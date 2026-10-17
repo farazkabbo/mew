@@ -1,0 +1,4 @@
+# Reviewed false positives (gitleaks fingerprints: commit:file:rule:line).
+# Forged unsigned test JWT ({"alg":"none"} / {"sub":"user_123"}) used to check the API rejects it.
+# Not a credential. The test now builds it at runtime; this entry covers the existing commit.
+b8e960d8e0dd6ba43b20a1d2bf002ccaa59909c4:services/api/tests/test_auth.py:jwt:84

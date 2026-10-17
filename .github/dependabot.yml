@@ -7,6 +7,13 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # eslint-config-next's plugins don't support ESLint 10 yet.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      # typescript-eslint supports TypeScript < 6.1 only.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
   - package-ecosystem: uv
     directory: /services/api
     schedule:
@@ -19,3 +26,7 @@ updates:
     directory: /services/api
     schedule:
       interval: weekly
+    ignore:
+      # The API pins Python 3.12 (pyproject: requires-python < 3.13); upgrade deliberately.
+      - dependency-name: python
+        versions: [">=3.13"]
