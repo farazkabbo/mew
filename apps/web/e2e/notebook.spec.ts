@@ -16,6 +16,54 @@ async function drawStroke(page: Page, x: number, y: number, length = 160, steps 
   await page.mouse.up();
 }
 
+async function drawStrokeAtDisplayRate(
+  page: Page,
+  x: number,
+  y: number,
+  length: number,
+  steps: number,
+) {
+  const box = await page.getByTestId("notebook-canvas").boundingBox();
+  if (!box) throw new Error("canvas not visible");
+  await page.evaluate(() => {
+    document.addEventListener(
+      "pointerdown",
+      (event) => {
+        (window as unknown as { __e2ePointerId: number }).__e2ePointerId = event.pointerId;
+      },
+      { capture: true, once: true },
+    );
+  });
+  await page.mouse.move(box.x + x, box.y + y);
+  await page.mouse.down();
+  const pointerId = await page.evaluate(
+    () => (window as unknown as { __e2ePointerId: number }).__e2ePointerId,
+  );
+  await page.evaluate(
+    async ({ x, y, length, steps, pointerId }) => {
+      const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="notebook-canvas"]');
+      if (!canvas) throw new Error("canvas not visible");
+
+      for (let i = 1; i <= steps; i++) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        canvas.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            button: -1,
+            buttons: 1,
+            clientX: x + (length * i) / steps,
+            clientY: y + Math.sin(i / 2) * 8,
+            pointerId,
+            pointerType: "mouse",
+          }),
+        );
+      }
+    },
+    { x: box.x + x, y: box.y + y, length, steps, pointerId },
+  );
+  await page.mouse.up();
+}
+
 async function storedStrokeCount(page: Page): Promise<number> {
   return page.evaluate(
     (name) =>
@@ -240,7 +288,7 @@ test("drawing on a page with 1,500 strokes keeps up with the display", async ({ 
   const idle = await frameIntervals(page, () => page.waitForTimeout(1000));
   const refresh = percentile(idle, 0.5);
   const drawing = await frameIntervals(page, async () => {
-    await drawStroke(page, 100, 450, 900, 240);
+    await drawStrokeAtDisplayRate(page, 100, 450, 900, 240);
     await page.mouse.move(10, 10);
   });
 
