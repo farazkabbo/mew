@@ -1,0 +1,29 @@
+{
+  "name": "mew",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.14.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @mew/web --filter @mew/api dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "health": "tsx scripts/health.ts",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "eslint": "^9",
+    "prettier": "^3",
+    "tsx": "^4",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8",
+    "vitest": "^5"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@mew/ink",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint --max-warnings 0 .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mew/shared": "workspace:*",
+    "perfect-freehand": "^1.2.3"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
+}

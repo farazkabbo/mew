@@ -1,0 +1,34 @@
+# Render Blueprint for the backend. https://render.com/docs/blueprint-spec
+# Secrets use `sync: false`: Render asks for them when the Blueprint is first applied
+# and they are never stored in git.
+services:
+  - type: web
+    name: mew-api
+    runtime: docker
+    rootDir: services/api
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    # The free plan sleeps when idle (cold starts of tens of seconds). Use a paid plan before
+    # relying on the latency targets.
+    plan: free
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - services/api/**
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Must equal INTERNAL_API_SECRET on the web app. Generate with:
+      #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+      - key: INTERNAL_API_SECRET
+        sync: false
+      # Clerk Frontend API URL, e.g. https://clerk.your-domain.com
+      - key: CLERK_ISSUER
+        sync: false
+      # Comma-separated web origins allowed in the token's azp claim, e.g. https://mew.app
+      - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
+      # Extra hostnames to accept; the service's onrender.com host is trusted automatically.
+      - key: ALLOWED_HOSTS
+        value: localhost

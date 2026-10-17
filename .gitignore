@@ -1,18 +1,56 @@
-# Build and Release Folders
-bin-debug/
-bin-release/
-[Oo]bj/
-[Bb]in/
+# Dependencies
+node_modules/
+.pnpm-store/
 
-# Other files and folders
-.settings/
+# Build output
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
 
-# Executables
-*.swf
-*.air
-*.ipa
-*.apk
+# Env files: never commit secrets. Only *.example files are tracked.
+.env
+.env.*
+!.env.example
+!**/.env.example
 
-# Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
-# should NOT be excluded as they contain compiler settings and other important
-# information for Eclipse / Flash Builder.
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Supabase CLI local state
+supabase/.branches/
+supabase/.temp/
+
+# Testing
+coverage/
+
+# Keys and certificates
+*.pem
+*.key
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Logs
+*.log
+
+# Clerk keyless-mode development keys
+.clerk/
+.audit-requirements.txt
+
+# Playwright output
+test-results/
+playwright-report/

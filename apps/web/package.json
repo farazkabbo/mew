@@ -1,0 +1,43 @@
+{
+  "name": "@mew/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "eslint --max-warnings 0",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "7.9.16",
+    "@mew/ink": "workspace:*",
+    "@mew/shared": "workspace:*",
+    "@supabase/supabase-js": "^2",
+    "dexie": "^4.4.6",
+    "lucide-react": "^1.50.0",
+    "next": "16.4.2",
+    "perfect-freehand": "^1.2.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.2",
+    "fake-indexeddb": "^6.2.5",
+    "tailwindcss": "^4",
+    "typescript": "~6.0.3",
+    "vitest": "^5"
+  }
+}

@@ -1,0 +1,11 @@
+# Supabase CLI config. Only what differs from the defaults is listed here.
+project_id = "mew"
+
+[db]
+major_version = 17
+
+# Clerk as the third-party auth provider. Replace the domain with your Clerk Frontend API host
+# when running Supabase locally; on the hosted project, set this in Authentication → Third-party.
+[auth.third_party.clerk]
+enabled = true
+domain = "your-instance.clerk.accounts.dev"

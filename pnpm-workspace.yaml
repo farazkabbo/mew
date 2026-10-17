@@ -1,0 +1,22 @@
+packages:
+  - apps/*
+  - packages/*
+  - services/*
+  - supabase
+
+# Lifecycle scripts are blocked unless explicitly allowed here (supply-chain hardening).
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+  esbuild: true
+
+# Only resolve versions published at least 14 days ago, so a hijacked release is likely to be
+# caught and pulled before it can be installed here.
+minimumReleaseAge: 20160
+# Security-critical frameworks are exempt so their patch releases (e.g. Next.js RCE fixes) can be
+# applied the day they ship. Pin these explicitly and review their release notes.
+minimumReleaseAgeExclude:
+  - next
+  - "@next/*"
+  - eslint-config-next
+  - "@clerk/*"

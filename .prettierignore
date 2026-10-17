@@ -1,0 +1,11 @@
+pnpm-lock.yaml
+**/.next/**
+**/node_modules/**
+**/.venv/**
+**/dist/**
+**/coverage/**
+services/api/**
+**/AGENTS.md
+**/CLAUDE.md
+**/test-results/**
+**/playwright-report/**

@@ -1,0 +1,12 @@
+.venv
+**/__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+tests
+.env
+.env.*
+*.pem
+.audit-requirements.txt
+node_modules
+package.json

@@ -1,0 +1,68 @@
+"""Typed, validated service configuration (environment variables and the repo-root .env.local)."""
+
+from pathlib import Path
+from typing import Annotated, Literal, Self
+
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+
+CsvTuple = Annotated[tuple[str, ...], NoDecode]
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(_REPO_ROOT / ".env.local", ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+        frozen=True,
+    )
+
+    app_env: Literal["development", "test", "production"] = "development"
+    internal_api_secret: SecretStr = Field(min_length=32)
+    # Clerk Frontend API URL, e.g. https://your-app.clerk.accounts.dev (the expected `iss` claim).
+    clerk_issuer: str | None = None
+    # Origins allowed in the token's `azp` claim, e.g. http://localhost:3000.
+    clerk_authorized_parties: CsvTuple = ()
+    allowed_hosts: CsvTuple = ("localhost", "127.0.0.1")
+    # Set by Render to the service's onrender.com host (also used by its health checks).
+    render_external_hostname: str | None = None
+
+    @field_validator("clerk_authorized_parties", "allowed_hosts", mode="before")
+    @classmethod
+    def _split_csv(cls, value: object) -> object:
+        if isinstance(value, str):
+            return tuple(part.strip() for part in value.split(",") if part.strip())
+        return value
+
+    @field_validator("clerk_issuer")
+    @classmethod
+    def _normalize_issuer(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        if not value.startswith(("https://", "http://")):
+            raise ValueError("must be an absolute URL")
+        return value.rstrip("/")
+
+    @model_validator(mode="after")
+    def _production_requirements(self) -> Self:
+        if self.app_env != "production":
+            return self
+        if not self.clerk_issuer or not self.clerk_issuer.startswith("https://"):
+            raise ValueError("CLERK_ISSUER must be an https URL in production")
+        if not self.clerk_authorized_parties:
+            raise ValueError("CLERK_AUTHORIZED_PARTIES is required in production")
+        if "*" in self.allowed_hosts:
+            raise ValueError("ALLOWED_HOSTS must not contain a wildcard in production")
+        return self
+
+    @property
+    def is_development(self) -> bool:
+        return self.app_env == "development"
+
+    @property
+    def trusted_hosts(self) -> tuple[str, ...]:
+        if self.render_external_hostname:
+            return (*self.allowed_hosts, self.render_external_hostname)
+        return self.allowed_hosts

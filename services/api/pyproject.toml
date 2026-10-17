@@ -1,0 +1,51 @@
+[project]
+name = "mew-api"
+version = "0.1.0"
+description = "Mew backend: checkers, course ingestion and heavy LLM orchestration."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.143,<0.144",
+    "uvicorn[standard]>=0.54,<0.55",
+    "pydantic>=2.12,<3",
+    "pydantic-settings>=2.16,<3",
+    "pyjwt[crypto]>=2.15,<3",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28,<0.29",
+    "mypy>=2.4,<3",
+    "pip-audit>=2.9",
+    "pytest>=9.1,<10",
+    "ruff>=0.17,<0.18",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "RUF", "PTH", "ASYNC", "FAST"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+files = ["src", "tests"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = [
+    "error",
+    # Starlette suggests httpx2 for TestClient; httpx still works. Revisit when bumping FastAPI.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]

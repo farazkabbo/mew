@@ -1,0 +1,13 @@
+{
+  "name": "@mew/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "uv run --frozen uvicorn --factory mew_api.main:create_app --reload --host 127.0.0.1 --port 8000",
+    "lint": "uv run --frozen ruff check . && uv run --frozen ruff format --check .",
+    "format": "uv run --frozen ruff format . && uv run --frozen ruff check --fix .",
+    "typecheck": "uv run --frozen mypy",
+    "test": "uv run --frozen pytest",
+    "audit:py": "uv export --frozen --no-dev --no-hashes --no-emit-project -o .audit-requirements.txt && uv run --frozen pip-audit --strict -r .audit-requirements.txt"
+  }
+}
