@@ -16,7 +16,13 @@ async function drawStroke(page: Page, x: number, y: number, length = 160, steps 
   await page.mouse.up();
 }
 
-async function drawStrokeAtDisplayRate(page: Page, x: number, y: number, length: number, steps: number) {
+async function drawStrokeAtDisplayRate(
+  page: Page,
+  x: number,
+  y: number,
+  length: number,
+  steps: number,
+) {
   const box = await page.getByTestId("notebook-canvas").boundingBox();
   if (!box) throw new Error("canvas not visible");
   await page.evaluate(() => {
