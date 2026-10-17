@@ -35,7 +35,7 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-config-next": "16.4.2",
     "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
