@@ -16,7 +16,8 @@
     "format:check": "prettier --check .",
     "health": "tsx scripts/health.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
-    "eval:mew": "pnpm --filter @mew/web eval:mew"
+    "eval:mew": "pnpm --filter @mew/web eval:mew",
+    "eval:tutor": "pnpm --filter @mew/web eval:tutor"
   },
   "devDependencies": {
     "@types/node": "^24",

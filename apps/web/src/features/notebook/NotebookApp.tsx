@@ -148,7 +148,7 @@ export function NotebookApp({ userId }: { userId: string }) {
       />
       <main className="relative min-w-0 flex-1">
         {engine && engine.pageId === pageId ? (
-          <NotebookCanvas ref={canvas} engine={engine} />
+          <NotebookCanvas ref={canvas} engine={engine} onPenDown={mew.penDown} />
         ) : (
           <div className="grid h-full place-items-center text-sm text-ink-muted">
             Opening notebook…
@@ -178,7 +178,7 @@ export function NotebookApp({ userId }: { userId: string }) {
 
         <div className="pointer-events-none absolute right-4 bottom-4">
           <MewDock
-            onSummon={() => mew.controller.summon()}
+            onSummon={mew.summon}
             onStartListening={mew.startListening}
             onStopListening={mew.stopListening}
           />
@@ -186,10 +186,7 @@ export function NotebookApp({ userId }: { userId: string }) {
 
         {debugOpen && (
           <div className="pointer-events-none absolute top-20 right-4 bottom-24">
-            <DebugPanel
-              onSimulateUtterance={(text) => mew.controller.utterance(text)}
-              onSummon={() => mew.controller.summon()}
-            />
+            <DebugPanel onSimulateUtterance={mew.say} onSummon={mew.summon} />
           </div>
         )}
 

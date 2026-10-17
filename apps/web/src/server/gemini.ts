@@ -7,15 +7,20 @@ import { geminiEnv } from "./env";
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
-export type StructuredRequest<T> = {
+/** Multimodal input: text plus (optionally) base64 PNG images. */
+export type InputPart = { type: "text"; text: string } | { type: "image"; png: string };
+
+type GenerationRequest = {
   model: string;
   system: string;
-  input: string;
-  schema: z.ZodType<T>;
+  input: string | InputPart[];
   thinkingLevel: ThinkingLevel;
   maxOutputTokens: number;
   timeoutMs: number;
+  signal?: AbortSignal;
 };
+
+export type StructuredRequest<T> = GenerationRequest & { schema: z.ZodType<T> };
 
 export class StructuredOutputError extends Error {
   override readonly name = "StructuredOutputError";
@@ -23,6 +28,7 @@ export class StructuredOutputError extends Error {
 
 /** Signature shared by the real generator and test doubles. */
 export type GenerateStructured = <T>(request: StructuredRequest<T>) => Promise<T>;
+export type StreamStructuredText = (request: StructuredRequest<unknown>) => AsyncIterable<string>;
 
 let client: GoogleGenAI | undefined;
 
@@ -32,27 +38,52 @@ function gemini(): GoogleGenAI {
 }
 
 /**
+ * Parameters shared by every call. Interactions are never stored by the API (`store: false`):
+ * transcripts and handwriting are student data.
+ */
+function params(request: StructuredRequest<unknown>) {
+  return {
+    model: request.model,
+    system_instruction: request.system,
+    input:
+      typeof request.input === "string"
+        ? request.input
+        : request.input.map((part) =>
+            part.type === "text"
+              ? part
+              : { type: "image" as const, data: part.png, mime_type: "image/png" },
+          ),
+    store: false,
+    response_format: {
+      type: "text" as const,
+      mime_type: "application/json",
+      schema: toGeminiSchema(request.schema),
+    },
+    generation_config: {
+      thinking_level: request.thinkingLevel,
+      max_output_tokens: request.maxOutputTokens,
+    },
+  };
+}
+
+function options(request: GenerationRequest) {
+  return {
+    timeout_ms: request.timeoutMs,
+    retries: { strategy: "none" as const },
+    ...(request.signal && { fetch_options: { signal: request.signal } }),
+  };
+}
+
+/**
  * One structured (JSON) generation. The output is validated against `schema`; invalid output is
  * retried once, then reported as a StructuredOutputError so callers can degrade gracefully.
- * Interactions are never stored by the API (`store: false`): transcripts are student data.
  */
 export const generateStructured: GenerateStructured = async <T>(request: StructuredRequest<T>) => {
-  const responseSchema = toGeminiSchema(request.schema);
   let problem = "no attempt";
   for (let attempt = 0; attempt < 2; attempt++) {
     const interaction = await gemini().interactions.create(
-      {
-        model: request.model,
-        system_instruction: request.system,
-        input: request.input,
-        store: false,
-        response_format: { type: "text", mime_type: "application/json", schema: responseSchema },
-        generation_config: {
-          thinking_level: request.thinkingLevel,
-          max_output_tokens: request.maxOutputTokens,
-        },
-      },
-      { timeout_ms: request.timeoutMs, retries: { strategy: "none" } },
+      { ...params(request as StructuredRequest<unknown>), stream: false },
+      options(request),
     );
     const parsed = request.schema.safeParse(parseJson(interaction.output_text));
     if (parsed.success) return parsed.data;
@@ -61,7 +92,21 @@ export const generateStructured: GenerateStructured = async <T>(request: Structu
   throw new StructuredOutputError(`Model output failed validation: ${problem}`);
 };
 
-function parseJson(text: string | undefined): unknown {
+/** Streams the raw JSON text of a structured generation as it is produced (not validated). */
+export const streamStructuredText: StreamStructuredText = async function* (request) {
+  const stream = await gemini().interactions.create(
+    { ...params(request), stream: true },
+    options(request),
+  );
+  for await (const event of stream) {
+    if (event.event_type === "step.delta" && event.delta.type === "text") yield event.delta.text;
+    if (event.event_type === "error") {
+      throw new Error(`Model stream error: ${event.error?.code ?? "unknown"}`);
+    }
+  }
+};
+
+export function parseJson(text: string | undefined): unknown {
   try {
     return text === undefined ? undefined : (JSON.parse(text) as unknown);
   } catch {
@@ -100,6 +145,11 @@ function prune(node: unknown): unknown {
   if (typeof node !== "object" || node === null) return node;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node)) {
+    // `const` isn't supported; a one-value enum says the same (discriminated-union tags).
+    if (key === "const") {
+      out.enum = [value];
+      continue;
+    }
     if (!SUPPORTED_KEYWORDS.has(key)) continue;
     // `properties` and `$defs` map names to schemas; their keys are names, not keywords.
     out[key] =

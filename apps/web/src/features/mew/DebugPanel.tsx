@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
+import { TutorDebug } from "../tutor/TutorDebug";
 import { useVoice } from "../voice/store";
 import { type DecisionRecord, useMew } from "./store";
 
@@ -22,7 +23,6 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
     e.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    useVoice.getState().commit(text);
     onSimulateUtterance(text);
     setDraft("");
   };
@@ -95,6 +95,8 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
             Summon Mew (tap mascot)
           </button>
         </section>
+
+        <TutorDebug />
 
         <section aria-label="Sensitivity">
           <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Sensitivity</h3>

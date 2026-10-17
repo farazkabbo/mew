@@ -11,7 +11,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "eval:mew": "tsx --conditions=react-server evals/mew.eval.ts"
+    "eval:mew": "tsx --conditions=react-server evals/mew.eval.ts",
+    "eval:tutor": "tsx --conditions=react-server evals/tutor.eval.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.16",

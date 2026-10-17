@@ -4,4 +4,6 @@ export * from "./mew";
 export * from "./mew-policy";
 export * from "./notebook";
 export * from "./prompts/mew";
+export * from "./prompts/tutor";
+export * from "./tutor";
 export * from "./voice";
