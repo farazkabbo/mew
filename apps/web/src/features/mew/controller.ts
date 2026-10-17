@@ -1,5 +1,11 @@
 import type { PageDocument } from "@mew/ink";
-import { MEW_LIMITS, type MewInput, type NotebookSignals, shouldRespond } from "@mew/shared";
+import {
+  MEW_LIMITS,
+  type MewInput,
+  type MewLabel,
+  type NotebookSignals,
+  shouldRespond,
+} from "@mew/shared";
 
 import type { PageChange } from "../notebook/engine";
 import { studentLines } from "../notebook/export-line";
@@ -14,13 +20,28 @@ export type ObservedPage = {
   subscribe(listener: (change: PageChange) => void): () => void;
 };
 
+/** What Mew needs from the rest of the app. All optional, so the gate works on its own. */
+export type MewHooks = {
+  /** The gate decided to respond: hand the turn to the tutor. */
+  onRespond?(turn: {
+    intent: Exclude<MewLabel, "ignore">;
+    utterance: string;
+    triggeredAt: number;
+    gateMs: number;
+  }): void;
+  /** Whether the tutor is talking or just finished. */
+  tutorSpokeRecently?(): boolean;
+  /** Recognised text of the line being written, if known. */
+  activeRegionText?(doc: PageDocument): string | undefined;
+};
+
 /** An erase within this window counts as "just erased". */
 const JUST_ERASED_MS = 10_000;
 const RECENT_LINE_MS = 60_000;
 
 /**
  * Wires the notebook and the voice transcript to the gate: turns activity into triggers, builds
- * the gate input, and records each decision. In M3 acted-on decisions go to the tutor.
+ * the gate input, records each decision, and hands acted-on decisions to the tutor.
  */
 export class MewController {
   private readonly triggers: MewTriggers;
@@ -32,6 +53,7 @@ export class MewController {
   constructor(
     private readonly gate: MewGate,
     private readonly clock: Clock,
+    private readonly hooks: MewHooks = {},
   ) {
     this.triggers = new MewTriggers((evaluation) => void this.evaluate(evaluation), clock);
   }
@@ -49,6 +71,11 @@ export class MewController {
 
   speech(): void {
     this.triggers.speech();
+  }
+
+  /** The tutor finished a turn: start the cooldown. */
+  tutorFinished(): void {
+    this.triggers.tutorFinished();
   }
 
   /** The student tapped the mascot. */
@@ -77,17 +104,28 @@ export class MewController {
     const mew = useMew.getState();
     mew.begin();
     const decision = await this.gate.decide(input);
+    const gateMs = this.clock.now() - started;
+    const acted = shouldRespond(decision.output, {
+      threshold: useMew.getState().threshold,
+      explicitSummon: input.explicitSummon,
+    });
     useMew.getState().record({
       ...decision,
       at: started,
       trigger,
       utterance: input.lastUtterance,
-      roundTripMs: this.clock.now() - started,
-      acted: shouldRespond(decision.output, {
-        threshold: useMew.getState().threshold,
-        explicitSummon: input.explicitSummon,
-      }),
+      roundTripMs: gateMs,
+      acted,
     });
+    const { label } = decision.output;
+    if (acted && label !== "ignore") {
+      this.hooks.onRespond?.({
+        intent: label,
+        utterance: input.lastUtterance,
+        triggeredAt: started,
+        gateMs,
+      });
+    }
   }
 
   private buildInput(trigger: Evaluation["trigger"], utterance: string): MewInput {
@@ -99,7 +137,7 @@ export class MewController {
       lastUtterance: clip(utterance),
       recentTranscript: previous.slice(-MEW_LIMITS.transcriptSegments).map((s) => clip(s.text)),
       notebookSignals: this.signals(),
-      tutorSpokeRecently: false, // the tutor speaks from M3
+      tutorSpokeRecently: this.hooks.tutorSpokeRecently?.() ?? false,
       explicitSummon: trigger === "summon",
     };
   }
@@ -109,10 +147,12 @@ export class MewController {
     const recentLines = this.page
       ? studentLines(this.page.doc).filter((l) => now - l.lastCreatedAt < RECENT_LINE_MS).length
       : 0;
+    const regionText = this.page ? this.hooks.activeRegionText?.(this.page.doc) : undefined;
     return {
       msSinceLastStroke: this.lastStrokeAt === null ? null : Math.round(now - this.lastStrokeAt),
       justErased: this.lastEraseAt !== null && now - this.lastEraseAt < JUST_ERASED_MS,
       linesWrittenLast60s: recentLines,
+      ...(regionText && { activeRegionText: regionText.slice(0, MEW_LIMITS.regionTextChars) }),
     };
   }
 }

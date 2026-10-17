@@ -152,3 +152,63 @@ describe("MewController", () => {
     expect(gate.decide.mock.calls[0]?.[0].lastUtterance.length).toBeLessThanOrEqual(500);
   });
 });
+
+describe("handing turns to the tutor", () => {
+  it("calls onRespond only for decisions that pass the threshold", async () => {
+    const onRespond = vi.fn();
+    const answer = gateReturning({
+      output: { label: "answer_question", confidence: 0.95, reason: "question" },
+      source: "model",
+      latencyMs: 150,
+    });
+    const mew = new MewController(answer, clock, { onRespond });
+
+    mew.utterance("why does it cancel?");
+    await flush();
+
+    expect(onRespond).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: "answer_question", utterance: "why does it cancel?" }),
+    );
+  });
+
+  it("never calls onRespond for ignore or low confidence", async () => {
+    const onRespond = vi.fn();
+    for (const output of [
+      { label: "ignore" as const, confidence: 1, reason: "" },
+      { label: "give_hint" as const, confidence: 0.3, reason: "" },
+    ]) {
+      const mew = new MewController(
+        gateReturning({ output, source: "model", latencyMs: 1 }),
+        clock,
+        {
+          onRespond,
+        },
+      );
+      mew.utterance("so then I divide by two and");
+      await flush();
+    }
+
+    expect(onRespond).not.toHaveBeenCalled();
+  });
+
+  it("tells the gate when the tutor spoke recently and what the current line says", async () => {
+    const gate = gateReturning({
+      output: { label: "ignore", confidence: 1, reason: "" },
+      source: "model",
+      latencyMs: 1,
+    });
+    const mew = new MewController(gate, clock, {
+      tutorSpokeRecently: () => true,
+      activeRegionText: () => "2x + 3 = 7",
+    });
+    mew.observe(page().observed);
+
+    mew.utterance("okay thanks that helps");
+    await flush();
+
+    expect(gate.decide.mock.calls[0]?.[0]).toMatchObject({
+      tutorSpokeRecently: true,
+      notebookSignals: { activeRegionText: "2x + 3 = 7" },
+    });
+  });
+});

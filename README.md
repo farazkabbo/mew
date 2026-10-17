@@ -130,6 +130,28 @@ to test the gate without a microphone.
 `pnpm eval:mew` runs 32 labelled utterances, including the M2 acceptance phrases, against the
 real gate model and reports accuracy and latency. It needs `GEMINI_API_KEY`.
 
+## The tutor
+
+When Mew decides to respond, the **tutor** (`/api/tutor`, Gemini Flash) gets the conversation, a
+PNG of your three most recent lines, and any recognised text for them. It replies with
+`{ speech, actions }`:
+
+- `speech` is streamed out of the JSON as soon as it's complete and spoken right away
+  (`/api/tts` proxies ElevenLabs Flash as raw PCM, played gaplessly with Web Audio). Board
+  `actions` arrive after and are drawn as ink from M4.
+- **Barge-in:** speaking over the tutor, or touching the page with the pen, fades it out within
+  150 ms. The tutor's own voice picked up by the mic doesn't count: transcripts that mostly repeat
+  what it's saying are treated as echo.
+- If the model returns invalid output it's retried once, then the turn falls back to speech only.
+  The caption bubble (togglable) shows what the tutor says.
+- After a writing pause, the current line is recognised in the background (`/api/recognize`,
+  cached per exact strokes). Mew uses the text as `activeRegionText`.
+- Images sent to the server must be real PNGs (signature and size are checked). Text-to-speech is
+  budgeted per character per user.
+
+`pnpm eval:tutor` measures time-to-first-audio for real turns (needs the Gemini and ElevenLabs
+keys plus `ELEVENLABS_VOICE_ID`) and fails if the median is over 2 s.
+
 ## Quality gates
 
 ```sh

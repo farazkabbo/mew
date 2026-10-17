@@ -46,15 +46,28 @@ describe("rate limiting", () => {
     const limiter = new MemoryRateLimiter(() => now);
     const rules = { test: { limit: 2, windowMs: 1000 } };
 
-    enforceRateLimit("u1", rules, limiter);
-    enforceRateLimit("u1", rules, limiter);
-    expect(() => enforceRateLimit("u1", rules, limiter)).toThrow(
+    enforceRateLimit("u1", rules, { rateLimiter: limiter });
+    enforceRateLimit("u1", rules, { rateLimiter: limiter });
+    expect(() => enforceRateLimit("u1", rules, { rateLimiter: limiter })).toThrow(
       expect.objectContaining({ status: 429, headers: { "Retry-After": "1" } }),
     );
-    enforceRateLimit("u2", rules, limiter); // other users are unaffected
+    enforceRateLimit("u2", rules, { rateLimiter: limiter }); // other users are unaffected
 
     now = 1001;
-    expect(() => enforceRateLimit("u1", rules, limiter)).not.toThrow();
+    expect(() => enforceRateLimit("u1", rules, { rateLimiter: limiter })).not.toThrow();
+  });
+});
+
+describe("weighted rate limiting", () => {
+  it("counts cost units (e.g. characters), not requests", () => {
+    const limiter = new MemoryRateLimiter(() => 0);
+    const rules = { chars: { limit: 100, windowMs: 1000 } };
+
+    enforceRateLimit("u1", rules, { cost: 60, rateLimiter: limiter });
+    expect(() => enforceRateLimit("u1", rules, { cost: 41, rateLimiter: limiter })).toThrow(
+      expect.objectContaining({ status: 429 }),
+    );
+    expect(() => enforceRateLimit("u1", rules, { cost: 40, rateLimiter: limiter })).not.toThrow();
   });
 });
 

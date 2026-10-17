@@ -75,3 +75,13 @@ export const elevenLabsEnv = defineEnv(
   }),
   { defaults: { ELEVENLABS_STT_MODEL: "scribe_v2_realtime" } },
 );
+
+export const ttsEnv = defineEnv(
+  z.object({
+    ELEVENLABS_API_KEY: z.string().min(1),
+    // Part of the upstream URL path, so restricted to the ID alphabet.
+    ELEVENLABS_VOICE_ID: z.string().regex(/^[A-Za-z0-9]{8,64}$/, "must be an ElevenLabs voice ID"),
+    ELEVENLABS_TTS_MODEL: z.string().min(1),
+  }),
+  { defaults: { ELEVENLABS_TTS_MODEL: "eleven_flash_v2_5" } },
+);

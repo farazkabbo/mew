@@ -2,6 +2,7 @@
 
 import { Bug, Mic, MicOff } from "lucide-react";
 
+import { Caption } from "../tutor/Caption";
 import { useVoice } from "../voice/store";
 import { Mascot, mascotLabel } from "./Mascot";
 import { useMew } from "./store";
@@ -25,6 +26,7 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
 
   return (
     <div className="pointer-events-auto flex flex-col items-end gap-2">
+      <Caption />
       {status === "error" && error && (
         <p
           role="alert"

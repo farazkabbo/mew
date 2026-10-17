@@ -2,38 +2,54 @@ import "server-only";
 
 import { HttpError } from "./http";
 
+/** `limit` units per sliding `windowMs`. A unit is a request unless a cost is given. */
 export type RateRule = { limit: number; windowMs: number };
+
+const MINUTE = 60_000;
+const DAY = 86_400_000;
 
 /** Per-user budgets for paid upstream APIs. */
 export const RATE_RULES = {
   /** Gate calls: one per utterance or pen pause. */
-  mew: { limit: 40, windowMs: 60_000 },
-  mewDaily: { limit: 3000, windowMs: 86_400_000 },
+  mew: { limit: 40, windowMs: MINUTE },
+  mewDaily: { limit: 3000, windowMs: DAY },
   /** Speech-to-text sessions: one per mic start. */
-  sttToken: { limit: 10, windowMs: 60_000 },
-  sttTokenDaily: { limit: 200, windowMs: 86_400_000 },
+  sttToken: { limit: 10, windowMs: MINUTE },
+  sttTokenDaily: { limit: 200, windowMs: DAY },
+  /** Tutor turns (the expensive model). */
+  tutor: { limit: 15, windowMs: MINUTE },
+  tutorDaily: { limit: 400, windowMs: DAY },
+  /** Handwriting recognition of single lines. */
+  recognize: { limit: 30, windowMs: MINUTE },
+  recognizeDaily: { limit: 1500, windowMs: DAY },
+  /** Text-to-speech, measured in characters (that's how it is billed). */
+  ttsCharsPerMinute: { limit: 3000, windowMs: MINUTE },
+  ttsCharsDaily: { limit: 40_000, windowMs: DAY },
 } as const satisfies Record<string, RateRule>;
 
 const MAX_TRACKED_KEYS = 50_000;
+
+type Hit = { at: number; cost: number };
 
 /**
  * Sliding-window rate limiter held in memory. Correct for a single server instance; when the
  * web app scales out, swap for a shared store behind the same `consume` signature.
  */
 export class MemoryRateLimiter {
-  private readonly hits = new Map<string, number[]>();
+  private readonly hits = new Map<string, Hit[]>();
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  /** Records a hit and reports whether it was within the rule. Rejected hits aren't counted. */
-  consume(key: string, rule: RateRule): { ok: boolean; retryAfterMs: number } {
+  /** Records a hit of `cost` units and reports whether it fit. Rejected hits aren't counted. */
+  consume(key: string, rule: RateRule, cost = 1): { ok: boolean; retryAfterMs: number } {
     const now = this.now();
-    const recent = (this.hits.get(key) ?? []).filter((t) => now - t < rule.windowMs);
-    if (recent.length >= rule.limit) {
+    const recent = (this.hits.get(key) ?? []).filter((h) => now - h.at < rule.windowMs);
+    const used = recent.reduce((sum, h) => sum + h.cost, 0);
+    if (used + cost > rule.limit) {
       this.hits.set(key, recent);
-      return { ok: false, retryAfterMs: rule.windowMs - (now - (recent[0] ?? now)) };
+      return { ok: false, retryAfterMs: rule.windowMs - (now - (recent[0]?.at ?? now)) };
     }
-    recent.push(now);
+    recent.push({ at: now, cost });
     this.hits.delete(key); // re-insert so Map order tracks recency for eviction
     this.hits.set(key, recent);
     this.evict();
@@ -55,10 +71,10 @@ const limiter = new MemoryRateLimiter();
 export function enforceRateLimit(
   userId: string,
   rules: Record<string, RateRule>,
-  rateLimiter: MemoryRateLimiter = limiter,
+  { cost = 1, rateLimiter = limiter }: { cost?: number; rateLimiter?: MemoryRateLimiter } = {},
 ): void {
   for (const [name, rule] of Object.entries(rules)) {
-    const { ok, retryAfterMs } = rateLimiter.consume(`${name}:${userId}`, rule);
+    const { ok, retryAfterMs } = rateLimiter.consume(`${name}:${userId}`, rule, cost);
     if (!ok) {
       throw new HttpError(429, "Too many requests", {
         "Retry-After": String(Math.ceil(retryAfterMs / 1000)),

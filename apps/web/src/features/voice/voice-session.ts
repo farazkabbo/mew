@@ -7,8 +7,8 @@ import { useVoice } from "./store";
 export type VoiceCallbacks = {
   /** A finished utterance. */
   onUtterance(text: string): void;
-  /** The student started (or continued) speaking — used for pen-pause and barge-in logic. */
-  onSpeech(): void;
+  /** The student is speaking (partial transcript) — used for pen-pause and barge-in logic. */
+  onSpeech(partial: string): void;
 };
 
 /** Silence that ends an utterance (seconds). */
@@ -37,7 +37,7 @@ export class VoiceSession {
           onOpen: () => !this.stopped && useVoice.getState().setStatus("listening"),
           onPartial: (text) => {
             useVoice.getState().setPartial(text);
-            if (text.trim()) this.callbacks.onSpeech();
+            if (text.trim()) this.callbacks.onSpeech(text);
           },
           onCommitted: (text) => {
             useVoice.getState().commit(text);
