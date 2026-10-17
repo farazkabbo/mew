@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "health": "tsx scripts/health.ts",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test"
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "eval:mew": "pnpm --filter @mew/web eval:mew"
   },
   "devDependencies": {
     "@types/node": "^24",

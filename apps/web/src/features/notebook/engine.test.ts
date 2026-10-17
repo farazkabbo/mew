@@ -147,4 +147,67 @@ describe("PageEngine", () => {
 
     expect(onError).toHaveBeenCalledOnce();
   });
+
+  it("moves strokes as one undo step, keeping ids, and persists the move", async () => {
+    const engine = await reopen();
+    const a = stroke(10, 1);
+    engine.addStroke(a);
+
+    engine.moveStrokes([a.id], 100, 40);
+    await engine.flush();
+    const reopened = await reopen();
+    expect(reopened.doc.size).toBe(1);
+    expect(reopened.doc.get(a.id)?.bbox[0]).toBeCloseTo(a.bbox[0] + 100);
+
+    engine.undo();
+    await engine.flush();
+    expect((await reopen()).doc.get(a.id)?.bbox[0]).toBeCloseTo(a.bbox[0]);
+  });
+
+  it("deletes a selection as one undo step", async () => {
+    const engine = await reopen();
+    const a = stroke(10, 1);
+    const b = stroke(30, 2);
+    engine.addStroke(a);
+    engine.addStroke(b);
+
+    engine.deleteStrokes([a.id, b.id, "not-there"]);
+    await engine.flush();
+    expect((await reopen()).doc.size).toBe(0);
+
+    engine.undo();
+    await engine.flush();
+    expect((await reopen()).doc.size).toBe(2);
+  });
+
+  it("shows edits made in another tab on the same page", async () => {
+    const tabA = await reopen();
+    const tabB = await reopen();
+    const changed = new Promise<void>((resolve) => tabB.subscribe(() => resolve()));
+
+    const a = stroke(10, 1);
+    tabA.addStroke(a);
+    await tabA.flush();
+    await changed;
+
+    expect(tabB.doc.get(a.id)).toEqual(a);
+    expect(tabB.canUndo).toBe(false); // someone else's edit is not ours to undo
+    tabA.dispose();
+    tabB.dispose();
+  });
+
+  it("ignores sync messages for other pages", async () => {
+    const engine = await reopen();
+    const listener = vi.fn();
+    engine.subscribe(listener);
+    const other = new BroadcastChannel(repo.syncChannelName);
+
+    other.postMessage({ type: "strokes-changed", pageId: crypto.randomUUID() });
+    other.postMessage({ type: "unexpected", pageId: pageId });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(listener).not.toHaveBeenCalled();
+    other.close();
+    engine.dispose();
+  });
 });

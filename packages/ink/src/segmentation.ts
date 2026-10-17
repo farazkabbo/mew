@@ -94,7 +94,7 @@ export function segmentLines(
     }
   }
 
-  return clusters
+  return mergeStackedFractions(clusters, letter)
     .map(toLine)
     .sort(
       (a, b) => a.bbox[1] + a.bbox[3] / 2 - (b.bbox[1] + b.bbox[3] / 2) || a.bbox[0] - b.bbox[0],
@@ -125,16 +125,59 @@ function strokeBand(stroke: SegmentableStroke, letter: number, tall: boolean): [
   return [y - pad, y + h + pad];
 }
 
+/**
+ * Stacked fractions span three bands (numerator, bar, denominator), so the first pass can split
+ * them. A flat, wide stroke acts as a fraction bar: lines sitting directly above or below it,
+ * within its horizontal extent, are merged into the bar's line.
+ */
+function mergeStackedFractions(clusters: Cluster[], letter: number): Cluster[] {
+  const result = [...clusters];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const host of result) {
+      const bars = host.strokes.filter((s) => isFractionBar(s.bbox, letter));
+      const stacked = result.find(
+        (other) => other !== host && bars.some((bar) => stacksOn(other.bbox, bar.bbox, letter)),
+      );
+      if (!stacked) continue;
+      host.strokes.push(...stacked.strokes);
+      host.bbox = unionBBox(host.bbox, stacked.bbox);
+      host.lastCreatedAt = Math.max(host.lastCreatedAt, stacked.lastCreatedAt);
+      result.splice(result.indexOf(stacked), 1);
+      changed = true;
+      break;
+    }
+  }
+  return result;
+}
+
+function isFractionBar([, , w, h]: BBox, letter: number): boolean {
+  return h <= 0.35 * letter && w >= 1.2 * letter;
+}
+
+/** Whether `box` sits just above or below `bar`, within the bar's width (with a little slack). */
+function stacksOn(box: BBox, bar: BBox, letter: number): boolean {
+  const slack = 0.5 * letter;
+  const within = box[0] >= bar[0] - slack && box[0] + box[2] <= bar[0] + bar[2] + slack;
+  if (!within) return false;
+  const gapAbove = bar[1] - (box[1] + box[3]);
+  const gapBelow = box[1] - (bar[1] + bar[3]);
+  const near = (gap: number) => gap >= -0.3 * letter && gap <= 0.8 * letter;
+  return near(gapAbove) || near(gapBelow);
+}
+
 function overlapRatio(a: [number, number], b: [number, number]): number {
   const smaller = Math.max(1e-6, Math.min(a[1] - a[0], b[1] - b[0]));
   return intervalOverlap(a[0], a[1], b[0], b[1]) / smaller;
 }
 
 function toLine(cluster: Cluster): Line {
-  const first = cluster.strokes[0];
+  const strokes = [...cluster.strokes].sort((a, b) => a.createdAt - b.createdAt || cmp(a.id, b.id));
+  const first = strokes[0];
   return {
     id: `line_${first?.id ?? "empty"}`,
-    strokeIds: cluster.strokes.map((s) => s.id),
+    strokeIds: strokes.map((s) => s.id),
     bbox: cluster.bbox,
     firstCreatedAt: first?.createdAt ?? 0,
     lastCreatedAt: cluster.lastCreatedAt,

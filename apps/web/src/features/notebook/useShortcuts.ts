@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { isTypingTarget } from "./dom";
 import { useNotebookUi } from "./store";
 
 type Handlers = {
@@ -35,6 +36,7 @@ export function useShortcuts(handlers: Handlers): void {
       else if (key === "p") ui.setTool("pen");
       else if (key === "h") ui.setTool("highlighter");
       else if (key === "e") ui.setTool("eraser");
+      else if (key === "l") ui.setTool("lasso");
       else if (key === "+" || key === "=") h.zoom(1.25);
       else if (key === "-") h.zoom(1 / 1.25);
       else if (key === "0") h.resetView();
@@ -45,11 +47,4 @@ export function useShortcuts(handlers: Handlers): void {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-  );
 }

@@ -8,6 +8,11 @@ import type { NotebookDb } from "./db";
 export class NotebookRepository {
   constructor(private readonly db: NotebookDb) {}
 
+  /** BroadcastChannel name shared by tabs editing this user's notebooks. */
+  get syncChannelName(): string {
+    return `${this.db.name}:sync`;
+  }
+
   async listNotebooks(): Promise<Notebook[]> {
     const rows = await this.db.notebooks.orderBy("updatedAt").reverse().toArray();
     return validRows(Notebook, rows, "notebook");

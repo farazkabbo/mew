@@ -1,5 +1,7 @@
 import { DEFAULT_PRESSURE } from "@mew/ink";
 
+import { isTypingTarget } from "../dom";
+
 /** A pointer sample in CSS pixels relative to the canvas, with a DOM timestamp in ms. */
 export type Sample = { x: number; y: number; pressure: number; time: number };
 
@@ -189,11 +191,4 @@ export class PointerInput {
       e.pointerType === "pen" ? Math.max(0.05, Math.min(1, e.pressure)) : DEFAULT_PRESSURE;
     return { x, y, pressure, time: e.timeStamp };
   }
-}
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-  );
 }

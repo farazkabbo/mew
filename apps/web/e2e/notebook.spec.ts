@@ -125,6 +125,79 @@ test("zooms with the keyboard and resets the view", async ({ page }) => {
   await expect(zoomLabel).toHaveText("100%");
 });
 
+/** Left edge (bbox x) of every stored stroke, sorted. */
+async function storedStrokeLefts(page: Page): Promise<number[]> {
+  return page.evaluate(
+    (name) =>
+      new Promise<number[]>((resolve, reject) => {
+        const open = indexedDB.open(name);
+        open.onerror = () => reject(open.error ?? new Error("open failed"));
+        open.onsuccess = () => {
+          const request = open.result.transaction("strokes").objectStore("strokes").getAll();
+          request.onsuccess = () => {
+            const rows = request.result as { bbox: number[] }[];
+            resolve(rows.map((r) => Math.round(r.bbox[0] ?? 0)).sort((a, b) => a - b));
+            open.result.close();
+          };
+        };
+      }),
+    DB_NAME,
+  );
+}
+
+test("lasso selects strokes, drags them, and deletes them — all undoable", async ({ page }) => {
+  await openNotebook(page);
+  await drawStroke(page, 200, 200, 100);
+  await drawStroke(page, 600, 450, 100);
+  await expect.poll(() => storedStrokeCount(page)).toBe(2);
+  const [firstLeft, secondLeft] = await storedStrokeLefts(page);
+
+  // Loop around the first stroke only.
+  await page.keyboard.press("l");
+  const box = await page.getByTestId("notebook-canvas").boundingBox();
+  if (!box) throw new Error("canvas not visible");
+  const at = (x: number, y: number) => page.mouse.move(box.x + x, box.y + y, { steps: 4 });
+  await at(180, 170);
+  await page.mouse.down();
+  for (const [x, y] of [
+    [320, 170],
+    [320, 235],
+    [180, 235],
+    [180, 172],
+  ] as const)
+    await at(x, y);
+  await page.mouse.up();
+
+  // Drag the selection 150px right.
+  await at(250, 200);
+  await page.mouse.down();
+  await at(400, 200);
+  await page.mouse.up();
+  await expect
+    .poll(() => storedStrokeLefts(page))
+    .toEqual([(firstLeft ?? 0) + 150, secondLeft ?? 0].sort((a, b) => a - b));
+
+  await page.keyboard.press("Delete");
+  await expect.poll(() => storedStrokeCount(page)).toBe(1);
+
+  await page.keyboard.press("Control+z"); // restores the deleted stroke
+  await expect.poll(() => storedStrokeCount(page)).toBe(2);
+  await page.keyboard.press("Control+z"); // undoes the move
+  await expect.poll(() => storedStrokeLefts(page)).toEqual([firstLeft, secondLeft]);
+});
+
+test("another tab showing the same page sees new strokes live", async ({ page }) => {
+  await openNotebook(page);
+  const otherTab = await page.context().newPage();
+  await openNotebook(otherTab);
+  expect(await inkedPixels(otherTab)).toBe(0);
+
+  await drawStroke(page, 200, 200);
+
+  await expect.poll(() => inkedPixels(otherTab)).toBeGreaterThan(100);
+  await otherTab.close();
+});
+
 test("keeps drawing at 60 fps on a page with 1,500 existing strokes", async ({ page }) => {
   await openNotebook(page);
   await seedStrokes(page, 1500);

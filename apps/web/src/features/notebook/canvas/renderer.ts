@@ -2,17 +2,19 @@ import type { BBox, Stroke } from "@mew/shared";
 import { type Camera, type Line, visibleRegion } from "@mew/ink";
 
 import { paintDraft, paintStrokes } from "./paint";
+import type { Overlay } from "./tools/types";
 
 export type Layers = { grid: HTMLCanvasElement; ink: HTMLCanvasElement; live: HTMLCanvasElement };
 
-export type Theme = { dark: boolean; dot: string; tutor: string };
+export type Theme = { dark: boolean; dot: string; tutor: string; accent: string };
 
 const GRID_SPACING = 24; // page units
 const MIN_DOT_SPACING_PX = 12;
 
 /**
  * Three stacked canvases: the dot grid, committed ink (redrawn only when the page or camera
- * changes), and a live layer for the stroke in progress and the eraser cursor. Keeping the
+ * changes), and a live layer for transient things (stroke in progress, eraser cursor, lasso,
+ * selection being dragged). Keeping the
  * stroke being drawn on its own layer means a frame costs one outline, not the whole page.
  */
 export class CanvasRenderer {
@@ -86,20 +88,41 @@ export class CanvasRenderer {
     if (lines) this.outlineLines(ctx, camera, lines);
   }
 
-  drawLive(
-    camera: Camera,
-    draft: Stroke | null,
-    eraser: { x: number; y: number; r: number } | null,
-  ) {
+  drawLive(camera: Camera, { draft, eraser, lasso, selection }: Overlay): void {
     const ctx = this.live;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     this.applyCamera(ctx, camera);
+    const hairline = 1 / camera.zoom;
+
+    if (selection) {
+      const { strokes, bbox, dx, dy } = selection;
+      ctx.save();
+      ctx.translate(dx, dy);
+      paintStrokes(ctx, strokes, this.theme.dark);
+      ctx.lineWidth = hairline;
+      ctx.setLineDash([5 * hairline, 4 * hairline]);
+      ctx.strokeStyle = this.theme.accent;
+      const pad = 6 * hairline;
+      ctx.strokeRect(bbox[0] - pad, bbox[1] - pad, bbox[2] + 2 * pad, bbox[3] + 2 * pad);
+      ctx.restore();
+    }
+    if (lasso && lasso.length > 1) {
+      ctx.save();
+      ctx.beginPath();
+      lasso.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+      ctx.closePath();
+      ctx.lineWidth = hairline;
+      ctx.setLineDash([4 * hairline, 4 * hairline]);
+      ctx.strokeStyle = this.theme.accent;
+      ctx.stroke();
+      ctx.restore();
+    }
     if (draft) paintDraft(ctx, draft, this.theme.dark);
     if (eraser) {
       ctx.beginPath();
       ctx.arc(eraser.x, eraser.y, eraser.r, 0, Math.PI * 2);
-      ctx.lineWidth = 1 / camera.zoom;
+      ctx.lineWidth = hairline;
       ctx.strokeStyle = this.theme.dot;
       ctx.stroke();
     }

@@ -27,7 +27,7 @@ export function displayColor(hex: string, dark: boolean): string {
   return dark ? (DARK_VARIANTS.get(hex.toLowerCase()) ?? hex) : hex;
 }
 
-export type Tool = StrokeTool | "eraser";
+export type Tool = StrokeTool | "eraser" | "lasso";
 
 /** Pen sizes in page units. */
 export const PEN_WIDTHS = { S: 2, M: 3.5, L: 6 } as const;

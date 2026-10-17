@@ -3,6 +3,10 @@
 import type { Notebook, Page } from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { DebugPanel } from "../mew/DebugPanel";
+import { MewDock } from "../mew/MewDock";
+import { useMew } from "../mew/store";
+import { useMewSession } from "../mew/useMewSession";
 import { type CanvasHandle, NotebookCanvas } from "./canvas/NotebookCanvas";
 import { NotebookDb } from "./db";
 import { PageEngine } from "./engine";
@@ -25,6 +29,7 @@ export function NotebookApp({ userId }: { userId: string }) {
   const [engine, setEngine] = useState<PageEngine | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const canvas = useRef<CanvasHandle>(null);
+  const debugOpen = useMew((s) => s.debugOpen);
 
   const report = useCallback((error: unknown) => {
     console.error("[notebook]", error);
@@ -66,11 +71,20 @@ export function NotebookApp({ userId }: { userId: string }) {
   useEffect(() => {
     if (!pageId) return;
     let cancelled = false;
+    let opened: PageEngine | null = null;
     void PageEngine.open(repo, pageId, report)
-      .then((next) => !cancelled && setEngine(next))
+      .then((next) => {
+        if (cancelled) {
+          next.dispose();
+          return;
+        }
+        opened = next;
+        setEngine(next);
+      })
       .catch(report);
     return () => {
       cancelled = true;
+      opened?.dispose(); // closes its cross-tab sync channel
     };
   }, [repo, pageId, report]);
 
@@ -98,6 +112,7 @@ export function NotebookApp({ userId }: { userId: string }) {
     [engine],
   );
   useShortcuts(actions);
+  const mew = useMewSession(engine);
 
   const createNotebook = async () => {
     const notebook = await repo.createNotebook(`Notebook ${notebooks.length + 1}`);
@@ -157,6 +172,23 @@ export function NotebookApp({ userId }: { userId: string }) {
               currentPageId={pageId}
               onSelect={setPageId}
               onAdd={() => void addPage().catch(report)}
+            />
+          </div>
+        )}
+
+        <div className="pointer-events-none absolute right-4 bottom-4">
+          <MewDock
+            onSummon={() => mew.controller.summon()}
+            onStartListening={mew.startListening}
+            onStopListening={mew.stopListening}
+          />
+        </div>
+
+        {debugOpen && (
+          <div className="pointer-events-none absolute top-20 right-4 bottom-24">
+            <DebugPanel
+              onSimulateUtterance={(text) => mew.controller.utterance(text)}
+              onSummon={() => mew.controller.summon()}
             />
           </div>
         )}

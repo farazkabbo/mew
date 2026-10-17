@@ -1,11 +1,26 @@
 import type { Stroke } from "@mew/shared";
 
-/** An undoable change to a page. Strokes are immutable values, so commands carry them whole. */
-export type Command =
-  { kind: "add"; strokes: readonly Stroke[] } | { kind: "erase"; strokes: readonly Stroke[] };
+/**
+ * An undoable change to a page: strokes taken off it and strokes put on it. Adding, erasing and
+ * moving (remove the old version, add the new one with the same id) are all instances.
+ * Strokes are immutable values, so commands carry them whole.
+ */
+export type Command = { readonly removed: readonly Stroke[]; readonly added: readonly Stroke[] };
+
+export function addCommand(strokes: readonly Stroke[]): Command {
+  return { removed: [], added: strokes };
+}
+
+export function eraseCommand(strokes: readonly Stroke[]): Command {
+  return { removed: strokes, added: [] };
+}
 
 export function invert(command: Command): Command {
-  return { kind: command.kind === "add" ? "erase" : "add", strokes: command.strokes };
+  return { removed: command.added, added: command.removed };
+}
+
+export function isEmpty(command: Command): boolean {
+  return command.removed.length === 0 && command.added.length === 0;
 }
 
 /** Bounded undo/redo stacks. A new command clears the redo stack. */
@@ -24,7 +39,7 @@ export class History {
   }
 
   record(command: Command): void {
-    if (command.strokes.length === 0) return;
+    if (isEmpty(command)) return;
     this.undoStack.push(command);
     if (this.undoStack.length > this.limit) this.undoStack.shift();
     this.redoStack = [];

@@ -10,10 +10,12 @@
     "lint": "eslint --max-warnings 0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "eval:mew": "tsx --conditions=react-server evals/mew.eval.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.16",
+    "@google/genai": "2.26.0",
     "@mew/ink": "workspace:*",
     "@mew/shared": "workspace:*",
     "@supabase/supabase-js": "^2",
@@ -37,6 +39,7 @@
     "eslint-config-next": "16.4.2",
     "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^5"
   }

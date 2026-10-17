@@ -1,13 +1,37 @@
 import type { Stroke } from "@mew/shared";
-import { type Command, History, PageDocument, type Vec } from "@mew/ink";
+import {
+  addCommand,
+  type Command,
+  eraseCommand,
+  History,
+  PageDocument,
+  translateStroke,
+  type Vec,
+} from "@mew/ink";
 
 import type { NotebookRepository } from "./repository";
 
-type Listener = () => void;
+/** What kind of edit just happened (lets listeners react to e.g. writing vs erasing). */
+export type PageChange = "draw" | "erase" | "delete" | "move" | "undo" | "redo" | "sync";
+
+type Listener = (change: PageChange) => void;
+
+/** Posted to other tabs after a page's strokes change in storage. */
+type SyncMessage = { type: "strokes-changed"; pageId: string };
+
+function isSyncMessage(data: unknown): data is SyncMessage {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    (data as SyncMessage).type === "strokes-changed" &&
+    typeof (data as SyncMessage).pageId === "string"
+  );
+}
 
 /**
- * One page's editing session: the in-memory document, undo/redo, and write-through persistence.
- * Framework-free; the canvas reads `doc` directly and React only subscribes for toolbar state.
+ * One page's editing session: the in-memory document, undo/redo, write-through persistence, and
+ * live sync with other tabs showing the same page. Framework-free; the canvas reads `doc`
+ * directly and React only subscribes for toolbar state.
  */
 export class PageEngine {
   readonly doc: PageDocument;
@@ -15,6 +39,7 @@ export class PageEngine {
   private readonly listeners = new Set<Listener>();
   private erasing: Stroke[] | null = null;
   private pendingWrites: Promise<void> = Promise.resolve();
+  private readonly channel: BroadcastChannel | null;
 
   private constructor(
     private readonly repo: NotebookRepository,
@@ -23,6 +48,13 @@ export class PageEngine {
     private readonly onError: (error: unknown) => void,
   ) {
     this.doc = new PageDocument(strokes);
+    this.channel =
+      typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(repo.syncChannelName);
+    this.channel?.addEventListener("message", (event: MessageEvent<unknown>) => {
+      if (isSyncMessage(event.data) && event.data.pageId === this.pageId) {
+        void this.reloadFromStorage().catch(this.onError);
+      }
+    });
   }
 
   static async open(
@@ -46,8 +78,24 @@ export class PageEngine {
     return () => this.listeners.delete(listener);
   }
 
+  dispose(): void {
+    this.channel?.close();
+    this.listeners.clear();
+  }
+
   addStroke(stroke: Stroke): void {
-    this.perform({ kind: "add", strokes: [stroke] });
+    this.perform(addCommand([stroke]), "draw");
+  }
+
+  deleteStrokes(ids: readonly string[]): void {
+    this.perform(eraseCommand(this.existing(ids)), "delete");
+  }
+
+  /** Moves strokes by (dx, dy) page units as a single undo step. */
+  moveStrokes(ids: readonly string[], dx: number, dy: number): void {
+    if (dx === 0 && dy === 0) return;
+    const before = this.existing(ids);
+    this.perform({ removed: before, added: before.map((s) => translateStroke(s, dx, dy)) }, "move");
   }
 
   /** Erases what the eraser touches between two page points. Returns true if anything changed. */
@@ -64,20 +112,20 @@ export class PageEngine {
     const erased = this.erasing;
     this.erasing = null;
     if (!erased?.length) return;
-    const command: Command = { kind: "erase", strokes: erased };
+    const command = eraseCommand(erased);
     this.history.record(command);
     this.persist(command);
-    this.emit();
+    this.emit("erase");
   }
 
   undo(): void {
     const command = this.history.undo();
-    if (command) this.applyAndPersist(command);
+    if (command) this.applyAndPersist(command, "undo");
   }
 
   redo(): void {
     const command = this.history.redo();
-    if (command) this.applyAndPersist(command);
+    if (command) this.applyAndPersist(command, "redo");
   }
 
   /** Resolves once every queued write has reached IndexedDB. */
@@ -85,29 +133,59 @@ export class PageEngine {
     return this.pendingWrites;
   }
 
-  private perform(command: Command): void {
-    this.history.record(command);
-    this.applyAndPersist(command);
+  /**
+   * Brings the document in line with storage after another tab changed this page. Not an undo
+   * step: it records someone else's edit, not ours.
+   */
+  async reloadFromStorage(): Promise<void> {
+    const fresh = new Map((await this.repo.loadStrokes(this.pageId)).map((s) => [s.id, s]));
+    const removed = this.doc.all().filter((s) => !sameStroke(s, fresh.get(s.id)));
+    const added = [...fresh.values()].filter((s) => !sameStroke(s, this.doc.get(s.id)));
+    if (removed.length === 0 && added.length === 0) return;
+    this.doc.apply({ removed, added });
+    this.emit("sync");
   }
 
-  private applyAndPersist(command: Command): void {
+  private existing(ids: readonly string[]): Stroke[] {
+    return ids.map((id) => this.doc.get(id)).filter((s) => s !== undefined);
+  }
+
+  private perform(command: Command, change: PageChange): void {
+    this.history.record(command);
+    this.applyAndPersist(command, change);
+  }
+
+  private applyAndPersist(command: Command, change: PageChange): void {
     this.doc.apply(command);
     this.persist(command);
-    this.emit();
+    this.emit(change);
   }
 
   /** Writes are chained so they reach storage in the order the edits happened. */
   private persist(command: Command): void {
+    const kept = new Set(command.added.map((s) => s.id));
+    const deleted = command.removed.map((s) => s.id).filter((id) => !kept.has(id));
     this.pendingWrites = this.pendingWrites
-      .then(() =>
-        command.kind === "add"
-          ? this.repo.putStrokes(command.strokes)
-          : this.repo.deleteStrokes(command.strokes.map((s) => s.id)),
-      )
+      .then(async () => {
+        await this.repo.deleteStrokes(deleted);
+        await this.repo.putStrokes(command.added);
+        this.channel?.postMessage({
+          type: "strokes-changed",
+          pageId: this.pageId,
+        } satisfies SyncMessage);
+      })
       .catch(this.onError);
   }
 
-  private emit(): void {
-    for (const listener of this.listeners) listener();
+  private emit(change: PageChange): void {
+    for (const listener of this.listeners) listener(change);
   }
+}
+
+/** Strokes are immutable except for moves, which change their box. */
+function sameStroke(a: Stroke | undefined, b: Stroke | undefined): boolean {
+  if (!a || !b) return false;
+  return (
+    a === b || (a.points.length === b.points.length && a.bbox.every((v, i) => v === b.bbox[i]))
+  );
 }

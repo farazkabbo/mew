@@ -1,4 +1,8 @@
 import type { ClerkMiddlewareOptions } from "@clerk/nextjs/server";
+import { SCRIBE_REALTIME_URL } from "@mew/shared";
+
+/** Realtime speech-to-text socket host (scheme + host only, as CSP expects). */
+const SPEECH_TO_TEXT_ORIGIN = new URL(SCRIBE_REALTIME_URL).origin;
 
 type Directives = NonNullable<
   NonNullable<ClerkMiddlewareOptions["contentSecurityPolicy"]>["directives"]
@@ -12,7 +16,7 @@ export function cspDirectives(env: {
   supabaseUrl: string | undefined;
   production: boolean;
 }): Directives {
-  const connect = ["self"];
+  const connect = ["self", SPEECH_TO_TEXT_ORIGIN];
   if (env.supabaseUrl) {
     const origin = new URL(env.supabaseUrl).origin;
     connect.push(origin, origin.replace(/^http/, "ws"));

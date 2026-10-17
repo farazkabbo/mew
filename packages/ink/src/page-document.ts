@@ -3,6 +3,7 @@ import type { BBox, Stroke } from "@mew/shared";
 import { inflateBBox, type Vec } from "./geometry";
 import { eraserHitsStroke } from "./hit-test";
 import type { Command } from "./history";
+import { lassoCaptures, polygonBBox } from "./lasso";
 import { SpatialIndex } from "./spatial-index";
 
 /**
@@ -35,6 +36,7 @@ export class PageDocument {
     return this.ordered;
   }
 
+  /** Adds strokes, replacing any existing stroke with the same id. */
   add(strokes: readonly Stroke[]): void {
     for (const stroke of strokes) {
       this.strokes.set(stroke.id, stroke);
@@ -57,8 +59,8 @@ export class PageDocument {
   }
 
   apply(command: Command): void {
-    if (command.kind === "add") this.add(command.strokes);
-    else this.remove(command.strokes.map((s) => s.id));
+    this.remove(command.removed.map((s) => s.id));
+    this.add(command.added);
   }
 
   /** Strokes whose boxes intersect the region, in drawing order. */
@@ -84,5 +86,11 @@ export class PageDocument {
       if (stroke && eraserHitsStroke(stroke, from, to, radius)) hits.push(stroke);
     }
     return hits;
+  }
+
+  /** Strokes captured by a lasso path, in drawing order. */
+  inLasso(polygon: readonly Vec[]): Stroke[] {
+    if (polygon.length < 3) return [];
+    return this.inRegion(polygonBBox(polygon)).filter((s) => lassoCaptures(s, polygon));
   }
 }

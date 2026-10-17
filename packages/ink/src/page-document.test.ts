@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { History } from "./history";
+import { addCommand, eraseCommand, History } from "./history";
+import { translateStroke } from "./lasso";
 import { PageDocument } from "./page-document";
 import { strokeThrough } from "./test-helpers";
 
@@ -94,11 +95,7 @@ describe("PageDocument", () => {
     const doc = new PageDocument();
     const history = new History();
 
-    for (const command of [
-      { kind: "add", strokes: [a] },
-      { kind: "add", strokes: [b] },
-      { kind: "erase", strokes: [a] },
-    ] as const) {
+    for (const command of [addCommand([a]), addCommand([b]), eraseCommand([a])]) {
       doc.apply(command);
       history.record(command);
     }
@@ -114,18 +111,83 @@ describe("PageDocument", () => {
   });
 });
 
+describe("lasso selection and moves", () => {
+  const box = (x: number, y: number, size: number) =>
+    [
+      [x, y],
+      [x + size, y],
+      [x + size, y + size],
+      [x, y + size],
+    ] as const;
+
+  it("captures strokes mostly inside the lasso and leaves the rest", () => {
+    const inside = strokeThrough([
+      [10, 10],
+      [30, 12],
+    ]);
+    const mostlyInside = strokeThrough([
+      [20, 40],
+      [40, 40],
+      [60, 40],
+      [95, 40],
+      [140, 40],
+    ]);
+    const outside = strokeThrough([
+      [300, 300],
+      [320, 300],
+    ]);
+    const doc = new PageDocument([inside, mostlyInside, outside]);
+
+    const captured = doc.inLasso(box(0, 0, 100));
+
+    expect(captured.map((s) => s.id).sort()).toEqual([inside.id, mostlyInside.id].sort());
+  });
+
+  it("needs at least a triangle", () => {
+    const doc = new PageDocument([strokeThrough([[5, 5]])]);
+
+    expect(
+      doc.inLasso([
+        [0, 0],
+        [10, 10],
+      ]),
+    ).toEqual([]);
+  });
+
+  it("moves strokes as one undoable replace that keeps ids", () => {
+    const a = strokeThrough([
+      [0, 0],
+      [10, 0],
+    ]);
+    const doc = new PageDocument([a]);
+    const history = new History();
+    const moved = translateStroke(a, 50, 20);
+    const move = { removed: [a], added: [moved] };
+
+    doc.apply(move);
+    history.record(move);
+    expect(doc.get(a.id)?.bbox[0]).toBe(a.bbox[0] + 50);
+    expect(doc.inRegion([45, 15, 20, 10]).map((s) => s.id)).toEqual([a.id]);
+
+    const undo = history.undo();
+    if (undo) doc.apply(undo);
+    expect(doc.get(a.id)).toBe(a);
+    expect(doc.size).toBe(1);
+  });
+});
+
 describe("History", () => {
   it("clears redo on a new command and respects its limit", () => {
     const history = new History(2);
     const s = () => [strokeThrough([[0, 0]])];
 
-    history.record({ kind: "add", strokes: s() });
-    history.record({ kind: "add", strokes: s() });
-    history.record({ kind: "add", strokes: s() });
+    history.record(addCommand(s()));
+    history.record(addCommand(s()));
+    history.record(addCommand(s()));
     history.undo();
     expect(history.canRedo).toBe(true);
 
-    history.record({ kind: "add", strokes: s() });
+    history.record(addCommand(s()));
     expect(history.canRedo).toBe(false);
 
     history.undo();
@@ -135,7 +197,7 @@ describe("History", () => {
 
   it("ignores empty commands", () => {
     const history = new History();
-    history.record({ kind: "erase", strokes: [] });
+    history.record(eraseCommand([]));
 
     expect(history.canUndo).toBe(false);
   });

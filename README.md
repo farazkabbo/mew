@@ -109,6 +109,27 @@ Pen pressure comes from the Pointer Events API (Apple Pencil, Wacom, Surface Pen
 finger input get simulated pressure. Once a pen has been used, touches only navigate (basic palm
 rejection).
 
+## Voice and Mew (the gate)
+
+Tap the **microphone** (bottom right) to start listening. Audio streams from the browser straight
+to ElevenLabs Scribe, using a single-use token minted by `/api/stt/token`; the API key never
+leaves the server. When you stop talking for 0.7 s, the utterance goes to **Mew**, which decides
+whether the tutor should respond:
+
+- Obvious filler ("hmm", "okay so") is ignored locally, without a model call.
+- Everything else goes to `/api/mew` → Gemini Flash-Lite (minimal thinking, JSON schema
+  output, `store: false`). On any failure Mew stays silent, unless you summoned it.
+- Triggers: a finished utterance, "Hey Mew …", tapping the mascot, or a 1.5 s pause after writing
+  a few strokes. For 4 s after the tutor speaks, only new questions get through.
+- Requests are same-origin only, size-capped, schema-validated and rate-limited per user.
+
+The **debug panel** (bug icon) shows the live transcript, every Mew decision (label,
+confidence, source, round-trip time) and a sensitivity slider. It also lets you type an utterance
+to test the gate without a microphone.
+
+`pnpm eval:mew` runs 32 labelled utterances, including the M2 acceptance phrases, against the
+real gate model and reports accuracy and latency. It needs `GEMINI_API_KEY`.
+
 ## Quality gates
 
 ```sh

@@ -5,7 +5,12 @@ import { cspDirectives, standaloneCsp } from "./csp";
 describe("cspDirectives", () => {
   it("allows the Supabase origin over https and wss, without path", () => {
     const d = cspDirectives({ supabaseUrl: "https://abc.supabase.co/rest/v1/", production: false });
-    expect(d["connect-src"]).toEqual(["self", "https://abc.supabase.co", "wss://abc.supabase.co"]);
+    expect(d["connect-src"]).toEqual([
+      "self",
+      "wss://api.elevenlabs.io",
+      "https://abc.supabase.co",
+      "wss://abc.supabase.co",
+    ]);
   });
 
   it("locks down plugins, base URI and framing", () => {
@@ -13,7 +18,7 @@ describe("cspDirectives", () => {
     expect(d["object-src"]).toEqual(["none"]);
     expect(d["base-uri"]).toEqual(["self"]);
     expect(d["frame-ancestors"]).toEqual(["none"]);
-    expect(d["connect-src"]).toEqual(["self"]);
+    expect(d["connect-src"]).toEqual(["self", "wss://api.elevenlabs.io"]);
   });
 
   it("upgrades insecure requests only in production", () => {

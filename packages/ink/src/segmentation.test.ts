@@ -61,6 +61,28 @@ describe("segmentLines", () => {
     expect(segmentLines([...left, ...right])).toHaveLength(2);
   });
 
+  it("keeps a stacked fraction (numerator, bar, denominator) on its line", () => {
+    const lhs = word(0, 110, 2, 0); // "x =" centred on y = 100
+    const bar = boxStroke([50, 99, 70, 2], 1000);
+    const numerator = word(60, 92, 3, 20_000); // written later, sitting just above the bar
+    const denominator = word(65, 128, 2, 40_000); // just below the bar
+    const nextLine = word(0, 200, 4, 60_000);
+
+    const lines = segmentLines([...lhs, bar, ...numerator, ...denominator, ...nextLine]);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0]?.strokeIds).toHaveLength(2 + 1 + 3 + 2);
+    expect(lines[1]?.strokeIds).toEqual(nextLine.map((s) => s.id));
+  });
+
+  it("does not pull the next line into an underlined line", () => {
+    const text = word(0, 100, 6, 0);
+    const underline = boxStroke([0, 104, 90, 2], 3000);
+    const nextLine = word(0, 160, 3, 10_000);
+
+    expect(segmentLines([...text, underline, ...nextLine])).toHaveLength(2);
+  });
+
   it("is tolerant of slight baseline drift when writing continuously", () => {
     const drifting = Array.from({ length: 8 }, (_, i) =>
       boxStroke([i * 14, 80 + i * 4, 12, 20], i * 200),

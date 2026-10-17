@@ -43,9 +43,7 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set) => 
   setTool: (tool) => set({ tool }),
   setColor: (color) =>
     set((state) =>
-      state.tool === "highlighter"
-        ? { highlighterColor: color }
-        : { inkColor: color, tool: state.tool === "eraser" ? "pen" : state.tool },
+      state.tool === "highlighter" ? { highlighterColor: color } : { inkColor: color, tool: "pen" },
     ),
   setPenSize: (penSize) => set({ penSize }),
   toggleLines: () => set((state) => ({ showLines: !state.showLines })),

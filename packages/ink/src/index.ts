@@ -3,6 +3,7 @@ export * from "./geometry";
 export * from "./hash";
 export * from "./hit-test";
 export * from "./history";
+export * from "./lasso";
 export * from "./outline";
 export * from "./page-document";
 export * from "./segmentation";

@@ -4,6 +4,7 @@ import {
   Eraser,
   Highlighter,
   ImageDown,
+  LassoSelect,
   type LucideIcon,
   Maximize,
   Pen,
@@ -30,6 +31,7 @@ const TOOLS: { tool: Tool; label: string; shortcut: string; icon: LucideIcon }[]
   { tool: "pen", label: "Pen", shortcut: "P", icon: Pen },
   { tool: "highlighter", label: "Highlighter", shortcut: "H", icon: Highlighter },
   { tool: "eraser", label: "Eraser", shortcut: "E", icon: Eraser },
+  { tool: "lasso", label: "Lasso select", shortcut: "L", icon: LassoSelect },
 ];
 
 export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: Props) {
@@ -65,7 +67,7 @@ export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: P
             aria-checked={activeColor === c.light}
             aria-label={c.name}
             title={c.name}
-            disabled={tool === "eraser"}
+            disabled={tool === "eraser" || tool === "lasso"}
             onClick={() => setColor(c.light)}
             className="grid size-7 place-items-center rounded-full disabled:opacity-40 aria-checked:ring-2 aria-checked:ring-accent"
           >
