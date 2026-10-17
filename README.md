@@ -3,6 +3,9 @@
 An ambient AI tutor that lives inside your notebook. It stays quiet until it's actually needed,
 then answers by voice and in animated ink on the page.
 
+Product brief: [docs/BUILD_BRIEF.md](docs/BUILD_BRIEF.md) · Build status and decisions:
+[docs/HANDOFF.md](docs/HANDOFF.md)
+
 ## Repository layout
 
 ```
