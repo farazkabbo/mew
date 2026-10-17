@@ -10,7 +10,7 @@ import path from "node:path";
 
 import type { TutorRequest } from "@mew/shared";
 
-const ROOT_ENV = path.resolve(import.meta.dirname, "../../../.env.local");
+const ROOT_ENV = path.resolve(import.meta.dirname, "../../.env.local");
 if (existsSync(ROOT_ENV)) process.loadEnvFile(ROOT_ENV);
 
 /** Brief: first audio within ~1.5 s of the end of a question; "under ~2 s" for M3. */

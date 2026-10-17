@@ -188,7 +188,18 @@ importers:
         specifier: ^5
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
-  apps/web:
+  backend: {}
+
+  backend/supabase:
+    devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.0
+        version: 0.5.8
+      vitest:
+        specifier: ^5
+        version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
+
+  frontend:
     dependencies:
       '@clerk/nextjs':
         specifier: 7.9.16
@@ -198,10 +209,10 @@ importers:
         version: 2.26.0(supports-color@7.2.0)
       '@mew/ink':
         specifier: workspace:*
-        version: link:../../packages/ink
+        version: link:../packages/ink
       '@mew/shared':
         specifier: workspace:*
-        version: link:../../packages/shared
+        version: link:../packages/shared
       '@supabase/supabase-js':
         specifier: ^2
         version: 2.117.2
@@ -289,17 +300,6 @@ importers:
         specifier: ^4
         version: 4.6.5
     devDependencies:
-      vitest:
-        specifier: ^5
-        version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
-
-  services/api: {}
-
-  supabase:
-    devDependencies:
-      '@electric-sql/pglite':
-        specifier: ^0.5.0
-        version: 0.5.8
       vitest:
         specifier: ^5
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))

@@ -28,10 +28,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
-      - run: pnpm --filter '!@mew/api' -r lint
-      - run: pnpm --filter '!@mew/api' -r typecheck
-      - run: pnpm --filter '!@mew/api' -r test
-      - run: pnpm --filter @mew/web build
+      - run: pnpm --filter '!@mew/backend' -r lint
+      - run: pnpm --filter '!@mew/backend' -r typecheck
+      - run: pnpm --filter '!@mew/backend' -r test
+      - run: pnpm --filter @mew/frontend build
       - run: pnpm audit --prod --audit-level high
 
   e2e:
@@ -46,9 +46,9 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @mew/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @mew/frontend exec playwright install --with-deps chromium
       # Runs the notebook in local mode (no Clerk keys), against a dev server Playwright starts.
-      - run: pnpm --filter @mew/web e2e
+      - run: pnpm --filter @mew/frontend e2e
         env:
           E2E_CHANNEL: chromium
       - name: Upload Playwright report
@@ -57,15 +57,15 @@ jobs:
         with:
           name: playwright-report
           path: |
-            apps/web/playwright-report/
-            apps/web/test-results/
+            frontend/playwright-report/
+            frontend/test-results/
           retention-days: 7
 
   python:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/api
+        working-directory: backend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

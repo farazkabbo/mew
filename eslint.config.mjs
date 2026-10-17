@@ -1,9 +1,15 @@
-// Shared lint config for framework-free TypeScript packages (apps/web has its own Next.js config).
+// Shared lint config for framework-free TypeScript packages (frontend has its own Next.js config).
 import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["**/node_modules/**", "**/dist/**", "**/.next/**", "apps/**", "services/**"]),
+  globalIgnores([
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.next/**",
+    "frontend/**",
+    "backend/.venv/**",
+  ]),
   ...tseslint.configs.strictTypeChecked,
   {
     languageOptions: {
