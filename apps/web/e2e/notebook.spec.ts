@@ -198,36 +198,61 @@ test("another tab showing the same page sees new strokes live", async ({ page })
   await otherTab.close();
 });
 
-test("keeps drawing at 60 fps on a page with 1,500 existing strokes", async ({ page }) => {
+/**
+ * Frame intervals (ms) measured with requestAnimationFrame while `during` runs. The first two
+ * intervals are dropped: they include the time before recording started.
+ */
+async function frameIntervals(page: Page, during: () => Promise<void>): Promise<number[]> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __frames: number[]; __recording: boolean };
+    w.__frames = [];
+    w.__recording = true;
+    let last = performance.now();
+    const tick = (now: number) => {
+      w.__frames.push(now - last);
+      last = now;
+      if (w.__recording) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await during();
+  return page.evaluate(() => {
+    const w = window as unknown as { __frames: number[]; __recording: boolean };
+    w.__recording = false;
+    return w.__frames.slice(2);
+  });
+}
+
+const percentile = (values: number[], p: number) =>
+  [...values].sort((a, b) => a - b)[Math.floor(values.length * p)] ?? Infinity;
+
+/**
+ * Smooth writing: drawing a long stroke over a busy page must keep up with the display. The
+ * budget is relative to this machine's own refresh interval (measured idle first), so the test
+ * means the same on a 144 Hz laptop and a GPU-less CI runner capped at 60 Hz.
+ */
+test("drawing on a page with 1,500 strokes keeps up with the display", async ({ page }) => {
   await openNotebook(page);
   await seedStrokes(page, 1500);
   await page.reload();
   await expect.poll(() => inkedPixels(page)).toBeGreaterThan(10_000);
 
-  await page.evaluate(() => {
-    const deltas: number[] = [];
-    let last = performance.now();
-    const tick = (now: number) => {
-      deltas.push(now - last);
-      last = now;
-      (window as unknown as { __frames: number[] }).__frames = deltas;
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
+  const idle = await frameIntervals(page, () => page.waitForTimeout(1000));
+  const refresh = percentile(idle, 0.5);
+  const drawing = await frameIntervals(page, async () => {
+    await drawStroke(page, 100, 450, 900, 240);
+    await page.mouse.move(10, 10);
   });
-  await drawStroke(page, 100, 450, 900, 240);
-  await page.mouse.move(10, 10);
 
-  const frames = await page.evaluate(() =>
-    (window as unknown as { __frames: number[] }).__frames.slice(2),
+  const p95 = percentile(drawing, 0.95);
+  const dropped = drawing.filter((d) => d > refresh * 1.75).length / drawing.length;
+  console.log(
+    `refresh=${refresh.toFixed(1)}ms (${(1000 / refresh).toFixed(0)} Hz) frames=${drawing.length} ` +
+      `p95=${p95.toFixed(1)}ms dropped=${(dropped * 100).toFixed(1)}%`,
   );
-  const sorted = [...frames].sort((a, b) => a - b);
-  const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? Infinity;
-  const fps = 1000 / (frames.reduce((sum, d) => sum + d, 0) / frames.length);
-  console.log(`frames=${frames.length} avgFps=${fps.toFixed(1)} p95=${p95.toFixed(1)}ms`);
 
-  expect(fps).toBeGreaterThan(55);
-  expect(p95).toBeLessThan(25);
+  expect(p95).toBeLessThanOrEqual(refresh * 1.5 + 2);
+  expect(dropped).toBeLessThanOrEqual(0.05);
 });
 
 /** Writes strokes straight into IndexedDB, spread over the page, as the app would store them. */

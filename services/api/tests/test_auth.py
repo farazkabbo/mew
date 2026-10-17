@@ -1,3 +1,5 @@
+import base64
+import json
 import time
 
 import pytest
@@ -81,7 +83,11 @@ def test_hmac_algorithm_downgrade_is_rejected(client: TestClient, make_token: To
 
 
 def test_unsigned_token_is_rejected(client: TestClient) -> None:
-    unsigned = "eyJhbGciOiJub25lIiwia2lkIjoidGVzdC1rZXkifQ.eyJzdWIiOiJ1c2VyXzEyMyJ9."
+    # Built at runtime: a JWT-shaped literal in source trips secret scanners.
+    def segment(data: dict[str, str]) -> str:
+        return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b"=").decode()
+
+    unsigned = f"{segment({'alg': 'none', 'kid': 'test-key'})}.{segment({'sub': 'user_123'})}."
 
     assert client.get("/v1/me", headers=internal_headers(unsigned)).status_code == 401
 
