@@ -3,9 +3,9 @@ import path from "node:path";
 
 import type { NextConfig } from "next";
 
-const repoRoot = path.resolve(import.meta.dirname, "../..");
+const repoRoot = path.resolve(import.meta.dirname, "..");
 
-// Local development reads the repo-root .env.local shared with services/api.
+// Local development reads the repo-root .env.local shared with the backend.
 // Variables already present in the environment (e.g. set by the host) take precedence.
 const rootEnvFile = path.join(repoRoot, ".env.local");
 if (existsSync(rootEnvFile)) process.loadEnvFile(rootEnvFile);

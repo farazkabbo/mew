@@ -6,7 +6,8 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+# backend/src/mew_api/config.py -> repo root
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 CsvTuple = Annotated[tuple[str, ...], NoDecode]
 

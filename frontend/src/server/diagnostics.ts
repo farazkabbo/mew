@@ -49,11 +49,11 @@ function describeApiError(error: unknown): string {
   if (!(error instanceof ApiError)) return error instanceof Error ? error.message : "Unknown error";
   switch (error.status) {
     case null:
-      return `API unreachable (${error.message}). Is services/api running?`;
+      return `API unreachable (${error.message}). Is the backend running?`;
     case 401:
-      return "API rejected the request — check INTERNAL_API_SECRET matches and CLERK_ISSUER / CLERK_AUTHORIZED_PARTIES are set for services/api.";
+      return "API rejected the request — check INTERNAL_API_SECRET matches and CLERK_ISSUER / CLERK_AUTHORIZED_PARTIES are set for the backend.";
     case 503:
-      return "API auth is not configured — set CLERK_ISSUER for services/api.";
+      return "API auth is not configured — set CLERK_ISSUER for the backend.";
     default:
       return error.message;
   }
@@ -63,7 +63,7 @@ function describeSupabaseError(code: string | undefined): string {
   switch (code) {
     case "PGRST205":
     case "42P01":
-      return "The profiles table is missing — apply the migrations in supabase/migrations.";
+      return "The profiles table is missing — apply the migrations in backend/supabase/migrations.";
     case "PGRST301":
     case "PGRST302":
       return "Supabase rejected the token — add Clerk under Authentication → Third-party auth.";

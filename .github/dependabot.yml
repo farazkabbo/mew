@@ -15,7 +15,7 @@ updates:
       - dependency-name: typescript
         update-types: [version-update:semver-major]
   - package-ecosystem: uv
-    directory: /services/api
+    directory: /backend
     schedule:
       interval: weekly
   - package-ecosystem: github-actions
@@ -23,7 +23,7 @@ updates:
     schedule:
       interval: weekly
   - package-ecosystem: docker
-    directory: /services/api
+    directory: /backend
     schedule:
       interval: weekly
     ignore:

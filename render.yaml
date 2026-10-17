@@ -5,7 +5,7 @@ services:
   - type: web
     name: mew-api
     runtime: docker
-    rootDir: services/api
+    rootDir: backend
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
@@ -15,7 +15,7 @@ services:
     autoDeploy: true
     buildFilter:
       paths:
-        - services/api/**
+        - backend/**
     envVars:
       - key: APP_ENV
         value: production

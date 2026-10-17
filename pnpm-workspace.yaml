@@ -1,8 +1,8 @@
 packages:
-  - apps/*
+  - frontend
+  - backend
+  - backend/supabase
   - packages/*
-  - services/*
-  - supabase
 
 # Lifecycle scripts are blocked unless explicitly allowed here (supply-chain hardening).
 allowBuilds:

@@ -6,12 +6,12 @@ then answers by voice and in animated ink on the page.
 ## Repository layout
 
 ```
-apps/web          Next.js 16 (App Router, TypeScript strict, Tailwind v4, Clerk auth)
-services/api      FastAPI on Python 3.12 (internal service: checkers, ingestion, heavy LLM work)
-packages/shared   Shared zod schemas and types (mirrored by Pydantic models in services/api)
-packages/ink      Framework-free ink logic: geometry, spatial index, line segmentation, undo/redo
-supabase          Postgres migrations (RLS) and their tests (run against PGlite, no Docker needed)
-scripts           Dev tooling (`pnpm health`)
+frontend/            Next.js 16 app: the notebook UI, plus its /api routes (gate, tutor, speech)
+backend/             FastAPI on Python 3.12 (internal service: checkers, ingestion, heavy LLM work)
+backend/supabase/    Postgres migrations (RLS) and their tests (run against PGlite, no Docker needed)
+packages/shared/     Shared zod schemas, prompts and types (mirrored by Pydantic models in backend/)
+packages/ink/        Framework-free ink logic: geometry, spatial index, line segmentation, undo/redo
+scripts/             Dev tooling (`pnpm health`)
 ```
 
 ### How the pieces talk
@@ -39,7 +39,7 @@ browser ──(Clerk session cookie)──► Next.js server ──(X-Internal-S
 
 ```sh
 pnpm install
-cd services/api && uv sync && cd ../..
+cd backend && uv sync && cd ..
 cp .env.example .env.local   # then fill it in (see below)
 ```
 
@@ -53,9 +53,9 @@ notebooks saved only in this browser, and the same strict CSP. Production refuse
 
 ### Clerk
 
-1. Sign the CLI in to your Clerk account, link the app, and pull its dev keys into `apps/web/.env.local`:
+1. Sign the CLI in to your Clerk account, link the app, and pull its dev keys into `frontend/.env.local`:
    ```sh
-   cd apps/web
+   cd frontend
    npx clerk@latest auth login
    npx clerk@latest link --app <your-app-id>
    npx clerk@latest env pull
@@ -73,11 +73,12 @@ notebooks saved only in this browser, and the same strict CSP. Production refuse
    domain.
 2. Apply the migrations, either with the CLI:
    ```sh
+   cd backend
    npx supabase@latest login
    npx supabase@latest link --project-ref <project-ref>
    npx supabase@latest db push
    ```
-   or by pasting `supabase/migrations/*.sql` into the SQL editor, in filename order.
+   or by pasting `backend/supabase/migrations/*.sql` into the SQL editor, in filename order.
 3. Put the project URL and the **publishable** key in `.env.local`. Never put the secret key in a
    `NEXT_PUBLIC_` variable; the app refuses to start if you do.
 
@@ -156,12 +157,12 @@ keys plus `ELEVENLABS_VOICE_ID`) and fails if the median is over 2 s.
 
 ```sh
 pnpm check                     # prettier, ESLint, tsc, vitest across the TS workspaces + API
-pnpm --filter @mew/web e2e     # Playwright: drawing, persistence, eraser/undo, export, 60 fps
-pnpm --filter @mew/api audit:py  # pip-audit of the API's runtime dependencies
+pnpm --filter @mew/frontend e2e  # Playwright: drawing, persistence, eraser/undo, export, 60 fps
+pnpm --filter @mew/backend audit:py  # pip-audit of the API's runtime dependencies
 pnpm audit --prod              # npm advisories
 ```
 
-The database tests in `supabase/tests` apply every migration to an in-memory Postgres (PGlite)
+The database tests in `backend/supabase/tests` apply every migration to an in-memory Postgres (PGlite)
 that emulates Supabase's roles and `auth.jwt()`. They then attack the policies: cross-user reads
 and writes, ownership spoofing, attaching rows to someone else's notebook, anon access, and
 column-level tampering.
@@ -172,7 +173,7 @@ current.
 
 ## Deploy
 
-- **API → Render.** `render.yaml` defines a Docker web service (`services/api/Dockerfile`,
+- **API → Render.** `render.yaml` defines a Docker web service (`backend/Dockerfile`,
   non-root, health check `/health`). Apply it as a Blueprint, then set `INTERNAL_API_SECRET`
   (same value as the web app), `CLERK_ISSUER` and `CLERK_AUTHORIZED_PARTIES` (your web origin).
   The service refuses to boot in production without them.

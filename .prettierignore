@@ -4,7 +4,9 @@ pnpm-lock.yaml
 **/.venv/**
 **/dist/**
 **/coverage/**
-services/api/**
+# Python backend (formatted by ruff); its database tests are TypeScript and stay included.
+backend/*
+!backend/supabase
 **/AGENTS.md
 **/CLAUDE.md
 **/test-results/**

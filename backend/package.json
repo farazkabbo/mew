@@ -1,5 +1,5 @@
 {
-  "name": "@mew/api",
+  "name": "@mew/backend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
