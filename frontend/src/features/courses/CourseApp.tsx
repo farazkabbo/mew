@@ -100,7 +100,7 @@ export function CourseApp({ id }: { id: string }) {
         </div>
       )}
       {course.status === "review" && <ScopeReview detail={detail} onSaved={setDetail} />}
-      {course.status === "ready" && <StudyPlan detail={detail} />}
+      {course.status === "ready" && <StudyPlan detail={detail} onChange={setDetail} />}
     </CourseShell>
   );
 }

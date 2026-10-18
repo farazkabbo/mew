@@ -17,6 +17,7 @@ const request: TutorRequest = {
   previousTutorSpeech: [],
   checks: [],
   courseContext: [],
+  quiz: null,
 };
 
 const RESPONSE: TutorResponse = {

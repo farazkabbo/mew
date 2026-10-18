@@ -4,6 +4,7 @@ import {
   MEW_LIMITS,
   type MewInput,
   type MewLabel,
+  type MewTrigger,
   type NotebookSignals,
   shouldRespond,
 } from "@mew/shared";
@@ -26,6 +27,8 @@ export type MewHooks = {
   /** The gate decided to respond: hand the turn to the tutor. */
   onRespond?(turn: {
     intent: Exclude<MewLabel, "ignore">;
+    /** What prompted it: speech, a writing pause, or a tap on the mascot. */
+    trigger: MewTrigger;
     utterance: string;
     triggeredAt: number;
     gateMs: number;
@@ -43,6 +46,8 @@ export type MewHooks = {
   quickCheck?(doc: PageDocument): Promise<LineCheck[] | null>;
   /** A pause produced a verified-correct line: tick it quietly (no tutor turn). */
   onVerifiedCorrect?(checks: LineCheck[]): void;
+  /** Whether to ignore a trigger altogether (e.g. writing pauses during a quiz). */
+  skip?(trigger: MewTrigger): boolean;
 };
 
 /** An erase within this window counts as "just erased". */
@@ -109,6 +114,7 @@ export class MewController {
   }
 
   private async evaluate({ trigger, utterance }: Evaluation): Promise<void> {
+    if (this.hooks.skip?.(trigger)) return;
     const input = this.buildInput(trigger, utterance);
     const started = this.clock.now();
     const mew = useMew.getState();
@@ -135,6 +141,7 @@ export class MewController {
     if (acted && label !== "ignore") {
       this.hooks.onRespond?.({
         intent: label,
+        trigger,
         utterance: input.lastUtterance,
         triggeredAt: started,
         gateMs,
@@ -168,6 +175,7 @@ export class MewController {
     if (wrong) {
       this.hooks.onRespond?.({
         intent: "check_work",
+        trigger: input.trigger,
         utterance: input.lastUtterance,
         triggeredAt: started,
         gateMs,

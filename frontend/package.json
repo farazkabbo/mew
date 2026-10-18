@@ -15,7 +15,8 @@
     "e2e": "playwright test",
     "eval:mew": "tsx --conditions=react-server evals/mew.eval.ts",
     "eval:tutor": "tsx --conditions=react-server evals/tutor.eval.ts",
-    "eval:course": "tsx --conditions=react-server evals/course.eval.ts"
+    "eval:course": "tsx --conditions=react-server evals/course.eval.ts",
+    "eval:quiz": "tsx --conditions=react-server evals/quiz.eval.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.16",
@@ -31,6 +32,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
+    "ts-fsrs": "5.4.2",
     "zod": "^4",
     "zustand": "^5.0.15"
   },

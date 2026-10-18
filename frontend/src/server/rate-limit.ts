@@ -31,6 +31,12 @@ export const RATE_RULES = {
   lesson: { limit: 20, windowMs: MINUTE },
   lessonDaily: { limit: 300, windowMs: DAY },
   retrieve: { limit: 60, windowMs: MINUTE },
+  /** Recording answers (practice and quiz) for the learner model. */
+  attempt: { limit: 60, windowMs: MINUTE },
+  attemptDaily: { limit: 3000, windowMs: DAY },
+  /** Grading a quiz answer (a model call with an image). */
+  quizGrade: { limit: 15, windowMs: MINUTE },
+  quizGradeDaily: { limit: 400, windowMs: DAY },
   /** Work checks (SymPy on the API service: CPU, not money, but still bounded). */
   check: { limit: 30, windowMs: MINUTE },
   checkDaily: { limit: 2000, windowMs: DAY },

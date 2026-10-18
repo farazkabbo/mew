@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CHECK_LIMITS, LineCheck } from "./check";
 import { COURSE_LIMITS, CourseExcerpt } from "./course";
 import { MEW_LIMITS, MewLabel } from "./mew";
+import { QuizContext } from "./quiz";
 
 export const TUTOR_LIMITS = {
   speechChars: 400,
@@ -116,6 +117,8 @@ export const TutorRequest = z.object({
   checks: z.array(LineCheck).max(CHECK_LIMITS.checksPerTurn).default([]),
   /** Passages of the student's course material relevant to this turn (with pages to cite). */
   courseContext: z.array(CourseExcerpt).max(COURSE_LIMITS.excerptsPerTurn).default([]),
+  /** The quiz question the student is answering, if a quiz is running (M8). */
+  quiz: QuizContext.nullable().default(null),
 });
 export type TutorRequest = z.infer<typeof TutorRequest>;
 

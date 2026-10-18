@@ -1,6 +1,7 @@
 pnpm-lock.yaml
 **/.next/**
 **/.next-e2e/**
+**/.next-build/**
 **/node_modules/**
 **/.venv/**
 **/dist/**

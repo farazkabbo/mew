@@ -14,7 +14,7 @@ from .checker.sandbox import CheckerPool, limit_memory
 from .config import Settings
 from .courses.store import MemoryCourseStore
 from .deps import require_internal_caller
-from .routes import check, courses, health, me
+from .routes import check, courses, health, learner, me
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ def create_app(
     v1.include_router(me.router)
     v1.include_router(check.router)
     v1.include_router(courses.router)
+    v1.include_router(learner.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

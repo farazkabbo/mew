@@ -1,14 +1,17 @@
 "use client";
 
-import { currentLine } from "@mew/ink";
-import { reconcileMarks } from "@mew/shared";
+import { currentLine, unionBBox } from "@mew/ink";
+import { reconcileMarks, TUTOR_LIMITS } from "@mew/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { coursesApi } from "../courses/api";
 import type { PageEngine } from "../notebook/engine";
-import { studentLines } from "../notebook/export-line";
+import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
 import { INK_COLORS, TUTOR_INK } from "../notebook/palette";
 import { WorkChecker } from "../check/checker";
 import { PyodideCodeRunner } from "../check/code-runner";
+import { gradeRemote } from "../quiz/grade-client";
+import { QuizSession } from "../quiz/session";
 import { TutorController } from "../tutor/controller";
 import { TutorInk } from "../tutor/ink";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
@@ -42,17 +45,62 @@ function createPipeline() {
     }),
   });
   const checker = new WorkChecker({ recognition, code: new PyodideCodeRunner() });
+  let quiz: QuizSession | null = null;
   const tutor = new TutorController({
     player: new PcmStreamPlayer(),
     recognition,
     ink,
     checker,
     courseId: () => courseId,
+    quiz: () => quiz?.context() ?? null,
     doc: () => engine?.doc ?? null,
     onFinished: () => mew?.tutorFinished(),
   });
+  quiz = new QuizSession({
+    api: {
+      detail: (id) => coursesApi.get(id),
+      progress: (id) => coursesApi.progress(id),
+      lesson: (id, conceptId) => coursesApi.lesson(id, conceptId),
+      attempt: (id, attempt) => coursesApi.attempt(id, attempt),
+    },
+    grade: (request) => gradeRemote(request),
+    doc: () => engine?.doc ?? null,
+    lines: studentLines,
+    recognize: async (doc, line) => (await recognition.recognize(doc, line))?.text ?? null,
+    renderAnswer: async (doc, lines) => {
+      if (lines.length === 0) return null;
+      const raster = await renderStrokesPng(
+        strokesOf(doc, lines),
+        lines.map((l) => l.bbox).reduce(unionBBox),
+      );
+      const base64 = await blobToBase64(raster.blob);
+      return base64.length <= TUTOR_LIMITS.imageBase64Chars ? base64 : null;
+    },
+    spokenSince: (at, exclude) =>
+      useVoice
+        .getState()
+        .segments.filter((s) => s.at >= at && s.text !== exclude && !tutor.isEcho(s.text))
+        .map((s) => s.text)
+        .join(" "),
+    mark: (actions) => void ink.render(actions),
+    say: (text) => tutor.announce(text),
+    now: () => Date.now(),
+  });
+  const quizSession = quiz;
   mew = new MewController(new HttpMewGate(), browserClock, {
-    onRespond: (turn) => void tutor.respond(turn),
+    onRespond: (turn) => {
+      if (quizSession.active) {
+        // "Is this right?" during a quiz is answered by the grader; asking for help counts.
+        if (turn.intent === "check_work") {
+          void quizSession.check(turn.utterance);
+          return;
+        }
+        quizSession.helpedByTutor();
+      }
+      void tutor.respond(turn);
+    },
+    // A quiz is a test: no quiet ticks or remarks on pauses while the student answers.
+    skip: (trigger) => trigger === "pen_pause" && quizSession.active,
     tutorSpokeRecently: () => {
       const { phase, lastFinishedAt } = useTutor.getState();
       const recent = lastFinishedAt !== null && Date.now() - lastFinishedAt < RECENT_TUTOR_MS;
@@ -70,6 +118,7 @@ function createPipeline() {
     tutor,
     recognition,
     ink,
+    quiz: quizSession,
     /** The course of the notebook on screen (the tutor draws on its material). */
     setCourse(next: string | null) {
       courseId = next;
@@ -89,7 +138,7 @@ function createPipeline() {
  */
 export function useMewSession(engine: PageEngine | null, courseId: string | null = null) {
   const [pipeline] = useState(createPipeline);
-  const { mew, tutor, recognition, ink } = pipeline;
+  const { mew, tutor, recognition, ink, quiz } = pipeline;
   const voice = useRef<VoiceSession | null>(null);
 
   useEffect(() => {
@@ -103,11 +152,12 @@ export function useMewSession(engine: PageEngine | null, courseId: string | null
   useEffect(
     () => () => {
       mew.dispose();
+      void quiz.stop();
       tutor.interrupt();
       ink.dispose();
       voice.current?.stop();
     },
-    [mew, tutor, ink],
+    [mew, tutor, ink, quiz],
   );
 
   const startListening = useCallback(() => {
@@ -149,7 +199,7 @@ export function useMewSession(engine: PageEngine | null, courseId: string | null
   /** The pen touched the page: don't talk over someone who's writing. */
   const penDown = useCallback(() => tutor.writing(), [tutor]);
 
-  return { startListening, stopListening, say, summon, penDown, ink };
+  return { startListening, stopListening, say, summon, penDown, ink, quiz };
 }
 
 /** Recognises the line being written after the pen rests, so Mew and the tutor know its text. */

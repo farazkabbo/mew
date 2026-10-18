@@ -2,6 +2,7 @@ import type { PageDocument } from "@mew/ink";
 import {
   type BoardAction,
   type LineCheck,
+  type QuizContext,
   reconcileMarks,
   TTS_SAMPLE_RATE,
   type TutorRequest,
@@ -33,6 +34,8 @@ export type TutorDeps = {
   checker?: Pick<WorkChecker, "check">;
   /** The course of the notebook on screen, if any (its passages go to the tutor). */
   courseId?: () => string | null;
+  /** The quiz question being answered, if a quiz is running. */
+  quiz?: () => QuizContext | null;
   /** The page on screen, if any. */
   doc(): PageDocument | null;
   /** Called when a turn ends, however it ends (starts Mew's cooldown). */
@@ -98,6 +101,7 @@ export class TutorController {
         doc: this.deps.doc(),
         recognition: this.deps.recognition,
         courseId: this.deps.courseId?.() ?? null,
+        quiz: this.deps.quiz?.() ?? null,
       });
       request.checks = checks;
       for await (const event of streamTutor(request, turn.abort.signal)) {
@@ -165,6 +169,28 @@ export class TutorController {
             ? "Something's off in that step — have another look."
             : "That step checks out.",
       );
+  }
+
+  /**
+   * Says a prepared line (a quiz question, a hint, a grade) without a model call: caption plus
+   * voice, interruptible like any turn. Resolves when it has been said (or cut off).
+   */
+  async announce(text: string): Promise<void> {
+    this.interrupt();
+    const turn: ActiveTurn = { id: 0, abort: new AbortController(), speech: text };
+    this.active = turn;
+    const tutor = useTutor.getState();
+    tutor.setCaption(text);
+    try {
+      await this.speak(turn, this.now());
+    } finally {
+      if (this.active === turn) {
+        this.active = null;
+        this.lastSpoken = { text, endedAt: this.now() };
+        useTutor.setState({ phase: "idle", lastFinishedAt: Date.now() });
+        this.deps.onFinished();
+      }
+    }
   }
 
   /** A partial transcript arrived: barge in if it's the student, not our own voice. */

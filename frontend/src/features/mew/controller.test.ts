@@ -211,4 +211,29 @@ describe("handing turns to the tutor", () => {
       notebookSignals: { activeRegionText: "2x + 3 = 7" },
     });
   });
+
+  it("says what prompted a turn, and can skip triggers altogether (writing pauses in a quiz)", async () => {
+    const gate = gateReturning({
+      output: { label: "check_work", confidence: 0.9, reason: "asked" },
+      source: "model",
+      latencyMs: 1,
+    });
+    const onRespond = vi.fn();
+    let skipping = true;
+    const mew = new MewController(gate, clock, {
+      onRespond,
+      skip: (trigger) => skipping && trigger === "utterance",
+    });
+
+    mew.utterance("is this right?");
+    await flush();
+    expect(gate.decide).not.toHaveBeenCalled();
+
+    skipping = false;
+    mew.utterance("is this right?");
+    await flush();
+    expect(onRespond).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: "check_work", trigger: "utterance" }),
+    );
+  });
 });

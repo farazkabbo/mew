@@ -9,12 +9,15 @@ Product brief: [docs/BUILD_BRIEF.md](docs/BUILD_BRIEF.md) · Build status and de
 ## Repository layout
 
 ```
-frontend/            Next.js 16 app: the notebook UI, plus its /api routes (gate, tutor, speech)
-backend/             FastAPI on Python 3.12 (internal service: checkers, ingestion, heavy LLM work)
-backend/supabase/    Postgres migrations (RLS) and their tests (run against PGlite, no Docker needed)
+frontend/            Next.js 16 app: notebook, courses, and its /api routes (gate, tutor, speech,
+                     checks, courses)
+backend/             FastAPI on Python 3.12 (internal service: SymPy checks, course ingestion,
+                     lessons, retrieval). See backend/README.md
+backend/supabase/    Postgres migrations (RLS, pgvector) and their tests (PGlite, no Docker needed)
 packages/shared/     Shared zod schemas, prompts and types (mirrored by Pydantic models in backend/)
-packages/ink/        Framework-free ink logic: geometry, spatial index, line segmentation, undo/redo
-scripts/             Dev tooling (`pnpm health`)
+packages/ink/        Framework-free ink logic: geometry, line segmentation, undo/redo, and the
+                     tutor's handwriting (glyphs, LaTeX, placement, plots and diagrams)
+scripts/             Dev tooling (`pnpm health`, glyph table builder)
 ```
 
 ### How the pieces talk
@@ -31,7 +34,8 @@ browser ──(Clerk session cookie)──► Next.js server ──(X-Internal-S
 - **FastAPI is never called from the browser.** Only the Next.js server calls it, with a shared
   secret plus the user's Clerk token, which FastAPI verifies against Clerk's JWKS.
 - **Supabase is reached with the user's own token**, so row-level security applies to every query.
-  The secret key (which bypasses RLS) is reserved for narrowly scoped server jobs.
+  The secret key (which bypasses RLS) is reserved for narrowly scoped server jobs: today only
+  course ingestion on the API service, for a course it has just created for the verified user.
 
 ## Prerequisites
 
@@ -51,8 +55,9 @@ cp .env.example .env.local   # then fill it in (see below)
 ### Local mode (no Clerk keys)
 
 Without `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, the dev server runs in **local mode**: no sign-in,
-notebooks saved only in this browser, and the same strict CSP. Production refuses to serve
-(HTTP 503) without Clerk keys, so local mode can't become an auth bypass.
+notebooks saved only in this browser, courses kept in the API's memory, and the same strict
+CSP. Production refuses to serve (HTTP 503) without Clerk keys, and the API accepts the local
+user only when `APP_ENV=development`, so local mode can't become an auth bypass.
 
 ### Clerk
 
@@ -135,7 +140,8 @@ confidence, source, round-trip time) and a sensitivity slider. It also lets you 
 to test the gate without a microphone.
 
 `pnpm eval:mew` runs 32 labelled utterances, including the M2 acceptance phrases, against the
-real gate model and reports accuracy and latency. It needs `GEMINI_API_KEY`.
+real gate model and reports accuracy and latency. It needs `GEMINI_API_KEY` and paces itself to
+14 requests a minute for Gemini's free tier (`EVAL_RPM=0` turns that off).
 
 ## The tutor
 
@@ -215,21 +221,49 @@ search). In local mode courses live in the API's memory; signed in, they live in
 RLS (apply the migrations first). `pnpm eval:course` checks against the real model that answers
 cite the right page.
 
+## Learning and review
+
+Progress is honest: every answer is recorded with how it came about (**on your own**, **with a
+hint**, or **after being shown**), and only answers given on your own count as knowing a
+concept. Each concept shows one of _Not started · Explored · Practised with hint · Checked ·
+Revisit_, and FSRS (ts-fsrs) schedules when it comes back.
+
+- **Lesson practice:** take the hint if you need it, check your answer against the model answer,
+  and say whether you had it.
+- **Quiz me** (course page, lesson, Review, or the sidebar in a course notebook): the tutor asks a
+  question in the notebook; answer on the page or out loud, then check it (or say "is this
+  right?"). The answer is graded against the lesson's model answer, ticked or circled in ink, and
+  recorded. Asking the tutor for help, taking the hint or a wrong first try makes it "with hint".
+  Without a model key you grade yourself against the model answer.
+- **Review** (sidebar): concepts due now, across all courses.
+- **Exam date:** the study plan spreads unchecked and to-revisit concepts over the days left,
+  brings back reviews due before the exam, and keeps the day before for a final pass.
+
+`pnpm eval:quiz` checks the grader against the real model (`EVAL_RPM` paces it; set
+`GEMINI_TUTOR_MODEL` to try another model).
+
 ## Quality gates
 
 ```sh
 pnpm check                     # prettier, ESLint, tsc, vitest across the TS workspaces + API
 E2E_BASE_URL=http://localhost:3100 pnpm --filter @mew/frontend e2e
-                               # Playwright (27 tests): starts its own web (:3100) and API (:8100)
+                               # Playwright (30 tests): starts its own web (:3100) and API (:8100)
                                # servers in local mode, beside any dev server you have running
 pnpm --filter @mew/backend audit:py  # pip-audit of the API's runtime dependencies
 pnpm audit --prod              # npm advisories
 ```
 
 The database tests in `backend/supabase/tests` apply every migration to an in-memory Postgres (PGlite)
-that emulates Supabase's roles and `auth.jwt()`. They then attack the policies: cross-user reads
-and writes, ownership spoofing, attaching rows to someone else's notebook, anon access, and
-column-level tampering.
+that emulates Supabase's roles, `auth.jwt()` and storage, with pgvector. They then attack the
+policies: cross-user reads and writes, ownership spoofing, attaching rows to someone else's
+notebook or course, retrieving another user's passages, logging attempts against someone else's
+concept (or the wrong course), other users' storage folders, anon access, and column-level
+tampering (including rewriting or backdating attempts).
+
+The Playwright suite runs one test at a time against a web server on :3100 (its own
+`.next-e2e` build folder) and the real API on :8100, both started by Playwright in local mode
+with a throwaway internal secret and no model keys. Model calls are mocked per test; SymPy,
+PDF parsing, retrieval and Pyodide run for real.
 
 CI (`.github/workflows/ci.yml`) runs all of the above plus a production build and a gitleaks
 secret scan. Actions are pinned to commit SHAs, and Dependabot keeps them and all dependencies
@@ -239,8 +273,12 @@ current.
 
 - **API → Render.** `render.yaml` defines a Docker web service (`backend/Dockerfile`,
   non-root, health check `/health`). Apply it as a Blueprint, then set `INTERNAL_API_SECRET`
-  (same value as the web app), `CLERK_ISSUER` and `CLERK_AUTHORIZED_PARTIES` (your web origin).
-  The service refuses to boot in production without them.
+  (same value as the web app), `CLERK_ISSUER` and `CLERK_AUTHORIZED_PARTIES` (your web origin);
+  the service refuses to boot in production without them. For courses also set
+  `GEMINI_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
+  `SUPABASE_SECRET_KEY`. Use an instance with at least 2 GB of RAM (the SymPy and PDF workers
+  run in their own processes; the free plan's 512 MB is not enough).
+- **Database.** Apply `backend/supabase/migrations/*.sql` in order (see Supabase above).
 - **Web.** Set every variable from the Web section of `.env.example`, with `APP_ORIGIN` set to the
   public origin and `API_BASE_URL` set to the Render service URL.
 
@@ -254,3 +292,11 @@ current.
 - Env vars are validated with zod (web) and Pydantic (API). Errors name variables, never values.
 - FastAPI hides `/docs` and the OpenAPI schema outside development, rejects unknown `Host`
   headers, and sends no CORS headers (browsers can't call it).
+- Untrusted input is processed out of process: SymPy checks and PDF parsing run in sandboxed
+  worker processes with hard time limits (and memory caps on Linux); students' Python runs in
+  a Pyodide worker with its own CSP, no network access, and a timeout.
+- Uploads are checked by their bytes (a PDF must start with `%PDF-`) and capped at 15 MB while
+  streaming. Every route is same-origin only (GETs refuse cross-site requests), rate-limited
+  per user and schema-validated.
+- Model output is always validated against a schema; speech, handwriting, images and course
+  material are treated as data, never as instructions.

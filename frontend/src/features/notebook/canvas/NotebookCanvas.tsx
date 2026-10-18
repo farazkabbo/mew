@@ -29,10 +29,12 @@ type CanvasProps = {
   onPenDown?: () => void;
   /** The tutor's ink while it's being written (drawn on the live layer). */
   tutorInk?: InkLayer & { attachViewport(viewport: () => BBox): () => void };
+  /** Extra screen width (CSS px) covered on the left by a floating panel (e.g. the quiz card). */
+  leftInset?: number;
 };
 
 export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function NotebookCanvas(
-  { engine, onPenDown, tutorInk },
+  { engine, onPenDown, tutorInk, leftInset = 0 },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,9 +43,11 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
   const liveRef = useRef<HTMLCanvasElement>(null);
   const controls = useRef<CanvasHandle | null>(null);
   const penDown = useRef(onPenDown);
+  const inset = useRef(leftInset);
   useEffect(() => {
     penDown.current = onPenDown;
-  }, [onPenDown]);
+    inset.current = leftInset;
+  }, [onPenDown, leftInset]);
 
   useImperativeHandle(ref, () => ({
     zoomBy: (factor) => controls.current?.zoomBy(factor),
@@ -177,7 +181,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     });
     const unsubscribeTutor = tutorInk?.subscribe(() => schedule({ live: true }));
     const detachViewport = tutorInk?.attachViewport(() =>
-      safeArea(renderer.visible(camera), camera.zoom),
+      safeArea(renderer.visible(camera), camera.zoom, inset.current),
     );
 
     return () => {
@@ -230,10 +234,10 @@ function readTheme(): Theme {
 const CHROME = { top: 80, bottom: 84, left: 16, right: 16 };
 
 /** The part of the visible page not hidden under the floating controls, in page units. */
-function safeArea([x, y, w, h]: BBox, zoom: number): BBox {
+function safeArea([x, y, w, h]: BBox, zoom: number, leftInset: number): BBox {
   const t = CHROME.top / zoom;
   const b = CHROME.bottom / zoom;
-  const l = CHROME.left / zoom;
+  const l = Math.max(CHROME.left, leftInset) / zoom;
   const r = CHROME.right / zoom;
   return [x + l, y + t, Math.max(0, w - l - r), Math.max(0, h - t - b)];
 }

@@ -1,18 +1,21 @@
 "use client";
 
-import type { Concept, CourseDetail, Lesson } from "@mew/shared";
-import { Loader2, NotebookPen } from "lucide-react";
+import type { Concept, ConceptProgress, CourseDetail, Lesson } from "@mew/shared";
+import { Loader2, NotebookPen, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { coursesApi, CourseApiError, formatPages, notebookHref } from "./api";
+import { coursesApi, CourseApiError, formatPages, notebookHref, quizHref } from "./api";
 import { CourseShell } from "./CourseShell";
+import { PracticeCard } from "./PracticeCard";
+import { StatusChip } from "./StatusChip";
 
 /** A concept's lesson: explanation, worked example and practice, grounded in the course. */
 export function LessonView({ courseId, conceptId }: { courseId: string; conceptId: string }) {
   const [detail, setDetail] = useState<CourseDetail | null>(null);
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ConceptProgress | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,7 +29,12 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
       .catch(fail);
     coursesApi
       .lesson(courseId, conceptId)
-      .then((l) => !cancelled && setLesson(l))
+      .then((l) => {
+        if (cancelled) return;
+        setLesson(l);
+        // Reading the lesson counts as exploring the concept (and starts its reviews).
+        void coursesApi.explored(courseId, conceptId).catch(() => undefined);
+      })
       .catch(fail);
     return () => {
       cancelled = true;
@@ -37,7 +45,16 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
   const back = { href: `/courses/${courseId}`, label: detail?.course.title ?? "Course" };
 
   return (
-    <CourseShell back={back} title={concept?.title ?? "Lesson"} subtitle={concept?.summary}>
+    <CourseShell
+      back={back}
+      title={concept?.title ?? "Lesson"}
+      subtitle={
+        <span className="flex flex-wrap items-center gap-3">
+          {progress && <StatusChip status={progress.status} />}
+          {concept?.summary}
+        </span>
+      }
+    >
       {error && (
         <p role="alert" className="text-sm text-error">
           {error}
@@ -71,21 +88,14 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
               <h2 className="font-serif text-2xl">Practice</h2>
               <ol className="mt-4 space-y-5">
                 {lesson.practice.map((q, i) => (
-                  <li key={i} className="rounded-xl border border-rule bg-paper-raised p-5">
-                    <p className="font-medium">
-                      {i + 1}. {q.question}
-                    </p>
-                    {q.hint && (
-                      <details className="mt-3 text-sm">
-                        <summary className="cursor-pointer text-ink-muted">Hint</summary>
-                        <p className="mt-1">{q.hint}</p>
-                      </details>
-                    )}
-                    <details className="mt-2 text-sm">
-                      <summary className="cursor-pointer text-ink-muted">Answer</summary>
-                      <p className="mt-1 whitespace-pre-wrap">{q.answer}</p>
-                    </details>
-                  </li>
+                  <PracticeCard
+                    key={i}
+                    courseId={courseId}
+                    conceptId={conceptId}
+                    index={i}
+                    question={q}
+                    onRecorded={setProgress}
+                  />
                 ))}
               </ol>
             </section>
@@ -97,13 +107,22 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
             </p>
           )}
           {detail && (
-            <Link
-              href={notebookHref(detail.course)}
-              className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
-            >
-              <NotebookPen className="size-4" aria-hidden />
-              Practise in the notebook
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={notebookHref(detail.course)}
+                className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
+              >
+                <NotebookPen className="size-4" aria-hidden />
+                Practise in the notebook
+              </Link>
+              <Link
+                href={quizHref(detail.course)}
+                className="inline-flex items-center gap-2 rounded-full border border-rule px-5 py-2 text-sm font-medium hover:border-accent"
+              >
+                <Sparkles className="size-4 text-tutor" aria-hidden />
+                Quiz me
+              </Link>
+            </div>
           )}
         </article>
       )}

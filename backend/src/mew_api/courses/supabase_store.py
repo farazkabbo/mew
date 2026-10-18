@@ -10,12 +10,22 @@ Two modes:
 import json
 import logging
 from collections.abc import Iterable, Sequence
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 from uuid import UUID
 
 import httpx
 
+from ..learner.models import (
+    MAX_ATTEMPTS,
+    AttemptRecord,
+    AttemptWrite,
+    CardRecord,
+    DueCard,
+    FsrsCard,
+    LearnerData,
+)
 from .models import Concept, Course, Edge, NewChunk, NewConcept, RetrievedChunk, Source
 from .store import CourseNotFoundError
 
@@ -227,6 +237,86 @@ class SupabaseCourseStore:
         for start in range(0, len(rows), _INSERT_BATCH):
             self._insert("concept_sources", rows[start : start + _INSERT_BATCH], returning=False)
 
+    # ─── learner model ─────────────────────────────────────────────────────────────────────
+
+    def has_concept(self, user: str, course_id: UUID, concept_id: UUID) -> bool:
+        params = {"user_id": f"eq.{user}", "course_id": f"eq.{course_id}"}
+        return bool(self._get("concepts", {**params, "id": f"eq.{concept_id}", "select": "id"}))
+
+    def learner_data(self, user: str, course_id: UUID) -> LearnerData:
+        scope = {"user_id": f"eq.{user}", "course_id": f"eq.{course_id}"}
+        attempts = self._get(
+            "attempts",
+            {
+                **scope,
+                "select": "concept_id,correct,evidence,source,created_at",
+                "order": "created_at.desc",
+                "limit": str(MAX_ATTEMPTS),
+            },
+        )
+        cards = self._get("review_cards", {**scope, "select": "concept_id,fsrs_state,due_at"})
+        return LearnerData(
+            attempts=[AttemptRecord.model_validate(r) for r in reversed(attempts)],
+            cards=[CardRecord.model_validate(r) for r in cards],
+        )
+
+    def add_attempt(self, user: str, course_id: UUID, attempt: AttemptWrite) -> None:
+        row = {"course_id": str(course_id), **attempt.model_dump(mode="json", exclude={"card"})}
+        self._insert("attempts", [self._owned(user, row)], returning=False)
+        # Update the card in place, or create it on the concept's first attempt.
+        response = self._request(
+            "PATCH",
+            "/rest/v1/review_cards",
+            params={"user_id": f"eq.{user}", "concept_id": f"eq.{attempt.concept_id}"},
+            content=json.dumps(_card_fields(attempt.card)),
+            headers={"Content-Type": "application/json", "Prefer": "return=representation"},
+        )
+        if response.json() == []:
+            self.start_card(user, course_id, attempt.concept_id, attempt.card)
+
+    def start_card(self, user: str, course_id: UUID, concept_id: UUID, card: FsrsCard) -> None:
+        row = {"course_id": str(course_id), "concept_id": str(concept_id), **_card_fields(card)}
+        self._request(
+            "POST",
+            "/rest/v1/review_cards",
+            params={"on_conflict": "concept_id,user_id"},
+            json=[self._owned(user, row)],
+            headers={"Prefer": "resolution=ignore-duplicates,return=minimal"},
+        )
+
+    def due_cards(self, user: str, before: datetime, limit: int) -> list[DueCard]:
+        rows = self._get(
+            "review_cards",
+            {
+                "user_id": f"eq.{user}",
+                "due_at": f"lte.{before.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}",
+                "order": "due_at.asc",
+                "limit": str(limit),
+                "select": "course_id,concept_id,due_at,fsrs_state",
+            },
+        )
+        if not rows:
+            return []
+        titles: dict[str, str] = {}
+        for table, key in (("courses", "course_id"), ("concepts", "concept_id")):
+            wanted = sorted({r[key] for r in rows})
+            found = self._get(
+                table,
+                {"user_id": f"eq.{user}", "id": f"in.({','.join(wanted)})", "select": "id,title"},
+            )
+            titles.update({r["id"]: r["title"] for r in found})
+        return [
+            DueCard(
+                course_id=r["course_id"],
+                course_title=titles.get(r["course_id"], ""),
+                concept_id=r["concept_id"],
+                concept_title=titles.get(r["concept_id"], ""),
+                due_at=r["due_at"],
+                reps=FsrsCard.model_validate(r["fsrs_state"]).reps,
+            )
+            for r in rows
+        ]
+
     # ─── HTTP ───────────────────────────────────────────────────────────────────────────────
 
     def _owned(self, user: str, row: dict[str, Any]) -> dict[str, Any]:
@@ -316,6 +406,10 @@ def _vector(values: Sequence[float]) -> str:
 
 def _ids(ids: Iterable[UUID]) -> str:
     return ",".join(str(i) for i in ids)
+
+
+def _card_fields(card: FsrsCard) -> dict[str, Any]:
+    return {"fsrs_state": card.model_dump(mode="json"), "due_at": card.due.isoformat()}
 
 
 def _course_fields(row: dict[str, Any]) -> dict[str, Any]:

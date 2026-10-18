@@ -18,7 +18,8 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "eval:mew": "pnpm --filter @mew/frontend eval:mew",
     "eval:tutor": "pnpm --filter @mew/frontend eval:tutor",
-    "eval:course": "pnpm --filter @mew/frontend eval:course"
+    "eval:course": "pnpm --filter @mew/frontend eval:course",
+    "eval:quiz": "pnpm --filter @mew/frontend eval:quiz"
   },
   "devDependencies": {
     "@types/node": "^24",

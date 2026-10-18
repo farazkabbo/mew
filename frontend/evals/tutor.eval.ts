@@ -45,6 +45,7 @@ function request(question: string): TutorRequest {
     previousTutorSpeech: [],
     checks: [],
     courseContext: [],
+    quiz: null,
   };
 }
 

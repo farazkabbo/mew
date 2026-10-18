@@ -3,6 +3,7 @@ import {
   type AnswerStyle,
   COURSE_LIMITS,
   type CourseExcerpt,
+  type QuizContext,
   MEW_LIMITS,
   type RecognizedLine,
   TUTOR_LIMITS,
@@ -28,6 +29,8 @@ type ContextInput = {
   recognition: RecognitionService;
   /** The course the notebook belongs to, if any: its relevant passages are added. */
   courseId?: string | null;
+  /** The quiz question being answered, if a quiz is running. */
+  quiz?: QuizContext | null;
   fetchImpl?: typeof fetch;
 };
 
@@ -76,6 +79,7 @@ export async function buildTutorRequest(input: ContextInput): Promise<TutorReque
       .map((s) => clip(s, TUTOR_LIMITS.speechChars)),
     checks: [],
     courseContext: await courseContext,
+    quiz: input.quiz ?? null,
   };
 }
 
