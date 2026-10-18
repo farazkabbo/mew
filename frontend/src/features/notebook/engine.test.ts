@@ -88,6 +88,37 @@ describe("NotebookRepository", () => {
 });
 
 describe("PageEngine", () => {
+  it("adds a tutor turn's ink as one undo step, flagged as tutor ink, and persists it", async () => {
+    const engine = await reopen();
+    const changes: string[] = [];
+    engine.subscribe((change) => changes.push(change));
+    const student = stroke(10, 1);
+    engine.addStroke(student);
+    const groupId = crypto.randomUUID();
+    const tutor = [stroke(40, 2), stroke(50, 3)].map((s) => ({
+      ...s,
+      author: "tutor" as const,
+      groupId,
+    }));
+
+    engine.addTutorStrokes(tutor);
+    expect(changes).toEqual(["draw", "tutor"]);
+    await engine.flush();
+    expect((await reopen()).doc.size).toBe(3);
+
+    engine.undo(); // one undo removes the tutor's whole turn
+    expect(engine.doc.all().map((s) => s.id)).toEqual([student.id]);
+    engine.dispose();
+  });
+
+  it("finishes queued writes quietly after the page is closed", async () => {
+    const engine = await reopen();
+    engine.addTutorStrokes([{ ...stroke(10, 1), author: "tutor" }]);
+    engine.dispose(); // its sync channel is closed while the write is still queued
+    await engine.flush();
+    expect((await reopen()).doc.size).toBe(1);
+  });
+
   it("persists strokes so a reopened page shows them (reload)", async () => {
     const engine = await reopen();
     engine.addStroke(stroke(10, 1));

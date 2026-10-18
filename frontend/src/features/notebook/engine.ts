@@ -11,8 +11,11 @@ import {
 
 import type { NotebookRepository } from "./repository";
 
-/** What kind of edit just happened (lets listeners react to e.g. writing vs erasing). */
-export type PageChange = "draw" | "erase" | "delete" | "move" | "undo" | "redo" | "sync";
+/**
+ * What kind of edit just happened (lets listeners react to e.g. writing vs erasing). "tutor" is
+ * the tutor's ink landing on the page: not the student writing.
+ */
+export type PageChange = "draw" | "erase" | "delete" | "move" | "undo" | "redo" | "sync" | "tutor";
 
 type Listener = (change: PageChange) => void;
 
@@ -40,6 +43,7 @@ export class PageEngine {
   private erasing: Stroke[] | null = null;
   private pendingWrites: Promise<void> = Promise.resolve();
   private readonly channel: BroadcastChannel | null;
+  private disposed = false;
 
   private constructor(
     private readonly repo: NotebookRepository,
@@ -79,12 +83,19 @@ export class PageEngine {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.channel?.close();
     this.listeners.clear();
   }
 
   addStroke(stroke: Stroke): void {
     this.perform(addCommand([stroke]), "draw");
+  }
+
+  /** Adds the tutor's ink for one turn as a single undo step. */
+  addTutorStrokes(strokes: readonly Stroke[]): void {
+    if (strokes.length === 0) return;
+    this.perform(addCommand([...strokes]), "tutor");
   }
 
   deleteStrokes(ids: readonly string[]): void {
@@ -99,8 +110,13 @@ export class PageEngine {
   }
 
   /** Erases what the eraser touches between two page points. Returns true if anything changed. */
-  eraseAlong(from: Vec, to: Vec, radius: number): boolean {
-    const hits = this.doc.hitByEraser(from, to, radius);
+  eraseAlong(
+    from: Vec,
+    to: Vec,
+    radius: number,
+    erasable: (stroke: Stroke) => boolean = () => true,
+  ): boolean {
+    const hits = this.doc.hitByEraser(from, to, radius).filter(erasable);
     if (hits.length === 0) return false;
     this.doc.remove(hits.map((s) => s.id));
     (this.erasing ??= []).push(...hits);
@@ -169,10 +185,12 @@ export class PageEngine {
       .then(async () => {
         await this.repo.deleteStrokes(deleted);
         await this.repo.putStrokes(command.added);
-        this.channel?.postMessage({
-          type: "strokes-changed",
-          pageId: this.pageId,
-        } satisfies SyncMessage);
+        // A page closed with writes still queued (e.g. tutor ink landing) has no channel left.
+        if (!this.disposed)
+          this.channel?.postMessage({
+            type: "strokes-changed",
+            pageId: this.pageId,
+          } satisfies SyncMessage);
       })
       .catch(this.onError);
   }

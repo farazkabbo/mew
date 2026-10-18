@@ -37,6 +37,7 @@ export function useShortcuts(handlers: Handlers): void {
       else if (key === "h") ui.setTool("highlighter");
       else if (key === "e") ui.setTool("eraser");
       else if (key === "l") ui.setTool("lasso");
+      else if (key === "t") ui.toggleTutorInk();
       else if (key === "+" || key === "=") h.zoom(1.25);
       else if (key === "-") h.zoom(1 / 1.25);
       else if (key === "0") h.resetView();

@@ -1,5 +1,6 @@
 import type { PageDocument } from "@mew/ink";
 import {
+  type LineCheck,
   MEW_LIMITS,
   type MewInput,
   type MewLabel,
@@ -28,11 +29,20 @@ export type MewHooks = {
     utterance: string;
     triggeredAt: number;
     gateMs: number;
+    /** Verified verdicts that prompted the turn, if a checker found something. */
+    checks?: LineCheck[];
   }): void;
   /** Whether the tutor is talking or just finished. */
   tutorSpokeRecently?(): boolean;
   /** Recognised text of the line being written, if known. */
   activeRegionText?(doc: PageDocument): string | undefined;
+  /**
+   * After a writing pause: verify the line just written (SymPy, chemistry balance, code). A
+   * definite verdict short-circuits the gate; null means "can't tell", and the gate decides.
+   */
+  quickCheck?(doc: PageDocument): Promise<LineCheck[] | null>;
+  /** A pause produced a verified-correct line: tick it quietly (no tutor turn). */
+  onVerifiedCorrect?(checks: LineCheck[]): void;
 };
 
 /** An erase within this window counts as "just erased". */
@@ -103,6 +113,10 @@ export class MewController {
     const started = this.clock.now();
     const mew = useMew.getState();
     mew.begin();
+    if (trigger === "pen_pause" && this.page && this.hooks.quickCheck) {
+      const checks = await this.hooks.quickCheck(this.page.doc).catch(() => null);
+      if (checks && this.verified(checks, input, started)) return;
+    }
     const decision = await this.gate.decide(input);
     const gateMs = this.clock.now() - started;
     const acted = shouldRespond(decision.output, {
@@ -126,6 +140,43 @@ export class MewController {
         gateMs,
       });
     }
+  }
+
+  /**
+   * A verifier settled the pause: a correct line is ticked quietly; a wrong one gets the tutor
+   * (with the verdict). Recorded like a gate decision so the debug panel shows why.
+   */
+  private verified(checks: LineCheck[], input: MewInput, started: number): boolean {
+    const target = checks.find((c) => c.target);
+    if (target?.verdict !== "correct" && target?.verdict !== "incorrect") return false;
+    const wrong = target.verdict === "incorrect";
+    const gateMs = this.clock.now() - started;
+    useMew.getState().record({
+      output: {
+        label: "check_work",
+        confidence: 1,
+        reason: `${target.checker} check: ${target.verdict} (${target.reason})`,
+      },
+      source: "checker",
+      latencyMs: Math.round(gateMs),
+      at: started,
+      trigger: input.trigger,
+      utterance: input.lastUtterance,
+      roundTripMs: gateMs,
+      acted: true,
+    });
+    if (wrong) {
+      this.hooks.onRespond?.({
+        intent: "check_work",
+        utterance: input.lastUtterance,
+        triggeredAt: started,
+        gateMs,
+        checks,
+      });
+    } else {
+      this.hooks.onVerifiedCorrect?.(checks);
+    }
+    return true;
   }
 
   private buildInput(trigger: Evaluation["trigger"], utterance: string): MewInput {

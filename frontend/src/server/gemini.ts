@@ -122,8 +122,6 @@ const SUPPORTED_KEYWORDS = new Set([
   "additionalProperties",
   "items",
   "prefixItems",
-  "minItems",
-  "maxItems",
   "enum",
   "format",
   "minimum",
@@ -140,11 +138,21 @@ export function toGeminiSchema(schema: z.ZodType): Record<string, unknown> {
   return prune(z.toJSONSchema(schema)) as Record<string, unknown>;
 }
 
+/**
+ * Besides dropping unsupported keywords: `oneOf` (zod's discriminated unions, e.g. board
+ * actions) becomes `anyOf`, which Gemini supports; the variants have distinct `type` tags, so
+ * it means the same. (Dropping it left the model with no idea what an action looks like.)
+ *
+ * Array bounds (minItems/maxItems) are not sent: combined with unions or nested arrays they make
+ * Gemini reject the schema (400 "invalid argument", verified against the API). The prompts state
+ * the limits and zod still enforces them.
+ */
 function prune(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(prune);
   if (typeof node !== "object" || node === null) return node;
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(node)) {
+  for (const [rawKey, value] of Object.entries(node)) {
+    const key = rawKey === "oneOf" ? "anyOf" : rawKey;
     // `const` isn't supported; a one-value enum says the same (discriminated-union tags).
     if (key === "const") {
       out.enum = [value];

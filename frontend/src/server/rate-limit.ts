@@ -1,6 +1,6 @@
 import "server-only";
 
-import { HttpError } from "./http";
+import { HttpError } from "./http-error";
 
 /** `limit` units per sliding `windowMs`. A unit is a request unless a cost is given. */
 export type RateRule = { limit: number; windowMs: number };
@@ -22,6 +22,18 @@ export const RATE_RULES = {
   /** Handwriting recognition of single lines. */
   recognize: { limit: 30, windowMs: MINUTE },
   recognizeDaily: { limit: 1500, windowMs: DAY },
+  /** Building a course from a PDF (parsing, embeddings, a model call). */
+  courseCreate: { limit: 6, windowMs: 60 * MINUTE },
+  courseCreateDaily: { limit: 20, windowMs: DAY },
+  /** Reading and editing courses. */
+  courseRead: { limit: 120, windowMs: MINUTE },
+  /** Lessons (a model call the first time each is opened) and retrieval for the tutor. */
+  lesson: { limit: 20, windowMs: MINUTE },
+  lessonDaily: { limit: 300, windowMs: DAY },
+  retrieve: { limit: 60, windowMs: MINUTE },
+  /** Work checks (SymPy on the API service: CPU, not money, but still bounded). */
+  check: { limit: 30, windowMs: MINUTE },
+  checkDaily: { limit: 2000, windowMs: DAY },
   /** Text-to-speech, measured in characters (that's how it is billed). */
   ttsCharsPerMinute: { limit: 3000, windowMs: MINUTE },
   ttsCharsDaily: { limit: 40_000, windowMs: DAY },

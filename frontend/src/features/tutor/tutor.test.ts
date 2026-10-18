@@ -1,5 +1,5 @@
 import { PageDocument, segmentLines, strokeBBox } from "@mew/ink";
-import type { Point, Stroke, TutorStreamEvent } from "@mew/shared";
+import type { LineCheck, Point, Stroke, TutorStreamEvent } from "@mew/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type * as ExportLine from "../notebook/export-line";
@@ -73,13 +73,22 @@ const flush = async () => {
 
 function controller(player: PcmStreamPlayer) {
   const onFinished = vi.fn();
+  const ink = {
+    render: vi.fn((_actions: unknown, opts?: { onStart?: () => void }) => {
+      opts?.onStart?.();
+      return Promise.resolve({ strokes: 7, skipped: [], missing: [] });
+    }),
+    pause: vi.fn(),
+    finish: vi.fn(),
+  };
   const tutor = new TutorController({
     player,
     recognition: new RecognitionService(),
+    ink,
     doc: () => null,
     onFinished,
   });
-  return { tutor, onFinished };
+  return { tutor, onFinished, ink };
 }
 
 const turnInput = {
@@ -114,6 +123,43 @@ describe("TutorController", () => {
     expect(turn?.timings.firstAudioMs).toBeTypeOf("number");
     expect(useTutor.getState().phase).toBe("idle");
     expect(onFinished).toHaveBeenCalledOnce();
+  });
+
+  it("writes the board actions as ink, paced to the speech, and times the ink start", async () => {
+    routeFetch(happyTutor);
+    const { player, finish } = fakePlayer();
+    const { tutor, ink } = controller(player);
+
+    const done = tutor.respond(turnInput);
+    await flush();
+    finish();
+    await done;
+
+    expect(ink.finish).toHaveBeenCalled(); // the previous turn's ink was settled first
+    expect(ink.render).toHaveBeenCalledWith(
+      [{ type: "write_text", text: "F₁ = −F₂", anchor: { near: "below_active_line" } }],
+      expect.objectContaining({ speech: SPEECH }),
+    );
+    const [turn] = useTutor.getState().turns;
+    expect(turn?.ink).toEqual({ strokes: 7, skipped: [], missing: [] });
+    expect(turn?.timings.inkStartMs).toBeTypeOf("number");
+  });
+
+  it("pauses the ink when the student writes or speaks, even after the speech has ended", async () => {
+    routeFetch(happyTutor);
+    const { player, finish } = fakePlayer();
+    const { tutor, ink } = controller(player);
+    const done = tutor.respond(turnInput);
+    await flush();
+    finish();
+    await done;
+
+    tutor.writing();
+    expect(ink.pause).toHaveBeenCalledTimes(1);
+    tutor.heard("the directions of the two"); // its own voice: ignored
+    expect(ink.pause).toHaveBeenCalledTimes(1);
+    tutor.heard("wait so what happens to the normal force");
+    expect(ink.pause).toHaveBeenCalledTimes(2);
   });
 
   it("barges in when the student speaks over it, fading out quickly", async () => {
@@ -188,6 +234,67 @@ describe("TutorController", () => {
     expect(useTutor.getState().turns[0]?.outcome).toBe("failed");
     expect(useTutor.getState().caption).toMatch(/couldn't answer/);
     expect(player.play).not.toHaveBeenCalled();
+  });
+
+  const wrongLine: LineCheck = {
+    lineId: "line_b",
+    checker: "math",
+    verdict: "incorrect",
+    reason: "changes_solutions",
+    detail: "x = 2 before, x = 5 after",
+    target: true,
+  };
+
+  it("sends verified checks to the model and keeps its marks consistent with them", async () => {
+    let sent: { checks?: LineCheck[] } = {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        if (url !== "/api/tutor") return Promise.resolve(new Response(new Uint8Array([0, 0])));
+        sent = JSON.parse(String(init?.body)) as typeof sent;
+        return Promise.resolve(
+          ndjson([
+            { type: "speech", text: "Check what you did with the three.", latencyMs: 300 },
+            {
+              type: "response",
+              // The model wrongly ticks the line the verifier found wrong.
+              response: {
+                speech: "Check what you did with the three.",
+                actions: [{ type: "mark_correct", targetLineId: "line_b" }],
+              },
+              latencyMs: 600,
+            },
+          ]),
+        );
+      }),
+    );
+    const { player, finish } = fakePlayer();
+    const { tutor, ink } = controller(player);
+    const done = tutor.respond({ ...turnInput, intent: "check_work", checks: [wrongLine] });
+    await flush();
+    finish();
+    await done;
+
+    expect(sent.checks).toEqual([wrongLine]);
+    expect(ink.render).toHaveBeenCalledWith(
+      [{ type: "mark_error", targetLineId: "line_b", note: "check this step" }],
+      expect.anything(),
+    );
+    expect(useTutor.getState().turns[0]?.checks).toEqual([wrongLine]);
+  });
+
+  it("still circles a verified mistake when the model is unavailable", async () => {
+    routeFetch(() => ndjson([{ type: "error", message: "The tutor is unavailable right now." }]));
+    const { player } = fakePlayer();
+    const { tutor, ink } = controller(player);
+
+    await tutor.respond({ ...turnInput, intent: "check_work", checks: [wrongLine] });
+
+    expect(ink.render).toHaveBeenCalledWith(
+      [{ type: "mark_error", targetLineId: "line_b", note: "check this step" }],
+      expect.anything(),
+    );
+    expect(useTutor.getState().caption).toMatch(/have another look/);
   });
 });
 

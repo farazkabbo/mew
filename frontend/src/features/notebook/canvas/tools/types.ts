@@ -15,6 +15,8 @@ export type Overlay = {
   lasso: Vec[] | null;
   /** Selected strokes, drawn on the live layer offset by (dx, dy) while being dragged. */
   selection: { strokes: Stroke[]; bbox: BBox; dx: number; dy: number } | null;
+  /** The tutor's ink being written (finished strokes plus the one in progress). */
+  tutor: readonly Stroke[];
 };
 
 export type ToolContext = {

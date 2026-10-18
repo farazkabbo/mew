@@ -1,7 +1,7 @@
 "use client";
 
 import type { Notebook } from "@mew/shared";
-import { BookOpen, Plus } from "lucide-react";
+import { BookOpen, GraduationCap, Plus } from "lucide-react";
 import Link from "next/link";
 
 type Props = {
@@ -12,7 +12,7 @@ type Props = {
 };
 
 /** Planned sections, shown disabled until their milestone lands. */
-const UPCOMING = ["Courses", "Review", "Library", "Study modes"];
+const UPCOMING = ["Review", "Library", "Study modes"];
 
 export function Sidebar({ notebooks, currentId, onSelect, onCreate }: Props) {
   return (
@@ -50,6 +50,17 @@ export function Sidebar({ notebooks, currentId, onSelect, onCreate }: Props) {
             </li>
           ))}
         </ul>
+
+        <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-sidebar-ink/50 uppercase">
+          Study
+        </h2>
+        <Link
+          href="/courses"
+          className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-sidebar-ink/75 hover:bg-white/5 hover:text-sidebar-ink"
+        >
+          <GraduationCap className="size-4 shrink-0 opacity-60" aria-hidden />
+          Courses
+        </Link>
 
         <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-sidebar-ink/50 uppercase">
           Coming soon

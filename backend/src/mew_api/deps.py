@@ -2,6 +2,7 @@
 
 import hmac
 import logging
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
@@ -64,3 +65,40 @@ def current_principal(
 
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
+
+
+@dataclass(frozen=True)
+class Caller:
+    """Who a request acts for: a verified Clerk user (with their token, for RLS-scoped
+    Supabase calls) or, in development only, the single local-mode user."""
+
+    user_id: str
+    token: str | None
+
+    @property
+    def is_local(self) -> bool:
+        return self.token is None
+
+
+LOCAL_USER_ID = "local"
+
+
+def current_caller(
+    request: Request,
+    settings: SettingsDep,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    x_mew_local_user: Annotated[str | None, Header()] = None,
+) -> Caller:
+    """A signed-in user, or the local-mode user when the web app runs without Clerk. Local mode
+    only exists in development: in production this header is ignored and a token is required.
+    Only the Next.js server can call this API at all (internal secret), so the header can't be
+    sent by a browser."""
+    if credentials is not None:
+        principal = current_principal(request, credentials)
+        return Caller(principal.user_id, credentials.credentials)
+    if settings.is_development and x_mew_local_user == LOCAL_USER_ID:
+        return Caller(LOCAL_USER_ID, None)
+    raise _unauthorized()
+
+
+CurrentCaller = Annotated[Caller, Depends(current_caller)]

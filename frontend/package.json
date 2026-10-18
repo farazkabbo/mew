@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-pyodide.mjs",
     "dev": "next dev --port 3000",
+    "prebuild": "node scripts/copy-pyodide.mjs",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint --max-warnings 0",
@@ -12,7 +14,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "eval:mew": "tsx --conditions=react-server evals/mew.eval.ts",
-    "eval:tutor": "tsx --conditions=react-server evals/tutor.eval.ts"
+    "eval:tutor": "tsx --conditions=react-server evals/tutor.eval.ts",
+    "eval:course": "tsx --conditions=react-server evals/course.eval.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.16",
@@ -24,6 +27,7 @@
     "lucide-react": "^1.50.0",
     "next": "16.4.2",
     "perfect-freehand": "^1.2.3",
+    "pyodide": "314.0.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",

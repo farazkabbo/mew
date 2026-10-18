@@ -233,3 +233,147 @@ describe("POST /api/recognize", () => {
     expect((await POST(post("/api/recognize", { image: btoa("GIF89a....") }))).status).toBe(400);
   });
 });
+
+describe("POST /api/check/math", () => {
+  const results = [
+    { index: 0, verdict: "unknown", reason: "first_line", detail: null },
+    {
+      index: 1,
+      verdict: "incorrect",
+      reason: "changes_solutions",
+      detail: "x = 2 before, x = 5 after",
+    },
+  ];
+
+  it("forwards the steps to the API service with the internal secret", async () => {
+    vi.stubEnv("API_BASE_URL", "http://api.internal:8000");
+    vi.stubEnv("INTERNAL_API_SECRET", "s".repeat(40));
+    const fetchMock = vi.fn<(url: URL, init: RequestInit) => Promise<Response>>(() =>
+      Promise.resolve(Response.json({ results })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await import("./check/math/route");
+
+    const response = await POST(post("/api/check/math", { steps: ["2x+3=7", "2x=10"] }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ results });
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toBe("http://api.internal:8000/v1/check/math");
+    expect(new Headers(init?.headers).get("X-Internal-Secret")).toBe("s".repeat(40));
+    expect(JSON.parse(String(init?.body))).toEqual({ steps: ["2x+3=7", "2x=10"] });
+  });
+
+  it("rejects cross-origin, oversized and malformed requests before calling the service", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await import("./check/math/route");
+
+    const steps = ["x=1"];
+    expect(
+      (await POST(post("/api/check/math", { steps }, { origin: "https://evil.example" }))).status,
+    ).toBe(403);
+    expect((await POST(post("/api/check/math", { steps: [] }))).status).toBe(400);
+    expect((await POST(post("/api/check/math", { steps: Array(9).fill("x=1") }))).status).toBe(400);
+    expect((await POST(post("/api/check/math", { steps: ["x".repeat(9000)] }))).status).toBe(413);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reports an unreachable checker as 503 and a bad reply as 502, without details", async () => {
+    vi.stubEnv("INTERNAL_API_SECRET", "s".repeat(40));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new TypeError("connect ECONNREFUSED"))),
+    );
+    let { POST } = await import("./check/math/route");
+    let response = await POST(post("/api/check/math", { steps: ["x=1"] }));
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(await response.json())).not.toContain("ECONNREFUSED");
+
+    vi.resetModules();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(Response.json({ nope: true }))),
+    );
+    ({ POST } = await import("./check/math/route"));
+    response = await POST(post("/api/check/math", { steps: ["x=1"] }));
+    expect(response.status).toBe(502);
+  });
+});
+
+describe("POST /api/courses", () => {
+  const COURSE = {
+    id: "22222222-2222-4222-8222-222222222222",
+    title: "Forces",
+    status: "processing",
+    created_at: "2026-10-17T12:00:00Z",
+  };
+
+  function upload(file: Blob | null, title = "Forces", headers: Record<string, string> = {}) {
+    const form = new FormData();
+    if (file) form.set("file", file, "chapter.pdf");
+    form.set("title", title);
+    return new Request(`${ORIGIN}/api/courses`, {
+      method: "POST",
+      body: form,
+      headers: { origin: ORIGIN, ...headers },
+    });
+  }
+
+  it("forwards a real PDF to the API as the local user (local mode)", async () => {
+    vi.stubEnv("INTERNAL_API_SECRET", "s".repeat(40));
+    const fetchMock = vi.fn<(url: URL, init: RequestInit) => Promise<Response>>(() =>
+      Promise.resolve(Response.json(COURSE, { status: 202 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await import("./courses/route");
+
+    const response = await POST(upload(new Blob(["%PDF-1.4 tiny"], { type: "application/pdf" })));
+
+    expect(response.status).toBe(202);
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toContain("/v1/courses?title=Forces");
+    const headers = new Headers(init?.headers);
+    expect(headers.get("X-Mew-Local-User")).toBe("local");
+    expect(headers.get("Content-Type")).toBe("application/pdf");
+    expect(headers.get("Authorization")).toBeNull();
+  });
+
+  it("checks the bytes, the size and the origin before anything reaches the API", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await import("./courses/route");
+
+    const notPdf = new Blob(["MZ executable"], { type: "application/pdf" });
+    expect((await POST(upload(notPdf))).status).toBe(422);
+    expect((await POST(upload(null))).status).toBe(400);
+    expect((await POST(upload(notPdf, "x".repeat(200)))).status).toBe(400);
+    const pdf = new Blob(["%PDF-1.4"], { type: "application/pdf" });
+    expect((await POST(upload(pdf, "Forces", { origin: "https://evil.example" }))).status).toBe(
+      403,
+    );
+    const big = new Blob(["%PDF-", new Uint8Array(16 * 1024 * 1024)]);
+    expect((await POST(upload(big))).status).toBe(413);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("maps API failures to safe errors", async () => {
+    vi.stubEnv("INTERNAL_API_SECRET", "s".repeat(40));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response("boom", { status: 503 }))),
+    );
+    const { GET } = await import("./courses/route");
+    const response = await GET(new Request(`${ORIGIN}/api/courses`));
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(await response.json())).not.toContain("boom");
+  });
+
+  it("refuses cross-site reads", async () => {
+    const { GET } = await import("./courses/route");
+    const response = await GET(
+      new Request(`${ORIGIN}/api/courses`, { headers: { "sec-fetch-site": "cross-site" } }),
+    );
+    expect(response.status).toBe(403);
+  });
+});

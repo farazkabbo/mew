@@ -1,10 +1,18 @@
 import type { PageDocument } from "@mew/ink";
-import { TTS_SAMPLE_RATE, type TutorRequest } from "@mew/shared";
+import {
+  type BoardAction,
+  type LineCheck,
+  reconcileMarks,
+  TTS_SAMPLE_RATE,
+  type TutorRequest,
+} from "@mew/shared";
 
+import type { WorkChecker } from "../check/checker";
 import { useVoice } from "../voice/store";
 import { buildTutorRequest } from "./context";
 import { isLikelyEcho, newWords } from "./echo";
 import type { PcmStreamPlayer } from "./pcm-player";
+import type { TutorInk } from "./ink";
 import type { RecognitionService } from "./recognition";
 import { type Turn, useTutor } from "./store";
 import { streamTutor } from "./tutor-client";
@@ -19,6 +27,12 @@ const BARGE_IN_FADE_MS = 150;
 export type TutorDeps = {
   player: PcmStreamPlayer;
   recognition: RecognitionService;
+  /** Writes board actions as ink (absent in tests that only cover speech). */
+  ink?: Pick<TutorInk, "render" | "pause" | "finish">;
+  /** Verifies work for check_work turns (absent in tests that only cover speech). */
+  checker?: Pick<WorkChecker, "check">;
+  /** The course of the notebook on screen, if any (its passages go to the tutor). */
+  courseId?: () => string | null;
   /** The page on screen, if any. */
   doc(): PageDocument | null;
   /** Called when a turn ends, however it ends (starts Mew's cooldown). */
@@ -34,6 +48,8 @@ export type RespondInput = {
   /** When the trigger happened (end of utterance, tap, pause), for latency accounting. */
   triggeredAt: number;
   gateMs: number;
+  /** Verdicts already found (e.g. by the quiet check after a writing pause). */
+  checks?: LineCheck[] | undefined;
 };
 
 /**
@@ -49,7 +65,9 @@ export class TutorController {
     this.now = deps.now ?? Date.now;
   }
 
-  async respond({ intent, utterance, triggeredAt, gateMs }: RespondInput): Promise<void> {
+  async respond(input: RespondInput): Promise<void> {
+    const { intent, utterance, triggeredAt, gateMs } = input;
+    this.deps.ink?.finish(); // the previous turn's ink lands in full before new ink starts
     this.interrupt();
     const tutor = useTutor.getState();
     const id = tutor.begin({ intent, utterance, at: triggeredAt, gateMs });
@@ -59,7 +77,14 @@ export class TutorController {
 
     let outcome: Turn["outcome"] = "done";
     let speaking: Promise<void> = Promise.resolve();
+    let checks: LineCheck[] = input.checks ?? [];
+    let drew = false;
     try {
+      if (intent === "check_work" && !input.checks && this.deps.checker) {
+        const doc = this.deps.doc();
+        checks = doc ? await this.deps.checker.check(doc) : [];
+      }
+      if (checks.length > 0) useTutor.getState().update(id, { checks });
       const request = await buildTutorRequest({
         intent,
         utterance,
@@ -72,7 +97,9 @@ export class TutorController {
         answerStyle: useTutor.getState().answerStyle,
         doc: this.deps.doc(),
         recognition: this.deps.recognition,
+        courseId: this.deps.courseId?.() ?? null,
       });
+      request.checks = checks;
       for await (const event of streamTutor(request, turn.abort.signal)) {
         if (event.type === "speech") {
           turn.speech = event.text;
@@ -82,18 +109,17 @@ export class TutorController {
           useTutor.getState().setCaption(event.text);
           speaking = this.speak(turn, triggeredAt);
         } else if (event.type === "response") {
-          useTutor.getState().update(id, { actions: event.response.actions });
+          // Verifiers outrank the model: marks are made to agree with them.
+          drew = this.draw(id, reconcileMarks(event.response.actions, checks), turn, triggeredAt);
         } else {
           outcome = "failed";
-          useTutor.getState().setCaption("I couldn't answer just now — try again in a moment.");
+          this.fallBack(id, checks, turn, triggeredAt, drew);
         }
       }
       await speaking;
     } catch {
       outcome = "failed";
-      if (!turn.abort.signal.aborted) {
-        useTutor.getState().setCaption("I couldn't answer just now — try again in a moment.");
-      }
+      if (!turn.abort.signal.aborted) this.fallBack(id, checks, turn, triggeredAt, drew);
     } finally {
       if (turn.abort.signal.aborted) outcome = "interrupted";
       if (this.active === turn) this.active = null;
@@ -105,15 +131,54 @@ export class TutorController {
     }
   }
 
+  private draw(id: number, actions: BoardAction[], turn: ActiveTurn, triggeredAt: number): boolean {
+    useTutor.getState().update(id, { actions });
+    const rendering = this.deps.ink?.render(actions, {
+      speech: turn.speech,
+      onStart: () => useTutor.getState().update(id, {}, { inkStartMs: this.since(triggeredAt) }),
+    });
+    // Planning may take a moment (graph layout); record what was drawn once it's known.
+    void rendering?.then((ink) => useTutor.getState().update(id, { ink })).catch(() => undefined);
+    return true;
+  }
+
+  /**
+   * The model couldn't answer. If a verifier already knows the line is wrong (or right), the
+   * page still says so; otherwise a short apology.
+   */
+  private fallBack(
+    id: number,
+    checks: readonly LineCheck[],
+    turn: ActiveTurn,
+    triggeredAt: number,
+    drew: boolean,
+  ): void {
+    const marks = reconcileMarks([], checks);
+    const wrong = checks.some((c) => c.target && c.verdict === "incorrect");
+    if (marks.length > 0 && !drew) this.draw(id, marks, turn, triggeredAt);
+    useTutor
+      .getState()
+      .setCaption(
+        marks.length === 0
+          ? "I couldn't answer just now — try again in a moment."
+          : wrong
+            ? "Something's off in that step — have another look."
+            : "That step checks out.",
+      );
+  }
+
   /** A partial transcript arrived: barge in if it's the student, not our own voice. */
   heard(partial: string): void {
     const turn = this.active;
-    if (!turn || useTutor.getState().phase !== "speaking") return;
-    if (newWords(partial, turn.speech) >= BARGE_IN_WORDS) this.interrupt();
+    const said = turn?.speech ?? this.lastSpoken?.text ?? "";
+    if (newWords(partial, said) < BARGE_IN_WORDS) return;
+    this.deps.ink?.pause();
+    if (turn && useTutor.getState().phase === "speaking") this.interrupt();
   }
 
-  /** The student put the pen down: stop talking over them. */
+  /** The student put the pen down: stop talking (and writing) over them. */
   writing(): void {
+    this.deps.ink?.pause();
     if (useTutor.getState().phase === "speaking") this.interrupt();
   }
 

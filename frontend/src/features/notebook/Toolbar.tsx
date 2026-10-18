@@ -10,6 +10,7 @@ import {
   Pen,
   Redo2,
   Rows3,
+  Sparkles,
   Undo2,
   ZoomIn,
   ZoomOut,
@@ -35,9 +36,18 @@ const TOOLS: { tool: Tool; label: string; shortcut: string; icon: LucideIcon }[]
 ];
 
 export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: Props) {
-  const { tool, inkColor, highlighterColor, penSize, showLines, zoom, canUndo, canRedo } =
-    useNotebookUi();
-  const { setTool, setColor, setPenSize, toggleLines } = useNotebookUi.getState();
+  const {
+    tool,
+    inkColor,
+    highlighterColor,
+    penSize,
+    showLines,
+    showTutorInk,
+    zoom,
+    canUndo,
+    canRedo,
+  } = useNotebookUi();
+  const { setTool, setColor, setPenSize, toggleLines, toggleTutorInk } = useNotebookUi.getState();
   const colors = tool === "highlighter" ? HIGHLIGHTER_COLORS : INK_COLORS;
   const activeColor = tool === "highlighter" ? highlighterColor : inkColor;
 
@@ -126,6 +136,12 @@ export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: P
         label="Show detected lines"
         pressed={showLines}
         onClick={toggleLines}
+      />
+      <IconButton
+        icon={Sparkles}
+        label="Show tutor ink (T)"
+        pressed={showTutorInk}
+        onClick={toggleTutorInk}
       />
       <IconButton icon={ImageDown} label="Export current line as PNG" onClick={onExportLine} />
     </div>

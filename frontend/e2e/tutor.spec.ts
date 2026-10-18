@@ -109,7 +109,7 @@ test("answers a question out loud and in a caption, seeing the student's handwri
   const turn = page.getByTestId("tutor-turns").locator("li").first();
   await expect(turn).toHaveAttribute("data-outcome", "done");
   await expect(turn).toContainText("1 board action");
-  await expect(turn).toContainText(/gate \d+ · speech \d+ · audio \d+ ms/);
+  await expect(turn).toContainText(/gate \d+ · speech \d+ · audio \d+( · ink \d+)? ms/);
 
   // The tutor saw a PNG of the handwriting.
   expect(calls).toHaveLength(1);

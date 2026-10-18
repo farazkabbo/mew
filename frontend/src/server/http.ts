@@ -7,18 +7,9 @@ import type { z } from "zod";
 import { isClerkConfigured, LOCAL_USER_ID } from "@/lib/auth-mode";
 
 import { appEnv, EnvError } from "./env";
+import { HttpError } from "./http-error";
 
-/** An error that maps directly to an HTTP response with a safe, user-facing message. */
-export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-    readonly headers: Record<string, string> = {},
-  ) {
-    super(message);
-    this.name = "HttpError";
-  }
-}
+export { HttpError };
 
 /** The signed-in user's id; in local mode (development only) a fixed local id. */
 export async function requireUserId(): Promise<string> {
@@ -39,6 +30,17 @@ export async function requireUserId(): Promise<string> {
 export function assertSameOrigin(request: Request): void {
   const origin = request.headers.get("origin");
   if (origin !== appEnv().APP_ORIGIN) throw new HttpError(403, "Cross-origin request refused");
+}
+
+/**
+ * For read-only GETs (browsers send no Origin on same-origin GETs): refuse requests the browser
+ * marks as coming from another site. Reading the response cross-origin is blocked by CORS anyway.
+ */
+export function assertNotCrossSite(request: Request): void {
+  const site = request.headers.get("sec-fetch-site");
+  if (site && site !== "same-origin" && site !== "none") {
+    throw new HttpError(403, "Cross-site request refused");
+  }
 }
 
 /** Reads and validates a JSON body, refusing anything larger than `maxBytes`. */
@@ -66,6 +68,43 @@ export async function readJson<T>(
   const parsed = schema.safeParse(body);
   if (!parsed.success) throw new HttpError(400, "Invalid request body");
   return parsed.data;
+}
+
+/**
+ * Reads a multipart form, refusing bodies over `maxBytes` while streaming (so a missing or
+ * false Content-Length can't make the server buffer an arbitrarily large upload).
+ */
+export async function readForm(request: Request, maxBytes: number): Promise<FormData> {
+  const type = request.headers.get("content-type") ?? "";
+  if (!type.toLowerCase().startsWith("multipart/form-data")) {
+    throw new HttpError(415, "Expected multipart/form-data");
+  }
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > maxBytes) throw new HttpError(413, "Request body too large");
+  if (!request.body) throw new HttpError(400, "Empty upload");
+
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  const reader = request.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      // Stop reading (backpressure halts the sender); cancelling would make the body's
+      // producer throw on its next write.
+      reader.releaseLock();
+      throw new HttpError(413, "Request body too large");
+    }
+    parts.push(value);
+  }
+  try {
+    return await new Response(new Blob(parts as BlobPart[]), {
+      headers: { "content-type": type },
+    }).formData();
+  } catch {
+    throw new HttpError(400, "Malformed upload");
+  }
 }
 
 /** Wraps a route handler: HttpErrors become JSON responses; anything else is a logged 500. */

@@ -30,11 +30,12 @@ export class NotebookRepository {
     });
   }
 
-  async createNotebook(title: string): Promise<Notebook> {
+  async createNotebook(title: string, courseId?: string): Promise<Notebook> {
     const now = Date.now();
     const notebook = Notebook.parse({
       id: crypto.randomUUID(),
       title,
+      ...(courseId && { courseId }),
       createdAt: now,
       updatedAt: now,
     });
@@ -44,6 +45,14 @@ export class NotebookRepository {
       await this.db.pages.add(newPage(notebook.id, 0));
     });
     return notebook;
+  }
+
+  /** The notebook for a course, creating it on first use (in one transaction: no duplicates). */
+  async notebookForCourse(courseId: string, title: string): Promise<Notebook> {
+    return this.db.transaction("rw", this.db.notebooks, this.db.pages, async () => {
+      const existing = (await this.listNotebooks()).find((n) => n.courseId === courseId);
+      return existing ?? (await this.createNotebook(title, courseId));
+    });
   }
 
   async touchNotebook(id: string): Promise<void> {

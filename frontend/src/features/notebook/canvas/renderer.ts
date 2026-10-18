@@ -88,12 +88,19 @@ export class CanvasRenderer {
     if (lines) this.outlineLines(ctx, camera, lines);
   }
 
-  drawLive(camera: Camera, { draft, eraser, lasso, selection }: Overlay): void {
+  drawLive(camera: Camera, { draft, eraser, lasso, selection, tutor }: Overlay): void {
     const ctx = this.live;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     this.applyCamera(ctx, camera);
     const hairline = 1 / camera.zoom;
+
+    // The last tutor stroke may be mid-write: its outline isn't final, so don't cache it.
+    const writing = tutor.at(-1);
+    if (writing) {
+      paintStrokes(ctx, tutor.slice(0, -1), this.theme.dark);
+      paintDraft(ctx, writing, this.theme.dark);
+    }
 
     if (selection) {
       const { strokes, bbox, dx, dy } = selection;

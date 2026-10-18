@@ -50,8 +50,9 @@ function localMode(request: NextRequest): NextResponse {
 // answering even when the auth provider is misconfigured or down.
 export const config = {
   matcher: [
-    // Skip Next.js internals and static files, unless found in search params.
-    "/((?!_next|api/health$|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // Skip Next.js internals and static files, unless found in search params. The code-runner
+    // worker and the Python runtime it loads get their own CSP from next.config.ts.
+    "/((?!_next|api/health$|pyodide/|workers/|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api(?!/health$)|trpc)(.*)",
     "/__clerk/(.*)",
   ],

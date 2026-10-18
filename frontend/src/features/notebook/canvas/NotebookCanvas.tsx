@@ -1,5 +1,6 @@
 "use client";
 
+import type { BBox } from "@mew/shared";
 import { type Camera, DEFAULT_CAMERA, panBy, screenToPage, zoomAt } from "@mew/ink";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
@@ -14,6 +15,8 @@ import { LassoTool } from "./tools/lasso";
 import { PenTool } from "./tools/pen";
 import type { Overlay, PagePoint, ToolContext, ToolController } from "./tools/types";
 import { isTypingTarget } from "../dom";
+import type { InkLayer } from "../../tutor/ink";
+import { isShown } from "../visibility";
 
 export type CanvasHandle = {
   zoomBy(factor: number): void;
@@ -24,10 +27,12 @@ type CanvasProps = {
   engine: PageEngine;
   /** Called when a pen, mouse or finger starts any gesture on the page (e.g. to barge in). */
   onPenDown?: () => void;
+  /** The tutor's ink while it's being written (drawn on the live layer). */
+  tutorInk?: InkLayer & { attachViewport(viewport: () => BBox): () => void };
 };
 
 export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function NotebookCanvas(
-  { engine, onPenDown },
+  { engine, onPenDown, tutorInk },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,7 +56,13 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     if (!container || !grid || !ink || !live) return;
 
     const renderer = new CanvasRenderer({ grid, ink, live }, readTheme());
-    const overlay: Overlay = { draft: null, eraser: null, lasso: null, selection: null };
+    const overlay: Overlay = {
+      draft: null,
+      eraser: null,
+      lasso: null,
+      selection: null,
+      tutor: [],
+    };
     let camera: Camera = DEFAULT_CAMERA;
 
     // --- Frame scheduling: mark layers dirty, draw them once on the next animation frame.
@@ -67,7 +78,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       if (dirty.ink) {
         // Selected strokes are drawn on the live layer (so they can be dragged), not here.
         const selected = new Set(overlay.selection?.strokes.map((s) => s.id));
-        const visible = engine.doc.inRegion(renderer.visible(camera));
+        const visible = engine.doc.inRegion(renderer.visible(camera)).filter(isShown);
         const lines = useNotebookUi.getState().showLines ? studentLines(engine.doc) : undefined;
         renderer.drawInk(
           camera,
@@ -75,7 +86,11 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
           lines,
         );
       }
-      if (dirty.live) renderer.drawLive(camera, overlay);
+      if (dirty.live) {
+        overlay.tutor =
+          tutorInk && useNotebookUi.getState().showTutorInk ? tutorInk.liveStrokes() : [];
+        renderer.drawLive(camera, overlay);
+      }
       dirty.grid = dirty.ink = dirty.live = false;
     };
     const all = { grid: true, ink: true, live: true };
@@ -157,8 +172,13 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     });
     const unsubscribeUi = useNotebookUi.subscribe((state, previous) => {
       if (state.showLines !== previous.showLines) schedule({ ink: true });
+      if (state.showTutorInk !== previous.showTutorInk) schedule({ ink: true, live: true });
       if (state.tool !== previous.tool) tools[previous.tool].deactivate?.();
     });
+    const unsubscribeTutor = tutorInk?.subscribe(() => schedule({ live: true }));
+    const detachViewport = tutorInk?.attachViewport(() =>
+      safeArea(renderer.visible(camera), camera.zoom),
+    );
 
     return () => {
       cancelAnimationFrame(frame);
@@ -168,9 +188,11 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       darkQuery.removeEventListener("change", onTheme);
       unsubscribeEngine();
       unsubscribeUi();
+      unsubscribeTutor?.();
+      detachViewport?.();
       controls.current = null;
     };
-  }, [engine]);
+  }, [engine, tutorInk]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-paper">
@@ -202,4 +224,16 @@ function readTheme(): Theme {
     tutor: token("--tutor", "#8a7bf0"),
     accent: token("--accent", "#5b8def"),
   };
+}
+
+/** Screen margins (CSS px) covered by floating UI: the toolbar above, page nav and mascot below. */
+const CHROME = { top: 80, bottom: 84, left: 16, right: 16 };
+
+/** The part of the visible page not hidden under the floating controls, in page units. */
+function safeArea([x, y, w, h]: BBox, zoom: number): BBox {
+  const t = CHROME.top / zoom;
+  const b = CHROME.bottom / zoom;
+  const l = CHROME.left / zoom;
+  const r = CHROME.right / zoom;
+  return [x + l, y + t, Math.max(0, w - l - r), Math.max(0, h - t - b)];
 }

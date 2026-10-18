@@ -20,6 +20,8 @@ import { useShortcuts } from "./useShortcuts";
 
 type Notice = { text: string; tone: "info" | "error" };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function NotebookApp({ userId }: { userId: string }) {
   const repo = useMemo(() => new NotebookRepository(new NotebookDb(userId)), [userId]);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
@@ -41,7 +43,14 @@ export function NotebookApp({ userId }: { userId: string }) {
     let cancelled = false;
     void navigator.storage?.persist?.();
     void (async () => {
-      const latest = await repo.openLatestNotebook();
+      // /notebook?course=<id>&title=<course title> opens (or creates) that course's notebook.
+      const params = new URLSearchParams(window.location.search);
+      const course = params.get("course");
+      const title = (params.get("title") ?? "").trim().slice(0, 200) || "Course notes";
+      const latest =
+        course && UUID.test(course)
+          ? await repo.notebookForCourse(course, title)
+          : await repo.openLatestNotebook();
       const all = await repo.listNotebooks();
       if (cancelled) return;
       setNotebooks(all);
@@ -112,7 +121,8 @@ export function NotebookApp({ userId }: { userId: string }) {
     [engine],
   );
   useShortcuts(actions);
-  const mew = useMewSession(engine);
+  const courseId = notebooks.find((n) => n.id === notebookId)?.courseId ?? null;
+  const mew = useMewSession(engine, courseId);
 
   const createNotebook = async () => {
     const notebook = await repo.createNotebook(`Notebook ${notebooks.length + 1}`);
@@ -148,7 +158,7 @@ export function NotebookApp({ userId }: { userId: string }) {
       />
       <main className="relative min-w-0 flex-1">
         {engine && engine.pageId === pageId ? (
-          <NotebookCanvas ref={canvas} engine={engine} onPenDown={mew.penDown} />
+          <NotebookCanvas ref={canvas} engine={engine} onPenDown={mew.penDown} tutorInk={mew.ink} />
         ) : (
           <div className="grid h-full place-items-center text-sm text-ink-muted">
             Opening notebook…

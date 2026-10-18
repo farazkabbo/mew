@@ -12,6 +12,9 @@ const ROOT_ENV = path.resolve(import.meta.dirname, "../../.env.local");
 if (existsSync(ROOT_ENV)) process.loadEnvFile(ROOT_ENV);
 
 const MIN_ACCURACY = 0.85;
+/** Requests per minute (Gemini's free tier allows 15 for Flash-Lite). `EVAL_RPM=0` disables pacing. */
+const RPM = Number(process.env.EVAL_RPM ?? 14);
+const PACE_MS = RPM > 0 ? Math.ceil(60_000 / RPM) : 0;
 
 type Case = {
   utterance: string;
@@ -36,8 +39,12 @@ let correct = 0;
 let acceptanceFailures = 0;
 const latencies: number[] = [];
 
+let lastCall = 0;
 for (const c of cases) {
   const trigger = c.trigger ?? "utterance";
+  const wait = lastCall + PACE_MS - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  lastCall = Date.now();
   const input = MewInput.parse({
     trigger,
     lastUtterance: c.utterance,

@@ -4,7 +4,7 @@ import { type Turn, type TurnTimings, useTutor } from "./store";
 
 /** Tutor settings and recent turns with per-stage latency, for the debug panel. */
 export function TutorDebug() {
-  const { answerStyle, captions, turns, setSettings } = useTutor();
+  const { answerStyle, captions, autoCheck, turns, setSettings } = useTutor();
 
   return (
     <section aria-label="Tutor">
@@ -34,6 +34,15 @@ export function TutorDebug() {
           />
           Captions
         </label>
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={autoCheck}
+            onChange={(e) => setSettings({ autoCheck: e.target.checked })}
+            className="accent-(--accent)"
+          />
+          Check my steps
+        </label>
       </div>
 
       {turns.length > 0 && (
@@ -57,11 +66,31 @@ function TurnRow({ turn }: { turn: Turn }) {
         <Timings timings={turn.timings} />
       </div>
       {turn.speech && <p className="mt-1">{turn.speech}</p>}
+      {turn.checks && turn.checks.length > 0 && (
+        <ul className="mt-1 text-xs text-ink-muted" data-testid="turn-checks">
+          {turn.checks.map((c) => (
+            <li key={c.lineId}>
+              {c.checker}: {c.verdict} ({c.reason}){c.detail ? ` — ${c.detail}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
       {turn.actions.length > 0 && (
         <details className="mt-1 text-xs text-ink-muted">
           <summary>
-            {turn.actions.length} board action{turn.actions.length === 1 ? "" : "s"} (drawn from M4)
+            {turn.actions.length} board action{turn.actions.length === 1 ? "" : "s"}
+            {turn.ink && ` · ${turn.ink.strokes} ink strokes`}
+            {turn.ink && turn.ink.skipped.length > 0 && ` · ${turn.ink.skipped.length} skipped`}
           </summary>
+          {turn.ink && turn.ink.skipped.length > 0 && (
+            <ul className="mt-1" data-testid="ink-skipped">
+              {turn.ink.skipped.map((s) => (
+                <li key={s.index}>
+                  {s.type}: {s.reason}
+                </li>
+              ))}
+            </ul>
+          )}
           <pre className="mt-1 overflow-x-auto whitespace-pre-wrap">
             {JSON.stringify(turn.actions, null, 1)}
           </pre>
@@ -77,6 +106,7 @@ function Timings({ timings }: { timings: TurnTimings }) {
     ["gate", timings.gateMs],
     ["speech", timings.tutorSpeechMs],
     ["audio", timings.firstAudioMs],
+    ["ink", timings.inkStartMs],
   ].filter((p): p is [string, number] => typeof p[1] === "number");
   return (
     <span className="tabular-nums" title="Milliseconds from the trigger">

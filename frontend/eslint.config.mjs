@@ -12,5 +12,13 @@ export default defineConfig([
       "no-useless-escape": "error",
     },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  // public/pyodide: the vendored Python runtime, copied from node_modules (not our code).
+  globalIgnores([
+    ".next/**",
+    ".next-e2e/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "public/pyodide/**",
+  ]),
 ]);
