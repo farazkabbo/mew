@@ -24,7 +24,7 @@
     "@mew/shared": "workspace:*",
     "@supabase/supabase-js": "^2",
     "dexie": "^4.4.6",
-    "lucide-react": "^1.50.0",
+    "lucide-react": "^1.57.0",
     "next": "16.4.2",
     "perfect-freehand": "^1.2.3",
     "pyodide": "314.0.7",
@@ -35,7 +35,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^24",
     "@types/react": "^19",
