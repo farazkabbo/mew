@@ -4,7 +4,7 @@ import { SCRIBE_REALTIME_URL, type SttSession, TTS_SAMPLE_RATE } from "@mew/shar
 import { z } from "zod";
 
 import { elevenLabsEnv, ttsEnv } from "./env";
-import { HttpError } from "./http";
+import { HttpError } from "./http-error";
 
 const API = "https://api.elevenlabs.io";
 

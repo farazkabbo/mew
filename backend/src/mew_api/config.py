@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # backend/src/mew_api/config.py -> repo root
@@ -29,6 +29,46 @@ class Settings(BaseSettings):
     allowed_hosts: CsvTuple = ("localhost", "127.0.0.1")
     # Set by Render to the service's onrender.com host (also used by its health checks).
     render_external_hostname: str | None = None
+
+    # Gemini (course ingestion, lessons). Without a key, ingestion still works with local
+    # fallbacks (heading-based concepts, lexical embeddings).
+    gemini_api_key: SecretStr | None = None
+    gemini_tutor_model: str = "gemini-3.8-flash"
+    gemini_gate_model: str = "gemini-3.5-flash-lite"
+    gemini_embed_model: str = "gemini-embedding-2"
+    # Concept extraction and lessons; defaults to the tutor model.
+    gemini_course_model: str | None = None
+
+    # Supabase (courses). The URL and publishable key are public; the secret key bypasses RLS and
+    # is used only by ingestion jobs, for a course whose owner was verified first.
+    supabase_url: str | None = Field(default=None, validation_alias="NEXT_PUBLIC_SUPABASE_URL")
+    supabase_publishable_key: str | None = Field(
+        default=None, validation_alias="NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+    )
+    supabase_secret_key: SecretStr | None = None
+
+    @field_validator("gemini_api_key", "supabase_secret_key", mode="before")
+    @classmethod
+    def _blank_is_none(cls, value: object) -> object:
+        return None if value == "" else value
+
+    @field_validator(
+        "gemini_tutor_model",
+        "gemini_gate_model",
+        "gemini_embed_model",
+        "gemini_course_model",
+        mode="before",
+    )
+    @classmethod
+    def _blank_model_is_default(cls, value: object, info: ValidationInfo) -> object:
+        if value == "" or value is None:
+            field = cls.model_fields[info.field_name or ""]
+            return field.default
+        return value
+
+    @property
+    def course_model(self) -> str:
+        return self.gemini_course_model or self.gemini_tutor_model
 
     @field_validator("clerk_authorized_parties", "allowed_hosts", mode="before")
     @classmethod

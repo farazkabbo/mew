@@ -1,4 +1,4 @@
-import type { AnswerStyle, BoardAction, TutorRequest } from "@mew/shared";
+import type { AnswerStyle, BoardAction, LineCheck, TutorRequest } from "@mew/shared";
 import { create } from "zustand";
 
 export type TutorPhase = "idle" | "thinking" | "speaking";
@@ -8,6 +8,7 @@ export type TurnTimings = {
   gateMs?: number;
   tutorSpeechMs?: number;
   firstAudioMs?: number;
+  inkStartMs?: number;
   totalMs?: number;
 };
 
@@ -17,8 +18,15 @@ export type Turn = {
   intent: TutorRequest["intent"];
   utterance: string;
   speech: string | null;
-  /** Board actions to draw as ink (from M4). */
+  /** Board actions from the response, and what the ink renderer made of them. */
   actions: BoardAction[];
+  /** Verified verdicts the turn was based on (check_work). */
+  checks?: LineCheck[];
+  ink?: {
+    strokes: number;
+    skipped: { index: number; type: string; reason: string }[];
+    missing: string[];
+  };
   timings: TurnTimings;
   outcome: "pending" | "done" | "interrupted" | "failed";
 };
@@ -26,7 +34,8 @@ export type Turn = {
 const MAX_TURNS = 20;
 const SETTINGS_KEY = "mew:tutor-settings";
 
-type Settings = { answerStyle: AnswerStyle; captions: boolean };
+/** `autoCheck`: check each finished line quietly after a writing pause (tick or circle). */
+type Settings = { answerStyle: AnswerStyle; captions: boolean; autoCheck: boolean };
 
 type TutorState = Settings & {
   phase: TutorPhase;
@@ -83,7 +92,12 @@ export const useTutor = create<TutorState & TutorActions>()((set, get) => ({
     if (settle) set({ phase: "idle", lastFinishedAt: Date.now() });
   },
   setSettings: (patch) => {
-    const settings = { answerStyle: get().answerStyle, captions: get().captions, ...patch };
+    const settings = {
+      answerStyle: get().answerStyle,
+      captions: get().captions,
+      autoCheck: get().autoCheck,
+      ...patch,
+    };
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch {
@@ -94,13 +108,14 @@ export const useTutor = create<TutorState & TutorActions>()((set, get) => ({
 }));
 
 function readSettings(): Settings {
-  const fallback: Settings = { answerStyle: "hints_first", captions: true };
+  const fallback: Settings = { answerStyle: "hints_first", captions: true, autoCheck: true };
   try {
     const raw = globalThis.localStorage?.getItem(SETTINGS_KEY);
     const parsed = raw ? (JSON.parse(raw) as Partial<Settings>) : {};
     return {
       answerStyle: parsed.answerStyle === "direct" ? "direct" : fallback.answerStyle,
       captions: typeof parsed.captions === "boolean" ? parsed.captions : fallback.captions,
+      autoCheck: typeof parsed.autoCheck === "boolean" ? parsed.autoCheck : fallback.autoCheck,
     };
   } catch {
     return fallback;

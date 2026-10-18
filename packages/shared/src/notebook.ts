@@ -48,6 +48,8 @@ export type Page = z.infer<typeof Page>;
 export const Notebook = z.object({
   id: z.uuid(),
   title: z.string().min(1).max(200),
+  /** The course this notebook is for (its tutor draws on the course material). */
+  courseId: z.uuid().optional(),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
 });

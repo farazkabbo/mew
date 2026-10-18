@@ -43,6 +43,8 @@ function request(question: string): TutorRequest {
     answerStyle: "hints_first",
     depth: "normal",
     previousTutorSpeech: [],
+    checks: [],
+    courseContext: [],
   };
 }
 
@@ -56,11 +58,16 @@ for (const question of QUESTIONS) {
     if (event.type === "speech") {
       speech = event.text;
       speechMs = Math.round(performance.now() - started);
-      const audio = await streamSpeech(speech, AbortSignal.timeout(15_000));
-      const reader = audio.getReader();
-      await reader.read();
-      audioMs = Math.round(performance.now() - started);
-      await reader.cancel();
+      try {
+        const audio = await streamSpeech(speech, AbortSignal.timeout(15_000));
+        const reader = audio.getReader();
+        await reader.read();
+        audioMs = Math.round(performance.now() - started);
+        await reader.cancel();
+      } catch (error) {
+        // e.g. 402 on a free plan with a Voice Library voice: the server log above has the status.
+        console.error(`✘ speech failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     } else if (event.type === "error") {
       console.error(`✘ ${JSON.stringify(question)}: ${event.message}`);
     }

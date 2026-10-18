@@ -24,6 +24,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // A separate build folder lets the e2e server run beside a normal `next dev` (one per folder).
+  distDir: process.env.NEXT_DIST_DIR ?? ".next",
   poweredByHeader: false,
   reactStrictMode: true,
   transpilePackages: ["@mew/shared", "@mew/ink"],
@@ -37,7 +39,22 @@ const nextConfig: NextConfig = {
     },
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // The code checker's worker runs students' Python in WebAssembly: it may compile wasm and
+      // fetch its own runtime files, nothing else. (A worker's CSP comes from its own response.)
+      ...["/workers/:path*", "/pyodide/:path*"].map((source) => ({
+        source,
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; " +
+              "frame-ancestors 'none'",
+          },
+        ],
+      })),
+    ];
   },
 };
 

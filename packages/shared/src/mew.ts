@@ -53,8 +53,11 @@ export type MewOutput = z.infer<typeof MewOutput>;
 /** Response of `POST /api/mew`. */
 export const MewDecisionResponse = z.object({
   output: MewOutput,
-  /** "model" = classified by the gate model; "rule" = decided locally without a model call. */
-  source: z.enum(["model", "rule", "fallback"]),
+  /**
+   * "model" = classified by the gate model; "rule" = decided locally without a model call;
+   * "checker" = a verifier (SymPy, chemistry balance, code run) found a definite answer first.
+   */
+  source: z.enum(["model", "rule", "fallback", "checker"]),
   latencyMs: z.number().int().nonnegative(),
 });
 export type MewDecisionResponse = z.infer<typeof MewDecisionResponse>;

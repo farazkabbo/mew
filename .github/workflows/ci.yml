@@ -45,7 +45,13 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
       - run: pnpm install --frozen-lockfile
+      # The API service runs too (maths checks go through SymPy end to end).
+      - run: uv sync --frozen
+        working-directory: backend
       - run: pnpm --filter @mew/frontend exec playwright install --with-deps chromium
       # Runs the notebook in local mode (no Clerk keys), against a dev server Playwright starts.
       - run: pnpm --filter @mew/frontend e2e

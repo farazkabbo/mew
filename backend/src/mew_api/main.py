@@ -1,16 +1,20 @@
 """Application factory. Run with: uvicorn --factory mew_api.main:create_app"""
 
 import logging
-from collections.abc import Awaitable, Callable
+import threading
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
 from .auth import ClerkTokenVerifier, JwksCache, TokenVerifier
+from .checker.sandbox import CheckerPool, limit_memory
 from .config import Settings
+from .courses.store import MemoryCourseStore
 from .deps import require_internal_caller
-from .routes import health, me
+from .routes import check, courses, health, me
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +24,27 @@ _DOCS_PATHS = ("/docs", "/openapi.json")
 def create_app(
     settings: Settings | None = None,
     token_verifier: TokenVerifier | None = None,
+    checker: CheckerPool | None = None,
+    *,
+    warm_checker: bool = True,
 ) -> FastAPI:
     settings = settings or Settings()
     logging.basicConfig(level=logging.DEBUG if settings.is_development else logging.INFO)
+    pool = checker or CheckerPool()
+    # PDF parsing gets its own sandboxed worker (untrusted files; 1 GB address-space cap).
+    ingest_pool = CheckerPool(workers=1, initializer=limit_memory, initargs=(1024**3,))
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if warm_checker:
+            # SymPy takes seconds to import: start the workers now, off the event loop.
+            threading.Thread(target=pool.warm, name="checker-warmup", daemon=True).start()
+        yield
+        pool.close()
+        ingest_pool.close()
 
     app = FastAPI(
+        lifespan=lifespan,
         title="Mew API",
         version=__version__,
         # Interactive docs only in development: no free schema map for attackers in production.
@@ -34,12 +54,18 @@ def create_app(
     )
     app.state.settings = settings
     app.state.token_verifier = token_verifier or _build_verifier(settings)
+    app.state.checker = pool
+    app.state.ingest_pool = ingest_pool
+    # Courses for local mode (development without Clerk): kept in memory.
+    app.state.local_courses = MemoryCourseStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
 
     v1 = APIRouter(prefix="/v1", dependencies=[Depends(require_internal_caller)])
     v1.include_router(me.router)
+    v1.include_router(check.router)
+    v1.include_router(courses.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

@@ -85,3 +85,24 @@ describe("toGeminiSchema", () => {
     expect(JSON.stringify(schema)).not.toContain("maxLength");
   });
 });
+
+describe("toGeminiSchema for the tutor's response", () => {
+  it("keeps every board action (unions become anyOf) and sends no array bounds", async () => {
+    const { TutorResponse } = await import("@mew/shared");
+    const { toGeminiSchema } = await import("./gemini");
+    const schema = toGeminiSchema(TutorResponse);
+    const text = JSON.stringify(schema);
+
+    // Regression: zod emits discriminated unions as oneOf, which used to be dropped, leaving the
+    // model no description of an action at all.
+    const items = (schema as { properties: { actions: { items: { anyOf: unknown[] } } } })
+      .properties.actions.items;
+    expect(items.anyOf).toHaveLength(8);
+    for (const tag of ["write_math", "mark_error", "draw_plot", "draw_graph", "draw_shapes"]) {
+      expect(text).toContain(`"enum":["${tag}"]`);
+    }
+    // Gemini rejects array bounds combined with unions or nesting (400, checked against the API).
+    expect(text).not.toMatch(/"(minItems|maxItems)"/);
+    expect(text).not.toContain("oneOf");
+  });
+});

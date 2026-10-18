@@ -1,5 +1,6 @@
 pnpm-lock.yaml
 **/.next/**
+**/.next-e2e/**
 **/node_modules/**
 **/.venv/**
 **/dist/**
@@ -11,3 +12,6 @@ backend/*
 **/CLAUDE.md
 **/test-results/**
 **/playwright-report/**
+# Generated glyph table (scripts/build-glyphs.ts); kept compact.
+packages/ink/src/tutor/glyphs/hershey.json
+frontend/public/pyodide/

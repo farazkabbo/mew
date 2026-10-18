@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.0",
+    "@electric-sql/pglite-pgvector": "0.0.9",
     "vitest": "^5"
   }
 }

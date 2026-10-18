@@ -1,6 +1,7 @@
 import type { BBox, Stroke } from "@mew/shared";
 import { bboxContainsPoint, inflateBBox, unionBBox, type Vec } from "@mew/ink";
 
+import { isShown } from "../../visibility";
 import type { PagePoint, ToolContext, ToolController } from "./types";
 
 /** Lasso points closer than this (CSS px) are skipped. */
@@ -54,7 +55,7 @@ export class LassoTool implements ToolController {
   end(): void {
     const { overlay, engine } = this.ctx;
     if (this.mode === "drawing" && overlay.lasso) {
-      this.setSelection(engine.doc.inLasso(overlay.lasso));
+      this.setSelection(engine.doc.inLasso(overlay.lasso).filter(isShown));
       overlay.lasso = null;
     } else if (this.mode === "dragging" && overlay.selection) {
       const { strokes, dx, dy } = overlay.selection;

@@ -84,6 +84,9 @@ notebooks saved only in this browser, and the same strict CSP. Production refuse
    or by pasting `backend/supabase/migrations/*.sql` into the SQL editor, in filename order.
 3. Put the project URL and the **publishable** key in `.env.local`. Never put the secret key in a
    `NEXT_PUBLIC_` variable; the app refuses to start if you do.
+4. For courses (signed in), set `SUPABASE_SECRET_KEY` for the API service. It is used only by
+   course-building jobs, which outlive a session token, for a course the API has just created
+   for the verified user.
 
 ## Develop
 
@@ -142,7 +145,7 @@ PNG of your three most recent lines, and any recognised text for them. It replie
 
 - `speech` is streamed out of the JSON as soon as it's complete and spoken right away
   (`/api/tts` proxies ElevenLabs Flash as raw PCM, played gaplessly with Web Audio). Board
-  `actions` arrive after and are drawn as ink from M4.
+  `actions` arrive after and are written on the page as ink (below).
 - **Barge-in:** speaking over the tutor, or touching the page with the pen, fades it out within
   150 ms. The tutor's own voice picked up by the mic doesn't count: transcripts that mostly repeat
   what it's saying are treated as echo.
@@ -156,11 +159,69 @@ PNG of your three most recent lines, and any recognised text for them. It replie
 `pnpm eval:tutor` measures time-to-first-audio for real turns (needs the Gemini and ElevenLabs
 keys plus `ELEVENLABS_VOICE_ID`) and fails if the median is over 2 s.
 
+## Tutor ink
+
+The tutor never pastes text boxes: its board actions are **handwritten** on the page.
+
+- Glyphs are single-stroke Hershey fonts (see `packages/ink/src/tutor/glyphs/NOTICE.md`),
+  scaled to the student's own writing size and wobbled a little per letter.
+- `write_math` takes a LaTeX subset (fractions, powers, subscripts, roots, Greek, operators,
+  arrows, ∑ ∫ ∏, `\text{}`), parsed by our own small parser; anything else falls back to text.
+- A placement engine (occupancy grid) puts each action next to, under or beside the line, in
+  free space on screen, and never over the student's strokes.
+- Ink writes itself, paced to the speech. Writing or speaking pauses it; it resumes when you're
+  quiet, moving out of the way of anything you wrote meanwhile. A turn is one undo step, and
+  the ✨ toolbar button (or `T`) hides tutor ink.
+- Plots (`draw_plot`), mind maps and flowcharts (`draw_graph`, laid out with ELK) and simple
+  sketches (`draw_shapes`) are hand-drawn too (roughjs strokes, our own safe function sampler).
+
+## Checking work
+
+When you pause after writing a line (or ask "is this right?"), the **checker router** verifies
+it. Language models never get the last word on arithmetic:
+
+| Content                  | Checker                                                                |
+| ------------------------ | ---------------------------------------------------------------------- |
+| Algebra, calculus, units | SymPy on the API service: does this line follow from the one above?    |
+| Chemical equations       | Atom and charge balance (in the browser)                               |
+| Python code              | Run in Pyodide in a sandboxed worker (errors are caught; time-limited) |
+| Anything else            | The tutor, with a short rubric                                         |
+
+A verified-correct line gets a small green tick, quietly (no voice, no model call). A verified
+mistake is circled in red with a short note and the tutor gives a hint; it's told the verdict
+and never contradicts it, and if the model fails the circle still appears. Turn this off with
+"Check my steps" in the debug panel.
+
+SymPy runs in worker processes with a hard time limit (and a memory cap on Linux); input is
+parsed by SymPy's strict LaTeX parser, never `eval`. Pyodide is self-hosted (copied from
+`node_modules` before `dev`/`build`) and runs with its own strict CSP and no network access.
+
+## Courses
+
+**Courses** (sidebar) turns a PDF into a study plan:
+
+1. Upload a chapter, notes or a syllabus (PDF, up to 15 MB). The API parses it (pdfium, in a
+   sandboxed process), transcribes scanned pages with Gemini, splits it into page-exact
+   passages, embeds them (Gemini embeddings in pgvector) and extracts a concept graph: concepts
+   in teaching order, their prerequisites, and their source pages.
+2. **Check the plan:** rename, reorder, merge or remove concepts and set an exam date.
+3. Study: each concept has a lesson (explanation, worked example, practice questions, page
+   references), written the first time it's opened and then cached. "Open the course notebook"
+   gives the course its own notebook, where the tutor is handed the passages relevant to each
+   question and cites their pages.
+
+Without a Gemini key the pipeline still works (concepts from the PDF's headings, lexical
+search). In local mode courses live in the API's memory; signed in, they live in Supabase under
+RLS (apply the migrations first). `pnpm eval:course` checks against the real model that answers
+cite the right page.
+
 ## Quality gates
 
 ```sh
 pnpm check                     # prettier, ESLint, tsc, vitest across the TS workspaces + API
-pnpm --filter @mew/frontend e2e  # Playwright: drawing, persistence, eraser/undo, export, 60 fps
+E2E_BASE_URL=http://localhost:3100 pnpm --filter @mew/frontend e2e
+                               # Playwright (27 tests): starts its own web (:3100) and API (:8100)
+                               # servers in local mode, beside any dev server you have running
 pnpm --filter @mew/backend audit:py  # pip-audit of the API's runtime dependencies
 pnpm audit --prod              # npm advisories
 ```

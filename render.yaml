@@ -9,8 +9,9 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    # The free plan sleeps when idle (cold starts of tens of seconds). Use a paid plan before
-    # relying on the latency targets.
+    # The free plan sleeps when idle (cold starts of tens of seconds) and has 512 MB of RAM, too
+    # little for the SymPy and PDF worker processes (M5, M7). Use a paid plan (2 GB+) before
+    # relying on checks, courses or the latency targets.
     plan: free
     autoDeploy: true
     buildFilter:
@@ -28,6 +29,17 @@ services:
         sync: false
       # Comma-separated web origins allowed in the token's azp claim, e.g. https://mew.app
       - key: CLERK_AUTHORIZED_PARTIES
+        sync: false
+      # Courses (M7): Supabase project URL and publishable key (public values), and the secret key
+      # used only by ingestion jobs.
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      # Gemini (course ingestion, OCR, lessons). Model IDs default to the code's values.
+      - key: GEMINI_API_KEY
         sync: false
       # Extra hostnames to accept; the service's onrender.com host is trusted automatically.
       - key: ALLOWED_HOSTS

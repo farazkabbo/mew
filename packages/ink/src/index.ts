@@ -9,3 +9,4 @@ export * from "./page-document";
 export * from "./segmentation";
 export * from "./spatial-index";
 export * from "./viewport";
+export * from "./tutor";

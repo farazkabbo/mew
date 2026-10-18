@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CHECK_LIMITS, LineCheck } from "./check";
+import { COURSE_LIMITS, CourseExcerpt } from "./course";
 import { MEW_LIMITS, MewLabel } from "./mew";
 
 export const TUTOR_LIMITS = {
@@ -110,6 +112,10 @@ export const TutorRequest = z.object({
   depth: z.enum(["normal", "deep"]),
   /** What the tutor said in the last turns (for continuity). */
   previousTutorSpeech: z.array(z.string().max(TUTOR_LIMITS.speechChars)).max(3),
+  /** Verified verdicts about recent lines (SymPy, chemistry balance, code runs). */
+  checks: z.array(LineCheck).max(CHECK_LIMITS.checksPerTurn).default([]),
+  /** Passages of the student's course material relevant to this turn (with pages to cite). */
+  courseContext: z.array(CourseExcerpt).max(COURSE_LIMITS.excerptsPerTurn).default([]),
 });
 export type TutorRequest = z.infer<typeof TutorRequest>;
 

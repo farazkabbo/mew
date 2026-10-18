@@ -27,10 +27,14 @@ describe("proxy matcher", () => {
     },
   );
 
-  it.each(["/_next/static/chunk.js", "/favicon.ico", "/fonts/inter.woff2", "/api/health"])(
-    "skips static assets and the health probe: %s",
-    (route) => {
-      expect(matcher.test(route)).toBe(false);
-    },
-  );
+  it.each([
+    "/_next/static/chunk.js",
+    "/favicon.ico",
+    "/fonts/inter.woff2",
+    "/api/health",
+    "/workers/code-runner.mjs",
+    "/pyodide/pyodide.asm.wasm",
+  ])("skips static assets and the health probe: %s", (route) => {
+    expect(matcher.test(route)).toBe(false);
+  });
 });

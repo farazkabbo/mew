@@ -15,6 +15,8 @@ const request: TutorRequest = {
   answerStyle: "hints_first",
   depth: "normal",
   previousTutorSpeech: [],
+  checks: [],
+  courseContext: [],
 };
 
 const RESPONSE: TutorResponse = {
