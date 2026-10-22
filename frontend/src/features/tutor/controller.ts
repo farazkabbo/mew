@@ -2,6 +2,7 @@ import type { PageDocument } from "@mew/ink";
 import {
   type BoardAction,
   type LineCheck,
+  type QuizContext,
   reconcileMarks,
   TTS_SAMPLE_RATE,
   type TutorRequest,
@@ -33,6 +34,10 @@ export type TutorDeps = {
   checker?: Pick<WorkChecker, "check">;
   /** The course of the notebook on screen, if any (its passages go to the tutor). */
   courseId?: () => string | null;
+  /** The quiz question being answered, if a quiz is running. */
+  quiz?: () => QuizContext | null;
+  /** The student's chosen voice (null: the server's default). */
+  voiceId?: () => string | null;
   /** The page on screen, if any. */
   doc(): PageDocument | null;
   /** Called when a turn ends, however it ends (starts Mew's cooldown). */
@@ -98,6 +103,7 @@ export class TutorController {
         doc: this.deps.doc(),
         recognition: this.deps.recognition,
         courseId: this.deps.courseId?.() ?? null,
+        quiz: this.deps.quiz?.() ?? null,
       });
       request.checks = checks;
       for await (const event of streamTutor(request, turn.abort.signal)) {
@@ -113,7 +119,7 @@ export class TutorController {
           drew = this.draw(id, reconcileMarks(event.response.actions, checks), turn, triggeredAt);
         } else {
           outcome = "failed";
-          this.fallBack(id, checks, turn, triggeredAt, drew);
+          this.fallBack(id, checks, turn, triggeredAt, drew, event.message);
         }
       }
       await speaking;
@@ -152,6 +158,8 @@ export class TutorController {
     turn: ActiveTurn,
     triggeredAt: number,
     drew: boolean,
+    /** The server's explanation (e.g. the model is busy), if it gave one. */
+    reason?: string,
   ): void {
     const marks = reconcileMarks([], checks);
     const wrong = checks.some((c) => c.target && c.verdict === "incorrect");
@@ -160,11 +168,33 @@ export class TutorController {
       .getState()
       .setCaption(
         marks.length === 0
-          ? "I couldn't answer just now — try again in a moment."
+          ? reason || "I couldn't answer just now — try again in a moment."
           : wrong
             ? "Something's off in that step — have another look."
             : "That step checks out.",
       );
+  }
+
+  /**
+   * Says a prepared line (a quiz question, a hint, a grade) without a model call: caption plus
+   * voice, interruptible like any turn. Resolves when it has been said (or cut off).
+   */
+  async announce(text: string): Promise<void> {
+    this.interrupt();
+    const turn: ActiveTurn = { id: 0, abort: new AbortController(), speech: text };
+    this.active = turn;
+    const tutor = useTutor.getState();
+    tutor.setCaption(text);
+    try {
+      await this.speak(turn, this.now());
+    } finally {
+      if (this.active === turn) {
+        this.active = null;
+        this.lastSpoken = { text, endedAt: this.now() };
+        useTutor.setState({ phase: "idle", lastFinishedAt: Date.now() });
+        this.deps.onFinished();
+      }
+    }
   }
 
   /** A partial transcript arrived: barge in if it's the student, not our own voice. */
@@ -210,11 +240,17 @@ export class TutorController {
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: turn.speech }),
+        body: JSON.stringify({ text: turn.speech, voiceId: this.deps.voiceId?.() ?? null }),
         cache: "no-store",
         signal: turn.abort.signal,
       });
-      if (!response.ok || !response.body) return; // no voice: the caption still shows the reply
+      if (!response.ok || !response.body) {
+        // No voice: the caption still shows the reply. Say why (e.g. a paid-only voice).
+        const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
+        if (typeof body?.error === "string") useTutor.getState().setVoiceIssue(body.error);
+        return;
+      }
+      useTutor.getState().setVoiceIssue(null);
       await this.deps.player.play(response.body, {
         sampleRate: TTS_SAMPLE_RATE,
         signal: turn.abort.signal,

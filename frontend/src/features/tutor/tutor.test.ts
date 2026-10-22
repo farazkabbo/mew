@@ -225,7 +225,9 @@ describe("TutorController", () => {
   });
 
   it("shows a short apology when the tutor fails", async () => {
-    routeFetch(() => ndjson([{ type: "error", message: "The tutor is unavailable right now." }]));
+    routeFetch(() =>
+      ndjson([{ type: "error", message: "I couldn't answer just now — try again in a moment." }]),
+    );
     const { player } = fakePlayer();
     const { tutor } = controller(player);
 
@@ -284,7 +286,9 @@ describe("TutorController", () => {
   });
 
   it("still circles a verified mistake when the model is unavailable", async () => {
-    routeFetch(() => ndjson([{ type: "error", message: "The tutor is unavailable right now." }]));
+    routeFetch(() =>
+      ndjson([{ type: "error", message: "I couldn't answer just now — try again in a moment." }]),
+    );
     const { player } = fakePlayer();
     const { tutor, ink } = controller(player);
 

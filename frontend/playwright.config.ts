@@ -53,7 +53,7 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: `node scripts/copy-pyodide.mjs && pnpm exec next dev --port ${port}`,
+      command: `node scripts/copy-pyodide.mjs && node scripts/copy-transformers.mjs && pnpm exec next dev --port ${port}`,
       // Like CI: local mode (no sign-in) and no model or speech keys, even when .env.local has
       // them (an empty variable in the environment wins over the file). Tests mock what they
       // need, so runs are deterministic and spend no credits. Its own build folder lets it run

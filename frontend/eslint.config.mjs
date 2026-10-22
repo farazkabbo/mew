@@ -12,13 +12,17 @@ export default defineConfig([
       "no-useless-escape": "error",
     },
   },
-  // public/pyodide: the vendored Python runtime, copied from node_modules (not our code).
+  // public/pyodide and public/workers/vendor: vendored runtimes copied from node_modules (not our
+  // code); public/workers/models: a trained model.
   globalIgnores([
     ".next/**",
     ".next-e2e/**",
+    ".next-build/**",
     "out/**",
     "build/**",
     "next-env.d.ts",
     "public/pyodide/**",
+    "public/workers/vendor/**",
+    "public/workers/models/**",
   ]),
 ]);

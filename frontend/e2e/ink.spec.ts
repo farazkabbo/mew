@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 /** M4 acceptance: the tutor writes a short equation next to my line, at my writing size,
  * without overlapping my work. The model and voice are mocked; everything else is real. */

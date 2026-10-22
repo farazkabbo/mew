@@ -4,6 +4,7 @@ import { streamSpeech } from "@/server/elevenlabs";
 import { ttsEnv } from "@/server/env";
 import { assertSameOrigin, handle, readJson, requireUserId } from "@/server/http";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { resolveVoice } from "@/server/voices";
 
 const MAX_BODY_BYTES = 4096;
 
@@ -14,7 +15,7 @@ const MAX_BODY_BYTES = 4096;
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
-  const { text } = await readJson(request, TtsRequest, MAX_BODY_BYTES);
+  const { text, voiceId } = await readJson(request, TtsRequest, MAX_BODY_BYTES);
   ttsEnv();
   enforceRateLimit(
     userId,
@@ -23,7 +24,7 @@ export const POST = handle(async (request: Request) => {
   );
 
   // Cancelling the request (barge-in) aborts the upstream synthesis too.
-  const audio = await streamSpeech(text, request.signal);
+  const audio = await streamSpeech(text, request.signal, resolveVoice(voiceId));
   return new Response(audio, {
     headers: {
       "Content-Type": `audio/pcm;rate=${TTS_SAMPLE_RATE};encoding=s16le;channels=1`,

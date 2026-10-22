@@ -106,3 +106,40 @@ describe("toGeminiSchema for the tutor's response", () => {
     expect(text).not.toContain("oneOf");
   });
 });
+
+describe("cooldown after quota or overload errors", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    create.mockReset();
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+  });
+
+  it("reads how long to wait from the error, capped, and ignores other errors", async () => {
+    const { cooldownFor } = await import("./gemini");
+    const quota = (text: string) => new Error(`429 Rate limit exceeded. ${text}`);
+    expect(cooldownFor(quota("Please retry in 51s"))).toBe(51_000);
+    expect(cooldownFor(quota("Please retry in 2m5s"))).toBe(125_000);
+    // A daily quota ("18 hours") is re-checked every 15 minutes instead.
+    expect(cooldownFor(quota("Please retry in 18h39m51s"))).toBe(15 * 60_000);
+    expect(cooldownFor(quota("upgrade your tier"))).toBe(60_000);
+    expect(cooldownFor(new Error("503 model is currently experiencing high demand"))).toBe(20_000);
+    expect(cooldownFor(new Error("Request timed out"))).toBeNull();
+    expect(cooldownFor(new Error("400 invalid argument"))).toBeNull();
+  });
+
+  it("fails fast, without a request, while a model cools down; other models still work", async () => {
+    const { generateStructured, ModelBusyError } = await import("./gemini");
+    create.mockRejectedValueOnce(new Error("429 Rate limit exceeded. Please retry in 30s"));
+
+    await expect(generateStructured(request)).rejects.toThrow(/429/);
+    await expect(generateStructured(request)).rejects.toBeInstanceOf(ModelBusyError);
+    expect(create).toHaveBeenCalledTimes(1);
+
+    create.mockResolvedValue({
+      output_text: '{"label":"ignore","confidence":0.9,"reason":"filler"}',
+    });
+    await expect(generateStructured({ ...request, model: "other-model" })).resolves.toMatchObject({
+      label: "ignore",
+    });
+  });
+});

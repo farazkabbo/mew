@@ -13,6 +13,15 @@ from datetime import UTC, date, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
+from ..learner.models import (
+    MAX_ATTEMPTS,
+    AttemptRecord,
+    AttemptWrite,
+    CardRecord,
+    DueCard,
+    FsrsCard,
+    LearnerData,
+)
 from .models import (
     Concept,
     Course,
@@ -63,6 +72,19 @@ class CourseStore(Protocol):
     def set_edges(self, user: str, course_id: UUID, edges: Sequence[Edge]) -> None: ...
     def add_concept_sources(self, user: str, links: Sequence[tuple[UUID, UUID]]) -> None: ...
 
+    # Learner model (M8)
+    def has_concept(self, user: str, course_id: UUID, concept_id: UUID) -> bool: ...
+    def learner_data(self, user: str, course_id: UUID) -> LearnerData: ...
+    def add_attempt(self, user: str, course_id: UUID, attempt: AttemptWrite) -> None:
+        """Logs the attempt and saves the concept's rescheduled card."""
+        ...
+
+    def start_card(self, user: str, course_id: UUID, concept_id: UUID, card: FsrsCard) -> None:
+        """Creates the concept's card unless it already has one."""
+        ...
+
+    def due_cards(self, user: str, before: datetime, limit: int) -> list[DueCard]: ...
+
 
 # ─── In memory (local development mode) ──────────────────────────────────────────────────────
 
@@ -87,9 +109,13 @@ class _UserData:
     edges: set[tuple[UUID, UUID]] = field(default_factory=set)
     concept_sources: set[tuple[UUID, UUID]] = field(default_factory=set)
     files: dict[str, bytes] = field(default_factory=dict)
+    attempts: list[tuple[UUID, AttemptRecord]] = field(default_factory=list)  # (course, attempt)
+    cards: dict[UUID, tuple[UUID, CardRecord]] = field(default_factory=dict)  # concept → card
 
 
 MAX_LOCAL_COURSES = 20
+#: Attempts kept per local user (the oldest go first).
+MAX_LOCAL_ATTEMPTS = 20_000
 
 
 class MemoryCourseStore:
@@ -148,6 +174,7 @@ class MemoryCourseStore:
             gone = {c.id for c in data.concepts.values() if c.course_id == course_id}
             data.concepts = {k: c for k, c in data.concepts.items() if k not in gone}
             data.edges = {e for e in data.edges if e[0] not in gone and e[1] not in gone}
+            self._forget_learning(data, gone)
 
     def add_source(self, user: str, source: Source) -> None:
         with self._lock:
@@ -255,6 +282,7 @@ class MemoryCourseStore:
                 data.concepts.pop(cid, None)
             data.edges = {e for e in data.edges if e[0] not in gone and e[1] not in gone}
             data.concept_sources = {link for link in data.concept_sources if link[0] not in gone}
+            self._forget_learning(data, gone)
 
     def add_edges(self, user: str, edges: Sequence[Edge]) -> None:
         with self._lock:
@@ -284,9 +312,67 @@ class MemoryCourseStore:
         with self._lock:
             self._data(user).concept_sources.update(links)
 
+    # ─── learner model ──────────────────────────────────────────────────────────────────────
+
+    def has_concept(self, user: str, course_id: UUID, concept_id: UUID) -> bool:
+        with self._lock:
+            concept = self._data(user).concepts.get(concept_id)
+            return concept is not None and concept.course_id == course_id
+
+    def learner_data(self, user: str, course_id: UUID) -> LearnerData:
+        with self._lock:
+            data = self._data(user)
+            attempts = [a for c, a in data.attempts if c == course_id][-MAX_ATTEMPTS:]
+            cards = [card for c, card in data.cards.values() if c == course_id]
+        return LearnerData(attempts=attempts, cards=cards)
+
+    def add_attempt(self, user: str, course_id: UUID, attempt: AttemptWrite) -> None:
+        with self._lock:
+            if not self.has_concept(user, course_id, attempt.concept_id):
+                raise CourseNotFoundError(attempt.concept_id)
+            data = self._data(user)
+            record = AttemptRecord(
+                **attempt.model_dump(exclude={"card"}), created_at=datetime.now(UTC)
+            )
+            data.attempts.append((course_id, record))
+            del data.attempts[:-MAX_LOCAL_ATTEMPTS]
+            data.cards[attempt.concept_id] = (course_id, _card(attempt.concept_id, attempt.card))
+
+    def start_card(self, user: str, course_id: UUID, concept_id: UUID, card: FsrsCard) -> None:
+        with self._lock:
+            if not self.has_concept(user, course_id, concept_id):
+                raise CourseNotFoundError(concept_id)
+            self._data(user).cards.setdefault(concept_id, (course_id, _card(concept_id, card)))
+
+    def due_cards(self, user: str, before: datetime, limit: int) -> list[DueCard]:
+        with self._lock:
+            data = self._data(user)
+            due = [
+                DueCard(
+                    course_id=course_id,
+                    course_title=data.courses[course_id].title,
+                    concept_id=card.concept_id,
+                    concept_title=data.concepts[card.concept_id].title,
+                    due_at=card.due_at,
+                    reps=card.fsrs_state.reps,
+                )
+                for course_id, card in data.cards.values()
+                if card.due_at <= before
+            ]
+        return sorted(due, key=lambda c: c.due_at)[:limit]
+
+    @staticmethod
+    def _forget_learning(data: _UserData, concepts: set[UUID]) -> None:
+        data.attempts = [(c, a) for c, a in data.attempts if a.concept_id not in concepts]
+        data.cards = {k: v for k, v in data.cards.items() if k not in concepts}
+
     def _require(self, user: str, course_id: UUID) -> None:
         if course_id not in self._data(user).courses:
             raise CourseNotFoundError(course_id)
+
+
+def _card(concept_id: UUID, card: FsrsCard) -> CardRecord:
+    return CardRecord(concept_id=concept_id, fsrs_state=card, due_at=card.due)
 
 
 def _cosine(a: Sequence[float], b: Sequence[float]) -> float:

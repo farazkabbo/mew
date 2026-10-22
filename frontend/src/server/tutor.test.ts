@@ -17,6 +17,7 @@ const request: TutorRequest = {
   previousTutorSpeech: [],
   checks: [],
   courseContext: [],
+  quiz: null,
 };
 
 const RESPONSE: TutorResponse = {
@@ -132,7 +133,9 @@ describe("runTutor", () => {
       runTutor(request, undefined, { stream: failingStream("{"), generate: neverCalled, now }),
     );
 
-    expect(events).toEqual([{ type: "error", message: "The tutor is unavailable right now." }]);
+    expect(events).toEqual([
+      { type: "error", message: "I couldn't answer just now — try again in a moment." },
+    ]);
   });
 
   it("stays silent when the client hung up", async () => {

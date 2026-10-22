@@ -2,6 +2,7 @@ packages:
   - frontend
   - backend
   - backend/supabase
+  - desktop
   - packages/*
 
 # Lifecycle scripts are blocked unless explicitly allowed here (supply-chain hardening).
@@ -12,6 +13,9 @@ allowBuilds:
   # Reviewed and not needed: a no-op preinstall, and a version-scheme warning.
   "@google/genai": false
   protobufjs: false
+  # Pulled in by @huggingface/transformers (Mew v2). It downloads native ONNX Runtime binaries for
+  # Node; only the browser (WebAssembly) build is used, so it's not needed.
+  onnxruntime-node: false
 
 # Only resolve versions published at least 14 days ago, so a hijacked release is likely to be
 # caught and pulled before it can be installed here.

@@ -12,7 +12,7 @@ import {
 } from "@mew/shared";
 
 import { geminiEnv } from "./env";
-import { type GenerateStructured, generateStructured } from "./gemini";
+import { type GenerateStructured, generateStructured, ModelBusyError } from "./gemini";
 
 /** The gate must answer well inside the 400 ms target; past this the student has moved on. */
 const GATE_TIMEOUT_MS = 2500;
@@ -44,7 +44,10 @@ export async function classifyMew(
     });
     return { output: enforceMewRules(input, output), source: "model", latencyMs: elapsed() };
   } catch (error) {
-    console.warn("[mew] gate unavailable:", error instanceof Error ? error.message : error);
+    // A busy model was already reported once when its cooldown started.
+    if (!(error instanceof ModelBusyError)) {
+      console.warn("[mew] gate unavailable:", error instanceof Error ? error.message : error);
+    }
     return { output: fallbackMew(input), source: "fallback", latencyMs: elapsed() };
   }
 }

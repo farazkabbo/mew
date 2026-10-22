@@ -1,8 +1,10 @@
 "use client";
 
-import { Bug, Mic, MicOff } from "lucide-react";
+import { Bug, Mic, MicOff, VolumeX, X } from "lucide-react";
+import Link from "next/link";
 
 import { Caption } from "../tutor/Caption";
+import { useTutor } from "../tutor/store";
 import { useVoice } from "../voice/store";
 import { Mascot, mascotLabel } from "./Mascot";
 import { useMew } from "./store";
@@ -19,6 +21,7 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
   const state = useMascotState();
   const { status, error, level } = useVoice();
   const { debugOpen, toggleDebug } = useMew();
+  const voiceIssue = useTutor((s) => s.voiceIssue);
   const listening = status === "listening" || status === "connecting";
 
   const small =
@@ -34,6 +37,28 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
         >
           {error}
         </p>
+      )}
+      {voiceIssue && (
+        <div
+          data-testid="voice-issue"
+          className="flex max-w-72 items-start gap-2 rounded-xl border border-rule bg-paper-raised px-3 py-2 text-xs shadow-lg"
+        >
+          <VolumeX className="mt-0.5 size-3.5 shrink-0 text-ink-muted" aria-hidden />
+          <p className="min-w-0 flex-1">
+            {voiceIssue}{" "}
+            <Link href="/settings" className="text-accent underline-offset-2 hover:underline">
+              Settings
+            </Link>
+          </p>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => useTutor.getState().setVoiceIssue(null)}
+            className="text-ink-muted hover:text-ink"
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </div>
       )}
       <div className="flex items-end gap-2">
         <button

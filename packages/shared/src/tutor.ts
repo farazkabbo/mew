@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CHECK_LIMITS, LineCheck } from "./check";
 import { COURSE_LIMITS, CourseExcerpt } from "./course";
 import { MEW_LIMITS, MewLabel } from "./mew";
+import { QuizContext } from "./quiz";
 
 export const TUTOR_LIMITS = {
   speechChars: 400,
@@ -116,6 +117,8 @@ export const TutorRequest = z.object({
   checks: z.array(LineCheck).max(CHECK_LIMITS.checksPerTurn).default([]),
   /** Passages of the student's course material relevant to this turn (with pages to cite). */
   courseContext: z.array(CourseExcerpt).max(COURSE_LIMITS.excerptsPerTurn).default([]),
+  /** The quiz question the student is answering, if a quiz is running (M8). */
+  quiz: QuizContext.nullable().default(null),
 });
 export type TutorRequest = z.infer<typeof TutorRequest>;
 
@@ -154,7 +157,14 @@ export const Recognition = z.object({
 });
 export type Recognition = z.infer<typeof Recognition>;
 
-export const TtsRequest = z.object({ text: z.string().min(1).max(TUTOR_LIMITS.ttsChars) });
+export const TtsRequest = z.object({
+  text: z.string().min(1).max(TUTOR_LIMITS.ttsChars),
+  /** A voice from GET /api/voices; anything else falls back to the default voice. */
+  voiceId: z
+    .string()
+    .regex(/^[A-Za-z0-9]{8,64}$/)
+    .nullish(),
+});
 export type TtsRequest = z.infer<typeof TtsRequest>;
 
 /** Raw audio format streamed by `POST /api/tts`: signed 16-bit little-endian mono PCM. */

@@ -82,6 +82,14 @@ export const ttsEnv = defineEnv(
     // Part of the upstream URL path, so restricted to the ID alphabet.
     ELEVENLABS_VOICE_ID: z.string().regex(/^[A-Za-z0-9]{8,64}$/, "must be an ElevenLabs voice ID"),
     ELEVENLABS_TTS_MODEL: z.string().min(1),
+    /** Voices offered in Settings, as "Name:voiceId,Name:voiceId" (optional). */
+    ELEVENLABS_VOICES: z
+      .string()
+      .regex(
+        /^[^:,]{1,40}:[A-Za-z0-9]{8,64}(,[^:,]{1,40}:[A-Za-z0-9]{8,64})*$/,
+        'must look like "Name:voiceId,Name:voiceId"',
+      )
+      .optional(),
   }),
   { defaults: { ELEVENLABS_TTS_MODEL: "eleven_flash_v2_5" } },
 );

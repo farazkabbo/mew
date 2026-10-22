@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 /**
  * M6 acceptance: "draw a mind map of the causes of WW1" and "graph y = sin x" both appear as

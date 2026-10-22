@@ -7,6 +7,9 @@ import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
 import { useMewSession } from "../mew/useMewSession";
+import { Onboarding } from "../onboarding/Onboarding";
+import { QuizCard } from "../quiz/QuizCard";
+import { useQuiz } from "../quiz/store";
 import { type CanvasHandle, NotebookCanvas } from "./canvas/NotebookCanvas";
 import { NotebookDb } from "./db";
 import { PageEngine } from "./engine";
@@ -16,11 +19,14 @@ import { NotebookRepository } from "./repository";
 import { Sidebar } from "./Sidebar";
 import { useNotebookUi } from "./store";
 import { Toolbar } from "./Toolbar";
+import { useAppServices } from "./useAppServices";
 import { useShortcuts } from "./useShortcuts";
 
 type Notice = { text: string; tone: "info" | "error" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Screen width the quiz card covers on the left (its width plus margins), kept free of ink. */
+const QUIZ_CARD_INSET = 352;
 
 export function NotebookApp({ userId }: { userId: string }) {
   const repo = useMemo(() => new NotebookRepository(new NotebookDb(userId)), [userId]);
@@ -31,7 +37,10 @@ export function NotebookApp({ userId }: { userId: string }) {
   const [engine, setEngine] = useState<PageEngine | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const canvas = useRef<CanvasHandle>(null);
+  /** "Quiz me" from a course screen: /notebook?course=…&quiz=1 starts a quiz once open. */
+  const quizRequested = useRef(false);
   const debugOpen = useMew((s) => s.debugOpen);
+  const quizActive = useQuiz((s) => s.active);
 
   const report = useCallback((error: unknown) => {
     console.error("[notebook]", error);
@@ -46,6 +55,7 @@ export function NotebookApp({ userId }: { userId: string }) {
       // /notebook?course=<id>&title=<course title> opens (or creates) that course's notebook.
       const params = new URLSearchParams(window.location.search);
       const course = params.get("course");
+      quizRequested.current = params.get("quiz") === "1";
       const title = (params.get("title") ?? "").trim().slice(0, 200) || "Course notes";
       const latest =
         course && UUID.test(course)
@@ -123,6 +133,24 @@ export function NotebookApp({ userId }: { userId: string }) {
   useShortcuts(actions);
   const courseId = notebooks.find((n) => n.id === notebookId)?.courseId ?? null;
   const mew = useMewSession(engine, courseId);
+  const { quiz } = mew;
+  const app = useAppServices({
+    ready: engine !== null,
+    listen: mew.startListening,
+    summon: mew.summon,
+  });
+
+  useEffect(() => {
+    if (!courseId || !engine || !quizRequested.current) return;
+    quizRequested.current = false;
+    void quiz.start(courseId);
+  }, [courseId, engine, quiz]);
+
+  // A quiz belongs to its course's notebook: switching notebooks ends it.
+  useEffect(() => {
+    const running = useQuiz.getState();
+    if (running.active && running.courseId !== courseId) void quiz.stop();
+  }, [courseId, quiz]);
 
   const createNotebook = async () => {
     const notebook = await repo.createNotebook(`Notebook ${notebooks.length + 1}`);
@@ -155,10 +183,17 @@ export function NotebookApp({ userId }: { userId: string }) {
         currentId={notebookId}
         onSelect={setNotebookId}
         onCreate={() => void createNotebook().catch(report)}
+        onQuiz={courseId ? () => void quiz.start(courseId) : null}
       />
       <main className="relative min-w-0 flex-1">
         {engine && engine.pageId === pageId ? (
-          <NotebookCanvas ref={canvas} engine={engine} onPenDown={mew.penDown} tutorInk={mew.ink} />
+          <NotebookCanvas
+            ref={canvas}
+            engine={engine}
+            onPenDown={mew.penDown}
+            tutorInk={mew.ink}
+            leftInset={quizActive ? QUIZ_CARD_INSET : 0}
+          />
         ) : (
           <div className="grid h-full place-items-center text-sm text-ink-muted">
             Opening notebook…
@@ -173,6 +208,10 @@ export function NotebookApp({ userId }: { userId: string }) {
             onResetView={actions.resetView}
             onExportLine={() => void exportLine().catch(report)}
           />
+        </div>
+
+        <div className="pointer-events-none absolute top-20 left-4">
+          <QuizCard session={quiz} />
         </div>
 
         {pageId && (
@@ -213,8 +252,19 @@ export function NotebookApp({ userId }: { userId: string }) {
               {notice.text}
             </p>
           )}
+          {!app.online && !notice && (
+            <p
+              data-testid="offline-notice"
+              className="rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
+            >
+              You&apos;re offline. Your notes are saved on this device; Mew needs a connection.
+            </p>
+          )}
         </div>
       </main>
+      {app.showIntro && (
+        <Onboarding onDone={app.closeIntro} onStartListening={mew.startListening} />
+      )}
     </div>
   );
 }

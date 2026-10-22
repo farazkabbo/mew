@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { assertSameOrigin, handle, readJson, requireUserId } from "@/server/http";
 import { classifyMew } from "@/server/mew-gate";
+import { afterResponse, logMewDecision } from "@/server/mew-log";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 
 const MAX_BODY_BYTES = 8 * 1024;
@@ -15,5 +16,7 @@ export const POST = handle(async (request: Request) => {
   const input = await readJson(request, MewInput, MAX_BODY_BYTES);
 
   const decision = await classifyMew(input);
+  // Kept for training Mew v2 only with the student's opt-in; never delays the answer.
+  afterResponse(() => logMewDecision(userId, input, decision));
   return NextResponse.json(decision, { headers: { "Cache-Control": "no-store" } });
 });

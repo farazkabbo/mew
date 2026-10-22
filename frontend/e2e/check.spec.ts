@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 /**
  * M5 acceptance: I write a wrong algebra step → it gets circled with a short hint; a correct

@@ -54,6 +54,7 @@ function request(question: string, context: CourseExcerpt[]): TutorRequest {
     previousTutorSpeech: [],
     checks: [],
     courseContext: context,
+    quiz: null,
   };
 }
 

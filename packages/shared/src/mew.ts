@@ -55,9 +55,10 @@ export const MewDecisionResponse = z.object({
   output: MewOutput,
   /**
    * "model" = classified by the gate model; "rule" = decided locally without a model call;
-   * "checker" = a verifier (SymPy, chemistry balance, code run) found a definite answer first.
+   * "checker" = a verifier (SymPy, chemistry balance, code run) found a definite answer first;
+   * "local" = Mew v2, the classifier running in the browser (M10).
    */
-  source: z.enum(["model", "rule", "fallback", "checker"]),
+  source: z.enum(["model", "rule", "fallback", "checker", "local"]),
   latencyMs: z.number().int().nonnegative(),
 });
 export type MewDecisionResponse = z.infer<typeof MewDecisionResponse>;

@@ -3,6 +3,7 @@
 import { X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
+import { useSettings } from "../settings/store";
 import { TutorDebug } from "../tutor/TutorDebug";
 import { useVoice } from "../voice/store";
 import { type DecisionRecord, useMew } from "./store";
@@ -16,7 +17,7 @@ type Props = {
 /** Developer view of the voice → Mew pipeline: live transcript, gate decisions, sensitivity. */
 export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
   const { status, error, partial, segments, level } = useVoice();
-  const { decisions, threshold, setThreshold, toggleDebug } = useMew();
+  const { decisions, threshold, toggleDebug } = useMew();
   const [draft, setDraft] = useState("");
 
   const submit = (e: FormEvent) => {
@@ -108,7 +109,9 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
               max={0.95}
               step={0.05}
               value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value))}
+              onChange={(e) =>
+                void useSettings.getState().update({ mew_threshold: Number(e.target.value) })
+              }
               className="flex-1 accent-(--accent)"
             />
             <span className="w-10 text-right tabular-nums">{threshold.toFixed(2)}</span>

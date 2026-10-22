@@ -26,6 +26,61 @@ export class StructuredOutputError extends Error {
   override readonly name = "StructuredOutputError";
 }
 
+/** The model said "too many requests" or "overloaded" recently: no request was sent. */
+export class ModelBusyError extends Error {
+  override readonly name = "ModelBusyError";
+  constructor(
+    readonly model: string,
+    readonly retryAfterMs: number,
+  ) {
+    super(`${model} is busy; retry in ${Math.ceil(retryAfterMs / 1000)} s`);
+  }
+}
+
+/** Longest pause after a 429 (a daily quota says "retry in 18h": re-check now and then). */
+const MAX_COOLDOWN_MS = 15 * 60_000;
+const DEFAULT_429_COOLDOWN_MS = 60_000;
+/** "High demand" spikes are usually short. */
+const OVERLOADED_COOLDOWN_MS = 20_000;
+
+/** Per model: until when calls fail fast instead of being sent (quota or overload). */
+const busyUntil = new Map<string, number>();
+
+/**
+ * How long to leave a model alone after this error, or null if the error isn't about load.
+ * The SDK's messages start with the HTTP status ("429 Rate limit exceeded … retry in 51s").
+ */
+export function cooldownFor(error: unknown): number | null {
+  const message = error instanceof Error ? error.message : String(error);
+  const status = /^(\d{3})\b/.exec(message)?.[1];
+  if (status === "503") return OVERLOADED_COOLDOWN_MS;
+  if (status !== "429") return null;
+  const retry = /retry in (?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?/i.exec(message);
+  const ms = retry
+    ? ((Number(retry[1] ?? 0) * 60 + Number(retry[2] ?? 0)) * 60 + Number(retry[3] ?? 0)) * 1000
+    : 0;
+  return Math.min(MAX_COOLDOWN_MS, ms > 0 ? ms : DEFAULT_429_COOLDOWN_MS);
+}
+
+function assertNotBusy(model: string, now = Date.now()): void {
+  const until = busyUntil.get(model);
+  if (until === undefined) return;
+  if (until > now) throw new ModelBusyError(model, until - now);
+  busyUntil.delete(model);
+}
+
+function noteFailure(model: string, error: unknown): void {
+  const cooldown = cooldownFor(error);
+  if (cooldown === null) return;
+  busyUntil.set(model, Date.now() + cooldown);
+  console.warn(`[gemini] ${model} busy; pausing calls for ${Math.ceil(cooldown / 1000)} s`);
+}
+
+/** For tests: forget every cooldown. */
+export function resetModelCooldowns(): void {
+  busyUntil.clear();
+}
+
 /** Signature shared by the real generator and test doubles. */
 export type GenerateStructured = <T>(request: StructuredRequest<T>) => Promise<T>;
 export type StreamStructuredText = (request: StructuredRequest<unknown>) => AsyncIterable<string>;
@@ -81,10 +136,16 @@ function options(request: GenerationRequest) {
 export const generateStructured: GenerateStructured = async <T>(request: StructuredRequest<T>) => {
   let problem = "no attempt";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const interaction = await gemini().interactions.create(
-      { ...params(request as StructuredRequest<unknown>), stream: false },
-      options(request),
-    );
+    assertNotBusy(request.model);
+    const interaction = await gemini()
+      .interactions.create(
+        { ...params(request as StructuredRequest<unknown>), stream: false },
+        options(request),
+      )
+      .catch((error: unknown) => {
+        noteFailure(request.model, error);
+        throw error;
+      });
     const parsed = request.schema.safeParse(parseJson(interaction.output_text));
     if (parsed.success) return parsed.data;
     problem = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -94,15 +155,21 @@ export const generateStructured: GenerateStructured = async <T>(request: Structu
 
 /** Streams the raw JSON text of a structured generation as it is produced (not validated). */
 export const streamStructuredText: StreamStructuredText = async function* (request) {
-  const stream = await gemini().interactions.create(
-    { ...params(request), stream: true },
-    options(request),
-  );
-  for await (const event of stream) {
-    if (event.event_type === "step.delta" && event.delta.type === "text") yield event.delta.text;
-    if (event.event_type === "error") {
-      throw new Error(`Model stream error: ${event.error?.code ?? "unknown"}`);
+  assertNotBusy(request.model);
+  try {
+    const stream = await gemini().interactions.create(
+      { ...params(request), stream: true },
+      options(request),
+    );
+    for await (const event of stream) {
+      if (event.event_type === "step.delta" && event.delta.type === "text") yield event.delta.text;
+      if (event.event_type === "error") {
+        throw new Error(`Model stream error: ${event.error?.code ?? "unknown"}`);
+      }
     }
+  } catch (error) {
+    noteFailure(request.model, error);
+    throw error;
   }
 };
 

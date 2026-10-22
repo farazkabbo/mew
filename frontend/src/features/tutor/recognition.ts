@@ -14,6 +14,8 @@ export class RecognitionService {
   private readonly inflight = new Map<string, Promise<Recognition | null>>();
   /** Set when the server says recognition isn't configured, to stop retrying every pause. */
   private unavailable = false;
+  /** After a 429 (our limit or the model's): no requests until then. */
+  private pausedUntil = 0;
 
   constructor(private readonly fetchImpl: typeof fetch = (...args) => fetch(...args)) {}
 
@@ -29,7 +31,7 @@ export class RecognitionService {
   }
 
   async recognize(doc: PageDocument, line: Line): Promise<Recognition | null> {
-    if (this.unavailable) return null;
+    if (this.unavailable || Date.now() < this.pausedUntil) return null;
     const key = this.key(doc, line);
     const hit = this.cache.get(key);
     if (hit) return hit;
@@ -52,6 +54,10 @@ export class RecognitionService {
         signal: AbortSignal.timeout(10_000),
       });
       if (response.status === 503) this.unavailable = true;
+      if (response.status === 429) {
+        const seconds = Number(response.headers.get("Retry-After")) || 30;
+        this.pausedUntil = Date.now() + Math.min(seconds, 900) * 1000;
+      }
       if (!response.ok) return null;
       const recognition = Recognition.parse(await response.json());
       this.cache.set(key, recognition);

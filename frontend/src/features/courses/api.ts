@@ -1,10 +1,14 @@
 import {
+  type AttemptRequest,
+  ConceptProgress,
   type ConceptReview,
   Course,
   CourseDetail,
   CourseList,
+  CourseProgress,
   type CourseUpdate,
   Lesson,
+  ReviewQueue,
 } from "@mew/shared";
 import { z } from "zod";
 
@@ -56,12 +60,35 @@ export const coursesApi = {
   remove: (id: string) => call(`/api/courses/${id}`, z.undefined(), { method: "DELETE" }),
   lesson: (id: string, conceptId: string) =>
     call(`/api/courses/${id}/concepts/${conceptId}/lesson`, Lesson),
+  progress: (id: string) => call(`/api/courses/${id}/progress`, CourseProgress),
+  /** Records an answer; returns the concept's new progress. */
+  attempt: (id: string, attempt: AttemptRequest) =>
+    call(`/api/courses/${id}/attempts`, ConceptProgress, json("POST", attempt)),
+  /** The lesson was opened: the concept counts as explored and joins the review queue. */
+  explored: (id: string, conceptId: string) =>
+    call(`/api/courses/${id}/concepts/${conceptId}/explored`, z.undefined(), json("POST", {})),
+  /** Concepts due for review across all courses. */
+  dueReviews: () => call("/api/review", ReviewQueue),
 };
 
 /** "/notebook" for this course: opens (or creates) the course's own notebook. */
 export function notebookHref(course: { id: string; title: string }): string {
   const params = new URLSearchParams({ course: course.id, title: course.title });
   return `/notebook?${params.toString()}`;
+}
+
+/** The course notebook with a quiz started on arrival ("Quiz me"). */
+export function quizHref(course: { id: string; title: string }): string {
+  return `${notebookHref(course)}&quiz=1`;
+}
+
+/** "due now", "in 3 days", "tomorrow", "3 days ago" — for review dates. */
+export function formatDue(due: string, now = new Date()): string {
+  const days = Math.round((Date.parse(due) - now.getTime()) / 86_400_000);
+  if (Date.parse(due) <= now.getTime()) return days <= -1 ? `due ${-days}d ago` : "due now";
+  if (days <= 0) return "later today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
 }
 
 /** "p. 3", "pp. 3–5, 9" */

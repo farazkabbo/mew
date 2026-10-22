@@ -14,7 +14,10 @@ from .checker.sandbox import CheckerPool, limit_memory
 from .config import Settings
 from .courses.store import MemoryCourseStore
 from .deps import require_internal_caller
-from .routes import check, courses, health, me
+from .mew_events.store import MemoryMewEventStore
+from .profiles.store import MemoryProfileStore
+from .routes import check, courses, health, learner, me, mew_events
+from .routes import settings as user_settings
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,8 @@ def create_app(
     app.state.ingest_pool = ingest_pool
     # Courses for local mode (development without Clerk): kept in memory.
     app.state.local_courses = MemoryCourseStore()
+    app.state.local_profiles = MemoryProfileStore()
+    app.state.local_mew_events = MemoryMewEventStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -66,6 +71,9 @@ def create_app(
     v1.include_router(me.router)
     v1.include_router(check.router)
     v1.include_router(courses.router)
+    v1.include_router(learner.router)
+    v1.include_router(user_settings.router)
+    v1.include_router(mew_events.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

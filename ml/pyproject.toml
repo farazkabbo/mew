@@ -1,0 +1,18 @@
+[project]
+name = "mew-gate-training"
+version = "0.1.0"
+description = "Fine-tunes Mew v2, the in-browser gate classifier (M10). Not deployed: its output is."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch>=2.14,<3",
+    "transformers>=5.19,<6",
+    "onnx>=1.23,<2",
+    "onnxruntime>=1.30,<2",
+    "numpy>=2.5,<3",
+    "ipykernel>=7",
+]
+
+[tool.uv]
+package = false
+# Same supply-chain rule as the rest of the repo: only releases at least 14 days old (when added).
+exclude-newer = "2026-10-07T00:00:00Z"

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Mew, the mascot (same shape as Mascot.tsx), on the paper colour. Source for `pnpm icons`. -->
+  <rect width="512" height="512" rx="112" fill="#f7f5f0"/>
+  <g transform="translate(64 56) scale(8)">
+    <path d="M11 20 L13 6 L22 14 Z M37 20 L35 6 L26 14 Z" fill="#1d1c1a"/>
+    <circle cx="24" cy="27" r="16" fill="#1d1c1a"/>
+    <circle cx="18" cy="26" r="2.4" fill="#f7f5f0"/>
+    <circle cx="30" cy="26" r="2.4" fill="#f7f5f0"/>
+    <ellipse cx="24" cy="33" rx="3" ry="2" fill="#8a7bf0"/>
+  </g>
+</svg>
