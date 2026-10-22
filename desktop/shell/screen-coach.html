@@ -87,6 +87,89 @@
         </p>
       </section>
 
+      <section aria-labelledby="privacy">
+        <h2 id="privacy">Privacy</h2>
+        <div id="mic-off" class="warning" role="status" hidden>
+          <p>
+            Microphone access is off for desktop apps, so Screen Coach is paused. Turn it on in
+            Windows Settings.
+          </p>
+          <button type="button" id="open-mic">Open microphone settings</button>
+        </div>
+
+        <fieldset>
+          <legend>When you ask about your screen, Mew sees</legend>
+          <label class="check">
+            <input type="radio" name="scope" value="window" />
+            <span>The window you're working in (recommended)</span>
+          </label>
+          <label class="check">
+            <input type="radio" name="scope" value="monitor" />
+            <span>The whole monitor under your mouse, with blocked apps blacked out</span>
+          </label>
+        </fieldset>
+
+        <label class="check">
+          <input type="checkbox" id="pause-during-calls" />
+          <span>Pause during calls and screen recordings</span>
+        </label>
+
+        <fieldset>
+          <legend>Cover before anything is sent</legend>
+          <label class="check">
+            <input type="checkbox" data-rule="cards" />
+            <span>Card numbers</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-rule="secrets" />
+            <span>Passwords, API keys and tokens</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-rule="codes" />
+            <span>One-time codes and PINs</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-rule="emails" />
+            <span>Email addresses</span>
+          </label>
+          <label class="check">
+            <input type="checkbox" data-rule="phones" />
+            <span>Phone numbers</span>
+          </label>
+        </fieldset>
+        <p class="hint">
+          Covered text is hidden with a grey box on this computer, using Windows' own text
+          recognition, before the picture leaves it. Text recognition can miss things, so blocked
+          apps, password fields and private browsing windows are never captured at all.
+        </p>
+      </section>
+
+      <section aria-labelledby="blocked">
+        <h2 id="blocked">Blocked apps</h2>
+        <p class="hint">
+          Mew never looks at these apps. They're matched by program file name (for example
+          <kbd>outlook.exe</kbd>). Mail and messaging apps start blocked; unblock any you want help
+          with.
+        </p>
+        <ul id="blocked-list" class="blocked-list"></ul>
+        <form id="block-form">
+          <label for="block-input">Block another app</label>
+          <div class="row">
+            <input
+              id="block-input"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="program.exe"
+            />
+            <button type="submit">Block</button>
+          </div>
+          <p class="problem" id="problem-blocked" role="alert" hidden></p>
+        </form>
+        <div class="row buttons">
+          <button type="button" id="restore-defaults">Restore the default list</button>
+        </div>
+      </section>
+
       <footer>
         <p>These settings stay on this computer and can only be changed here.</p>
       </footer>

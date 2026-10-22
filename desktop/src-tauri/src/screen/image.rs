@@ -10,7 +10,7 @@ pub const MAX_LONG_SIDE: u32 = 1600;
 pub struct Pixels {
     pub width: u32,
     pub height: u32,
-    /// Bytes per pixel: 4 for BGRA, 3 for BGR.
+    /// Bytes per pixel: 4 for BGRA, 3 for BGR, 1 for grey.
     pub channels: u32,
     pub data: SecretBytes,
 }
@@ -38,9 +38,31 @@ pub fn fit_within(width: u32, height: u32, max_side: u32) -> (u32, u32) {
 /// Downscales BGRA to BGR (what the JPEG encoder takes) by averaging the source pixels each
 /// output pixel covers. Alpha is dropped: captured desktop content is opaque.
 pub fn downscale_bgra_to_bgr(source: &Pixels, max_side: u32) -> Pixels {
+    downscale(source, max_side, 3, |[b, g, r], out| {
+        out.copy_from_slice(&[b, g, r])
+    })
+}
+
+/// Downscales BGRA to 8-bit grey (what OCR reads fastest), using Rec. 601 luma weights.
+pub fn downscale_bgra_to_gray(source: &Pixels, max_side: u32) -> Pixels {
+    downscale(source, max_side, 1, |[b, g, r], out| {
+        out[0] =
+            ((u32::from(r) * 299 + u32::from(g) * 587 + u32::from(b) * 114 + 500) / 1000) as u8;
+    })
+}
+
+/// Box-filter downscale of BGRA: each output pixel averages the source pixels it covers, then
+/// `write` turns that average colour ([b, g, r]) into `channels` output bytes.
+fn downscale(
+    source: &Pixels,
+    max_side: u32,
+    channels: u32,
+    write: impl Fn([u8; 3], &mut [u8]),
+) -> Pixels {
     debug_assert_eq!(source.channels, 4);
     let (out_w, out_h) = fit_within(source.width, source.height, max_side);
-    let mut data = SecretBytes::zeroed(out_w as usize * out_h as usize * 3);
+    let out_channels = channels as usize;
+    let mut data = SecretBytes::zeroed(out_w as usize * out_h as usize * out_channels);
     let src = source.data.as_slice();
     let src_stride = source.stride();
     let out = data.as_mut_slice();
@@ -63,16 +85,15 @@ pub fn downscale_bgra_to_bgr(source: &Pixels, max_side: u32) -> Pixels {
                 }
             }
             let count = ((y1 - y0) * (x1 - x0)) as u64;
-            let at = (oy as usize * out_w as usize + ox as usize) * 3;
-            for c in 0..3 {
-                out[at + c] = ((sum[c] + count / 2) / count) as u8;
-            }
+            let average = sum.map(|channel| ((channel + count / 2) / count) as u8);
+            let at = (oy as usize * out_w as usize + ox as usize) * out_channels;
+            write(average, &mut out[at..at + out_channels]);
         }
     }
     Pixels {
         width: out_w,
         height: out_h,
-        channels: 3,
+        channels,
         data,
     }
 }
@@ -155,6 +176,20 @@ mod tests {
         let out = downscale_bgra_to_bgr(&source, 1600);
         assert_eq!((out.width, out.height), (1600, 900));
         assert!(out.data.as_slice().chunks(3).all(|px| px == [40, 80, 120]));
+    }
+
+    #[test]
+    fn makes_grey_copies_for_ocr() {
+        // Pure red, green and blue map to their luma weights; white stays white.
+        let source = bgra(4, 1, |x, _| match x {
+            0 => [0, 0, 255, 255],
+            1 => [0, 255, 0, 255],
+            2 => [255, 0, 0, 255],
+            _ => [255, 255, 255, 255],
+        });
+        let grey = downscale_bgra_to_gray(&source, 1600);
+        assert_eq!((grey.width, grey.height, grey.channels), (4, 1, 1));
+        assert_eq!(grey.data.as_slice(), &[76, 150, 29, 255]);
     }
 
     #[test]

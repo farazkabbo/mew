@@ -59,15 +59,17 @@ pub fn run() {
 #[cfg(windows)]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::coach::{
-        screen_coach_set_enabled, screen_coach_set_hotkey, screen_coach_set_paused,
-        screen_coach_status,
+        screen_coach_open_mic_settings, screen_coach_set_enabled, screen_coach_set_hotkey,
+        screen_coach_set_paused, screen_coach_set_privacy, screen_coach_status,
     };
     tauri::generate_handler![
         reminders::notify_due,
         screen_coach_status,
         screen_coach_set_enabled,
         screen_coach_set_paused,
-        screen_coach_set_hotkey
+        screen_coach_set_hotkey,
+        screen_coach_set_privacy,
+        screen_coach_open_mic_settings
     ]
 }
 

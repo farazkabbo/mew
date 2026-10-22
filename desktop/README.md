@@ -10,8 +10,11 @@ A [Tauri v2](https://v2.tauri.app) shell around the Mew web app. The window show
 - **Screen Coach** (in progress, [docs/SCREEN_COACH.md](../docs/SCREEN_COACH.md)): off until the
   user turns it on in **tray → Screen Coach settings…** (a bundled local page). Once on, holding
   **Ctrl+Alt+Space** (or tray → _Look at my screen_) captures one frame of the foreground
-  window in memory, with a violet glow at the screen edges; **Ctrl+Alt+P** pauses. As of S0
-  the frame is held for 60 s and wiped; nothing is sent anywhere yet.
+  window in memory, with a violet glow at the screen edges; **Ctrl+Alt+P** pauses. Before
+  capturing, the privacy layer (S1) refuses blocked apps, password fields, private browsing
+  windows, calls and recordings, and a microphone that's switched off. After capturing, it
+  covers card numbers, keys and codes it finds with on-device OCR. As of S1 the frame is held
+  for 60 s and wiped; nothing is sent anywhere yet.
 
 The web app still runs on its servers (keys stay there): the desktop app needs the Next.js and
 API servers, either your `npm run dev` or a deployment.
@@ -62,13 +65,35 @@ PowerShell's name.
   - The capture glow is excluded from captures (`WDA_EXCLUDEFROMCAPTURE`).
   - Windows' yellow capture border can't be turned off by an unpackaged app; it doubles as
     part of the capture indicator.
-  - `windows` is the version Tauri already uses (`=0.62.2`), so no new crate came in.
+  - `windows` is the version Tauri already uses (`=0.62.2`), and `regex` was already in the
+    lockfile through Tauri, so no new crate came in.
+- **Screen Coach privacy layer** (`src/screen/privacy/`, run in order by `src/screen/pipeline.rs`):
+  - Default blocked apps: password managers, Windows Settings (whole), Windows Security,
+    sign-in prompts, finance apps, and mail and messaging apps (opt-in). The list is editable,
+    matched by executable name, and is a starting point: vendors rename executables.
+  - Password fields: UI Automation's `IsPassword` on the focused element. If UI Automation
+    can't answer, the capture is refused.
+  - Private windows: browser + window-title markers (InPrivate, Incognito, Private Browsing).
+  - Calls: another app holding the microphone right now, or a screen recorder running. Mew's
+    own voice input (WebView2) doesn't count. The microphone signals come from Windows'
+    capability consent store in the registry, which is undocumented, so it's read defensively.
+  - Monitor captures black out windows of blocked apps and private browsers.
+  - Redaction: Windows.Media.Ocr on a grey copy (at most 2560 px), then pattern detection
+    tolerant of OCR look-alikes (`l`/`1`, `O`/`0`), then flat grey boxes (not blur). If OCR
+    can't run, nothing is sent.
+  - **OCR is best effort.** In testing it skipped a line reading `4111 1111 1111 1111` (runs
+    of ones look like bars) while reading realistic card numbers fine. Blocked apps and
+    password fields are the hard guarantees; redaction is the safety net.
+  - Release-build timings on a dense 1875×1070 window: capture ~60 ms, redaction 125–180 ms,
+    downscale ~35 ms, encode ~5 ms.
 
 ## Tests
 
 ```sh
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
-cd src-tauri && cargo test -- --ignored   # real capture of a test window (needs a desktop + GPU)
+# Real Windows tests (need a desktop, a GPU and an OCR language): capture a test window, and
+# redact a test card number and key from it (threat check 3). Both capture only their own window.
+cd src-tauri && cargo test -- --ignored
 ```
 
 Screen Coach's "nothing on disk" check (threat checklist item 1), from the repo root:

@@ -37,11 +37,21 @@ Last updated 2026-10-21, after M9 and M10 (every milestone of the brief is built
 | M10 Mew v2           | ✅ Pipeline done (opt-in logging → Teach Mew → dataset → training → in-browser model)  |
 
 **Screen Coach** (new feature, [SCREEN_COACH.md](SCREEN_COACH.md); its Decisions section is
-binding): **S0 plumbing built** (2026-10-22). Built: local settings + opt-in, hotkeys, an
-in-memory capture with Windows.Graphics.Capture, the edge glow and tray states, all in
-`desktop/src-tauri/src/screen/`, plus `scripts/check-no-screenshots.ps1`. **37 Rust tests now**
-(33 + 1 ignored real-capture test). The hotkey flow still needs the owner's manual check. Next
-is S1 (privacy layer).
+binding): **S0 and S1 built** (2026-10-22), all in `desktop/src-tauri/src/screen/`.
+
+- **S0 (plumbing):** local settings + opt-in, hotkeys, an in-memory capture with
+  Windows.Graphics.Capture, the edge glow and tray states, plus
+  `scripts/check-no-screenshots.ps1`.
+- **S1 (privacy layer):** blocked apps, password fields (UI Automation), private windows, calls
+  and microphone, blackout in monitor captures, and on-device OCR redaction (fail closed). See
+  desktop/README.md for details and limits.
+- **Tests:** 61 unit tests plus 2 real-Windows tests (`cargo test -- --ignored`); threat check 3
+  passes there.
+- **Still to verify:** the hotkey flow, password fields, InPrivate and calls by hand.
+- **Database:** the Supabase project (`gvwynloprjomqqovpoem`, confirmed by the owner) still has
+  no tables. Applying the migrations through the Supabase connector was blocked by Claude
+  Code's auto-mode check, waiting on the owner.
+- **Next:** S2 (ask about your screen; device tokens per decision 8).
 
 Tests: **531 unit tests** (frontend 203, backend 114, ink 108, shared 68, database 38), **5 Rust
 tests** (desktop) and **38 Playwright tests**. `pnpm check`, the Playwright suite, the

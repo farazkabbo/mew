@@ -426,3 +426,22 @@ don't ask them again. Where a decision changes the brief above, the decision win
    one-time notice explains that coach mode sees the whole monitor.
 7. **This brief lives in the repo** (this file), referenced from the root `CLAUDE.md`, with this
    Decisions section.
+8. **How the desktop app signs in (device tokens)** (decided 2026-10-22, built in S2):
+   - **Flow (PKCE-style link code):** Rust generates a random `code_verifier` and gives the page
+     only its hash (`code_challenge`). The signed-in page asks the server for a link code
+     bound to that challenge and the user, then passes the code to Rust. Rust exchanges code +
+     `code_verifier` with the server for a device token. An intercepted link code is useless
+     without the verifier, which never leaves Rust.
+   - **Link code:** single-use, expires in 60 seconds, bound to user + challenge.
+   - **Device token:** an opaque random 256-bit value (not a JWT), stored only in Windows
+     Credential Manager. The server stores only its hash.
+   - **Revocation through a table**, not a signed token with a revocation timestamp, so it
+     takes effect immediately. Migration: `device_tokens` (`id`, `user_id`, `token_hash`
+     unique, `device_name`, `scopes`, `created_at`, `last_used_at`, `revoked_at`), with RLS so
+     users can list and revoke only their own.
+   - **Scope:** the token works only for the Screen Coach endpoints (screen turns, coach
+     verify, clip upload), never for general account access.
+   - **Revoked automatically** on sign-out in the app, account deletion and password change. A
+     "Signed-in devices" list in account settings has Revoke buttons.
+   - `last_used_at` is updated at most once per hour. The link and exchange endpoints are
+     rate-limited.
