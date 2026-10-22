@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Screen Coach</title>
+    <link rel="stylesheet" href="screen-coach.css" />
+    <script src="screen-coach.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Screen Coach</h1>
+        <p class="lede">
+          Ask Mew about anything on your screen. Mew guides you step by step, and you do the
+          clicking.
+        </p>
+      </header>
+
+      <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+
+      <section aria-labelledby="how">
+        <h2 id="how">When Mew sees your screen</h2>
+        <ul class="facts">
+          <li>
+            <strong>Only when you ask.</strong> Hold
+            <kbd data-hotkey="talk">Ctrl+Alt+Space</kbd> and ask, or choose
+            <em>Look at my screen</em> in the tray. Never in the background.
+          </li>
+          <li>
+            <strong>One picture of the window you're working in.</strong> Step-by-step coaching sees
+            the whole monitor, and Mew tells you before it starts.
+          </li>
+          <li>
+            <strong>You'll see it happen.</strong> The edges of the screen glow violet and Windows
+            shows a yellow border each time a picture is taken.
+          </li>
+          <li>
+            <strong>Never saved.</strong> The picture stays in memory, is sent encrypted to Mew's
+            server and Google's Gemini model to answer you, and is then discarded. It is never
+            written to disk or stored in your account.
+          </li>
+          <li><strong>Mew never clicks or types for you.</strong> It points the way; you do it.</li>
+          <li>
+            <strong>Pause any time</strong> from the tray or with
+            <kbd data-hotkey="pause">Ctrl+Alt+P</kbd>.
+          </li>
+        </ul>
+      </section>
+
+      <section aria-labelledby="switch" id="switch-section">
+        <h2 id="switch">Screen Coach is <span id="state-word">off</span></h2>
+        <div id="consent-row" class="row">
+          <label class="check">
+            <input type="checkbox" id="consent" />
+            <span>I've read how Screen Coach sees my screen.</span>
+          </label>
+        </div>
+        <div class="row buttons">
+          <button type="button" id="turn-on" class="primary" disabled>Turn on Screen Coach</button>
+          <button type="button" id="turn-off" hidden>Turn off</button>
+          <button type="button" id="pause" hidden aria-pressed="false">Pause</button>
+        </div>
+      </section>
+
+      <section aria-labelledby="keys" id="keys-section">
+        <h2 id="keys">Shortcuts</h2>
+        <form class="hotkey" data-which="talk">
+          <label for="hotkey-talk">Hold to ask about your screen</label>
+          <div class="row">
+            <input id="hotkey-talk" name="accelerator" autocomplete="off" spellcheck="false" />
+            <button type="submit">Change</button>
+          </div>
+          <p class="problem" id="problem-talk" role="alert" hidden></p>
+        </form>
+        <form class="hotkey" data-which="pause">
+          <label for="hotkey-pause">Pause or resume</label>
+          <div class="row">
+            <input id="hotkey-pause" name="accelerator" autocomplete="off" spellcheck="false" />
+            <button type="submit">Change</button>
+          </div>
+          <p class="problem" id="problem-pause" role="alert" hidden></p>
+        </form>
+        <p class="hint">
+          Use Ctrl or Alt with a key, for example Ctrl+Alt+Space. Shortcuts work only while Screen
+          Coach is on.
+        </p>
+      </section>
+
+      <footer>
+        <p>These settings stay on this computer and can only be changed here.</p>
+      </footer>
+    </main>
+  </body>
+</html>

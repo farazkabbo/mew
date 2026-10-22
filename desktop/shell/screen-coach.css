@@ -1,0 +1,192 @@
+:root {
+  color-scheme: light dark;
+  --paper: #f7f5f0;
+  --raised: #fdfcf9;
+  --ink: #1d1c1a;
+  --muted: #6d695f;
+  --rule: #e3dfd4;
+  --tutor: #6f5fe0;
+  --tutor-ink: #ffffff;
+  --error: #b5442a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1b1a18;
+    --raised: #24231f;
+    --ink: #ece9e2;
+    --muted: #a8a397;
+    --rule: #3a3833;
+    --tutor: #a59af5;
+    --tutor-ink: #1b1a18;
+    --error: #f08a6c;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font:
+    14px/1.5 "Segoe UI Variable Text",
+    "Segoe UI",
+    system-ui,
+    sans-serif;
+}
+
+main {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 20px 32px;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font:
+    600 24px/1.2 "Segoe UI Variable Display",
+    "Segoe UI",
+    system-ui,
+    sans-serif;
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.lede,
+.hint,
+footer {
+  color: var(--muted);
+}
+
+section {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+
+.facts {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.facts li + li {
+  margin-top: 8px;
+}
+
+kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  font:
+    12px "Cascadia Mono",
+    Consolas,
+    monospace;
+  white-space: nowrap;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.buttons {
+  margin-top: 12px;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.check input {
+  margin-top: 3px;
+}
+
+button,
+input:not([type="checkbox"]) {
+  font: inherit;
+  color: inherit;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+}
+
+button {
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--tutor);
+  border-color: var(--tutor);
+  color: var(--tutor-ink);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--tutor);
+  outline-offset: 2px;
+}
+
+.hotkey + .hotkey {
+  margin-top: 12px;
+}
+
+.hotkey label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.hotkey input {
+  flex: 1;
+  min-width: 0;
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+.problem {
+  margin: 6px 0 0;
+  color: var(--error);
+}
+
+.notice {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--tutor);
+  background: var(--raised);
+}
+
+footer {
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+@media (forced-colors: active) {
+  button.primary {
+    border: 2px solid ButtonText;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
