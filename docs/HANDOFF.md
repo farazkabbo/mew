@@ -36,6 +36,13 @@ Last updated 2026-10-21, after M9 and M10 (every milestone of the brief is built
 | M9 Desktop + polish  | ✅ Done for **Windows** (Tauri: hotkey, tray, reminders), PWA, settings, intro, errors |
 | M10 Mew v2           | ✅ Pipeline done (opt-in logging → Teach Mew → dataset → training → in-browser model)  |
 
+**Screen Coach** (new feature, [SCREEN_COACH.md](SCREEN_COACH.md); its Decisions section is
+binding): **S0 plumbing built** (2026-10-22). Built: local settings + opt-in, hotkeys, an
+in-memory capture with Windows.Graphics.Capture, the edge glow and tray states, all in
+`desktop/src-tauri/src/screen/`, plus `scripts/check-no-screenshots.ps1`. **37 Rust tests now**
+(33 + 1 ignored real-capture test). The hotkey flow still needs the owner's manual check. Next
+is S1 (privacy layer).
+
 Tests: **531 unit tests** (frontend 203, backend 114, ink 108, shared 68, database 38), **5 Rust
 tests** (desktop) and **38 Playwright tests**. `pnpm check`, the Playwright suite, the
 production build, `cargo test` / `cargo clippy -D warnings` and the Windows installer build

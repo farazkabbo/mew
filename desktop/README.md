@@ -7,6 +7,11 @@ A [Tauri v2](https://v2.tauri.app) shell around the Mew web app. The window show
 - **Tray icon:** closing the window keeps Mew in the tray (Open, Ask Mew, Quit).
 - **Review reminders:** a Windows notification when concepts are due for review (at most one
   every 30 minutes; the web app checks `/api/review` and asks the shell to notify).
+- **Screen Coach** (in progress, [docs/SCREEN_COACH.md](../docs/SCREEN_COACH.md)): off until the
+  user turns it on in **tray → Screen Coach settings…** (a bundled local page). Once on, holding
+  **Ctrl+Alt+Space** (or tray → _Look at my screen_) captures one frame of the foreground
+  window in memory, with a violet glow at the screen edges; **Ctrl+Alt+P** pauses. As of S0
+  the frame is held for 60 s and wiped; nothing is sent anywhere yet.
 
 The web app still runs on its servers (keys stay there): the desktop app needs the Next.js and
 API servers, either your `npm run dev` or a deployment.
@@ -43,11 +48,35 @@ PowerShell's name.
   `mew:summon` DOM event, so the page needs no permission for it.
 - Navigation is limited to the app's origin and Clerk's sign-in pages (`src/origin.rs`).
 - Crates are pinned to releases at least 14 days old when added; `Cargo.lock` is committed.
+- **Screen Coach** (`src/screen/`):
+  - Captures start only in Rust, from the hotkey and tray handlers. No command a page can call
+    starts a capture or returns pixels; screenshots never enter a WebView.
+  - Its settings live in `%APPDATA%\app.mew.desktop\screen-coach.json`, are enforced in Rust,
+    and can be changed only by the bundled page `shell/screen-coach.html`. Its capability is
+    local-only and limited to the `screen-coach` window, and the commands check the window
+    again.
+  - An unreadable or unexpected settings file resets to "off".
+  - Frames live in `SecretBytes` (zeroed on drop) and expire after 60 s.
+  - JPEG encoding uses WIC into our own buffer, so there are no temp files.
+  - Crash reports exclude the heap (`WerSetFlags(NOHEAP)`).
+  - The capture glow is excluded from captures (`WDA_EXCLUDEFROMCAPTURE`).
+  - Windows' yellow capture border can't be turned off by an unpackaged app; it doubles as
+    part of the capture indicator.
+  - `windows` is the version Tauri already uses (`=0.62.2`), so no new crate came in.
 
 ## Tests
 
 ```sh
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
+cd src-tauri && cargo test -- --ignored   # real capture of a test window (needs a desktop + GPU)
+```
+
+Screen Coach's "nothing on disk" check (threat checklist item 1), from the repo root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check-no-screenshots.ps1 -Start
+# …use Screen Coach: hold Ctrl+Alt+Space a few times, tray → Look at my screen…
+powershell -ExecutionPolicy Bypass -File scripts\check-no-screenshots.ps1 -Check
 ```
 
 Not done yet: a macOS build (needs a Mac; add the microphone usage description and the
