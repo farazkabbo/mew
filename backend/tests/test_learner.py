@@ -73,7 +73,8 @@ def test_attempts_and_cards_round_trip_in_local_mode(client: TestClient) -> None
             f"{base}/explored", json={"concept_id": first, "card": card()}, headers=LOCAL
         )
         assert response.status_code == 204
-    later = NOW + timedelta(days=3)
+    # Relative to the real clock: the route compares due dates with "now".
+    later = datetime.now(UTC) + timedelta(days=3)
     for evidence in ("with_hint", "independent"):
         response = client.post(
             f"{base}/attempts",
@@ -92,7 +93,7 @@ def test_attempts_and_cards_round_trip_in_local_mode(client: TestClient) -> None
     assert [a["evidence"] for a in data["attempts"]] == ["with_hint", "independent"]
     assert [c["concept_id"] for c in data["cards"]] == [first]
     assert data["cards"][0]["fsrs_state"]["reps"] == 1
-    assert data["cards"][0]["due_at"].startswith("2026-10-21")
+    assert data["cards"][0]["due_at"].startswith(later.date().isoformat())
 
     # A started card is due straight away; the practised one isn't yet.
     started = card(datetime.now(UTC) - timedelta(seconds=1))

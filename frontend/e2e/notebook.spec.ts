@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 const DB_NAME = "mew-notebooks-local";
 

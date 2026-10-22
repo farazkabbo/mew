@@ -1,0 +1,69 @@
+[
+  {
+    "name": "a question while writing",
+    "input": {
+      "trigger": "utterance",
+      "lastUtterance": "why does the force cancel out?",
+      "recentTranscript": ["okay so", "this is the free body diagram"],
+      "notebookSignals": {
+        "msSinceLastStroke": 1500,
+        "justErased": false,
+        "linesWrittenLast60s": 2,
+        "activeRegionText": "F_net = 0"
+      },
+      "tutorSpokeRecently": false,
+      "explicitSummon": false
+    },
+    "text": "why does the force cancel out? | before: okay so / this is the free body diagram | writing: F_net = 0 | trigger utterance; summoned no; tutor spoke no; last stroke just now; erased no; lines 2"
+  },
+  {
+    "name": "a writing pause with no speech, after erasing",
+    "input": {
+      "trigger": "pen_pause",
+      "lastUtterance": "",
+      "recentTranscript": [],
+      "notebookSignals": {
+        "msSinceLastStroke": 45000,
+        "justErased": true,
+        "linesWrittenLast60s": 7
+      },
+      "tutorSpokeRecently": true,
+      "explicitSummon": false
+    },
+    "text": "(nothing said) | before: - | writing: - | trigger pen pause; summoned no; tutor spoke yes; last stroke a minute ago; erased yes; lines 3+"
+  },
+  {
+    "name": "a summon; messy whitespace and only the last two segments",
+    "input": {
+      "trigger": "summon",
+      "lastUtterance": "  hey   mew\n\tis this right? ",
+      "recentTranscript": ["one", "two", "  three  "],
+      "notebookSignals": {
+        "msSinceLastStroke": null,
+        "justErased": false,
+        "linesWrittenLast60s": 0,
+        "activeRegionText": "   "
+      },
+      "tutorSpokeRecently": false,
+      "explicitSummon": true
+    },
+    "text": "hey mew is this right? | before: two / three | writing: - | trigger summon; summoned yes; tutor spoke no; last stroke none; erased no; lines 0"
+  },
+  {
+    "name": "long text keeps its end; emoji count as one character",
+    "input": {
+      "trigger": "utterance",
+      "lastUtterance": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂 what is this",
+      "recentTranscript": [],
+      "notebookSignals": {
+        "msSinceLastStroke": 9999,
+        "justErased": false,
+        "linesWrittenLast60s": 1
+      },
+      "tutorSpokeRecently": false,
+      "explicitSummon": false
+    },
+    "expectLength": { "utteranceChars": 300, "endsWith": " what is this" },
+    "text": null
+  }
+]

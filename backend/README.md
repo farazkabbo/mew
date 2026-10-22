@@ -50,9 +50,19 @@ Database migrations and their RLS tests live in `supabase/` (TypeScript, PGlite 
 | `POST /v1/courses/{id}/attempts`                       | user        | Logs an answer and saves the concept's rescheduled card   |
 | `POST /v1/courses/{id}/explored`                       | user        | Starts a concept's review card (once), when it's opened   |
 | `GET /v1/learner/due?limit=`                           | user        | Concepts due for review, across the caller's courses      |
+| `GET /v1/me/settings`, `PATCH /v1/me/settings`         | user        | The caller's settings (profiles.settings), with defaults  |
+| `POST /v1/mew/events`                                  | user        | Keeps a gate decision, only if the caller opted in        |
+| `GET /v1/mew/events?unlabeled=&before=&limit=`         | user        | Kept decisions, newest first (for labelling)              |
+| `PATCH /v1/mew/events/{id}`                            | user        | Sets (or clears) the human label                          |
+| `GET /v1/mew/events/labeled`, `DELETE /v1/mew/events`  | user        | Export the labelled ones; forget them all                 |
 
 The learner endpoints (M8) store what the web server computes: FSRS runs there (ts-fsrs), and
 each attempt arrives with the concept's updated card, validated here (`learner/models.py`).
+
+Mew v2's dataset is built by `uv run python -m mew_api.dataset` (see ml/README.md): labelled
+decisions of students still opted in, Teach Mew downloads and the gate's seed cases, turned
+into text by `dataset/features.py` (identical to `mewFeatureText` in packages/shared; both
+are tested against `mew-features.cases.json`).
 
 Everything under `/v1` needs `X-Internal-Secret`. "User" endpoints take the caller from
 `deps.current_caller`: a Clerk token verified against Clerk's JWKS (issuer, expiry, `azp`,

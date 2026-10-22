@@ -2,12 +2,13 @@
 
 Context for a new working session. Read this, then [BUILD_BRIEF.md](BUILD_BRIEF.md) (the
 product brief), then the root [README.md](../README.md) and [backend/README.md](../backend/README.md).
-Last updated 2026-10-18, after M8.
+Last updated 2026-10-21, after M9 and M10 (every milestone of the brief is built).
 
 ## 1. Working agreement (from the project owner)
 
 - Build **one milestone at a time**. After each: run it, verify the acceptance criteria, and
-  report what works and what doesn't, then wait before starting the next.
+  report what works and what doesn't, then wait before starting the next (unless the owner
+  asks for several in a row, as for M9 and M10).
 - **Never commit or push.** The owner commits. Finish by giving the exact `git` commands
   (a new branch per piece of work, then add, commit and push).
 - **Security first.** Treat every new endpoint, input and dependency as hostile until checked.
@@ -32,11 +33,13 @@ Last updated 2026-10-18, after M8.
 | M6 Visuals           | ✅ Done (plots, mind maps, flowcharts, sketches: ELK + roughjs → ink)                  |
 | M7 Courses           | ✅ Done locally; **Supabase migrations not applied to the hosted project yet** (§6)    |
 | M8 Learner model     | ✅ Done (attempts + evidence, statuses, FSRS reviews, exam plan, Quiz me, Review page) |
-| M9 Desktop + polish  | ⏭ **Next.** Pointers in §10.                                                           |
-| M10 Mew v2           | Not started. Pointers in §10.                                                          |
+| M9 Desktop + polish  | ✅ Done for **Windows** (Tauri: hotkey, tray, reminders), PWA, settings, intro, errors |
+| M10 Mew v2           | ✅ Pipeline done (opt-in logging → Teach Mew → dataset → training → in-browser model)  |
 
-Tests: **464 unit tests** (frontend 176, ink 108, backend 88, shared 62, database 30) and **30
-Playwright tests**. `pnpm check`, the Playwright suite and the production build all pass.
+Tests: **531 unit tests** (frontend 203, backend 114, ink 108, shared 68, database 38), **5 Rust
+tests** (desktop) and **38 Playwright tests**. `pnpm check`, the Playwright suite, the
+production build, `cargo test` / `cargo clippy -D warnings` and the Windows installer build
+all pass.
 
 Real-API checks (2026-10-17, owner's keys): the gate (`eval:mew` 32/32, both M2 acceptance
 phrases), the tutor's response schema, course ingestion (Gemini embeddings, concept graph,
@@ -46,8 +49,10 @@ and the free tier's 20/day quota stopped the run. §9 lists what blocked the res
 
 **Git:** M4–M7 are commit `701321e` on `feat/m4-m7-ink-checks-visuals-courses`, cut from
 `chore/frontend-backend-layout` (M0–M3 + the folder split). M8 is uncommitted on top of it
-(suggested branch `feat/m8-learner-model`). Check `git log` / `git branch -a`
-for what has been merged into `main`.
+(suggested branch `feat/m8-learner-model`). M8 was then committed as `17680fb` on
+`feat/m8-learner-model` (plus `2f04cbb`, ONBOARDING.md); M9 and M10 are uncommitted on top
+(suggested branch `feat/m9-m10-desktop-mew-v2`). Check `git log` / `git branch -a` for what has
+been merged into `main`.
 
 ## 3. Layout
 
@@ -57,11 +62,16 @@ frontend/                     Next.js 16 app (UI + its /api routes)
   src/server/                 server-only: env, http (origin checks, readJson, readForm),
                               http-error, rate-limit, gemini (schema pruning, §4), mew-gate,
                               tutor, elevenlabs, png, csp, api-client (→ FastAPI),
-                              courses (calls FastAPI as the current user)
+                              user-api (calls FastAPI as the current user; courses.ts wraps
+                              it), voices (allowlist), telemetry (latency), mew-log (opt-in
+                              cache + logging decisions)
   src/app/api/                health, mew, stt/token, tutor (NDJSON), tts, recognize,
                               check/math (→ SymPy), courses/** (→ FastAPI; incl. progress,
-                              attempts, concepts/[id]/explored), review, quiz/grade
-  src/app/(app)/              notebook, courses, courses/[id], courses/[id]/concepts/[conceptId]
+                              attempts, concepts/[id]/explored), review, quiz/grade, settings,
+                              voices, telemetry, mew/events (+ [id], export)
+  src/app/(app)/              notebook, courses, courses/[id], courses/[id]/concepts/[conceptId],
+                              review, settings, teach; layout.tsx mounts DesktopBridge
+  src/app/manifest.ts, error.tsx, global-error.tsx   PWA manifest; error pages
   src/features/notebook/      canvas (renderer, input, tools), engine (PageEngine: undo,
                               IndexedDB, tab sync, addTutorStrokes), repository (Dexie),
                               visibility (hidden tutor ink), Sidebar, Toolbar
@@ -74,12 +84,22 @@ frontend/                     Next.js 16 app (UI + its /api routes)
   src/features/quiz/          QuizSession ("Quiz me": pick, ask, grade, record), QuizCard, store
   src/server/learner.ts       FSRS (ts-fsrs, server-only), ratings from evidence, progress
   src/server/quiz.ts          grading with the tutor model
-  src/features/mew/           gate, triggers, controller (pen-pause quick checks), session wiring
+  src/features/mew/           gate (v1), local-gate (v2: CascadeMewGate, WorkerClassifier),
+                              triggers, controller (pen-pause quick checks, skip hook), session
+  src/features/settings/      store (server-saved, debounced, race-safe), SettingsApp, controls
+  src/features/onboarding/    first-run introduction (native <dialog>)
+  src/features/telemetry/     LatencyReporter (turn timings → /api/telemetry)
+  src/features/desktop/       bridge (isDesktop, review reminders), DesktopBridge
+  src/features/teach/         Teach Mew (labelling kept gate decisions)
   src/features/voice/         microphone, Scribe client, voice session
-  public/workers/             code-runner.mjs (Pyodide worker; its own CSP, see next.config.ts)
+  public/workers/             code-runner.mjs (Pyodide), mew-gate.mjs (Mew v2 classifier); their
+                              own CSP (next.config.ts). vendor/ (transformers.js + ONNX Runtime,
+                              copied) and models/ (a trained model) are gitignored
   public/pyodide/             copied from node_modules by scripts/copy-pyodide.mjs (gitignored)
-  scripts/copy-pyodide.mjs    runs before dev/build (and before the e2e server)
-  e2e/                        Playwright: notebook, voice, tutor, ink, check, visuals, courses
+  public/icons/               PWA icons (generated from desktop/icon.svg)
+  scripts/copy-*.mjs          run before dev/build (and before the e2e server)
+  e2e/                        Playwright: notebook, voice, tutor, ink, check, visuals, courses,
+                              learner, app (M9), mew-v2 (M10); fixtures.ts resets settings
   e2e/helpers/pdf.ts          tiny PDF writer for tests
   evals/                      eval:mew, eval:tutor, eval:course (real APIs; skip without keys)
 backend/src/mew_api/          FastAPI (see backend/README.md)
@@ -87,10 +107,18 @@ backend/src/mew_api/          FastAPI (see backend/README.md)
   courses/                    pdf, chunking, embeddings, llm, prompts, concepts, lessons,
                               store (memory) + supabase_store, ingest
   learner/                    models (attempts, FSRS card shape, due cards)
-  routes/                     health, me, check, courses, learner
-backend/supabase/             migrations (core, stroke tool, courses) + RLS tests on PGlite
+  profiles/                   settings models and stores (memory, Supabase)
+  mew_events/                 kept gate decisions: models and stores
+  dataset/                    Mew v2 features (mirror of mewFeatureText) and the exporter CLI
+  supabase_rest.py            PostgREST plumbing shared by every Supabase store
+  routes/                     health, me, check, courses, learner, settings, mew_events
+backend/supabase/             migrations (core, stroke tool, courses, learner, settings) + RLS
+                              tests on PGlite
+desktop/                      Tauri v2 (Windows): src-tauri/src/{lib,origin,reminders}.rs
+ml/                           train.py, train_mew_gate.ipynb, pyproject (own uv env)
 packages/shared/              zod schemas (notebook, mew, tutor, voice, check, course, learner,
-                              quiz), reconcileMarks, chemistry balance, mew-policy, learner
+                              quiz, settings, telemetry, mew-events), mew-features (v2 input
+                              text + golden cases), reconcileMarks, chemistry balance, mew-policy, learner
                               logic (status, quiz order, exam plan), prompts (mew, tutor v5,
                               checker, quiz-grade v1)
 packages/ink/                 geometry, spatial index, segmentation, history, outline, lasso,
@@ -200,6 +228,53 @@ Added in M8:
   spread over the days left; checked concepts come back on their review day if it's before the
   exam; with 3+ days left the eve is a final review. Calendar maths is done on dates (no DST).
 
+Added in M9:
+
+- **Desktop = Windows first, with Tauri.** The owner asked for Windows (macOS later). The window
+  shows the remote web app (`MEW_APP_URL`, default :3000), so keys stay on the server. Beyond the
+  wrapper it adds a global hotkey (Ctrl+Shift+M → `mew:summon` DOM event via `eval`), a tray, and
+  review reminders. The remote origin gets exactly one permission (`allow-notify-due`, a runtime
+  capability scoped to the app origin); `notify_due` sanitises and rate-limits (30 min) in Rust.
+  Navigation is limited to the app origin and Clerk. Notifications only show for installed apps.
+- **PWA too** (manifest + icons; no service worker: the nonce CSP and offline caching don't mix
+  well, and notes are already offline in IndexedDB).
+- **Settings live in `profiles.settings`** (new migration constrains the keys), read and written
+  through FastAPI (`/v1/me/settings`; memory store in local mode). The client store applies
+  changes at once, **debounces saves (300 ms)**, never lets an older reply undo a newer change,
+  never lets a slow first load overwrite edits, and flushes pending saves on `pagehide` with
+  `keepalive`. These were real bugs found by the e2e tests.
+- **Voice choice** is an allowlist (`ELEVENLABS_VOICES`), resolved on the server: an arbitrary
+  voice id never reaches the ElevenLabs URL. A 402 (Voice Library voice on a free plan) becomes
+  a message the student can act on.
+- **Gemini cooldown** (`server/gemini.ts`): after a 429 or 503, calls to that model fail fast
+  (`ModelBusyError`) until the retry time (capped at 15 min; 503 → 20 s). The gate falls back at
+  once, the tutor says it's busy, recognition answers 429 + Retry-After and the client waits.
+- **Latency telemetry**: timings only (never content), batched by the client, kept in memory per
+  user (one instance, like the rate limiter) and logged as `[latency] {...}` lines without user
+  ids. Settings shows median / 95th percentile per stage against the brief's targets.
+- **Onboarding** is a native `<dialog>` (focus trap, Escape); `onboarded` is a setting.
+
+Added in M10:
+
+- **Logging only with opt-in, checked twice**: the API reads the profile setting, and RLS on
+  `mew_events` refuses inserts without it. Next caches the opt-in for 60 s and updates the cache
+  whenever settings are read or changed through it, so opting out applies to the next decision.
+  Logging runs in `after()` (never delays the gate) and never throws.
+- **One feature format, two implementations**: `mewFeatureText` (TS) and `mew_feature_text`
+  (Python) build the classifier's text; both are tested against `mew-features.cases.json`
+  (including whitespace and emoji/code-point edge cases). Features are versioned; a model trained
+  on another version is refused by the browser.
+- **Dataset export** (`python -m mew_api.dataset`) only includes students _still_ opted in,
+  resolves conflicting labels by majority (ties dropped), splits by a hash of the text.
+- **Training** (`ml/`, own uv env, `exclude-newer` 14 days): plain PyTorch loop (no
+  accelerate/optimum), legacy ONNX exporter, onnxruntime dynamic int8. The trust threshold is
+  chosen on the validation split (95 % precision) and shipped in `mew.json`.
+- **In the browser**: transformers.js 4.3 (self-contained `transformers.min.js`) and ONNX
+  Runtime's _asyncify_ WebAssembly build, self-hosted under `/workers/vendor/` (copied before
+  dev/build), single-threaded (no SharedArrayBuffer), remote models disabled. The cascade never
+  waits for the model to load (v1 decides until it's ready); the worker warms up (one dummy
+  run) before saying ready; answers slower than 250 ms go to v1.
+
 ## 5. Security model (keep these invariants)
 
 - Every POST route: `assertSameOrigin` → `requireUserId` → `enforceRateLimit` → `readJson` /
@@ -218,18 +293,24 @@ Added in M8:
 - Model output is always schema-validated. Speech, handwriting, images and course material are
   data, never instructions (stated in every prompt).
 - Never put a JWT-shaped literal in source: gitleaks flags it (see `.gitleaksignore`).
+- The desktop shell grants the web origin one command only (`notify_due`); add any new
+  native feature in Rust, triggered by the shell, before considering another permission.
+- Students' words leave the notebook for training only with opt-in; datasets (`ml/data`) are
+  gitignored and must be handled like the database.
 
 ## 6. Environment
 
 One file: **`.env.local` at the repo root** (gitignored), read by both frontend and backend.
-Template: `.env.example` (every variable is commented there). As of 2026-10-17 every key is set
-**except `SUPABASE_SECRET_KEY`**.
+Template: `.env.example` (every variable is commented there). As of 2026-10-21 every key is set
+**except `SUPABASE_SECRET_KEY`**; the owner switched `GEMINI_TUTOR_MODEL` to Flash-Lite and
+`ELEVENLABS_VOICE_ID` to George (free-plan voice) on 2026-10-18.
 
 Before courses work when signed in (Clerk mode):
 
 1. Apply the migrations to the hosted project (`backend/supabase/migrations/*.sql`, in order;
    README → Supabase). The courses migration also creates the `course-sources` bucket; the
-   learner migration (M8) adds `attempts` and `review_cards`.
+   learner migration (M8) adds `attempts` and `review_cards`; the settings migration (M9)
+   constrains `profiles.settings`.
 2. Make sure Supabase third-party auth trusts Clerk (README → Supabase step 1); `/status`
    checks it.
 3. Set `SUPABASE_SECRET_KEY` (API service only; Render too).
@@ -252,10 +333,16 @@ EVAL_RPM=0 pnpm eval:mew                    # no pacing (paid tier)
 GEMINI_TUTOR_MODEL=gemini-3.5-flash-lite pnpm eval:course   # override a model for one run
 cd backend && uv run --frozen pytest | ruff check . | mypy
 pnpm tsx scripts/build-glyphs.ts <dir with futural.jhf, greeks.jhf, mathupp.jhf>
+cd desktop && pnpm app | pnpm bundle             # desktop app (Rust; MEW_APP_URL)
+cd desktop/src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
+cd backend && uv run python -m mew_api.dataset --out ../ml/data --seed ../frontend/evals/mew.cases.json
+cd ml && uv sync && uv run python train.py --data data --export ../frontend/public/workers/models/mew-gate
 ```
 
 ## 8. Pitfalls on this machine (Windows, Git Bash)
 
+- **Python run from a Bash heredoc turns `\b` in a replacement string into a backspace byte**
+  (it happened to a regex in `gemini.ts`). Make code edits with the Edit tool, or a script file.
 - **Bash heredocs and `node -e` mangle backslashes and quotes** (`\\.` became `\.`; a `’`
   escape became the literal character; apostrophes end a single-quoted script). Write source
   with the file tool; in Python tests write `chr(0x2019)`. `proxy.test.ts` guards the proxy
@@ -275,6 +362,13 @@ $_.CommandLine -match 'next|uvicorn|spawn_main' }`, then confirm ports 3000, 310
 - Gemini free tier: 15 requests/min on Flash-Lite (`eval:mew` paces itself at 14/min); Flash is
   5/min and 20/day (`eval:quiz` paces at `EVAL_RPM`, default 5).
 - Moving folders breaks `node_modules` and `.venv`; delete both and reinstall.
+- Rust is installed with rustup (stable MSVC, `%USERPROFILE%\.cargo\bin`); Git Bash may need
+  `export PATH="$HOME/.cargo/bin:$PATH"`. The first Tauri build compiles ~400 crates.
+- **The owner may be using this machine while you work**: a launched desktop window appears on
+  their screen. Don't send synthetic keystrokes (the hotkey) to it.
+- In `next dev`, `uncaughtException: Error: aborted` is logged when a browser disconnects in the
+  middle of sending a request body (e.g. Playwright closing a page during a keepalive upload).
+  Nothing fails; it isn't a handler error.
 - After editing `.env.local`, restart the dev servers.
 - React's compiler lint rules are on: no ref reads or impure calls during render, and no
   synchronous `setState` in effects (set state from promise callbacks).
@@ -286,18 +380,26 @@ $_.CommandLine -match 'next|uvicorn|spawn_main' }`, then confirm ports 3000, 310
   exceeded"; only Flash-Lite responded. `eval:tutor` can't pass until billing is enabled (or
   `GEMINI_TUTOR_MODEL` is set to a model with quota). Gate latency is ~0.8 s (brief target
   0.4 s for v1; v2 should fix that).
-- **ElevenLabs voice:** the configured voice is a Voice Library voice, which free accounts can't
-  use over the API (402 `paid_plan_required`). Pick a default voice in the ElevenLabs app (or
-  add credits); speech-to-text tokens work.
+- **ElevenLabs voice:** Voice Library voices fail with 402 on a free plan; the app now says so.
+  George (`JBFqnCBsd6RMkjVDRZzb`) works on the owner's key.
 - Course ingestion runs as a FastAPI background task: a restart mid-ingestion leaves the course
   "processing" (no job queue yet). The local store is in memory (lost on API restart).
 - Only PDF sources are wired up (`sources.kind` also allows `text` and `topic`: brief §8 step 1).
 - Units checking covers `\text{…}` units with SI conversion; inequalities, `\pm` and some
   notations are "unknown" (never guessed). The code checker only reports failures.
 - Two tabs editing the same page: last write wins. No cloud sync of strokes yet;
-  `tutor_turns` and `mew_events` aren't written to Supabase yet.
+  `tutor_turns` isn't written to Supabase yet.
 - Echo handling for the tutor's voice is heuristic (word overlap); headphones are best.
-- The conversation drawer and settings screen aren't built (settings live in the debug panel).
+- The conversation drawer isn't built. Library, Mind map, Flowchart and Just practise are still
+  "coming soon" in the sidebar.
+- **Mew v2 has no real model yet.** The pipeline was run end to end on the 29 seed cases
+  (DistilBERT: 40 % validation accuracy, trust threshold 1.0, so it never answers and v1
+  decides); a useful model needs a few hundred labelled decisions per label. Warm inference
+  with DistilBERT int8 took 93 ms in the browser here, over the brief's 30 ms for v2: try a
+  smaller base (e.g. a 4-layer MiniLM/TinyBERT with a tokenizer.json) once data exists.
+- **Desktop:** Windows only (no macOS build, signing or auto-update). The hotkey and
+  notifications were not exercised automatically (the owner was using the machine); the
+  window, sidebar and intro were checked visually. Telemetry is per instance and in memory.
 - Quiz grading is the model's judgment against the lesson's answer. Maths answers aren't yet
   settled by SymPy (brief: never trust the model for algebra); e.g. "x = 4/2" for "x = 2" is
   "correct" on Flash but "partly" on Flash-Lite. Next step: when the expected answer and the
@@ -307,26 +409,20 @@ $_.CommandLine -match 'next|uvicorn|spawn_main' }`, then confirm ports 3000, 310
 - Lesson practice is self-graded (hint taken → "with hint"); only the notebook quiz is graded.
 - Supabase returns at most 1000 rows per request: progress uses a course's latest 1000 attempts.
 
-## 10. Where the next milestones plug in
+## 10. Beyond the brief's milestones
 
-### M9: desktop + polish
+Every milestone (M0–M10) is built. Sensible next steps, roughly by value:
 
-- Tauri wrapper around `frontend/` (the web app is self-contained; mind the CSP and the
-  Pyodide `.dat`/worker paths in a `tauri://` origin).
-- Settings screen: today in the debug panel (`TutorDebug.tsx`, `features/mew/DebugPanel.tsx`):
-  answer style, captions, "check my steps", Mew threshold. Profiles have a `settings` jsonb.
-- Sidebar: "Library", "Mind map", "Flowchart" and "Just practise" are still "coming soon"
-  (`features/notebook/Sidebar.tsx`); "Review" and "Quiz me" are live.
-- Latency telemetry: `TurnTimings` (gate, speech, first audio, ink start, total) is recorded
-  per turn in `useTutor`; nothing is sent anywhere yet.
-
-### M10: Mew v2
-
-- The gate is behind `MewGate` (`features/mew/gate.ts`); add an in-browser classifier as a
-  second implementation and fall back to `HttpMewGate` on low confidence.
-- `mew_events` exists in the core migration (only stored with the student's opt-in,
-  `profiles.settings.mew_logging_opt_in`); nothing writes it yet. `evals/mew.cases.json` is a
-  starting labelled set.
+- **Collect labels and train a real Mew v2** (ml/README.md), then compare v2 with v1 on
+  `evals/mew.cases.json` and on held-out student data. Consider a smaller base model for latency.
+- **SymPy for quiz answers** (see §9) and **cloud sync of notebooks** (strokes are local only).
+- **macOS desktop build** (microphone usage description and audio-input entitlement), signing,
+  auto-update; a "screen context" feature ("explain what I'm reading") would need a careful
+  permission design.
+- **Shared rate limiting and telemetry** (Redis or similar) before running more than one web
+  instance.
+- The remaining sidebar study modes (Mind map, Flowchart, Just practise) and the conversation
+  drawer (brief §12).
 
 ## 11. Recipes
 

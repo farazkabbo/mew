@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "./fixtures";
 
 // A fake microphone (a test tone) with permission pre-granted.
 test.use({

@@ -61,6 +61,8 @@ Talking or writing over the tutor interrupts it ("barge-in").
 | `backend/supabase/` | Postgres migrations with row-level security, and tests that attack them     |
 | `packages/shared/`  | zod schemas, prompts and pure logic shared by the app                       |
 | `packages/ink/`     | Framework-free ink: line segmentation, undo, the tutor's handwriting        |
+| `desktop/`          | Mew for Windows (Tauri v2, Rust): summon hotkey, tray, review reminders     |
+| `ml/`               | Mew v2: training the in-browser gate model from labelled decisions          |
 | `docs/`             | The product brief and the handoff (status, decisions, pitfalls)             |
 
 **How the pieces talk.** The browser only talks to the Next.js server. The Next server calls
@@ -75,11 +77,12 @@ Identity is Clerk.
 - **Signed-in mode** (Clerk + Supabase): real accounts and data in Supabase. Needs the setup in
   the README's Clerk and Supabase sections.
 
-**Status.** Milestones M0–M8 are built: canvas, voice and the gate, tutor replies with voice,
-ink, work checking, visuals, courses, and the learner model (statuses, spaced review, exam
-plan, "Quiz me"). Next is M9 (desktop app with Tauri, settings, polish), then M10 (an in-browser
-gate model). Check the table at the top of [docs/HANDOFF.md](docs/HANDOFF.md) for the current
-state.
+**Status.** All the brief's milestones (M0–M10) are built: canvas, voice and the gate, tutor
+replies with voice, ink, work checking, visuals, courses, the learner model (statuses, spaced
+review, exam plan, "Quiz me"), settings and the Windows desktop app (M9), and Mew v2's pipeline
+(M10: opt-in logging, Teach Mew, dataset, training, in-browser model; no real model is trained
+yet). Check the table at the top of [docs/HANDOFF.md](docs/HANDOFF.md) for the current state and
+its §10 for what comes next.
 
 **How the team works** (from the handoff): one milestone at a time, verified before moving on;
 security first; check current official docs before using a third-party API; ask before adding
@@ -102,6 +105,12 @@ If something is missing, tell the developer how to install it and **ask before d
 - pnpm: `npm install -g pnpm@12.14.0`. (Corepack isn't bundled with Node 25 and newer, so don't
   rely on `corepack enable`.)
 - uv: https://docs.astral.sh/uv/getting-started/installation/
+
+Only if the developer will work on them (ask first; both are large):
+
+- **Desktop app** (`desktop/`): Rust via https://rustup.rs (stable, MSVC on Windows) plus the
+  Visual Studio C++ Build Tools. Check with `cargo --version`.
+- **Training Mew v2** (`ml/`): `cd ml && uv sync` installs PyTorch and friends (~1 GB).
 
 ## Step 3: install dependencies
 

@@ -1,21 +1,15 @@
-"""CourseStore on Supabase: PostgREST and Storage over HTTP.
+"""CourseStore on Supabase (PostgREST and Storage; plumbing in ../supabase_rest.py).
 
-Two modes:
-- user: the publishable key plus the user's Clerk session token, so RLS scopes every row;
-- service: the secret key (bypasses RLS), used only by ingestion jobs after the route has
-  verified the caller owns the course. Every query still filters on user_id, and every insert
-  sets it, so a bug can't cross users even here.
+The service mode (secret key) is used only by ingestion jobs, after the route has verified that
+the caller owns the course.
 """
 
 import json
-import logging
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import quote
 from uuid import UUID
-
-import httpx
 
 from ..learner.models import (
     MAX_ATTEMPTS,
@@ -26,36 +20,15 @@ from ..learner.models import (
     FsrsCard,
     LearnerData,
 )
+from ..supabase_rest import StoreError, SupabaseRest
 from .models import Concept, Course, Edge, NewChunk, NewConcept, RetrievedChunk, Source
 from .store import CourseNotFoundError
-
-logger = logging.getLogger(__name__)
 
 BUCKET = "course-sources"
 _INSERT_BATCH = 100
 
 
-class StoreError(RuntimeError):
-    """Supabase refused or failed a request (details are logged, not exposed)."""
-
-
-class SupabaseCourseStore:
-    def __init__(
-        self,
-        url: str,
-        *,
-        api_key: str,
-        user_token: str | None,
-        client: httpx.Client | None = None,
-    ) -> None:
-        self.base = url.rstrip("/")
-        headers = {"apikey": api_key}
-        if user_token:
-            headers["Authorization"] = f"Bearer {user_token}"
-        self.service = user_token is None
-        self.http = client or httpx.Client(timeout=20.0, follow_redirects=False)
-        self.headers = headers
-
+class SupabaseCourseStore(SupabaseRest):
     def ensure_profile(self, user: str) -> None:
         self._request(
             "POST",
@@ -79,7 +52,7 @@ class SupabaseCourseStore:
         return Course.model_validate(_course_fields(rows[0])) if rows else None
 
     def update_course(self, user: str, course_id: UUID, fields: dict[str, Any]) -> None:
-        self._patch("courses", {"user_id": f"eq.{user}", "id": f"eq.{course_id}"}, fields)
+        self._patch_one("courses", {"user_id": f"eq.{user}", "id": f"eq.{course_id}"}, fields)
 
     def delete_course(self, user: str, course_id: UUID) -> None:
         paths = [s.storage_path for s in self.list_sources(user, course_id) if s.storage_path]
@@ -199,7 +172,7 @@ class SupabaseCourseStore:
         return [Concept.model_validate(r) for r in rows]
 
     def update_concept(self, user: str, concept_id: UUID, fields: dict[str, Any]) -> None:
-        self._patch("concepts", {"user_id": f"eq.{user}", "id": f"eq.{concept_id}"}, fields)
+        self._patch_one("concepts", {"user_id": f"eq.{user}", "id": f"eq.{concept_id}"}, fields)
 
     def delete_concepts(self, user: str, concept_ids: Sequence[UUID]) -> None:
         if concept_ids:
@@ -317,87 +290,9 @@ class SupabaseCourseStore:
             for r in rows
         ]
 
-    # ─── HTTP ───────────────────────────────────────────────────────────────────────────────
-
-    def _owned(self, user: str, row: dict[str, Any]) -> dict[str, Any]:
-        # In user mode the database fills user_id from the token (and RLS checks it); in service
-        # mode it must be set explicitly.
-        return {**row, "user_id": user} if self.service else row
-
-    def _get(self, table: str, params: dict[str, str]) -> list[dict[str, Any]]:
-        rows = self._request("GET", f"/rest/v1/{table}", params={"select": "*", **params}).json()
-        if not isinstance(rows, list):
-            raise StoreError("unexpected response from Supabase")
-        return rows
-
-    def _insert(
-        self,
-        table: str,
-        rows: list[dict[str, Any]],
-        *,
-        returning: bool = True,
-        select: str = "*",
-    ) -> list[dict[str, Any]]:
-        if not rows:
-            return []
-        response = self._request(
-            "POST",
-            f"/rest/v1/{table}",
-            params={"select": select} if returning else None,
-            json=rows,
-            headers={"Prefer": "return=representation" if returning else "return=minimal"},
-        )
-        return response.json() if returning else []
-
-    def _patch(self, table: str, params: dict[str, str], fields: dict[str, Any]) -> None:
-        response = self._request(
-            "PATCH",
-            f"/rest/v1/{table}",
-            params=params,
-            content=json.dumps(fields, default=str),
-            headers={"Content-Type": "application/json", "Prefer": "return=representation"},
-        )
-        if response.json() == []:
+    def _patch_one(self, table: str, params: dict[str, str], fields: dict[str, Any]) -> None:
+        if not self._patch(table, params, fields):
             raise CourseNotFoundError(params.get("id", ""))
-
-    def _delete(self, table: str, params: dict[str, str]) -> None:
-        self._request("DELETE", f"/rest/v1/{table}", params=params)
-
-    def _request(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: dict[str, str] | None = None,
-        json: Any = None,
-        content: bytes | str | None = None,
-        headers: dict[str, str] | None = None,
-        ok: Iterable[int] = (),
-    ) -> httpx.Response:
-        try:
-            response = self.http.request(
-                method,
-                f"{self.base}{path}",
-                params=params,
-                json=json,
-                content=content,
-                headers={**self.headers, **(headers or {})},
-            )
-        except httpx.HTTPError as error:
-            raise StoreError(f"Supabase unreachable ({type(error).__name__})") from None
-        if response.status_code in (401, 403):
-            logger.info("Supabase refused %s %s: %s", method, path, response.status_code)
-            raise PermissionError("not allowed")
-        if response.is_error and response.status_code not in set(ok):
-            logger.warning(
-                "Supabase %s %s failed: %s %s",
-                method,
-                path,
-                response.status_code,
-                response.text[:300],
-            )
-            raise StoreError(f"Supabase request failed ({response.status_code})")
-        return response
 
 
 def _vector(values: Sequence[float]) -> str:
@@ -415,3 +310,6 @@ def _card_fields(card: FsrsCard) -> dict[str, Any]:
 def _course_fields(row: dict[str, Any]) -> dict[str, Any]:
     keys = ("id", "title", "subject", "exam_date", "status", "status_detail", "created_at")
     return {k: row.get(k) for k in keys}
+
+
+__all__ = ["StoreError", "SupabaseCourseStore"]

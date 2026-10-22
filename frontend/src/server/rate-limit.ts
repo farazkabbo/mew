@@ -34,6 +34,13 @@ export const RATE_RULES = {
   /** Recording answers (practice and quiz) for the learner model. */
   attempt: { limit: 60, windowMs: MINUTE },
   attemptDaily: { limit: 3000, windowMs: DAY },
+  /** Listing, labelling and exporting kept gate decisions (Teach Mew). */
+  mewEvents: { limit: 120, windowMs: MINUTE },
+  /** Reading and changing settings (changes are coalesced by the client). */
+  settings: { limit: 120, windowMs: MINUTE },
+  /** Latency reports (batched by the client) and reading them back. */
+  telemetry: { limit: 30, windowMs: MINUTE },
+  telemetryRead: { limit: 60, windowMs: MINUTE },
   /** Grading a quiz answer (a model call with an image). */
   quizGrade: { limit: 15, windowMs: MINUTE },
   quizGradeDaily: { limit: 400, windowMs: DAY },

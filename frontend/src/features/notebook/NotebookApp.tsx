@@ -7,6 +7,7 @@ import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
 import { useMewSession } from "../mew/useMewSession";
+import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
 import { useQuiz } from "../quiz/store";
 import { type CanvasHandle, NotebookCanvas } from "./canvas/NotebookCanvas";
@@ -18,6 +19,7 @@ import { NotebookRepository } from "./repository";
 import { Sidebar } from "./Sidebar";
 import { useNotebookUi } from "./store";
 import { Toolbar } from "./Toolbar";
+import { useAppServices } from "./useAppServices";
 import { useShortcuts } from "./useShortcuts";
 
 type Notice = { text: string; tone: "info" | "error" };
@@ -132,6 +134,11 @@ export function NotebookApp({ userId }: { userId: string }) {
   const courseId = notebooks.find((n) => n.id === notebookId)?.courseId ?? null;
   const mew = useMewSession(engine, courseId);
   const { quiz } = mew;
+  const app = useAppServices({
+    ready: engine !== null,
+    listen: mew.startListening,
+    summon: mew.summon,
+  });
 
   useEffect(() => {
     if (!courseId || !engine || !quizRequested.current) return;
@@ -245,8 +252,19 @@ export function NotebookApp({ userId }: { userId: string }) {
               {notice.text}
             </p>
           )}
+          {!app.online && !notice && (
+            <p
+              data-testid="offline-notice"
+              className="rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
+            >
+              You&apos;re offline. Your notes are saved on this device; Mew needs a connection.
+            </p>
+          )}
         </div>
       </main>
+      {app.showIntro && (
+        <Onboarding onDone={app.closeIntro} onStartListening={mew.startListening} />
+      )}
     </div>
   );
 }

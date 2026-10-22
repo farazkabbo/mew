@@ -59,3 +59,10 @@ playwright-report/
 
 # Pyodide runtime, copied from node_modules by frontend/scripts/copy-pyodide.mjs
 frontend/public/pyodide/
+# transformers.js and ONNX Runtime (Mew v2), copied by frontend/scripts/copy-transformers.mjs
+frontend/public/workers/vendor/
+# A trained Mew v2 model (ml/README.md: built by training, deployed with the app)
+frontend/public/workers/models/
+# Mew v2 datasets contain students' words: never commit them
+ml/data/
+ml/output/

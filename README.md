@@ -17,6 +17,8 @@ backend/supabase/    Postgres migrations (RLS, pgvector) and their tests (PGlite
 packages/shared/     Shared zod schemas, prompts and types (mirrored by Pydantic models in backend/)
 packages/ink/        Framework-free ink logic: geometry, line segmentation, undo/redo, and the
                      tutor's handwriting (glyphs, LaTeX, placement, plots and diagrams)
+desktop/             Mew for Windows: a Tauri v2 shell (summon hotkey, tray, review reminders)
+ml/                  Mew v2: dataset → fine-tuning → the in-browser gate model
 scripts/             Dev tooling (`pnpm health`, glyph table builder)
 ```
 
@@ -41,6 +43,7 @@ browser ──(Clerk session cookie)──► Next.js server ──(X-Internal-S
 
 - Node.js ≥ 22 and pnpm 12 (`npm i -g pnpm`)
 - [uv](https://docs.astral.sh/uv/) (installs Python 3.12 for the API automatically)
+- Optional: the Rust toolchain (rustup) for the desktop app; see [desktop/README.md](desktop/README.md)
 
 ## Setup
 
@@ -242,15 +245,52 @@ Revisit_, and FSRS (ts-fsrs) schedules when it comes back.
 `pnpm eval:quiz` checks the grader against the real model (`EVAL_RPM` paces it; set
 `GEMINI_TUTOR_MODEL` to try another model).
 
+## Settings, first run and errors
+
+**Settings** (sidebar, `/settings`) are saved to the student's profile (`profiles.settings`) and
+cached in the browser: listening on open, how readily Mew speaks up, answer style, captions,
+checking steps while writing, the tutor's voice (from the server's allowlist,
+`ELEVENLABS_VOICES`), opting in to help train Mew, recent latency (median and slowest 5 % of
+each stage against the brief's targets), and replaying the introduction. A short **introduction**
+shows the first time the notebook opens.
+
+When something upstream fails, the app says so instead of going quiet: a model that answers
+"429 quota" or "503 high demand" is left alone until its retry time (calls fail fast meanwhile,
+and the tutor says it's busy); a refused voice explains why (e.g. a Voice Library voice on a free
+ElevenLabs plan) with a link to Settings; going offline shows a notice (notes keep saving
+locally); and a page that crashes shows a calm error page. Edge and Chrome can install Mew as an
+app (web manifest).
+
+## Desktop app (Windows)
+
+`desktop/` wraps the web app in a native window (Tauri v2, Edge WebView2) and adds what a web page
+can't: **Ctrl+Shift+M** summons Mew from any app, a **tray icon** keeps it running, and Windows
+**notifications** remind the student when concepts are due for review. See
+[desktop/README.md](desktop/README.md):
+
+```sh
+cd desktop && pnpm app      # run it against your dev server (MEW_APP_URL, default :3000)
+cd desktop && pnpm bundle   # .msi and setup .exe in src-tauri/target/release/bundle/
+```
+
+## Teach Mew and Mew v2
+
+Students can opt in (_Settings → Help improve Mew_) to keep Mew's decisions. In **Teach Mew**
+(`/teach`) they mark what Mew should have done, download their labels, or delete everything.
+The labels train **Mew v2**, a small classifier that runs in the browser: when it's confident it
+decides on the device; otherwise (or with no model installed) the v1 gate decides as before. The
+pipeline (dataset export, fine-tuning notebook, deployment) is in [ml/README.md](ml/README.md).
+
 ## Quality gates
 
 ```sh
 pnpm check                     # prettier, ESLint, tsc, vitest across the TS workspaces + API
 E2E_BASE_URL=http://localhost:3100 pnpm --filter @mew/frontend e2e
-                               # Playwright (30 tests): starts its own web (:3100) and API (:8100)
+                               # Playwright (38 tests): starts its own web (:3100) and API (:8100)
                                # servers in local mode, beside any dev server you have running
 pnpm --filter @mew/backend audit:py  # pip-audit of the API's runtime dependencies
 pnpm audit --prod              # npm advisories
+cd desktop/src-tauri && cargo test && cargo clippy -- -D warnings   # the desktop app
 ```
 
 The database tests in `backend/supabase/tests` apply every migration to an in-memory Postgres (PGlite)
@@ -281,6 +321,10 @@ current.
 - **Database.** Apply `backend/supabase/migrations/*.sql` in order (see Supabase above).
 - **Web.** Set every variable from the Web section of `.env.example`, with `APP_ORIGIN` set to the
   public origin and `API_BASE_URL` set to the Render service URL.
+- **Mew v2 model (optional).** Ship `frontend/public/workers/models/mew-gate/` with the web app
+  if one was trained (ml/README.md); without it the v1 gate decides.
+- **Desktop app.** Build with `MEW_APP_URL` set to the web app's public origin
+  (desktop/README.md).
 
 ## Security notes
 
@@ -295,6 +339,12 @@ current.
 - Untrusted input is processed out of process: SymPy checks and PDF parsing run in sandboxed
   worker processes with hard time limits (and memory caps on Linux); students' Python runs in
   a Pyodide worker with its own CSP, no network access, and a timeout.
+- The desktop app shows the remote web app in WebView2; that origin may call exactly one
+  native command (`notify_due`, validated and rate-limited in Rust). Navigation is limited to
+  the app's origin and Clerk's sign-in pages.
+- Mew's decisions are kept only with the student's opt-in (checked by the API and again by
+  the database's RLS), can be deleted at any time, and leave future datasets when the
+  student opts out.
 - Uploads are checked by their bytes (a PDF must start with `%PDF-`) and capped at 15 MB while
   streaming. Every route is same-origin only (GETs refuse cross-site requests), rate-limited
   per user and schema-validated.

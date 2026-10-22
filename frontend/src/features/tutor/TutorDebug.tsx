@@ -1,10 +1,11 @@
 "use client";
 
+import { useSettings } from "../settings/store";
 import { type Turn, type TurnTimings, useTutor } from "./store";
 
 /** Tutor settings and recent turns with per-stage latency, for the debug panel. */
 export function TutorDebug() {
-  const { answerStyle, captions, autoCheck, turns, setSettings } = useTutor();
+  const { answerStyle, captions, autoCheck, turns } = useTutor();
 
   return (
     <section aria-label="Tutor">
@@ -18,7 +19,7 @@ export function TutorDebug() {
                 type="radio"
                 name="answer-style"
                 checked={answerStyle === style}
-                onChange={() => setSettings({ answerStyle: style })}
+                onChange={() => void useSettings.getState().update({ answer_style: style })}
                 className="accent-(--accent)"
               />
               {style === "hints_first" ? "Hints first" : "Direct answers"}
@@ -29,7 +30,7 @@ export function TutorDebug() {
           <input
             type="checkbox"
             checked={captions}
-            onChange={(e) => setSettings({ captions: e.target.checked })}
+            onChange={(e) => void useSettings.getState().update({ captions: e.target.checked })}
             className="accent-(--accent)"
           />
           Captions
@@ -38,7 +39,7 @@ export function TutorDebug() {
           <input
             type="checkbox"
             checked={autoCheck}
-            onChange={(e) => setSettings({ autoCheck: e.target.checked })}
+            onChange={(e) => void useSettings.getState().update({ auto_check: e.target.checked })}
             className="accent-(--accent)"
           />
           Check my steps

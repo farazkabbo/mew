@@ -43,6 +43,8 @@ type TutorState = Settings & {
   caption: string | null;
   turns: Turn[];
   lastFinishedAt: number | null;
+  /** Why the tutor can't be heard (speech refused), shown once; captions carry on. */
+  voiceIssue: string | null;
 };
 
 type TutorActions = {
@@ -53,6 +55,7 @@ type TutorActions = {
   /** Records the outcome; `settle` returns the tutor to idle (false when a newer turn runs). */
   finish(id: number, outcome: Turn["outcome"], settle?: boolean): void;
   setSettings(settings: Partial<Settings>): void;
+  setVoiceIssue(issue: string | null): void;
 };
 
 let nextId = 1;
@@ -63,6 +66,8 @@ export const useTutor = create<TutorState & TutorActions>()((set, get) => ({
   caption: null,
   turns: [],
   lastFinishedAt: null,
+  voiceIssue: null,
+  setVoiceIssue: (voiceIssue) => set({ voiceIssue }),
   begin: ({ intent, utterance, at, gateMs }) => {
     const id = nextId++;
     const turn: Turn = {

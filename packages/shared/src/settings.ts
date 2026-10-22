@@ -1,0 +1,43 @@
+import { z } from "zod";
+
+/**
+ * Per-user settings (M9), stored in profiles.settings. Mirrors
+ * backend/src/mew_api/profiles/models.py; keys are snake_case as stored.
+ */
+
+export const VoiceId = z.string().regex(/^[A-Za-z0-9]{8,64}$/);
+
+export const UserSettings = z.object({
+  mew_threshold: z.number().min(0.3).max(0.95),
+  answer_style: z.enum(["hints_first", "direct"]),
+  captions: z.boolean(),
+  /** Check each finished line quietly after a writing pause. */
+  auto_check: z.boolean(),
+  /** Start listening when a notebook opens. */
+  listen_on_open: z.boolean(),
+  /** null: the server's default voice. */
+  voice_id: VoiceId.nullable(),
+  /** Keep Mew's decisions (with what was said) so they can be labelled to improve Mew (M10). */
+  mew_logging_opt_in: z.boolean(),
+  /** The first-run introduction has been seen. */
+  onboarded: z.boolean(),
+});
+export type UserSettings = z.infer<typeof UserSettings>;
+
+export const DEFAULT_SETTINGS: UserSettings = {
+  mew_threshold: 0.7,
+  answer_style: "hints_first",
+  captions: true,
+  auto_check: true,
+  listen_on_open: false,
+  voice_id: null,
+  mew_logging_opt_in: false,
+  onboarded: false,
+};
+
+export const SettingsPatch = UserSettings.partial().strict();
+export type SettingsPatch = z.infer<typeof SettingsPatch>;
+
+export const Voice = z.object({ id: VoiceId, name: z.string().max(40) });
+export type Voice = z.infer<typeof Voice>;
+export const VoiceList = z.object({ voices: z.array(Voice) });

@@ -2,6 +2,7 @@ packages:
   - frontend
   - backend
   - backend/supabase
+  - desktop
   - packages/*
 
 # Lifecycle scripts are blocked unless explicitly allowed here (supply-chain hardening).

@@ -17,6 +17,7 @@ import {
   type GenerateStructured,
   generateStructured,
   type InputPart,
+  ModelBusyError,
   parseJson,
   type StreamStructuredText,
   streamStructuredText,
@@ -86,11 +87,22 @@ export async function* runTutor(
     yield { type: "response", response: { ...response, speech: spoken }, latencyMs: elapsed() };
   } catch (error) {
     if (signal?.aborted) return;
-    console.warn("[tutor] generation failed:", error instanceof Error ? error.message : error);
+    if (!(error instanceof ModelBusyError)) {
+      console.warn("[tutor] generation failed:", error instanceof Error ? error.message : error);
+    }
     yield spoken === null
-      ? { type: "error", message: "The tutor is unavailable right now." }
+      ? { type: "error", message: unavailableMessage(error) }
       : { type: "response", response: { speech: spoken, actions: [] }, latencyMs: elapsed() };
   }
+}
+
+/** What the student is told when no reply could be made. */
+export function unavailableMessage(error: unknown): string {
+  if (!(error instanceof ModelBusyError))
+    return "I couldn't answer just now — try again in a moment.";
+  const seconds = Math.ceil(error.retryAfterMs / 1000);
+  const when = seconds < 90 ? "in a minute" : `in about ${Math.ceil(seconds / 60)} minutes`;
+  return `The tutor is busy right now (too many requests to the model). Try again ${when}.`;
 }
 
 function tutorInput(request: TutorRequest): InputPart[] {

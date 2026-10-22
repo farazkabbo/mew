@@ -1,7 +1,7 @@
 "use client";
 
 import type { Notebook } from "@mew/shared";
-import { BookOpen, GraduationCap, Plus, RotateCcw, Sparkles } from "lucide-react";
+import { BookOpen, GraduationCap, Plus, RotateCcw, Settings, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 type Props = {
@@ -94,6 +94,12 @@ export function Sidebar({ notebooks, currentId, onSelect, onCreate, onQuiz }: Pr
           ))}
         </ul>
       </nav>
+      <div className="border-t border-white/10 p-3">
+        <Link href="/settings" className={LINK}>
+          <Settings className="size-4 shrink-0 opacity-60" aria-hidden />
+          Settings
+        </Link>
+      </div>
     </aside>
   );
 }

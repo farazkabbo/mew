@@ -44,9 +44,13 @@ export async function createSttSession(): Promise<SttSession> {
 export async function streamSpeech(
   text: string,
   signal: AbortSignal,
+  /** An allowed voice (see voices.ts); defaults to ELEVENLABS_VOICE_ID. */
+  voiceId?: string,
 ): Promise<ReadableStream<Uint8Array>> {
   const { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_TTS_MODEL } = ttsEnv();
-  const url = new URL(`${API}/v1/text-to-speech/${ELEVENLABS_VOICE_ID}/stream`);
+  const voice = voiceId ?? ELEVENLABS_VOICE_ID;
+  if (!/^[A-Za-z0-9]{8,64}$/.test(voice)) throw new HttpError(400, "Unknown voice");
+  const url = new URL(`${API}/v1/text-to-speech/${voice}/stream`);
   url.searchParams.set("output_format", `pcm_${TTS_SAMPLE_RATE}`);
 
   let response: Response;
@@ -64,7 +68,25 @@ export async function streamSpeech(
   }
   if (!response.ok || !response.body) {
     console.warn("[tts] request failed with", response.status);
-    throw new HttpError(502, "Speech service refused the request");
+    throw speechError(response.status);
   }
   return response.body;
+}
+
+/**
+ * Explains a refused speech request in terms the student can act on (they see captions
+ * instead). 402 is what free ElevenLabs accounts get for Voice Library voices.
+ */
+function speechError(status: number): HttpError {
+  if (status === 402) {
+    return new HttpError(
+      503,
+      "This voice needs a paid ElevenLabs plan. Pick another voice in Settings.",
+    );
+  }
+  if (status === 401 || status === 403) {
+    return new HttpError(503, "The voice service refused the server's key.");
+  }
+  if (status === 429) return new HttpError(429, "The voice service is busy. Try again soon.");
+  return new HttpError(502, "Speech service refused the request");
 }

@@ -1,0 +1,30 @@
+[package]
+name = "mew-desktop"
+version = "0.1.0"
+description = "Mew for Windows: a Tauri shell around the Mew web app"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+
+[lib]
+name = "mew_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Pinned to releases at least 14 days old when added (the same rule as the JS workspace).
+[build-dependencies]
+tauri-build = { version = "=2.7.1", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.1", features = ["tray-icon", "dynamic-acl"] }
+tauri-plugin-notification = "=2.5.1"
+serde = { version = "1.0.228", features = ["derive"] }
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-global-shortcut = "=2.4.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

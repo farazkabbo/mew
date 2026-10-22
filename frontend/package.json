@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "node scripts/copy-pyodide.mjs",
+    "predev": "node scripts/copy-pyodide.mjs && node scripts/copy-transformers.mjs",
     "dev": "next dev --port 3000",
-    "prebuild": "node scripts/copy-pyodide.mjs",
+    "prebuild": "node scripts/copy-pyodide.mjs && node scripts/copy-transformers.mjs",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint --max-warnings 0",
@@ -21,6 +21,7 @@
   "dependencies": {
     "@clerk/nextjs": "7.9.16",
     "@google/genai": "2.26.0",
+    "@huggingface/transformers": "4.3.0",
     "@mew/ink": "workspace:*",
     "@mew/shared": "workspace:*",
     "@supabase/supabase-js": "^2",

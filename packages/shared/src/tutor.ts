@@ -157,7 +157,14 @@ export const Recognition = z.object({
 });
 export type Recognition = z.infer<typeof Recognition>;
 
-export const TtsRequest = z.object({ text: z.string().min(1).max(TUTOR_LIMITS.ttsChars) });
+export const TtsRequest = z.object({
+  text: z.string().min(1).max(TUTOR_LIMITS.ttsChars),
+  /** A voice from GET /api/voices; anything else falls back to the default voice. */
+  voiceId: z
+    .string()
+    .regex(/^[A-Za-z0-9]{8,64}$/)
+    .nullish(),
+});
 export type TtsRequest = z.infer<typeof TtsRequest>;
 
 /** Raw audio format streamed by `POST /api/tts`: signed 16-bit little-endian mono PCM. */

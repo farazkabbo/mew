@@ -1,7 +1,7 @@
 "use client";
 
 import { currentLine, unionBBox } from "@mew/ink";
-import { reconcileMarks, TUTOR_LIMITS } from "@mew/shared";
+import { type MewDecisionResponse, type MewInput, reconcileMarks, TUTOR_LIMITS } from "@mew/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { coursesApi } from "../courses/api";
@@ -12,6 +12,7 @@ import { WorkChecker } from "../check/checker";
 import { PyodideCodeRunner } from "../check/code-runner";
 import { gradeRemote } from "../quiz/grade-client";
 import { QuizSession } from "../quiz/session";
+import { useSettings } from "../settings/store";
 import { TutorController } from "../tutor/controller";
 import { TutorInk } from "../tutor/ink";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
@@ -21,6 +22,7 @@ import { useVoice } from "../voice/store";
 import { VoiceSession } from "../voice/voice-session";
 import { MewController } from "./controller";
 import { HttpMewGate } from "./gate";
+import { CascadeMewGate, WorkerClassifier } from "./local-gate";
 import type { MascotState } from "./Mascot";
 import { useMew } from "./store";
 import { browserClock } from "./triggers";
@@ -29,6 +31,21 @@ import { browserClock } from "./triggers";
 const RECOGNIZE_AFTER_MS = 1200;
 /** The tutor counts as having "spoken recently" for this long after a turn. */
 const RECENT_TUTOR_MS = 10_000;
+
+/** Keeps an on-device decision for labelling (the server checks the opt-in again). */
+function logLocalDecision(input: MewInput, decision: MewDecisionResponse): Promise<unknown> {
+  return fetch("/api/mew/events", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      input,
+      output: decision.output,
+      source: decision.source,
+      latencyMs: decision.latencyMs,
+    }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 /** The voice → Mew → tutor pipeline, independent of React. */
 function createPipeline() {
@@ -53,6 +70,7 @@ function createPipeline() {
     checker,
     courseId: () => courseId,
     quiz: () => quiz?.context() ?? null,
+    voiceId: () => useSettings.getState().settings.voice_id,
     doc: () => engine?.doc ?? null,
     onFinished: () => mew?.tutorFinished(),
   });
@@ -87,7 +105,15 @@ function createPipeline() {
     now: () => Date.now(),
   });
   const quizSession = quiz;
-  mew = new MewController(new HttpMewGate(), browserClock, {
+  // Mew v2: the on-device classifier when a model is installed and it's sure; v1 otherwise.
+  const classifier = new WorkerClassifier();
+  const gateV2 = new CascadeMewGate(classifier, new HttpMewGate(), {
+    onLocalDecision: (input, decision) => {
+      if (useSettings.getState().settings.mew_logging_opt_in)
+        void logLocalDecision(input, decision);
+    },
+  });
+  mew = new MewController(gateV2, browserClock, {
     onRespond: (turn) => {
       if (quizSession.active) {
         // "Is this right?" during a quiz is answered by the grader; asking for help counts.
@@ -119,6 +145,7 @@ function createPipeline() {
     recognition,
     ink,
     quiz: quizSession,
+    classifier,
     /** The course of the notebook on screen (the tutor draws on its material). */
     setCourse(next: string | null) {
       courseId = next;
@@ -144,6 +171,10 @@ export function useMewSession(engine: PageEngine | null, courseId: string | null
   useEffect(() => {
     pipeline.setEngine(engine);
   }, [pipeline, engine]);
+  // Mew v2: start loading the on-device model, if there is one (v1 decides meanwhile).
+  useEffect(() => {
+    void pipeline.classifier.warm();
+  }, [pipeline]);
   useEffect(() => {
     pipeline.setCourse(courseId);
   }, [pipeline, courseId]);
