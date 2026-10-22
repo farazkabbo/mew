@@ -37,6 +37,8 @@ function render(view) {
     }
   }
 
+  renderPrivacy(view);
+
   if (!usable) showNotice(view.unsupportedReason);
   else if (view.settingsReset)
     showNotice(
@@ -94,6 +96,82 @@ for (const form of document.querySelectorAll("form.hotkey")) {
     }
   });
 }
+
+// ─── Privacy ─────────────────────────────────────────────────────────────────────────────────
+
+function renderPrivacy(view) {
+  const { privacy, microphone } = view;
+  $("mic-off").hidden = microphone !== "denied";
+  for (const radio of document.querySelectorAll('input[name="scope"]')) {
+    radio.checked = radio.value === privacy.askScope;
+  }
+  $("pause-during-calls").checked = privacy.pauseDuringCalls;
+  for (const box of document.querySelectorAll("input[data-rule]")) {
+    box.checked = privacy.redaction[box.dataset.rule];
+  }
+
+  const list = $("blocked-list");
+  list.replaceChildren(
+    ...privacy.blockedApps.map((app) => {
+      const item = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = app;
+      const unblock = document.createElement("button");
+      unblock.type = "button";
+      unblock.textContent = "Unblock";
+      unblock.setAttribute("aria-label", `Unblock ${app}`);
+      unblock.addEventListener("click", () =>
+        savePrivacy({ blockedApps: privacy.blockedApps.filter((other) => other !== app) }),
+      );
+      item.append(name, unblock);
+      return item;
+    }),
+  );
+}
+
+/** Sends the whole privacy settings with `changes` applied; Rust checks and saves them. */
+async function savePrivacy(changes) {
+  const privacy = { ...current.privacy, ...changes };
+  try {
+    render(await invoke("screen_coach_set_privacy", { privacy }));
+    $("problem-blocked").hidden = true;
+    return true;
+  } catch (error) {
+    const problem = $("problem-blocked");
+    problem.textContent = typeof error === "string" ? error : "Couldn't save that setting.";
+    problem.hidden = false;
+    render(current);
+    return false;
+  }
+}
+
+for (const radio of document.querySelectorAll('input[name="scope"]')) {
+  radio.addEventListener("change", () => savePrivacy({ askScope: radio.value }));
+}
+
+$("pause-during-calls").addEventListener("change", (event) =>
+  savePrivacy({ pauseDuringCalls: event.target.checked }),
+);
+
+for (const box of document.querySelectorAll("input[data-rule]")) {
+  box.addEventListener("change", () =>
+    savePrivacy({ redaction: { ...current.privacy.redaction, [box.dataset.rule]: box.checked } }),
+  );
+}
+
+$("block-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = $("block-input");
+  const name = input.value.trim();
+  if (!name) return;
+  if (await savePrivacy({ blockedApps: [...current.privacy.blockedApps, name] })) input.value = "";
+});
+
+$("restore-defaults").addEventListener("click", () =>
+  savePrivacy({ blockedApps: [...current.defaultBlockedApps] }),
+);
+
+$("open-mic").addEventListener("click", () => invoke("screen_coach_open_mic_settings"));
 
 // Rust tells the page when anything changes elsewhere (tray, hotkeys).
 window.addEventListener("screen-coach:changed", refresh);

@@ -11,6 +11,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
 
+use super::privacy::blocklist::{self, default_blocked_apps};
+use super::privacy::detect::RedactionRules;
+
 /// Bumped whenever the explanation the user agrees to (what is seen, when, what's kept) changes
 /// in substance: an older consent then no longer counts and Screen Coach stays off until the
 /// user reads the new one.
@@ -39,7 +42,51 @@ impl Default for Hotkeys {
     }
 }
 
-/// The default is everything off: not enabled, no consent, not paused, default hotkeys.
+/// What "Ask about your screen" captures (decision 6: the foreground window by default).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureScope {
+    #[default]
+    Window,
+    Monitor,
+}
+
+/// The privacy layer's settings (S1). Every field has a default so settings files written
+/// before a field existed still load.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase", default)]
+pub struct Privacy {
+    /// Apps Screen Coach never looks at (lowercase executable names).
+    pub blocked_apps: Vec<String>,
+    pub redaction: RedactionRules,
+    pub ask_scope: CaptureScope,
+    /// Don't look or listen during calls and screen recordings (on by default, brief §7.10).
+    pub pause_during_calls: bool,
+}
+
+impl Default for Privacy {
+    fn default() -> Self {
+        Self {
+            blocked_apps: default_blocked_apps(),
+            redaction: RedactionRules::default(),
+            ask_scope: CaptureScope::default(),
+            pause_during_calls: true,
+        }
+    }
+}
+
+impl Privacy {
+    /// Checks and cleans settings coming from the settings page or the file.
+    pub fn normalized(self) -> Result<Self, String> {
+        Ok(Self {
+            blocked_apps: blocklist::normalize_list(&self.blocked_apps)?,
+            ..self
+        })
+    }
+}
+
+/// The default is everything off: not enabled, no consent, not paused, default hotkeys and
+/// default privacy settings.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ScreenConfig {
@@ -50,6 +97,8 @@ pub struct ScreenConfig {
     /// Paused from the tray or the pause hotkey (survives restarts: a pause is a promise).
     pub paused: bool,
     pub hotkeys: Hotkeys,
+    #[serde(default)]
+    pub privacy: Privacy,
 }
 
 impl ScreenConfig {
@@ -81,14 +130,22 @@ pub fn path_in(dir: &Path) -> PathBuf {
 }
 
 pub fn parse(text: &str) -> Loaded {
-    match serde_json::from_str::<ScreenConfig>(text) {
-        Ok(config)
-            if validate_hotkey(&config.hotkeys.talk).is_ok()
-                && validate_hotkey(&config.hotkeys.pause).is_ok() =>
-        {
-            Loaded::Read(config)
-        }
-        _ => Loaded::Reset(ScreenConfig::default()),
+    let Ok(config) = serde_json::from_str::<ScreenConfig>(text) else {
+        return Loaded::Reset(ScreenConfig::default());
+    };
+    let hotkeys_ok = validate_hotkey(&config.hotkeys.talk).is_ok()
+        && validate_hotkey(&config.hotkeys.pause).is_ok();
+    // A blocked list that only loads after "cleaning" was edited by hand: start over from the
+    // defaults rather than guess what was meant.
+    let privacy_ok = config
+        .privacy
+        .clone()
+        .normalized()
+        .is_ok_and(|privacy| privacy == config.privacy);
+    if hotkeys_ok && privacy_ok {
+        Loaded::Read(config)
+    } else {
+        Loaded::Reset(ScreenConfig::default())
     }
 }
 
@@ -181,9 +238,16 @@ mod tests {
 
     #[test]
     fn a_damaged_or_unexpected_file_turns_everything_off() {
+        // A file written by S0 (before privacy settings existed) loads with the defaults.
         let on = r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
-        assert!(matches!(parse(on), Loaded::Read(c) if c.is_on()));
+        assert!(
+            matches!(parse(on), Loaded::Read(c) if c.is_on() && c.privacy == Privacy::default())
+        );
         for bad in [
+            // A hand-edited blocked list with a path in it.
+            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"},"privacy":{"blockedApps":["C:\\x.exe"]}}"#,
+            // A privacy setting we don't know.
+            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"},"privacy":{"sendEverything":true}}"#,
             "",
             "{",
             "null",
@@ -212,6 +276,10 @@ mod tests {
             consent_version: CONSENT_VERSION,
             paused: true,
             hotkeys: Hotkeys::default(),
+            privacy: Privacy {
+                ask_scope: CaptureScope::Monitor,
+                ..Privacy::default()
+            },
         };
         save(&path, &config).unwrap();
         assert_eq!(load(&path), Loaded::Read(config));

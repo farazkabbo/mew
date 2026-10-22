@@ -60,7 +60,11 @@ pub struct FrameMeta {
 /// Milliseconds per stage, logged without content (brief §13).
 #[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct Timings {
+    /// Privacy checks before capturing (microphone, calls, blocked apps, password field).
+    pub checks_ms: u32,
     pub capture_ms: u32,
+    /// Blacking out blocked windows, OCR and covering sensitive text.
+    pub redact_ms: u32,
     pub downscale_ms: u32,
     pub encode_ms: u32,
 }

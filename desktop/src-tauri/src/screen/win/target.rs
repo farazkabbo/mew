@@ -16,7 +16,8 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetAncestor, GetClassNameW, GetCursorPos, GetForegroundWindow, GetWindowLongW,
-    GetWindowThreadProcessId, IsIconic, IsWindowVisible, GA_ROOT, GWL_EXSTYLE, WS_EX_TOOLWINDOW,
+    GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, GA_ROOT, GWL_EXSTYLE,
+    WS_EX_TOOLWINDOW,
 };
 
 use crate::screen::frame::{ScreenRect, TargetKind};
@@ -33,6 +34,8 @@ pub struct Target {
     pub dpi: u32,
     /// The app in front (for window targets, that window's app), lowercase file name only.
     pub app: Option<String>,
+    /// The window the user is working in (for window targets, the captured window).
+    pub foreground: Option<HWND>,
 }
 
 // SAFETY: HWND and HMONITOR are plain handles (opaque numbers), valid from any thread; the
@@ -68,7 +71,7 @@ pub fn monitor_target() -> Option<Target> {
     // SAFETY: plain value arguments.
     let monitor = unsafe { MonitorFromPoint(point, MONITOR_DEFAULTTONEAREST) };
     let monitor_rect = monitor_rect(monitor)?;
-    let app = foreground_app_window().and_then(exe_name_of);
+    let foreground = foreground_app_window();
     Some(Target {
         kind: TargetKind::Monitor,
         window: None,
@@ -76,7 +79,8 @@ pub fn monitor_target() -> Option<Target> {
         bounds: monitor_rect,
         monitor_rect,
         dpi: monitor_dpi(monitor),
-        app,
+        app: foreground.and_then(exe_name_of),
+        foreground,
     })
 }
 
@@ -96,7 +100,70 @@ pub fn window_target(hwnd: HWND) -> Option<Target> {
         monitor_rect,
         dpi: monitor_dpi(monitor),
         app: exe_name_of(hwnd),
+        foreground: Some(hwnd),
     })
+}
+
+/// A window's title, read only to recognise private browsing windows (never logged or stored).
+pub fn window_title(hwnd: HWND) -> String {
+    let mut buffer = [0u16; 512];
+    // SAFETY: the buffer and its length are passed together.
+    let len = unsafe { GetWindowTextW(hwnd, &mut buffer) };
+    String::from_utf16_lossy(&buffer[..len.max(0) as usize])
+}
+
+/// A window showing on screen, with what the privacy layer needs to know about it.
+pub struct VisibleWindow {
+    pub bounds: ScreenRect,
+    pub app: Option<String>,
+    pub title: String,
+}
+
+/// Every visible top-level window of other apps that overlaps `area`, including small tool
+/// windows (a password manager's quick-access popup, say). Used to black out blocked apps in
+/// monitor captures.
+pub fn visible_windows_over(area: ScreenRect) -> Vec<VisibleWindow> {
+    let mut handles: Vec<HWND> = Vec::new();
+    unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
+        // SAFETY: `lparam` is the address of `handles` below, alive for the whole EnumWindows call.
+        let handles = unsafe { &mut *(lparam.0 as *mut Vec<HWND>) };
+        handles.push(hwnd);
+        true.into()
+    }
+    // SAFETY: the callback only runs during this call, while `handles` is alive.
+    let _ = unsafe {
+        EnumWindows(
+            Some(collect),
+            LPARAM(&mut handles as *mut Vec<HWND> as isize),
+        )
+    };
+
+    // SAFETY: no arguments.
+    let own_pid = unsafe { GetCurrentProcessId() };
+    handles
+        .into_iter()
+        .filter(|&hwnd| {
+            // SAFETY: plain value arguments; Windows validates the handle.
+            let shown =
+                unsafe { IsWindowVisible(hwnd) }.as_bool() && !unsafe { IsIconic(hwnd) }.as_bool();
+            let mut pid = 0u32;
+            // SAFETY: `pid` is a valid out pointer.
+            unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+            shown && !is_cloaked(hwnd) && pid != own_pid
+        })
+        .filter_map(|hwnd| {
+            let bounds = window_bounds(hwnd)?;
+            overlaps(bounds, area).then(|| VisibleWindow {
+                bounds,
+                app: exe_name_of(hwnd),
+                title: window_title(hwnd),
+            })
+        })
+        .collect()
+}
+
+pub fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
+    a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 }
 
 fn root_of(hwnd: HWND) -> Option<HWND> {
@@ -281,6 +348,30 @@ mod tests {
         assert_eq!(exe_basename("EXCEL.EXE").as_deref(), Some("excel.exe"));
         assert_eq!(exe_basename(r"C:\dir\"), None);
         assert_eq!(exe_basename(""), None);
+    }
+
+    #[test]
+    fn overlap_needs_shared_area() {
+        let a = ScreenRect {
+            left: -100,
+            top: 0,
+            right: 0,
+            bottom: 100,
+        };
+        let touching = ScreenRect {
+            left: 0,
+            top: 0,
+            right: 50,
+            bottom: 50,
+        };
+        let inside = ScreenRect {
+            left: -50,
+            top: 10,
+            right: -10,
+            bottom: 20,
+        };
+        assert!(!overlaps(a, touching));
+        assert!(overlaps(a, inside));
     }
 
     #[test]

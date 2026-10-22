@@ -1,17 +1,27 @@
 //! Screen Coach: an on-screen tutor for Windows (docs/SCREEN_COACH.md).
 //!
-//! S0 (this milestone) is the plumbing: settings kept on this computer, the hold-to-talk and
-//! pause hotkeys, a single in-memory capture per request, the capture indicator, tray states,
-//! and the local settings page with the opt-in.
+//! Built so far:
+//! - S0, plumbing: settings kept on this computer, the hold-to-talk and pause hotkeys, one
+//!   in-memory capture per request, the capture indicator, tray states, and the local settings
+//!   page with the opt-in.
+//! - S1, privacy: blocked apps, password fields, private windows, calls, microphone access,
+//!   blacking out blocked windows in monitor captures, and on-device redaction (`privacy/`,
+//!   run in order by `pipeline.rs`).
+//!
+//! Where to start reading: `coach.rs` (what happens when a hotkey is pressed), then
+//! `pipeline.rs` (one capture, step by step).
 
 pub mod config;
 pub mod frame;
 pub mod image;
+pub mod privacy;
 pub mod secret;
 pub mod tray_badge;
 
 #[cfg(windows)]
 pub mod coach;
+#[cfg(windows)]
+pub mod pipeline;
 #[cfg(windows)]
 pub mod win;
 

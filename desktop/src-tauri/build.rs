@@ -7,6 +7,8 @@ fn main() {
         "screen_coach_set_enabled",
         "screen_coach_set_paused",
         "screen_coach_set_hotkey",
+        "screen_coach_set_privacy",
+        "screen_coach_open_mic_settings",
     ]);
     // Our own manifest replaces Tauri's default: the same Common Controls dependency, plus
     // Per-Monitor DPI Awareness V2 (Screen Coach maps screenshot pixels to screen pixels).

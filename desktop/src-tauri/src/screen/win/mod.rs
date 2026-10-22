@@ -4,7 +4,12 @@
 pub mod capture;
 pub mod encode;
 pub mod indicator;
+pub mod ocr;
+pub mod system;
 pub mod target;
+#[cfg(test)]
+pub mod test_window;
+pub mod uia;
 
 use windows::core::HSTRING;
 use windows::Foundation::Metadata::ApiInformation;
