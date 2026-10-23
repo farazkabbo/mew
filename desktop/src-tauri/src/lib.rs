@@ -2,9 +2,13 @@
 //! a global hotkey to summon Mew from any app, a tray icon, review reminders, and Screen Coach
 //! (docs/SCREEN_COACH.md).
 //!
-//! Security: the window shows a remote origin (the web app). That origin gets exactly one
-//! permission, calling `notify_due`; everything else (hotkeys, tray, window, screen capture)
-//! happens in Rust. Screen Coach's settings commands are granted to its bundled local page only.
+//! Security: the window shows a remote origin (the web app). That origin may call three
+//! commands, each checked in Rust: `notify_due`, and Screen Coach's `screen_coach_ask` (the
+//! words of a question; never pixels) and `screen_coach_link_finish` (a one-time sign-in code).
+//! Everything else (hotkeys, tray, windows, screen capture) happens in Rust. Screen Coach's
+//! settings commands are granted to its bundled local page only, and its overlay commands to
+//! its overlay pages only (each window its own). Links the web page opens in a new window go to
+//! the default browser (https only), never into a window of ours.
 
 mod origin;
 mod reminders;
@@ -20,8 +24,13 @@ use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
 
 use reminders::Reminders;
 
-const MAIN: &str = "main";
+pub(crate) const MAIN: &str = "main";
 pub const TRAY_ID: &str = "mew";
+/// WebView2 arguments, the same for every window (windows sharing a profile must agree): wry's
+/// defaults, plus letting Screen Coach's answers play aloud without a click on the page (the
+/// question was asked with a hotkey, which the page doesn't see as a gesture).
+pub(crate) const BROWSER_ARGS: &str =
+    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
 /// Tells the page to summon Mew (it listens for this event; see the web app's desktop bridge).
 const SUMMON_SCRIPT: &str = "window.dispatchEvent(new CustomEvent('mew:summon'))";
 
@@ -37,10 +46,14 @@ pub fn is_summon_hotkey(shortcut: &Shortcut) -> bool {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_url = origin::app_url(std::env::var("MEW_APP_URL").ok());
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .manage(Reminders::default())
-        .invoke_handler(handlers())
+        .invoke_handler(handlers());
+    // A clip's preview image, served from memory to the preview window only (S3).
+    #[cfg(windows)]
+    let builder = builder.register_uri_scheme_protocol(screen::clip::SCHEME, screen::clip::serve);
+    builder
         .setup(move |app| {
             remote_capability(app.handle(), &app_url)?;
             let window = main_window(app.handle(), app_url.clone())?;
@@ -48,7 +61,7 @@ pub fn run() {
             #[cfg(desktop)]
             hotkeys(app.handle())?;
             #[cfg(windows)]
-            screen::coach::setup(app.handle())?;
+            screen::coach::setup(app.handle(), app_url.clone())?;
             let _ = window.set_focus();
             Ok(())
         })
@@ -58,6 +71,12 @@ pub fn run() {
 
 #[cfg(windows)]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
+    use screen::account::{
+        screen_coach_disconnect, screen_coach_link_finish, screen_coach_link_start,
+    };
+    use screen::annotate::{screen_ink_drawn, screen_ink_pill};
+    use screen::ask::screen_coach_ask;
+    use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
         screen_coach_open_mic_settings, screen_coach_set_enabled, screen_coach_set_hotkey,
         screen_coach_set_paused, screen_coach_set_privacy, screen_coach_status,
@@ -69,7 +88,16 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_coach_set_paused,
         screen_coach_set_hotkey,
         screen_coach_set_privacy,
-        screen_coach_open_mic_settings
+        screen_coach_open_mic_settings,
+        screen_coach_link_start,
+        screen_coach_link_finish,
+        screen_coach_disconnect,
+        screen_coach_ask,
+        screen_ink_drawn,
+        screen_ink_pill,
+        screen_clip_ready,
+        screen_clip_save,
+        screen_clip_cancel
     ]
 }
 
@@ -78,14 +106,17 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     tauri::generate_handler![reminders::notify_due]
 }
 
-/// The web app's pages (and only they) may call `notify_due`.
+/// The web app's pages (and only they) may call these: review reminders, and Screen Coach's
+/// two page-facing commands (each also re-checks the calling window in Rust).
 fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
     app.add_capability(
         CapabilityBuilder::new("mew-web-app")
             .remote(origin::capability_pattern(app_url))
             .local(false)
             .window(MAIN)
-            .permission("allow-notify-due"),
+            .permission("allow-notify-due")
+            .permission("allow-screen-coach-ask")
+            .permission("allow-screen-coach-link-finish"),
     )
 }
 
@@ -96,7 +127,17 @@ fn main_window(app: &AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
         .title("Mew")
         .inner_size(1280.0, 840.0)
         .min_inner_size(900.0, 600.0)
+        .additional_browser_args(BROWSER_ARGS)
         .on_navigation(move |target| origin::may_navigate(&allowed, target))
+        // A link opened in a new window (a saved clip's source, say) goes to the default
+        // browser, https only; no window of ours ever shows another site.
+        .on_new_window(|url, _features| {
+            #[cfg(windows)]
+            screen::win::system::open_in_browser(&url);
+            #[cfg(not(windows))]
+            let _ = url;
+            tauri::webview::NewWindowResponse::Deny
+        })
         .build()?;
     // Closing the window keeps Mew in the tray, so the hotkeys and reminders keep working.
     let hidden = window.clone();

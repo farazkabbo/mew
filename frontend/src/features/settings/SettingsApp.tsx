@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { CourseShell } from "../courses/CourseShell";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
 import { Section, Toggle } from "./controls";
+import { DevicesSection } from "./DevicesSection";
 import { LatencyTable } from "./LatencyTable";
 import { PrivacySection } from "./PrivacySection";
 import { useSettings } from "./store";
@@ -125,6 +126,8 @@ export function SettingsApp() {
         </Section>
 
         <PrivacySection />
+
+        <DevicesSection />
 
         <Section title="Performance">
           <p className="text-sm text-ink-muted">

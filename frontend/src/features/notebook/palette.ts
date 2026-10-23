@@ -18,9 +18,14 @@ export const HIGHLIGHTER_COLORS = [
 ] as const;
 
 export const TUTOR_INK = { light: "#8a7bf0", dark: "#a497ff" } as const;
+/** The tutor's highlighter (Screen Coach clips: desktop/src-tauri/src/screen/ink.rs). */
+export const TUTOR_HIGHLIGHT = { light: "#8a7bf055", dark: "#a497ff44" } as const;
 
 const DARK_VARIANTS = new Map<string, string>(
-  [...INK_COLORS, ...HIGHLIGHTER_COLORS, TUTOR_INK].map((c) => [c.light.toLowerCase(), c.dark]),
+  [...INK_COLORS, ...HIGHLIGHTER_COLORS, TUTOR_INK, TUTOR_HIGHLIGHT].map((c) => [
+    c.light.toLowerCase(),
+    c.dark,
+  ]),
 );
 
 export function displayColor(hex: string, dark: boolean): string {

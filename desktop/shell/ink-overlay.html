@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Mew ink</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/ink-overlay.js" defer></script>
+  </head>
+  <body class="ink">
+    <!-- Decorative: what the tutor draws is also said out loud. -->
+    <canvas aria-hidden="true"></canvas>
+  </body>
+</html>

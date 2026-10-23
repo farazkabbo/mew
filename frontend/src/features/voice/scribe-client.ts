@@ -11,8 +11,13 @@ export type ScribeHandlers = {
 };
 
 export type ScribeOptions = {
-  /** Silence that ends an utterance. The brief asks for ~700 ms. */
-  vadSilenceSecs: number;
+  /**
+   * How utterances end: "vad" when the server hears silence (the notebook), "manual" when the
+   * client calls `commit()` (hold-to-talk: the key is released).
+   */
+  commitStrategy?: "vad" | "manual";
+  /** Silence that ends an utterance (VAD only). The brief asks for ~700 ms. */
+  vadSilenceSecs?: number;
   /** ISO language code; omitted = automatic detection. */
   languageCode?: string;
 };
@@ -45,8 +50,11 @@ export class ScribeClient {
     url.searchParams.set("model_id", session.modelId);
     url.searchParams.set("token", session.token);
     url.searchParams.set("audio_format", "pcm_16000");
-    url.searchParams.set("commit_strategy", "vad");
-    url.searchParams.set("vad_silence_threshold_secs", String(options.vadSilenceSecs));
+    const strategy = options.commitStrategy ?? "vad";
+    url.searchParams.set("commit_strategy", strategy);
+    if (strategy === "vad" && options.vadSilenceSecs !== undefined) {
+      url.searchParams.set("vad_silence_threshold_secs", String(options.vadSilenceSecs));
+    }
     if (options.languageCode) url.searchParams.set("language_code", options.languageCode);
 
     this.socket = new WebSocket(url);
@@ -63,10 +71,22 @@ export class ScribeClient {
   }
 
   sendAudio(pcm: Int16Array): void {
+    this.send(pcm, false);
+  }
+
+  /**
+   * Ends the utterance now (manual commit strategy): the server answers with the committed
+   * transcript. Sends a short chunk of silence, since every message carries audio.
+   */
+  commit(): void {
+    this.send(new Int16Array(SAMPLE_RATE / 10), true);
+  }
+
+  private send(pcm: Int16Array, commit: boolean): void {
     const message = JSON.stringify({
       message_type: "input_audio_chunk",
       audio_base_64: toBase64(pcm),
-      commit: false,
+      commit,
       sample_rate: SAMPLE_RATE,
     });
     if (this.socket.readyState === WebSocket.OPEN) {

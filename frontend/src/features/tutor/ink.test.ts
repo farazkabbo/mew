@@ -71,6 +71,7 @@ function fakeEngine(strokes: Stroke[]) {
   const engine = {
     pageId: PAGE,
     doc,
+    images: [],
     addTutorStrokes: vi.fn((list: readonly Stroke[]) => {
       committed.push([...list]);
       doc.add(list);

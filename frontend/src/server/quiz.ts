@@ -18,7 +18,7 @@ export async function gradeAnswer(
   generate: GenerateStructured = generateStructured,
 ): Promise<QuizGrade> {
   const input: InputPart[] = [{ type: "text", text: renderQuizGradeInput(request) }];
-  if (request.image) input.push({ type: "image", png: request.image });
+  if (request.image) input.push({ type: "image", base64: request.image, mimeType: "image/png" });
   return generate({
     model: geminiEnv().GEMINI_TUTOR_MODEL,
     system: QUIZ_GRADE_PROMPT.system,

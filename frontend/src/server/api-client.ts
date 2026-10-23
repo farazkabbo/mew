@@ -33,8 +33,35 @@ type ApiFetchOptions = {
 export async function apiFetch<T>(
   path: `/${string}`,
   schema: z.ZodType<T>,
-  { token, timeoutMs = 5_000, method = "GET", body, raw, headers: extra }: ApiFetchOptions = {},
+  options: ApiFetchOptions = {},
 ): Promise<T> {
+  const response = await send(path, options, "application/json");
+  const parsed = schema.safeParse(
+    response.status === 204 ? undefined : await response.json().catch(() => undefined),
+  );
+  if (!parsed.success) {
+    throw new ApiError("API response did not match the expected schema", response.status);
+  }
+  return parsed.data;
+}
+
+/** Like `apiFetch`, for a binary reply (a clip's image): its bytes and content type. */
+export async function apiFetchBytes(
+  path: `/${string}`,
+  options: ApiFetchOptions = {},
+): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+  const response = await send(path, options, "*/*");
+  return {
+    bytes: await response.arrayBuffer(),
+    contentType: response.headers.get("content-type") ?? "application/octet-stream",
+  };
+}
+
+async function send(
+  path: `/${string}`,
+  { token, timeoutMs = 5_000, method = "GET", body, raw, headers: extra }: ApiFetchOptions,
+  accept: string,
+): Promise<Response> {
   const { API_BASE_URL, INTERNAL_API_SECRET } = apiEnv();
   const base = new URL(API_BASE_URL);
   const url = new URL(path, base);
@@ -43,7 +70,7 @@ export async function apiFetch<T>(
   }
 
   const headers = new Headers({
-    Accept: "application/json",
+    Accept: accept,
     "X-Internal-Secret": INTERNAL_API_SECRET,
   });
   for (const [name, value] of Object.entries(extra ?? {})) headers.set(name, value);
@@ -69,14 +96,7 @@ export async function apiFetch<T>(
   if (!response.ok) {
     throw new ApiError(`API responded with ${response.status}`, response.status);
   }
-
-  const parsed = schema.safeParse(
-    response.status === 204 ? undefined : await response.json().catch(() => undefined),
-  );
-  if (!parsed.success) {
-    throw new ApiError("API response did not match the expected schema", response.status);
-  }
-  return parsed.data;
+  return response;
 }
 
 function describe(cause: unknown): string {

@@ -203,10 +203,23 @@ importers:
         version: 5.0.3(@types/node@24.19.1)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   desktop:
+    dependencies:
+      '@mew/ink':
+        specifier: workspace:*
+        version: link:../packages/ink
+      '@mew/shared':
+        specifier: workspace:*
+        version: link:../packages/shared
+      zod:
+        specifier: ^4
+        version: 4.6.5
     devDependencies:
       '@tauri-apps/cli':
         specifier: 2.12.1
         version: 2.12.1
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   frontend:
     dependencies:

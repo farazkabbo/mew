@@ -6,12 +6,21 @@ import { cspDirectives, standaloneCsp } from "@/server/csp";
 import { appEnv } from "@/server/env";
 
 const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+/**
+ * Called by the desktop app, which has no browser session: these authenticate with a device
+ * token (or, to get one, a one-time link code and its verifier) inside the route.
+ */
+const isDeviceRoute = createRouteMatcher([
+  "/api/devices/exchange",
+  "/api/devices/revoke-self",
+  "/api/screen/(.*)",
+]);
 const production = process.env.NODE_ENV === "production";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 const withClerk = clerkMiddleware(
   async (auth, request) => {
-    if (!isPublicRoute(request)) await auth.protect();
+    if (!isPublicRoute(request) && !isDeviceRoute(request)) await auth.protect();
   },
   () => ({
     // Only accept session tokens minted for our own origin (CSRF / token-reuse protection).

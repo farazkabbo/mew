@@ -36,9 +36,21 @@
             shows a yellow border each time a picture is taken.
           </li>
           <li>
-            <strong>Never saved.</strong> The picture stays in memory, is sent encrypted to Mew's
-            server and Google's Gemini model to answer you, and is then discarded. It is never
-            written to disk or stored in your account.
+            <strong>Not saved, unless you save it.</strong> The picture stays in memory, is sent
+            encrypted to Mew's server and Google's Gemini model to answer you, and is then
+            discarded. It is never written to disk.
+          </li>
+          <li>
+            <strong>Mew draws beside what it explains</strong> in violet ink that only you see (it
+            never shows in screen shares or recordings). While ink is on screen, Mew notices
+            scrolling, switching apps and key presses (never which keys) so the ink can fade when
+            the page moves.
+          </li>
+          <li>
+            <strong>Saving to your notebook is up to you.</strong> Say “save this” or press
+            <kbd data-hotkey="clip">Ctrl+Alt+C</kbd>: you see exactly what will be saved, with the
+            page's title and link, and nothing is kept unless you press Save. Saved clips are stored
+            privately in your account, like your notes, until you delete them.
           </li>
           <li><strong>Mew never clicks or types for you.</strong> It points the way; you do it.</li>
           <li>
@@ -63,6 +75,22 @@
         </div>
       </section>
 
+      <section aria-labelledby="account">
+        <h2 id="account">Your Mew account</h2>
+        <p id="account-state">
+          Connect Screen Coach to your Mew account so it can answer your questions.
+        </p>
+        <div class="row buttons">
+          <button type="button" id="connect" class="primary">Connect</button>
+          <button type="button" id="disconnect" hidden>Disconnect</button>
+        </div>
+        <p class="hint">
+          Connecting opens Mew, where you confirm. This computer gets its own sign-in that only
+          works for Screen Coach, kept in Windows Credential Manager. You can sign it out from here,
+          or from Mew's Settings → Signed-in devices.
+        </p>
+      </section>
+
       <section aria-labelledby="keys" id="keys-section">
         <h2 id="keys">Shortcuts</h2>
         <form class="hotkey" data-which="talk">
@@ -80,6 +108,14 @@
             <button type="submit">Change</button>
           </div>
           <p class="problem" id="problem-pause" role="alert" hidden></p>
+        </form>
+        <form class="hotkey" data-which="clip">
+          <label for="hotkey-clip">Save to notebook</label>
+          <div class="row">
+            <input id="hotkey-clip" name="accelerator" autocomplete="off" spellcheck="false" />
+            <button type="submit">Change</button>
+          </div>
+          <p class="problem" id="problem-clip" role="alert" hidden></p>
         </form>
         <p class="hint">
           Use Ctrl or Alt with a key, for example Ctrl+Alt+Space. Shortcuts work only while Screen

@@ -1,0 +1,152 @@
+/* A clip's preview: the picture, the tutor's ink on it, and the crop box. */
+
+body.preview {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--paper);
+  color: var(--ink);
+  user-select: none;
+}
+
+body.preview header {
+  padding: 14px 20px 6px;
+}
+
+body.preview h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.source,
+.link {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link {
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+}
+
+body.preview main {
+  position: relative;
+  min-height: 0;
+  padding: 8px 20px;
+}
+
+.stage {
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.frame {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
+  line-height: 0;
+}
+
+.frame img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 170px);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  -webkit-user-drag: none;
+}
+
+.frame svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.frame .dim {
+  fill: rgba(0, 0, 0, 0.45);
+}
+
+.frame .crop {
+  fill: none;
+  stroke: #fff;
+}
+
+.frame .handle {
+  fill: #fff;
+  stroke: var(--violet-strong);
+}
+
+.frame .card {
+  fill: rgba(255, 252, 242, 0.95);
+  stroke: rgba(138, 123, 240, 0.45);
+}
+
+.hint {
+  position: absolute;
+  inset: auto 0 16px;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+body.preview footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px 16px;
+  font-size: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.timer,
+.status {
+  color: var(--muted);
+}
+
+.timer {
+  margin-left: auto;
+}
+
+body.preview button {
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--violet-strong);
+  color: #fff;
+  cursor: pointer;
+}
+
+body.preview button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+body.preview button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+body.preview button:focus-visible,
+body.preview input:focus-visible {
+  outline: 2px solid var(--violet-strong);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .frame .crop,
+  .frame .handle {
+    stroke: Highlight;
+  }
+}

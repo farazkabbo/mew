@@ -2,7 +2,8 @@
 //!
 //! Captures start only here, from the hotkey and tray handlers (decision 2). No command a page
 //! can call starts a capture or returns screen pixels. What a capture does, step by step, is in
-//! `pipeline.rs`.
+//! `pipeline.rs`; asking about it is in `ask.rs`; connecting to the account in `account.rs`;
+//! ink on screen in `annotate.rs` and saving clips in `clip.rs` (S3).
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,17 +15,24 @@ use serde::Serialize;
 use tauri::image::Image;
 use tauri::ipc::CapabilityBuilder;
 use tauri::menu::{CheckMenuItem, MenuItem};
-use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
-use super::config::{self, HotkeyError, Loaded, Privacy, ScreenConfig, CONSENT_VERSION};
-use super::frame::{FrameMeta, FrameSlot, Timings, FRAME_TTL};
+use super::account::PendingLink;
+use super::annotate::{self, InkState};
+use super::ask;
+use super::clip::{self, ClipDraft, Purpose};
+use super::config::{
+    self, CaptureScope, HotkeyError, Loaded, Privacy, ScreenConfig, CONSENT_VERSION,
+};
+use super::frame::{CapturedFrame, FrameMeta, FrameSlot, Timings, FRAME_TTL};
+use super::page;
 use super::pipeline::{self, Captured, Request, ScreenError, Tools};
 use super::privacy::blocklist::DEFAULT_BLOCKED_APPS;
 use super::privacy::MicAccess;
 use super::tray_badge::{with_badge, Status};
-use super::win::{self, indicator, system, ComThread, Unsupported};
+use super::win::{self, credential, indicator, system, ComThread, Unsupported};
 
 /// The local settings page's window (and the only window its capability applies to).
 pub const SETTINGS_WINDOW: &str = "screen-coach";
@@ -39,11 +47,18 @@ pub struct TrayItems<R: Runtime> {
 
 pub struct ScreenCoach {
     config_path: PathBuf,
+    /// The web app (and its server): where questions and sign-in go.
+    app_url: Url,
     support: Result<(), Unsupported>,
     state: Mutex<State>,
     slot: FrameSlot,
     worker: Mutex<Sender<Job>>,
     capturing: AtomicBool,
+    pending_link: Mutex<Option<PendingLink>>,
+    /// The ink on screen (S3).
+    ink: Mutex<InkState>,
+    /// A clip waiting in its preview (S3).
+    clip: Mutex<Option<ClipDraft>>,
 }
 
 struct State {
@@ -52,8 +67,13 @@ struct State {
     config_reset: bool,
     status: Status,
     talk_held: bool,
+    /// The page is listening for this hold of the talk hotkey (a capture started for it).
+    hold_active: bool,
+    /// A device token is saved: Screen Coach can ask the server.
+    connected: bool,
     talk: HotkeyReport,
     pause: HotkeyReport,
+    clip: HotkeyReport,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -79,9 +99,12 @@ pub struct StatusView {
     pub settings_reset: bool,
     pub talk: HotkeyReport,
     pub pause: HotkeyReport,
+    pub clip: HotkeyReport,
     pub privacy: Privacy,
     pub default_blocked_apps: &'static [&'static str],
     pub microphone: MicAccess,
+    /// Connected to the user's Mew account (a device token is saved).
+    pub connected: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
@@ -89,13 +112,20 @@ pub struct StatusView {
 pub enum HotkeyKind {
     Talk,
     Pause,
+    Clip,
 }
 
-/// A capture request for the worker thread, with what to do with the result.
-struct Job {
-    request: Request,
-    done: Box<dyn FnOnce(Result<Captured, ScreenError>) + Send>,
+/// Who asked for a capture: the hold-to-talk hotkey (the page listens, then asks with the
+/// words), the tray (asked at once, without words), or saving a clip (S3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    Hotkey,
+    Tray,
+    Clip(Purpose),
 }
+
+/// Work for the capture worker thread, which owns the Windows objects in `Tools`.
+type Job = Box<dyn FnOnce(&mut Tools) + Send>;
 
 impl ScreenCoach {
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
@@ -104,7 +134,7 @@ impl ScreenCoach {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn view(&self) -> StatusView {
+    pub fn view(&self) -> StatusView {
         let state = self.lock();
         StatusView {
             supported: self.support.is_ok(),
@@ -123,10 +153,52 @@ impl ScreenCoach {
             settings_reset: state.config_reset,
             talk: state.talk.clone(),
             pause: state.pause.clone(),
+            clip: state.clip.clone(),
             privacy: state.config.privacy.clone(),
             default_blocked_apps: DEFAULT_BLOCKED_APPS,
             microphone: system::mic_access(),
+            connected: state.connected,
         }
+    }
+
+    pub fn app_url(&self) -> &Url {
+        &self.app_url
+    }
+
+    pub fn pending_link(&self) -> std::sync::MutexGuard<'_, Option<PendingLink>> {
+        self.pending_link
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn set_connected(&self, connected: bool) {
+        self.lock().connected = connected;
+    }
+
+    pub fn ink(&self) -> std::sync::MutexGuard<'_, InkState> {
+        self.ink
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn clip(&self) -> std::sync::MutexGuard<'_, Option<ClipDraft>> {
+        self.clip
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The privacy settings right now.
+    pub fn privacy(&self) -> Privacy {
+        self.lock().config.privacy.clone()
+    }
+
+    pub fn is_capturing(&self) -> bool {
+        self.capturing.load(Ordering::SeqCst)
+    }
+
+    /// The held frame, handed over once (for asking about it).
+    pub fn take_frame(&self) -> Option<CapturedFrame> {
+        self.slot.take_latest(Instant::now())
     }
 
     fn resting_status(&self, state: &State) -> Status {
@@ -158,7 +230,7 @@ impl ScreenCoach {
 }
 
 /// Sets Screen Coach up at start-up. Never fails the app: problems leave Screen Coach off.
-pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> {
     win::exclude_heap_from_crash_dumps();
     let support = win::check_support();
     let config_path = config::path_in(&app.path().app_config_dir()?);
@@ -172,18 +244,25 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let state = State {
         talk: report(&config.hotkeys.talk),
         pause: report(&config.hotkeys.pause),
+        clip: report(&config.hotkeys.clip),
         config,
         config_reset,
         status: Status::Off,
         talk_held: false,
+        hold_active: false,
+        connected: credential::is_saved(),
     };
     let coach = ScreenCoach {
         config_path,
+        app_url,
         support,
         state: Mutex::new(state),
         slot: FrameSlot::default(),
         worker: Mutex::new(start_worker()),
         capturing: AtomicBool::new(false),
+        pending_link: Mutex::new(None),
+        ink: Mutex::new(InkState::default()),
+        clip: Mutex::new(None),
     };
     {
         let mut state = coach.lock();
@@ -191,6 +270,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     }
     app.manage(coach);
     settings_capability(app)?;
+    overlay_capabilities(app)?;
     sync_hotkeys(app);
     refresh(app);
     Ok(())
@@ -208,7 +288,35 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-set-paused")
             .permission("allow-screen-coach-set-hotkey")
             .permission("allow-screen-coach-set-privacy")
-            .permission("allow-screen-coach-open-mic-settings"),
+            .permission("allow-screen-coach-open-mic-settings")
+            .permission("allow-screen-coach-link-start")
+            .permission("allow-screen-coach-disconnect"),
+    )
+}
+
+/// Each overlay page (S3) may call only its own commands, and only from its own window: the
+/// ink overlay reports what it drew, the pill has its two buttons, the preview its three.
+fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    use super::overlay::Surface;
+    app.add_capability(
+        CapabilityBuilder::new("screen-ink")
+            .local(true)
+            .window(Surface::Ink.label())
+            .permission("allow-screen-ink-drawn"),
+    )?;
+    app.add_capability(
+        CapabilityBuilder::new("screen-ink-pill")
+            .local(true)
+            .window(Surface::Pill.label())
+            .permission("allow-screen-ink-pill"),
+    )?;
+    app.add_capability(
+        CapabilityBuilder::new("screen-clip")
+            .local(true)
+            .window(Surface::Clip.label())
+            .permission("allow-screen-clip-ready")
+            .permission("allow-screen-clip-save")
+            .permission("allow-screen-clip-cancel"),
     )
 }
 
@@ -220,13 +328,15 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
         let _ = window.set_focus();
         return;
     }
+    let dev_url = app.config().build.dev_url.clone();
     let built =
         WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App(SETTINGS_PAGE.into()))
             .title("Mew · Screen Coach")
             .inner_size(600.0, 760.0)
             .min_inner_size(420.0, 520.0)
+            .additional_browser_args(crate::BROWSER_ARGS)
             // Bundled pages only: the page can't be navigated anywhere else.
-            .on_navigation(super::is_local_page)
+            .on_navigation(move |url| super::is_local_page(url, dev_url.as_ref()))
             .build();
     if let Err(error) = built {
         eprintln!("[screen] couldn't open the settings window ({error})");
@@ -241,7 +351,7 @@ fn sync_hotkeys<R: Runtime>(app: &AppHandle<R>) {
     let shortcuts = app.global_shortcut();
     let mut guard = coach.lock();
     let state = &mut *guard;
-    for report in [&mut state.talk, &mut state.pause] {
+    for report in [&mut state.talk, &mut state.pause, &mut state.clip] {
         if report.registered {
             if let Ok(shortcut) = config::validate_hotkey(&report.accelerator) {
                 let _ = shortcuts.unregister(shortcut);
@@ -252,10 +362,11 @@ fn sync_hotkeys<R: Runtime>(app: &AppHandle<R>) {
     }
     state.talk.accelerator = state.config.hotkeys.talk.clone();
     state.pause.accelerator = state.config.hotkeys.pause.clone();
+    state.clip.accelerator = state.config.hotkeys.clip.clone();
     if coach.support.is_err() || !state.config.is_on() {
         return;
     }
-    for report in [&mut state.talk, &mut state.pause] {
+    for report in [&mut state.talk, &mut state.pause, &mut state.clip] {
         match config::validate_hotkey(&report.accelerator) {
             Ok(shortcut) => match shortcuts.register(shortcut) {
                 Ok(()) => report.registered = true,
@@ -293,27 +404,51 @@ pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed:
     let Some(coach) = app.try_state::<ScreenCoach>() else {
         return;
     };
-    let (is_talk, is_pause) = {
+    // Esc is only registered while ink is on screen.
+    if shortcut == &annotate::escape() {
+        if pressed == ShortcutState::Pressed {
+            annotate::clear(app);
+        }
+        return;
+    }
+    let (is_talk, is_pause, is_clip) = {
         let state = coach.lock();
         let matches = |report: &HotkeyReport| {
             report.registered
                 && config::validate_hotkey(&report.accelerator).is_ok_and(|s| &s == shortcut)
         };
-        (matches(&state.talk), matches(&state.pause))
+        (
+            matches(&state.talk),
+            matches(&state.pause),
+            matches(&state.clip),
+        )
     };
+    if is_clip {
+        if pressed == ShortcutState::Pressed && usable(&coach) {
+            clip::on_hotkey(app);
+        }
+        return;
+    }
     match (is_talk, is_pause, pressed) {
         (true, _, ShortcutState::Pressed) => {
             coach.lock().talk_held = true;
-            ask(app);
+            if capture(app, Origin::Hotkey, None) {
+                coach.lock().hold_active = true;
+                page::dispatch(app, page::LISTEN, serde_json::Value::Null);
+            }
         }
         (true, _, ShortcutState::Released) => {
             let mut state = coach.lock();
             state.talk_held = false;
+            let was_listening = std::mem::take(&mut state.hold_active);
             if state.status == Status::Listening {
                 state.status = coach.resting_status(&state);
             }
             drop(state);
-            // S2 sends the question with the held frame here.
+            // The page finishes hearing the question and asks with it (`screen_coach_ask`).
+            if was_listening {
+                page::dispatch(app, page::RELEASE, serde_json::Value::Null);
+            }
             refresh(app);
         }
         (_, true, ShortcutState::Pressed) => toggle_pause(app),
@@ -334,70 +469,135 @@ pub fn toggle_pause<R: Runtime>(app: &AppHandle<R>) {
 
 /// "Look at my screen" from the tray.
 pub fn look_from_tray<R: Runtime>(app: &AppHandle<R>) {
-    ask(app);
+    capture(app, Origin::Tray, None);
 }
 
-/// Captures the screen for a question: only when Screen Coach is on, not paused, and not
-/// already capturing. The privacy checks themselves run in the pipeline.
-fn ask<R: Runtime>(app: &AppHandle<R>) {
+/// Captures the screen to clip from (S3): to re-place the earlier ink on, or to drag a region
+/// out of. Only from the clip hotkey, the pill or "save this" (decision 2).
+pub fn capture_for_clip<R: Runtime>(app: &AppHandle<R>, scope: CaptureScope, purpose: Purpose) {
+    capture(app, Origin::Clip(purpose), Some(scope));
+}
+
+/// On, not paused, on a supported PC: the hotkeys may act.
+fn usable(coach: &ScreenCoach) -> bool {
+    let state = coach.lock();
+    coach.support.is_ok() && state.config.is_on() && !state.config.paused
+}
+
+/// Captures the screen for a question: only when Screen Coach is on, connected, not paused, and
+/// not already capturing. The privacy checks themselves run in the pipeline. True if a capture
+/// started.
+fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<CaptureScope>) -> bool {
     let Some(coach) = app.try_state::<ScreenCoach>() else {
-        return;
+        return false;
     };
     let request = {
         let mut state = coach.lock();
         if coach.support.is_err() || !state.config.is_on() || state.config.paused {
-            return;
+            return false;
+        }
+        if !state.connected {
+            drop(state);
+            notify(app, "Connect Screen Coach to your Mew account first: tray → Screen Coach settings → Connect.");
+            return false;
         }
         if coach.capturing.swap(true, Ordering::SeqCst) {
-            return;
+            return false;
         }
         state.status = Status::Looking;
         Request {
-            scope: state.config.privacy.ask_scope,
+            scope: scope.unwrap_or(state.config.privacy.ask_scope),
             privacy: state.config.privacy.clone(),
         }
     };
     refresh(app);
 
     let handle = app.clone();
-    let job = Job {
-        request,
-        done: Box::new(move |result| finish_capture(&handle, result)),
-    };
-    let sent = coach
-        .worker
-        .lock()
-        .map(|worker| worker.send(job).is_ok())
-        .unwrap_or(false);
-    if !sent {
-        // The worker died (it never should): start a new one for next time.
-        if let Ok(mut worker) = coach.worker.lock() {
-            *worker = start_worker();
-        }
-        finish_capture(app, Err(ScreenError::Failed));
+    let queued = on_worker(app, move |tools| {
+        let result = pipeline::run(tools, &request);
+        finish_capture(&handle, origin, result);
+    });
+    if !queued {
+        finish_capture(app, origin, Err(ScreenError::Failed));
     }
+    true
 }
 
-/// Keeps the frame (and shows the indicator) or tells the user why there's none.
-fn finish_capture<R: Runtime>(app: &AppHandle<R>, result: Result<Captured, ScreenError>) {
+/// Runs `work` on the capture worker (one job at a time, with its Windows objects). False if
+/// the worker couldn't take it.
+pub fn on_worker<R: Runtime>(
+    app: &AppHandle<R>,
+    work: impl FnOnce(&mut Tools) + Send + 'static,
+) -> bool {
+    let Some(coach) = app.try_state::<ScreenCoach>() else {
+        return false;
+    };
+    let job: Job = Box::new(work);
+    let Ok(mut worker) = coach.worker.lock() else {
+        return false;
+    };
+    if worker.send(job).is_ok() {
+        return true;
+    }
+    // The worker died (it never should): start a new one for next time.
+    *worker = start_worker();
+    false
+}
+
+/// The privacy settings now (defaults if Screen Coach isn't set up: the strictest redaction is
+/// still the default one).
+pub fn privacy_of<R: Runtime>(app: &AppHandle<R>) -> Privacy {
+    app.try_state::<ScreenCoach>()
+        .map(|coach| coach.privacy())
+        .unwrap_or_default()
+}
+
+/// Keeps the frame (and shows the indicator) or tells the user why there's none. A tray capture
+/// is asked about at once; a hotkey capture waits for the page to send the words.
+fn finish_capture<R: Runtime>(
+    app: &AppHandle<R>,
+    origin: Origin,
+    result: Result<Captured, ScreenError>,
+) {
     let Some(coach) = app.try_state::<ScreenCoach>() else {
         return;
     };
-    coach.capturing.store(false, Ordering::SeqCst);
+    let mut kept = false;
+    let mut for_clip = None;
     match result {
-        Ok(Captured { jpeg, meta }) => {
-            log_capture(&meta, jpeg.len());
-            let (monitor, dpi) = (meta.monitor, meta.dpi);
+        Ok(captured) => {
+            log_capture(&captured.meta, captured.jpeg.len());
+            let (monitor, dpi) = (captured.meta.monitor, captured.meta.dpi);
             // A pause pressed mid-capture wins: the frame is dropped (and wiped).
             if coach.lock().config.paused {
-                drop(jpeg);
+                drop(captured);
             } else {
-                coach.slot.put(jpeg, meta, Instant::now());
                 indicator::flash(monitor, dpi);
-                schedule_expiry(app);
+                match origin {
+                    Origin::Clip(purpose) => for_clip = Some((purpose, captured)),
+                    Origin::Hotkey | Origin::Tray => {
+                        let Captured { jpeg, meta, detail } = captured;
+                        coach.slot.put(jpeg, meta, Some(detail), Instant::now());
+                        schedule_expiry(app);
+                    }
+                }
+                kept = true;
             }
         }
         Err(error) => notify(app, &error.message()),
+    }
+    // Only now: an ask waiting for this capture reads the flag first, then the slot.
+    coach.capturing.store(false, Ordering::SeqCst);
+    if let Some((purpose, captured)) = for_clip {
+        clip::on_captured(app, purpose, captured);
+    }
+    match (origin, kept) {
+        (Origin::Tray, true) => ask::ask_in_background(app, String::new()),
+        (Origin::Hotkey, false) => {
+            coach.lock().hold_active = false;
+            page::dispatch(app, page::CANCEL, serde_json::Value::Null);
+        }
+        _ => {}
     }
     let mut state = coach.lock();
     state.status = if state.talk_held && state.config.is_on() && !state.config.paused {
@@ -439,7 +639,7 @@ fn log_capture(meta: &FrameMeta, bytes: usize) {
     );
 }
 
-fn notify<R: Runtime>(app: &AppHandle<R>, message: &str) {
+pub fn notify<R: Runtime>(app: &AppHandle<R>, message: &str) {
     let _ = app
         .notification()
         .builder()
@@ -455,20 +655,29 @@ fn start_worker() -> Sender<Job> {
     let spawned = std::thread::Builder::new()
         .name("mew-screen-capture".into())
         .spawn(move || {
-            let com = ComThread::init();
+            // Without COM, every Windows object in `Tools` fails to start, so jobs fail closed
+            // (no capture, no OCR, nothing sent).
+            let _com = ComThread::init();
             let mut tools = Tools::default();
-            for Job { request, done } in receiver {
-                let result = match &com {
-                    Ok(_) => pipeline::run(&mut tools, &request),
-                    Err(_) => Err(ScreenError::Failed),
-                };
-                done(result);
+            for job in receiver {
+                job(&mut tools);
             }
         });
     if spawned.is_err() {
         eprintln!("[screen] couldn't start the capture worker");
     }
     sender
+}
+
+/// Back to the resting state after a question was answered (or failed).
+pub fn settle<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(coach) = app.try_state::<ScreenCoach>() {
+        let mut state = coach.lock();
+        if !state.talk_held {
+            state.status = coach.resting_status(&state);
+        }
+    }
+    refresh(app);
 }
 
 /// Updates the tray (icon, tooltip, menu items) and the settings page to the current state.
@@ -519,6 +728,8 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
     if paused {
         // Pausing is a promise: nothing held, nothing captured until resumed (brief §7.10).
         coach.slot.clear();
+        annotate::clear(app);
+        clip::discard(app, None);
     }
     refresh(app);
     Ok(coach.view())
@@ -526,8 +737,11 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
 
 /// Only the bundled settings page may change settings; this re-checks the window on top of
 /// the capability (defence in depth).
-fn require_settings_window<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
-    let local = window.url().is_ok_and(|url| super::is_local_page(&url));
+pub fn require_settings_window<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
+    let dev_url = window.app_handle().config().build.dev_url.clone();
+    let local = window
+        .url()
+        .is_ok_and(|url| super::is_local_page(&url, dev_url.as_ref()));
     if window.label() == SETTINGS_WINDOW && local {
         Ok(())
     } else {
@@ -535,7 +749,7 @@ fn require_settings_window<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), 
     }
 }
 
-fn coach_of<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::State<'_, ScreenCoach>, String> {
+pub fn coach_of<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::State<'_, ScreenCoach>, String> {
     app.try_state::<ScreenCoach>()
         .ok_or_else(|| "Screen Coach isn't ready.".to_owned())
 }
@@ -576,6 +790,8 @@ pub fn screen_coach_set_enabled<R: Runtime>(
     }
     if !enabled {
         coach.slot.clear();
+        annotate::clear(app);
+        clip::discard(app, None);
     }
     sync_hotkeys(app);
     refresh(app);
@@ -611,13 +827,18 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
     let normalised = shortcut.to_string();
     {
         let state = coach.lock();
-        let other = match which {
-            HotkeyKind::Talk => &state.config.hotkeys.pause,
-            HotkeyKind::Pause => &state.config.hotkeys.talk,
+        let hotkeys = &state.config.hotkeys;
+        let others: [&String; 2] = match which {
+            HotkeyKind::Talk => [&hotkeys.pause, &hotkeys.clip],
+            HotkeyKind::Pause => [&hotkeys.talk, &hotkeys.clip],
+            HotkeyKind::Clip => [&hotkeys.talk, &hotkeys.pause],
         };
-        if config::validate_hotkey(other).is_ok_and(|s| s == shortcut) {
+        if others
+            .iter()
+            .any(|other| config::validate_hotkey(other).is_ok_and(|s| s == shortcut))
+        {
             return Err(
-                "That shortcut is already used by the other Screen Coach action.".to_owned(),
+                "That shortcut is already used by another Screen Coach action.".to_owned(),
             );
         }
         if crate::is_summon_hotkey(&shortcut) {
@@ -628,7 +849,7 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
     let shortcuts = app.global_shortcut();
     let already_ours = {
         let state = coach.lock();
-        [&state.talk, &state.pause].iter().any(|report| {
+        [&state.talk, &state.pause, &state.clip].iter().any(|report| {
             report.registered
                 && config::validate_hotkey(&report.accelerator).is_ok_and(|s| s == shortcut)
         })
@@ -642,6 +863,7 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
     coach.update(|config| match which {
         HotkeyKind::Talk => config.hotkeys.talk = normalised,
         HotkeyKind::Pause => config.hotkeys.pause = normalised,
+        HotkeyKind::Clip => config.hotkeys.clip = normalised,
     })?;
     sync_hotkeys(app);
     refresh(app);

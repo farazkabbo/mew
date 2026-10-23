@@ -1,13 +1,21 @@
 "use client";
 
 import type { BBox } from "@mew/shared";
-import { type Camera, DEFAULT_CAMERA, panBy, screenToPage, zoomAt } from "@mew/ink";
+import {
+  bboxesIntersect,
+  type Camera,
+  DEFAULT_CAMERA,
+  panBy,
+  screenToPage,
+  zoomAt,
+} from "@mew/ink";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 import type { PageEngine } from "../engine";
 import { studentLines } from "../export-line";
 import type { Tool } from "../palette";
 import { useNotebookUi } from "../store";
+import { ClipImages } from "./clip-images";
 import { PointerInput, type Sample } from "./input";
 import { CanvasRenderer, type Theme } from "./renderer";
 import { EraserTool } from "./tools/eraser";
@@ -84,10 +92,19 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
         const selected = new Set(overlay.selection?.strokes.map((s) => s.id));
         const visible = engine.doc.inRegion(renderer.visible(camera)).filter(isShown);
         const lines = useNotebookUi.getState().showLines ? studentLines(engine.doc) : undefined;
+        const region = renderer.visible(camera);
+        const pictures = engine.images
+          .map((image) => ({
+            box: [image.x, image.y, image.width, image.height] as BBox,
+            clipId: image.clipId,
+          }))
+          .filter(({ box }) => bboxesIntersect(box, region))
+          .map(({ box, clipId }) => ({ box, bitmap: clipImages.get(clipId) }));
         renderer.drawInk(
           camera,
           selected.size ? visible.filter((s) => !selected.has(s.id)) : visible,
           lines,
+          pictures,
         );
       }
       if (dirty.live) {
@@ -98,6 +115,8 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       dirty.grid = dirty.ink = dirty.live = false;
     };
     const all = { grid: true, ink: true, live: true };
+    // Clips saved from the screen: their pictures load in the background, then redraw.
+    const clipImages = new ClipImages(() => schedule({ ink: true }));
 
     const setCamera = (next: Camera) => {
       camera = next;
@@ -186,6 +205,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
 
     return () => {
       cancelAnimationFrame(frame);
+      clipImages.dispose();
       input.dispose();
       window.removeEventListener("keydown", onKeyDown);
       resize.disconnect();

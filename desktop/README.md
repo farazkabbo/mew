@@ -13,8 +13,10 @@ A [Tauri v2](https://v2.tauri.app) shell around the Mew web app. The window show
   window in memory, with a violet glow at the screen edges; **Ctrl+Alt+P** pauses. Before
   capturing, the privacy layer (S1) refuses blocked apps, password fields, private browsing
   windows, calls and recordings, and a microphone that's switched off. After capturing, it
-  covers card numbers, keys and codes it finds with on-device OCR. As of S1 the frame is held
-  for 60 s and wiped; nothing is sent anywhere yet.
+  covers card numbers, keys and codes it finds with on-device OCR. When the key comes up, the
+  web page sends what you said and Rust uploads the frame with the question. The answer
+  streams back and the page speaks it (S2). First connect the app to your account: Screen
+  Coach settings → Connect.
 
 The web app still runs on its servers (keys stay there): the desktop app needs the Next.js and
 API servers, either your `npm run dev` or a deployment.
@@ -28,7 +30,12 @@ and WebView2 (built into Windows 11). From this folder:
 pnpm app      # debug build, opens a window on MEW_APP_URL (default http://localhost:3000)
 pnpm bundle   # release build: src-tauri/target/release/bundle/{msi,nsis}/
 pnpm icons    # regenerate src-tauri/icons from icon.svg
+pnpm build:shell   # bundle Screen Coach's overlay pages (runs before app/bundle by itself)
 ```
+
+Screen Coach's overlay pages (the ink overlay, the ink pill, a clip's preview) are TypeScript in
+`overlay-src/`, bundled by esbuild into `shell/gen/` (gitignored) so they reuse the notebook's
+handwriting from `packages/ink`. `pnpm lint`, `pnpm typecheck` and `pnpm test` cover them.
 
 `MEW_APP_URL` picks the web app: set it in the environment when running, or when building (the
 build bakes it in as the default). Only `https://` URLs, or `http://` on this machine, are
@@ -87,13 +94,73 @@ PowerShell's name.
   - Release-build timings on a dense 1875×1070 window: capture ~60 ms, redaction 125–180 ms,
     downscale ~35 ms, encode ~5 ms.
 
+- **Screen Coach sign-in and asking** (S2: `src/screen/account.rs`, `ask.rs`, `protocol.rs`):
+  - The desktop app has its own device token (decision 8): an opaque 256-bit value in Windows
+    Credential Manager (`Mew/ScreenCoach/DeviceToken`), valid only for Screen Coach routes. The
+    server keeps only its hash.
+  - Getting one: PKCE-style. Rust keeps the verifier; the signed-in page sees only the
+    challenge and hands back a one-time code (60 s).
+  - The main window's origin may call exactly two Screen Coach commands, each re-checked in
+    Rust: `screen_coach_ask` (the words of a question; it can't start a capture or read pixels)
+    and `screen_coach_link_finish` (a one-time code, accepted only while a connection started
+    from the settings page is pending, for up to 5 minutes).
+  - Uploads use WinHTTP, straight from a wipeable buffer, with no redirects.
+  - Replies are schema-checked in Rust (`protocol::parse_event`) before the page sees them, and
+    the page checks them again.
+  - Both windows share `BROWSER_ARGS`: wry's defaults plus
+    `--autoplay-policy=no-user-gesture-required`, so answers to a hotkey question can play
+    aloud.
+
+- **Screen Coach ink and clips** (S3, `docs/SCREEN_COACH_S3.md`, decision 9: `annotate.rs`,
+  `ink.rs`, `overlay.rs`, `watch.rs`, `win/winevent.rs`, `clip.rs`, `source.rs`):
+  - Three local windows, each loading one bundled page with its own strict CSP, refusing
+    navigation and new windows, and allowed only its own commands (a capability per window,
+    re-checked in Rust): the ink overlay (`screen_ink_drawn`), the pill (`screen_ink_pill`) and
+    the preview (`screen_clip_ready`/`save`/`cancel`).
+  - The ink overlay covers one monitor: transparent, click-through, never focused, excluded from
+    every capture. It gets the tutor's actions and the on-screen text as **rectangles only**,
+    plans the ink with `packages/ink`, and reports the strokes back; Rust checks them (caps,
+    finite numbers, on the monitor, plain hex colours) before keeping them.
+  - The redacted screenshot and its visible OCR text stay in Rust while the ink is on screen and
+    unchanged (at most 5 minutes), for a clip. Words under a redaction box are dropped from the
+    kept text, and the redaction rules run again on it.
+  - While ink is visible, one thread watches: WinEvents (app switch, move, resize, minimise,
+    standard scrolling), a low-level mouse hook (wheel and left-button drags only; nothing is
+    recorded) and `GetLastInputInfo` (a key press, without a keyboard hook; Ctrl/Alt chords such
+    as our hotkeys don't count). The first change fades the ink, wipes the screenshot and stops
+    the thread. Esc is a global hotkey only while ink is visible.
+  - The preview is the only WebView that sees screen pixels, and only after the student asked to
+    save. Its image comes from `mewclip://` (served from memory, to the preview window only, at a
+    one-time path, `Cache-Control: no-store`); its page has `connect-src` for IPC only, no
+    context menu and no image dragging. Cancel, or 60 s without a choice, wipes the draft.
+  - Saving: crop, near-black check (protected video), JPEG quality 90 at 4:4:4 (WIC; Windows has
+    no WebP encoder), at most 2400 px; the crop's visible text; the source (window title, the
+    browser's address via UI Automation trimmed to scheme, host and path plus YouTube's `v`/`t`,
+    and a video's position from Windows' media session). Uploaded with the device token; the web
+    page gets only the clip's id.
+  - "Save this" and "show that again" are recognised in Rust (`intent.rs`) and upload nothing to
+    the tutor. "Show that again" looks for the focus region's words on a new capture first; only
+    if that fails does it ask the server (`/api/screen/reanchor`), whose answer may only move the
+    ink.
+  - The main window's links that open a new window go to the default browser (https only).
+  - `windows-future` (=0.3.2, already in the tree through `windows`) is used directly for the
+    media session's async calls.
+
 ## Tests
 
 ```sh
 cd src-tauri && cargo test && cargo clippy --all-targets -- -D warnings
 # Real Windows tests (need a desktop, a GPU and an OCR language): capture a test window, and
 # redact a test card number and key from it (threat check 3). Both capture only their own window.
-cd src-tauri && cargo test -- --ignored
+cd src-tauri && cargo test captures_a_window covers_a_card -- --ignored
+# S2 end to end (dev servers running, Gemini key set): link a device, ask about a test window
+# that holds a prompt injection (threat check 4), sign out, and check the token is refused.
+MEW_E2E_APP=http://localhost:3000 MEW_E2E_API=http://127.0.0.1:8000 INTERNAL_API_SECRET=… \
+  cargo test e2e -- --ignored --nocapture
+# Windows' media session (prints what's playing in Edge and Chrome, if anything).
+cargo test reads_the_media_session -- --ignored --nocapture
+# The overlay pages in a real browser, from the repo's frontend folder (Tauri's bridge stubbed).
+cd ../../frontend && E2E_BASE_URL=http://localhost:3100 npx playwright test desktop-overlays clips
 ```
 
 Screen Coach's "nothing on disk" check (threat checklist item 1), from the repo root:

@@ -6,22 +6,30 @@
 //!   4. OCR the frame and cover sensitive text (fail closed: no OCR, no picture)
 //!   5. downscale and encode to JPEG, all in memory
 //!
+//! The redacted pixels and the text left visible are kept with the frame (S3): to place ink
+//! beside the text, and to clip from if the student saves. They never leave Rust except in a
+//! clip the student confirmed.
+//!
 //! Runs on the capture worker thread, which owns the Windows objects in `Tools`.
 
 use std::time::Instant;
 
 use super::config::{CaptureScope, Privacy};
-use super::frame::{FrameMeta, Timings};
+use super::frame::{FrameDetail, FrameMeta, Timings};
 use super::image::{
     downscale_bgra_to_bgr, downscale_bgra_to_gray, looks_blank, Pixels, MAX_LONG_SIDE,
 };
 use super::privacy::blocklist::is_blocked;
 use super::privacy::private_window::is_private_window;
-use super::privacy::redact::{fill, rects_to_cover, screen_to_pixels, BLACKED_OUT, REDACTED};
+use super::privacy::redact::{
+    fill, rects_to_cover, screen_to_pixels, PixelRect, BLACKED_OUT, REDACTED,
+};
 use super::privacy::{may_capture, Focus, Refusal, Situation};
+use super::screen_text::ScreenText;
 use super::secret::SecretBytes;
 use super::win::capture::{CaptureError, Capturer};
 use super::win::encode::encode_jpeg;
+use super::win::media_session::{MediaSessions, MediaState};
 use super::win::ocr::{Ocr, OcrError};
 use super::win::system;
 use super::win::target::{self, Target};
@@ -36,6 +44,7 @@ pub struct Request {
 pub struct Captured {
     pub jpeg: SecretBytes,
     pub meta: FrameMeta,
+    pub detail: FrameDetail,
 }
 
 /// Why there's no picture, phrased for the user (never raw errors, brief §10).
@@ -68,44 +77,75 @@ pub struct Tools {
     capturer: Option<Capturer>,
     automation: Option<Automation>,
     ocr: Option<Ocr>,
+    media: Option<MediaSessions>,
+}
+
+impl Tools {
+    /// What Windows' media controls say about `app`'s video, if anything.
+    pub fn media_state(&mut self, app: &str) -> Option<MediaState> {
+        if self.media.is_none() {
+            self.media = MediaSessions::new();
+        }
+        self.media.as_ref()?.state_of(app)
+    }
+
+    /// A browser window's address bar text (only read for a clip being saved).
+    pub fn address_bar(&mut self, window: windows::Win32::Foundation::HWND) -> Option<String> {
+        if self.automation.is_none() {
+            self.automation = Automation::new().ok();
+        }
+        self.automation.as_ref()?.address_bar(window)
+    }
 }
 
 /// Runs one capture. Every early return drops (and so wipes) the pixels captured so far.
 pub fn run(tools: &mut Tools, request: &Request) -> Result<Captured, ScreenError> {
-    let privacy = &request.privacy;
     let target = match request.scope {
         CaptureScope::Window => target::ask_target(),
         CaptureScope::Monitor => target::monitor_target(),
     }
     .ok_or(ScreenError::NothingToSee)?;
+    run_on(tools, &target, &request.privacy)
+}
 
+/// The pipeline for a target already chosen (tests use it with a window they drew).
+pub fn run_on(
+    tools: &mut Tools,
+    target: &Target,
+    privacy: &Privacy,
+) -> Result<Captured, ScreenError> {
     let started = Instant::now();
-    may_capture(&situation(tools, &target, privacy)).map_err(ScreenError::Refused)?;
+    may_capture(&situation(tools, target, privacy)).map_err(ScreenError::Refused)?;
     let checks_ms = elapsed_ms(started);
 
     let started = Instant::now();
-    let mut raw = capture(tools, &target)?;
+    let mut raw = capture(tools, target)?;
     let capture_ms = elapsed_ms(started);
     if looks_blank(&raw) {
         return Err(ScreenError::Blank);
     }
 
     let started = Instant::now();
+    let mut hidden = Vec::new();
     if target.kind == super::frame::TargetKind::Monitor {
-        black_out_blocked_windows(&mut raw, &target, privacy);
+        hidden = black_out_blocked_windows(&mut raw, target, privacy);
     }
-    cover_sensitive_text(tools, &mut raw, privacy)?;
+    let text = cover_sensitive_text(tools, &mut raw, target, privacy, hidden)?;
     let redact_ms = elapsed_ms(started);
 
     let started = Instant::now();
     let small = downscale_bgra_to_bgr(&raw, MAX_LONG_SIDE);
-    drop(raw);
     let downscale_ms = elapsed_ms(started);
 
     let started = Instant::now();
     let jpeg = encode_jpeg(&small).map_err(|_| ScreenError::Failed)?;
     let encode_ms = elapsed_ms(started);
 
+    let video_playing = target
+        .app
+        .as_deref()
+        .and_then(|app| tools.media_state(app))
+        .map(|state| state.playing);
     let meta = FrameMeta {
         kind: target.kind,
         app: target.app.clone(),
@@ -121,8 +161,21 @@ pub fn run(tools: &mut Tools, request: &Request) -> Result<Captured, ScreenError
             downscale_ms,
             encode_ms,
         },
+        video_playing,
+        window: target.foreground.map(|hwnd| hwnd.0 as isize),
     };
-    Ok(Captured { jpeg, meta })
+    Ok(Captured {
+        jpeg,
+        meta,
+        detail: FrameDetail { pixels: raw, text },
+    })
+}
+
+/// The privacy checks alone, for the app in front right now: a held screenshot is only clipped
+/// if a capture would be allowed at this moment too (no password field, no blocked app).
+pub fn may_use_screen_now(tools: &mut Tools, privacy: &Privacy) -> Result<(), ScreenError> {
+    let target = target::ask_target().ok_or(ScreenError::NothingToSee)?;
+    may_capture(&situation(tools, &target, privacy)).map_err(ScreenError::Refused)
 }
 
 /// Everything the privacy rules need to know about this moment.
@@ -170,8 +223,12 @@ fn capture(tools: &mut Tools, target: &Target) -> Result<Pixels, ScreenError> {
 }
 
 /// Monitor captures can include other windows: black out any that belong to a blocked app or
-/// a private browser, or whose app we can't identify (decision 6).
-fn black_out_blocked_windows(raw: &mut Pixels, target: &Target, privacy: &Privacy) {
+/// a private browser, or whose app we can't identify (decision 6). Returns what was covered.
+fn black_out_blocked_windows(
+    raw: &mut Pixels,
+    target: &Target,
+    privacy: &Privacy,
+) -> Vec<PixelRect> {
     let rects: Vec<_> = target::visible_windows_over(target.bounds)
         .into_iter()
         .filter(|window| match &window.app {
@@ -183,34 +240,50 @@ fn black_out_blocked_windows(raw: &mut Pixels, target: &Target, privacy: &Privac
         .filter_map(|window| screen_to_pixels(window.bounds, target.bounds, raw.width, raw.height))
         .collect();
     fill(raw, &rects, BLACKED_OUT);
+    rects
 }
 
-/// Reads the text on screen and covers what the redaction rules ask for. If any rule is on and
-/// OCR can't run, nothing is sent (fail closed).
+/// Reads the text on screen, covers what the redaction rules ask for, and returns the text that
+/// is still visible (none of it under `hidden` or a covered area). If any rule is on and OCR
+/// can't run, nothing is sent (fail closed); with every rule off, OCR is only for placing ink,
+/// so a failure just means no text.
 fn cover_sensitive_text(
     tools: &mut Tools,
     raw: &mut Pixels,
+    target: &Target,
     privacy: &Privacy,
-) -> Result<(), ScreenError> {
+    mut hidden: Vec<PixelRect>,
+) -> Result<ScreenText, ScreenError> {
     let rules = &privacy.redaction;
-    if !(rules.cards || rules.secrets || rules.codes || rules.emails || rules.phones) {
-        return Ok(());
-    }
+    let required = rules.cards || rules.secrets || rules.codes || rules.emails || rules.phones;
+    let fail = |error: ScreenError| if required { Err(error) } else { Ok(ScreenText::default()) };
     if tools.ocr.is_none() {
-        tools.ocr = Some(Ocr::new().map_err(|error| match error {
-            OcrError::NoLanguage => ScreenError::NoOcrLanguage,
-            OcrError::Windows(_) => ScreenError::RedactionFailed,
-        })?);
+        match Ocr::new() {
+            Ok(ocr) => tools.ocr = Some(ocr),
+            Err(OcrError::NoLanguage) => return fail(ScreenError::NoOcrLanguage),
+            Err(OcrError::Windows(_)) => return fail(ScreenError::RedactionFailed),
+        }
     }
-    let ocr = tools.ocr.as_ref().ok_or(ScreenError::RedactionFailed)?;
+    let Some(ocr) = tools.ocr.as_ref() else {
+        return fail(ScreenError::RedactionFailed);
+    };
     let grey = downscale_bgra_to_gray(raw, ocr.max_side());
     let scale = raw.width as f32 / grey.width as f32;
-    let lines = ocr.read(&grey).map_err(|_| ScreenError::RedactionFailed)?;
+    let lines = match ocr.read(&grey) {
+        Ok(lines) => lines,
+        Err(_) => return fail(ScreenError::RedactionFailed),
+    };
     drop(grey);
     let rects = rects_to_cover(&lines, rules, scale, raw.width, raw.height);
-    drop(lines);
     fill(raw, &rects, REDACTED);
-    Ok(())
+    hidden.extend(rects);
+    Ok(ScreenText::from_ocr(
+        &lines,
+        scale,
+        (raw.width, raw.height),
+        target.bounds,
+        &hidden,
+    ))
 }
 
 fn elapsed_ms(since: Instant) -> u32 {
@@ -290,7 +363,13 @@ mod tests {
         );
 
         let started = Instant::now();
-        cover_sensitive_text(&mut tools, &mut raw, &privacy).expect("redaction");
+        let text = cover_sensitive_text(&mut tools, &mut raw, &target, &privacy, Vec::new())
+            .expect("redaction");
+        let kept = text.text_in(target.bounds, &privacy.redaction);
+        assert!(
+            !kept.contains("4242") && !kept.contains("AKIA"),
+            "the kept text hides what the image hides: {kept}"
+        );
         let redact_ms = started.elapsed().as_millis();
 
         let after = read(&raw);

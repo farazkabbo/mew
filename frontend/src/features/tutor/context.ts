@@ -1,7 +1,9 @@
 import { type PageDocument, unionBBox } from "@mew/ink";
 import {
   type AnswerStyle,
+  type ClippedText,
   COURSE_LIMITS,
+  type ImageBlock,
   type CourseExcerpt,
   type QuizContext,
   MEW_LIMITS,
@@ -11,6 +13,7 @@ import {
   type TutorRequest,
 } from "@mew/shared";
 
+import { sourceLabel } from "../notebook/clip-page";
 import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
 import type { RecognitionService } from "./recognition";
 
@@ -26,6 +29,8 @@ type ContextInput = {
   previousSpeech: readonly string[];
   answerStyle: AnswerStyle;
   doc: PageDocument | null;
+  /** Images on the page (clips from the screen): their text is context for the tutor. */
+  images?: readonly ImageBlock[];
   recognition: RecognitionService;
   /** The course the notebook belongs to, if any: its relevant passages are added. */
   courseId?: string | null;
@@ -80,7 +85,20 @@ export async function buildTutorRequest(input: ContextInput): Promise<TutorReque
     checks: [],
     courseContext: await courseContext,
     quiz: input.quiz ?? null,
+    clippedText: clippedText(input.images ?? []),
   };
+}
+
+/** The text of the newest clips on the page, with where each came from. */
+export function clippedText(images: readonly ImageBlock[]): ClippedText[] {
+  return [...images]
+    .filter((image) => image.ocrText?.trim())
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, TUTOR_LIMITS.clippedTexts)
+    .map((image) => ({
+      source: sourceLabel(image).slice(0, 200),
+      text: (image.ocrText ?? "").slice(0, TUTOR_LIMITS.clippedTextChars),
+    }));
 }
 
 /** The course passages most relevant to what the student said (and wrote). Never throws. */

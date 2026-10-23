@@ -24,6 +24,8 @@ export type BoardInput = {
   lines: readonly Line[];
   activeLine?: Line | undefined;
   viewport: BBox;
+  /** Other things on the page to keep ink off (images clipped from the screen). */
+  obstacles?: readonly BBox[];
   colors: BoardColors;
   now: number;
   newId: () => string;
@@ -90,12 +92,15 @@ export class BoardPlanner {
           ? measureHandwriting(studentStrokes)
           : DEFAULT_HANDWRITING;
 
-    this.content = input.strokes
-      .map((s) => s.bbox)
-      .reduce<BBox | undefined>((acc, b) => (acc ? unionBBox(acc, b) : b), undefined);
+    const obstacles = input.obstacles ?? [];
+    this.content = [...input.strokes.map((s) => s.bbox), ...obstacles].reduce<BBox | undefined>(
+      (acc, b) => (acc ? unionBBox(acc, b) : b),
+      undefined,
+    );
     const size = this.scale.xHeight;
     this.grid = new OccupancyGrid(searchRegion(input.viewport, this.content, 60 * size), size / 2);
     for (const stroke of input.strokes) this.grid.mark(inflateBBox(stroke.bbox, CLEARANCE * size));
+    for (const box of obstacles) this.grid.mark(inflateBBox(box, CLEARANCE * size));
     this.rng = seededRandom(seedFrom(input.groupId));
     this.createdAt = input.now;
   }

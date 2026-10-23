@@ -1,6 +1,7 @@
 import type { PageDocument } from "@mew/ink";
 import {
   type BoardAction,
+  type ImageBlock,
   type LineCheck,
   type QuizContext,
   reconcileMarks,
@@ -40,6 +41,8 @@ export type TutorDeps = {
   voiceId?: () => string | null;
   /** The page on screen, if any. */
   doc(): PageDocument | null;
+  /** Images on that page (clips saved from the screen). */
+  images?: () => readonly ImageBlock[];
   /** Called when a turn ends, however it ends (starts Mew's cooldown). */
   onFinished(): void;
   now?: () => number;
@@ -101,6 +104,7 @@ export class TutorController {
           .reverse(),
         answerStyle: useTutor.getState().answerStyle,
         doc: this.deps.doc(),
+        images: this.deps.images?.() ?? [],
         recognition: this.deps.recognition,
         courseId: this.deps.courseId?.() ?? null,
         quiz: this.deps.quiz?.() ?? null,

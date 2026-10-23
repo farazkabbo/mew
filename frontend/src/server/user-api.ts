@@ -5,7 +5,7 @@ import type { z } from "zod";
 
 import { isClerkConfigured } from "@/lib/auth-mode";
 
-import { ApiError, apiFetch } from "./api-client";
+import { ApiError, apiFetch, apiFetchBytes } from "./api-client";
 import { HttpError } from "./http-error";
 
 type Messages = {
@@ -42,6 +42,20 @@ export async function userApi<T>(
   const identity = await caller();
   try {
     return await apiFetch(path, schema, { ...options, ...identity });
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+    throw toHttpError(error, messages);
+  }
+}
+
+/** Like `userApi`, for a binary reply (a clip's image). */
+export async function userApiBytes(
+  path: `/${string}`,
+  messages: Messages = GENERIC,
+): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+  const identity = await caller();
+  try {
+    return await apiFetchBytes(path, { ...identity, timeoutMs: 15_000 });
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;
     throw toHttpError(error, messages);

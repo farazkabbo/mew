@@ -1,4 +1,5 @@
-//! System state Screen Coach respects: microphone permission, calls and screen sharing.
+//! System state Screen Coach respects: microphone permission, calls and screen sharing, and
+//! the display preferences ink follows (animations, contrast themes).
 //!
 //! Microphone permission and use come from Windows' capability consent store in the registry
 //! (what Settings → Privacy & security → Microphone shows). It isn't a documented API, so it is
@@ -13,8 +14,14 @@ use windows::Win32::System::Registry::{
     RegCloseKey, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER,
     HKEY_LOCAL_MACHINE, KEY_READ, RRF_RT_REG_QWORD, RRF_RT_REG_SZ,
 };
+use windows::Win32::System::SystemInformation::{ComputerNameDnsHostname, GetComputerNameExW};
+use windows::Win32::Graphics::Gdi::{GetSysColor, COLOR_HIGHLIGHT};
+use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+use windows::Win32::UI::WindowsAndMessaging::{
+    SystemParametersInfoW, SPI_GETCLIENTAREAANIMATION, SPI_GETHIGHCONTRAST, SW_SHOWNORMAL,
+    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+};
 
 use crate::screen::privacy::MicAccess;
 
@@ -142,6 +149,25 @@ fn running_process_names() -> Vec<String> {
     names
 }
 
+/// How this computer appears in the account's "Signed-in devices" list, e.g. "DESKTOP-1A2B (Windows)".
+pub fn device_name() -> String {
+    let mut buffer = [0u16; 256];
+    let mut len = buffer.len() as u32;
+    // SAFETY: the buffer and its length in characters are passed together.
+    let name = match unsafe {
+        GetComputerNameExW(
+            ComputerNameDnsHostname,
+            Some(PWSTR(buffer.as_mut_ptr())),
+            &mut len,
+        )
+    } {
+        Ok(()) => String::from_utf16_lossy(&buffer[..len as usize]),
+        Err(_) => "This computer".to_owned(),
+    };
+    let name: String = name.chars().filter(|c| !c.is_control()).take(60).collect();
+    format!("{} (Windows)", name.trim())
+}
+
 /// Opens Windows Settings at the microphone privacy page (a fixed URI, never from a page).
 pub fn open_microphone_settings() {
     // SAFETY: a fixed, constant URI opened with the default handler.
@@ -241,6 +267,74 @@ fn read_qword(key: HKEY, subkey: &str, value: PCWSTR) -> Option<u64> {
         )
     };
     (status == ERROR_SUCCESS).then_some(data)
+}
+
+/// Opens an https link in the default browser (a link the web page opened in a new window).
+/// Anything else is refused: no files, no other schemes, nothing with credentials in it.
+pub fn open_in_browser(url: &tauri::Url) -> bool {
+    if !is_openable(url) {
+        return false;
+    }
+    let target = HSTRING::from(url.as_str());
+    // SAFETY: plain strings that outlive the call; "open" on an https URL starts the browser.
+    let result = unsafe {
+        ShellExecuteW(None, w!("open"), &target, PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL)
+    };
+    // ShellExecuteW reports success as a value above 32.
+    result.0 as isize > 32
+}
+
+/// https, a host, and no user name or password.
+pub fn is_openable(url: &tauri::Url) -> bool {
+    url.scheme() == "https"
+        && url.host_str().is_some_and(|host| !host.is_empty())
+        && url.username().is_empty()
+        && url.password().is_none()
+}
+
+/// Windows Settings → Accessibility → Visual effects → "Animation effects".
+pub fn animations_enabled() -> bool {
+    let mut enabled = windows::core::BOOL(1);
+    // SAFETY: SPI_GETCLIENTAREAANIMATION writes a BOOL to the pointer.
+    let result = unsafe {
+        SystemParametersInfoW(
+            SPI_GETCLIENTAREAANIMATION,
+            0,
+            Some((&mut enabled as *mut windows::core::BOOL).cast()),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    result.is_err() || enabled.as_bool()
+}
+
+/// A contrast theme is on: use the system highlight colour instead of our violet.
+pub fn high_contrast() -> bool {
+    let mut info = HIGHCONTRASTW {
+        cbSize: std::mem::size_of::<HIGHCONTRASTW>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: `info` is valid with cbSize set, as SPI_GETHIGHCONTRAST requires.
+    let result = unsafe {
+        SystemParametersInfoW(
+            SPI_GETHIGHCONTRAST,
+            info.cbSize,
+            Some((&mut info as *mut HIGHCONTRASTW).cast()),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    result.is_ok() && info.dwFlags.0 & HCF_HIGHCONTRASTON.0 != 0
+}
+
+/// The system highlight colour as "#rrggbb" when a contrast theme is on (ink then uses it
+/// instead of our violet, brief §4.3); None otherwise.
+pub fn contrast_highlight() -> Option<String> {
+    if !high_contrast() {
+        return None;
+    }
+    // SAFETY: reads a system colour; no pointers.
+    let colour = unsafe { GetSysColor(COLOR_HIGHLIGHT) };
+    let [r, g, b] = [colour & 0xFF, (colour >> 8) & 0xFF, (colour >> 16) & 0xFF];
+    Some(format!("#{r:02x}{g:02x}{b:02x}"))
 }
 
 #[cfg(test)]

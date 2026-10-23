@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { ScreenCoachBridge } from "../screen/ScreenCoachBridge";
 import { isDesktop, remindAboutReviews, SUMMON_EVENT } from "./bridge";
 
 /** First check shortly after opening, then every half hour (the app shows at most one per 30 min). */
@@ -10,8 +11,8 @@ const FIRST_CHECK_MS = 60_000;
 const CHECK_EVERY_MS = 30 * 60_000;
 
 /**
- * Desktop-only behaviour, mounted on every app page: review reminders, and sending the summon
- * hotkey to the notebook (which handles the event itself) from any other page.
+ * Desktop-only behaviour, mounted on every app page: review reminders, sending the summon hotkey
+ * to the notebook (which handles the event itself) from any other page, and Screen Coach's voice.
  */
 export function DesktopBridge() {
   const router = useRouter();
@@ -35,5 +36,5 @@ export function DesktopBridge() {
     return () => window.removeEventListener(SUMMON_EVENT, toNotebook);
   }, [pathname, router]);
 
-  return null;
+  return <ScreenCoachBridge />;
 }

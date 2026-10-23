@@ -1,9 +1,13 @@
 import { ReviewQueue } from "@mew/shared";
 
 /**
- * The desktop app (Tauri, desktop/) shows this web app in its own window. Inside it, the page can
- * ask Windows to show a review reminder (`notify_due`, the one command it may call), and the
- * desktop app's Ctrl+Shift+M hotkey arrives as a `mew:summon` event.
+ * The desktop app (Tauri, desktop/) shows this web app in its own window. Inside it, the page may
+ * call three commands, each checked in Rust:
+ * - `notify_due`: show a review reminder;
+ * - `screen_coach_ask`: ask Screen Coach about the frame the desktop app captured on the hotkey
+ *   (the page sends only the words; it never sees the screenshot);
+ * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code.
+ * The desktop app's Ctrl+Shift+M hotkey arrives as a `mew:summon` event.
  */
 
 type TauriGlobal = { core?: { invoke?: (cmd: string, args?: object) => Promise<unknown> } };
@@ -33,4 +37,16 @@ export async function remindAboutReviews(
     first: items[0]?.conceptTitle ?? null,
   });
   return shown === true;
+}
+
+/** Asks Screen Coach about the captured screen. The answer arrives as `mew:screen-*` events. */
+export async function askAboutScreen(transcript: string): Promise<void> {
+  await invoke("screen_coach_ask", { transcript });
+}
+
+/** Gives the desktop app the one-time code for the sign-in it started (it redeems it). */
+export async function finishDeviceLink(code: string): Promise<void> {
+  const result = invoke("screen_coach_link_finish", { code });
+  if (!result) throw new Error("Not running in the Mew desktop app");
+  await result;
 }

@@ -355,8 +355,8 @@ _Accept:_ threat checklist items 1, 2, 3, 6, 7 pass.
 **S2 — Ask about your screen.** Voice question + screenshot → ScreenTutorResponse → TTS, with the safety check.
 _Accept:_ "what does this button do?" in any app gets a 1–2 sentence spoken answer in ≤ 1.8 s; injection test page passes.
 
-**S3 — Overlay ink.** Per-monitor click-through overlay excluded from capture, coordinate mapping, point_at / circle_region / screen_note, fade-out, Esc to clear, optional UI Automation snapping.
-_Accept:_ arrows land on the right control at 150% scaling and on a second monitor with different scaling.
+**S3 — Annotate on screen + save to notebook** (replaced by [SCREEN_COACH_S3.md](SCREEN_COACH_S3.md), decision 9). Per-monitor click-through overlay excluded from capture, ink placed beside content, fade on scroll/move, "show that again", and clipping the annotated region (or a drag-selected one) into a notebook page with editable tutor strokes.
+_Accept:_ see §6 of SCREEN_COACH_S3.md.
 
 **S4 — Coach mode.** Planner, state machine, verifier, hint ladder, progress pill, stop/resume.
 _Accept:_ complete a 5+ step walkthrough in Excel or Word where a skipped step is detected and hinted.
@@ -364,8 +364,8 @@ _Accept:_ complete a 5+ step walkthrough in Excel or Word where a skipped step i
 **S5 — Learner integration.** Skills, walkthroughs, evidence rules, FSRS re-checks, course-aware explanations via retrieval.
 _Accept:_ finishing a walkthrough creates a skill; a re-check is scheduled; course concepts are referenced when relevant.
 
-**S6 — Clip & quiz.** Region clip to notebook with preview/confirm, quiz-me-on-this with recall cards.
-_Accept:_ a clipped slide appears as a notebook page the tutor can discuss; quiz cards appear in Review.
+**S6 — Quiz.** Quiz-me-on-this with recall cards (the clip half moved to S3).
+_Accept:_ quiz cards from screen content appear in Review.
 
 **S7 — Polish & ship.** Mascot animations, onboarding tutorial, settings, accessibility pass, code signing, signed updates, trust page, full threat checklist.
 _Accept:_ all checklist items pass; a new user goes from install to first successful walkthrough in under 3 minutes.
@@ -445,3 +445,46 @@ don't ask them again. Where a decision changes the brief above, the decision win
      "Signed-in devices" list in account settings has Revoke buttons.
    - `last_used_at` is updated at most once per hour. The link and exchange endpoints are
      rate-limited.
+9. **S3 is "Annotate on screen + Save to notebook"** (decided 2026-10-22; it replaces the S3
+   above and takes the clip half of S6). Its brief is [SCREEN_COACH_S3.md](SCREEN_COACH_S3.md).
+   The owner chose these answers to its planning questions:
+   - **Clip pages are built in the browser.** Notebooks are local-first (IndexedDB), so the
+     server stores the clip (a `clips` row, the image in the private `clips` bucket, and the
+     tutor's strokes as crop-relative vectors). Rust hands the main page only the clip id; the
+     page, with its own Clerk session, fetches the clip and builds the notebook page locally
+     (an image block plus editable tutor strokes). No server `blocks` table until notebooks
+     sync.
+   - **Clips are JPEG, not WebP:** Windows has no built-in WebP encoder (WIC only decodes it via
+     a Store extension), and libwebp would be a new C dependency. JPEG quality 90 with full
+     colour resolution (4:4:4) through the WIC encoder we already use, at most 2400 px on the
+     long side.
+   - **Scroll detection:** while (and only while) ink is visible, a low-level mouse hook notes
+     wheel and button events, and `GetLastInputInfo` catches key presses (input seen that
+     wasn't the mouse). No keyboard hook, nothing recorded: the hook only fades the ink.
+     WinEvents cover moves, resizes, minimising and app switches.
+   - **A small "ink pill"** (Save to notebook · Clear) shows while ink is visible; it's the first
+     piece of the S7 mascot. It never takes focus.
+   - **Intents are rules in Rust**, not Mew labels: "save this" / "clip this" / "put this in my
+     notebook" → clip, "show that again" → reannotate, anything else → ask. A clip by voice
+     uploads nothing extra. They fold into `MewLabel` in S4, when Mew gates coach mode.
+   - **Saved links are trimmed** to scheme, host and path (plus YouTube's `v` and `t`), since
+     query strings often carry session tokens. The preview shows the exact link before saving.
+   - **Re-placing ink ("show that again")** first looks for the focus region's text in the new
+     capture's on-device OCR (free, private, fast); only if it isn't found does it ask the
+     verifier model (`reanchor` prompt).
+   - **Ink is drawn on one monitor:** the one the capture is on. A window spread over two
+     monitors is annotated on its main one.
+   - Settled while building (2026-10-22):
+     - A clip's picture is served to the notebook by our own route (`/api/clips/[id]/image`,
+       the student's session, RLS and the bucket policy) rather than a signed URL: the page's
+       CSP stays as it is and no storage link can leak through history or logs.
+     - Without ink on screen, the drag-select happens in the preview window (showing the
+       capture of the monitor under the cursor), not a full-screen frozen-screen layer.
+     - Saving or cancelling a clip clears the ink from the screen (the preview showed it).
+     - Ink and the screenshot under it last at most 5 minutes even if nothing moves.
+     - A clip of a live turn is refused if a password field or blocked app is in front at the
+       moment of saving, even though the screenshot was taken earlier.
+     - The consent version is 2: the explanation now covers ink, noticing scrolls while it
+       shows, and saving clips.
+     - The notebook tutor sees the newest clips' text on the page (`clippedText`) and keeps its
+       ink off clipped images.

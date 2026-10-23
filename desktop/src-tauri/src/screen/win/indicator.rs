@@ -12,16 +12,15 @@ use windows::core::w;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::Graphics::Gdi::{CreateSolidBrush, GetSysColor, COLOR_HIGHLIGHT, HBRUSH};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, PeekMessageW,
     RegisterClassExW, SetLayeredWindowAttributes, SetWindowDisplayAffinity, ShowWindow,
-    SystemParametersInfoW, TranslateMessage, LWA_ALPHA, MSG, PM_REMOVE, SPI_GETCLIENTAREAANIMATION,
-    SPI_GETHIGHCONTRAST, SW_SHOWNOACTIVATE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
-    WDA_EXCLUDEFROMCAPTURE, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-    WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    TranslateMessage, LWA_ALPHA, MSG, PM_REMOVE, SW_SHOWNOACTIVATE, WDA_EXCLUDEFROMCAPTURE,
+    WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    WS_EX_TRANSPARENT, WS_POPUP,
 };
 
+use super::system;
 use crate::screen::frame::ScreenRect;
 
 /// The tutor's ink colour (#8a7bf0) as a COLORREF (0x00BBGGRR).
@@ -93,7 +92,7 @@ pub fn fade_alphas(steps: u32) -> Vec<u8> {
 }
 
 fn run(monitor: ScreenRect, dpi: u32) -> windows::core::Result<()> {
-    let colour = if high_contrast() {
+    let colour = if system::high_contrast() {
         // SAFETY: reads a system colour; no pointers.
         COLORREF(unsafe { GetSysColor(COLOR_HIGHLIGHT) })
     } else {
@@ -155,7 +154,7 @@ fn run(monitor: ScreenRect, dpi: u32) -> windows::core::Result<()> {
     }
 
     pump_for(HOLD);
-    if animations_enabled() {
+    if system::animations_enabled() {
         for alpha in fade_alphas(FADE_STEPS) {
             for &hwnd in &windows {
                 // SAFETY: windows created above, still alive.
@@ -210,39 +209,6 @@ fn pump_for(duration: Duration) {
         }
         std::thread::sleep(Duration::from_millis(10));
     }
-}
-
-/// Windows Settings → Accessibility → Visual effects → "Animation effects".
-fn animations_enabled() -> bool {
-    let mut enabled = windows::core::BOOL(1);
-    // SAFETY: SPI_GETCLIENTAREAANIMATION writes a BOOL to the pointer.
-    let result = unsafe {
-        SystemParametersInfoW(
-            SPI_GETCLIENTAREAANIMATION,
-            0,
-            Some((&mut enabled as *mut windows::core::BOOL).cast()),
-            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
-        )
-    };
-    result.is_err() || enabled.as_bool()
-}
-
-/// A contrast theme is on: use the system highlight colour instead of our violet.
-fn high_contrast() -> bool {
-    let mut info = HIGHCONTRASTW {
-        cbSize: std::mem::size_of::<HIGHCONTRASTW>() as u32,
-        ..Default::default()
-    };
-    // SAFETY: `info` is valid with cbSize set, as SPI_GETHIGHCONTRAST requires.
-    let result = unsafe {
-        SystemParametersInfoW(
-            SPI_GETHIGHCONTRAST,
-            info.cbSize,
-            Some((&mut info as *mut HIGHCONTRASTW).cast()),
-            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
-        )
-    };
-    result.is_ok() && info.dwFlags.0 & HCF_HIGHCONTRASTON.0 != 0
 }
 
 #[cfg(test)]

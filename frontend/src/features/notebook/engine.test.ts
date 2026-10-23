@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 
-import type { Point, Stroke } from "@mew/shared";
+import type { ClipView, Point, Stroke } from "@mew/shared";
 import { strokeBBox } from "@mew/ink";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -44,6 +44,32 @@ async function reopen(): Promise<PageEngine> {
 }
 
 describe("NotebookRepository", () => {
+  it("turns a saved clip into a new page with its image and the tutor's ink, once", async () => {
+    const notebook = await repo.openLatestNotebook();
+    const clip: ClipView = {
+      id: "55555555-5555-4555-8555-555555555555",
+      width: 600,
+      height: 200,
+      pixelRatio: 1,
+      strokes: [{ tool: "pen", color: "#8a7bf0", width: 3, points: [[10, 10, 0.5, 0]] }],
+      source: { app: "acrobat.exe", capturedAt: "2026-10-22T10:00:00.000Z" },
+      ocrText: "Question 3",
+      notebookPageId: null,
+      createdAt: "2026-10-22T10:00:01.000+00:00",
+    };
+    const page = await repo.importClip(notebook.id, clip);
+    const again = await repo.importClip(notebook.id, clip);
+    expect(again.id).toBe(page.id);
+    expect(await repo.listPages(notebook.id)).toHaveLength(2);
+
+    const engine = await PageEngine.open(repo, page.id, (e: unknown) => {
+      throw e;
+    });
+    expect(engine.images).toHaveLength(1);
+    expect(engine.images[0]).toMatchObject({ clipId: clip.id, ocrText: "Question 3" });
+    expect(engine.doc.all().map((s) => s.author)).toEqual(["tutor"]);
+  });
+
   it("creates a first notebook with one page, and reuses it afterwards", async () => {
     const again = await repo.openLatestNotebook();
     const notebooks = await repo.listNotebooks();

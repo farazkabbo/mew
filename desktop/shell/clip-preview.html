@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- No network at all: the image comes from Rust's in-memory mewclip:// handler. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src http://mewclip.localhost; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Save to notebook · Mew</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <link rel="stylesheet" href="clip-preview.css" />
+    <script src="gen/clip-preview.js" defer></script>
+  </head>
+  <body class="preview">
+    <header>
+      <h1>Save to notebook</h1>
+      <p id="source" class="source"></p>
+      <p id="link" class="link"></p>
+    </header>
+
+    <main>
+      <div class="stage">
+        <div class="frame">
+          <img id="frame" alt="What will be saved" draggable="false" />
+          <svg id="marks" aria-label="Crop area and the tutor's notes" role="img"></svg>
+        </div>
+      </div>
+      <p id="hint" class="hint" hidden>Drag to choose what to save.</p>
+    </main>
+
+    <footer>
+      <label><input id="include-notes" type="checkbox" checked /> Include tutor notes</label>
+      <label><input id="include-link" type="checkbox" /> Include source link</label>
+      <span id="timer" class="timer" aria-live="off"></span>
+      <span id="status" class="status" role="status" aria-live="polite"></span>
+      <button id="cancel" type="button" class="secondary" aria-keyshortcuts="Escape">Cancel</button>
+      <button id="save" type="button" aria-keyshortcuts="Enter">Save</button>
+    </footer>
+  </body>
+</html>

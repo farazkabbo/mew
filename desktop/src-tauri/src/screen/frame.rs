@@ -1,13 +1,16 @@
 //! The one captured frame Screen Coach holds, in memory only, until it's sent or expires.
 //!
 //! Decision 2 (docs/SCREEN_COACH.md): screenshot bytes never enter a WebView. Only Rust code
-//! takes a frame from the slot (the uploader, from S2); no command hands one to a page.
+//! takes a frame from the slot (the uploader, from S2); no command hands one to a page. The one
+//! exception is a clip's local preview (S3), and only after the student asked to save.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
+use super::image::Pixels;
+use super::screen_text::ScreenText;
 use super::secret::SecretBytes;
 
 /// A frame nobody used within this time is wiped.
@@ -55,6 +58,10 @@ pub struct FrameMeta {
     pub width: u32,
     pub height: u32,
     pub timings: Timings,
+    /// A video is playing in the app in front (Windows' media session), when Windows says.
+    pub video_playing: Option<bool>,
+    /// The window the student was working in (a raw HWND), for watching it while ink is shown.
+    pub window: Option<isize>,
 }
 
 /// Milliseconds per stage, logged without content (brief §13).
@@ -69,10 +76,19 @@ pub struct Timings {
     pub encode_ms: u32,
 }
 
+/// What a capture keeps besides the JPEG it sends: the redacted pixels at full size (to clip
+/// from) and the visible text (to place ink beside it). Wiped with the frame.
+pub struct FrameDetail {
+    /// BGRA, after blacking out blocked windows and covering sensitive text.
+    pub pixels: Pixels,
+    pub text: ScreenText,
+}
+
 pub struct CapturedFrame {
     pub id: u64,
     pub jpeg: SecretBytes,
     pub meta: FrameMeta,
+    pub detail: Option<FrameDetail>,
     expires_at: Instant,
 }
 
@@ -89,7 +105,13 @@ struct SlotState {
 
 impl FrameSlot {
     /// Stores a frame, replacing (and so wiping) any earlier one. Returns its id.
-    pub fn put(&self, jpeg: SecretBytes, meta: FrameMeta, now: Instant) -> u64 {
+    pub fn put(
+        &self,
+        jpeg: SecretBytes,
+        meta: FrameMeta,
+        detail: Option<FrameDetail>,
+        now: Instant,
+    ) -> u64 {
         let mut state = self.lock();
         state.next_id += 1;
         let id = state.next_id;
@@ -97,6 +119,7 @@ impl FrameSlot {
             id,
             jpeg,
             meta,
+            detail,
             expires_at: now + FRAME_TTL,
         });
         id
@@ -113,6 +136,12 @@ impl FrameSlot {
             }
             _ => None,
         }
+    }
+
+    /// Hands over whatever frame is held (once), unless it has expired.
+    pub fn take_latest(&self, now: Instant) -> Option<CapturedFrame> {
+        let id = self.lock().frame.as_ref()?.id;
+        self.take(id, now)
     }
 
     /// Wipes the frame if it has expired (the sweeper calls this).
@@ -164,6 +193,8 @@ mod tests {
             width: 1600,
             height: 900,
             timings: Timings::default(),
+            video_playing: None,
+            window: None,
         }
     }
 
@@ -179,7 +210,7 @@ mod tests {
     fn hands_a_frame_over_once() {
         let slot = FrameSlot::default();
         let now = Instant::now();
-        let id = slot.put(jpeg(), meta(), now);
+        let id = slot.put(jpeg(), meta(), None, now);
         let frame = slot.take(id, now).expect("frame");
         assert_eq!(frame.jpeg.as_slice(), &[0xFF, 0xD8, 0xFF, 0xD9]);
         assert!(slot.take(id, now).is_none(), "taken twice");
@@ -190,8 +221,8 @@ mod tests {
     fn a_newer_capture_replaces_the_old_one() {
         let slot = FrameSlot::default();
         let now = Instant::now();
-        let old = slot.put(jpeg(), meta(), now);
-        let new = slot.put(jpeg(), meta(), now);
+        let old = slot.put(jpeg(), meta(), None, now);
+        let new = slot.put(jpeg(), meta(), None, now);
         assert_ne!(old, new);
         assert!(slot.take(old, now).is_none());
         assert!(slot.take(new, now).is_some());
@@ -201,13 +232,13 @@ mod tests {
     fn frames_expire() {
         let slot = FrameSlot::default();
         let now = Instant::now();
-        let id = slot.put(jpeg(), meta(), now);
+        let id = slot.put(jpeg(), meta(), None, now);
         slot.expire(now + FRAME_TTL / 2);
         assert!(slot.holds_frame());
         slot.expire(now + FRAME_TTL);
         assert!(!slot.holds_frame());
 
-        let id2 = slot.put(jpeg(), meta(), now);
+        let id2 = slot.put(jpeg(), meta(), None, now);
         assert!(
             slot.take(id2, now + FRAME_TTL).is_none(),
             "expired frames aren't handed over"
@@ -220,7 +251,7 @@ mod tests {
     fn clear_wipes_everything() {
         let slot = FrameSlot::default();
         let now = Instant::now();
-        let id = slot.put(jpeg(), meta(), now);
+        let id = slot.put(jpeg(), meta(), None, now);
         slot.clear();
         assert!(slot.take(id, now).is_none());
     }

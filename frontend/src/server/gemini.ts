@@ -7,8 +7,10 @@ import { geminiEnv } from "./env";
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
-/** Multimodal input: text plus (optionally) base64 PNG images. */
-export type InputPart = { type: "text"; text: string } | { type: "image"; png: string };
+/** Multimodal input: text plus (optionally) base64 images. */
+export type InputPart =
+  | { type: "text"; text: string }
+  | { type: "image"; base64: string; mimeType: "image/png" | "image/jpeg" };
 
 type GenerationRequest = {
   model: string;
@@ -106,7 +108,7 @@ function params(request: StructuredRequest<unknown>) {
         : request.input.map((part) =>
             part.type === "text"
               ? part
-              : { type: "image" as const, data: part.png, mime_type: "image/png" },
+              : { type: "image" as const, data: part.base64, mime_type: part.mimeType },
           ),
     store: false,
     response_format: {

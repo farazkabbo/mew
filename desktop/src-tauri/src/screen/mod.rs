@@ -7,33 +7,66 @@
 //! - S1, privacy: blocked apps, password fields, private windows, calls, microphone access,
 //!   blacking out blocked windows in monitor captures, and on-device redaction (`privacy/`,
 //!   run in order by `pipeline.rs`).
+//! - S2, asking: device sign-in (`account.rs`, decision 8), the question and its streamed answer
+//!   (`ask.rs`, `protocol.rs`), passed to the web page to speak (`page.rs`).
+//! - S3, ink and clips (docs/SCREEN_COACH_S3.md, decision 9): the answer's ink drawn beside the
+//!   content (`annotate.rs`, `ink.rs`, `overlay.rs`), faded when it moves (`watch.rs`), re-placed
+//!   on request (`reanchor.rs`), and saved to the notebook (`clip.rs`, `source.rs`). What was
+//!   said over the hotkey is a question or a command (`intent.rs`).
 //!
 //! Where to start reading: `coach.rs` (what happens when a hotkey is pressed), then
-//! `pipeline.rs` (one capture, step by step).
+//! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
+//! `annotate.rs` and `clip.rs`.
 
+pub mod base64;
 pub mod config;
 pub mod frame;
 pub mod image;
+pub mod ink;
+pub mod intent;
 pub mod privacy;
+pub mod protocol;
+pub mod screen_text;
 pub mod secret;
+pub mod source;
 pub mod tray_badge;
+pub mod watch;
 
+#[cfg(windows)]
+pub mod account;
+#[cfg(windows)]
+pub mod annotate;
+#[cfg(windows)]
+pub mod ask;
+#[cfg(windows)]
+pub mod clip;
 #[cfg(windows)]
 pub mod coach;
 #[cfg(windows)]
+pub mod overlay;
+#[cfg(windows)]
+pub mod page;
+#[cfg(windows)]
 pub mod pipeline;
+#[cfg(windows)]
+pub mod reanchor;
 #[cfg(windows)]
 pub mod win;
 
 use tauri::Url;
 
-/// True for the app's own bundled pages (served by Tauri on Windows from `http://tauri.localhost`).
-pub fn is_local_page(url: &Url) -> bool {
-    match (url.scheme(), url.host_str()) {
+/// True for the app's own bundled pages. Tauri serves them from `http://tauri.localhost`; under
+/// `tauri dev` the CLI serves them from its built-in dev server instead (`dev_url`), which is
+/// accepted only in debug builds and only at exactly that origin.
+pub fn is_local_page(url: &Url, dev_url: Option<&Url>) -> bool {
+    let bundled = match (url.scheme(), url.host_str()) {
         ("http" | "https", Some("tauri.localhost")) => url.port().is_none(),
         ("tauri", Some("localhost")) => true,
         _ => false,
-    }
+    };
+    let dev_server =
+        cfg!(debug_assertions) && dev_url.is_some_and(|dev| dev.origin() == url.origin());
+    bundled || dev_server
 }
 
 #[cfg(test)]
@@ -42,7 +75,7 @@ mod tests {
 
     #[test]
     fn only_bundled_pages_are_local() {
-        let local = |s: &str| is_local_page(&Url::parse(s).unwrap());
+        let local = |s: &str| is_local_page(&Url::parse(s).unwrap(), None);
         assert!(local("http://tauri.localhost/screen-coach.html"));
         assert!(local("https://tauri.localhost/screen-coach.html"));
         assert!(local("tauri://localhost/screen-coach.html"));
@@ -51,5 +84,20 @@ mod tests {
         assert!(!local("http://tauri.localhost.evil.example/"));
         assert!(!local("http://tauri.localhost:8080/"));
         assert!(!local("file:///C:/screen-coach.html"));
+    }
+
+    #[test]
+    fn the_dev_server_counts_only_in_debug_builds_and_only_at_its_origin() {
+        let dev = Url::parse("http://localhost:1430").unwrap();
+        let local = |s: &str| is_local_page(&Url::parse(s).unwrap(), Some(&dev));
+        assert_eq!(
+            local("http://localhost:1430/screen-coach.html"),
+            cfg!(debug_assertions)
+        );
+        assert!(
+            !local("http://localhost:3000/notebook"),
+            "the web app is never local"
+        );
+        assert!(!local("http://localhost:1431/screen-coach.html"));
     }
 }

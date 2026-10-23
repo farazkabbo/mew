@@ -4,13 +4,15 @@
   "version": "0.1.0",
   "identifier": "app.mew.desktop",
   "build": {
-    "frontendDist": "../shell"
+    "frontendDist": "../shell",
+    "beforeDevCommand": "pnpm run build:shell",
+    "beforeBuildCommand": "pnpm run build:shell"
   },
   "app": {
     "withGlobalTauri": true,
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' http://mewclip.localhost"
     }
   },
   "bundle": {
@@ -25,7 +27,9 @@
     ],
     "shortDescription": "A quiet tutor that lives in your notebook.",
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" }
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   }
 }

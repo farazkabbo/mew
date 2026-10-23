@@ -135,6 +135,21 @@ describe("planBoard", () => {
     expect(box[1] + box[3]).toBeGreaterThan(line[1]);
   });
 
+  it("keeps its ink off images on the page (clips from the screen)", async () => {
+    const strokes = studentPage();
+    // An image filling the space right of the active line.
+    const image: [number, number, number, number] = [300, 120, 700, 200];
+    const plan = await planBoard(
+      [write("F_1 = -F_2", { near: "active_line" })],
+      input(strokes, { obstacles: [image] }),
+      TEXT_RENDERERS,
+    );
+    expect(plan.skipped).toEqual([]);
+    for (const t of plan.actions[0]?.strokes ?? []) {
+      expect(bboxesIntersect(t.bbox, image)).toBe(false);
+    }
+  });
+
   it("produces valid tutor strokes that share the turn's group", async () => {
     const base = input(studentPage());
     const plan = await planBoard(
