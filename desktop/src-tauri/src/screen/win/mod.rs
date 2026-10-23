@@ -2,14 +2,19 @@
 //! these modules, with its safety reasoning next to it.
 
 pub mod capture;
+pub mod credential;
+pub mod crypto;
 pub mod encode;
+pub mod http;
 pub mod indicator;
+pub mod media_session;
 pub mod ocr;
 pub mod system;
 pub mod target;
 #[cfg(test)]
 pub mod test_window;
 pub mod uia;
+pub mod winevent;
 
 use windows::core::HSTRING;
 use windows::Foundation::Metadata::ApiInformation;

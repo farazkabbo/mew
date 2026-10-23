@@ -17,10 +17,12 @@ use super::privacy::detect::RedactionRules;
 /// Bumped whenever the explanation the user agrees to (what is seen, when, what's kept) changes
 /// in substance: an older consent then no longer counts and Screen Coach stays off until the
 /// user reads the new one.
-pub const CONSENT_VERSION: u32 = 1;
+/// 2: S3 added ink on screen (and noticing scrolls while it shows) and saving clips.
+pub const CONSENT_VERSION: u32 = 2;
 
 pub const DEFAULT_TALK_HOTKEY: &str = "Ctrl+Alt+Space";
 pub const DEFAULT_PAUSE_HOTKEY: &str = "Ctrl+Alt+P";
+pub const DEFAULT_CLIP_HOTKEY: &str = "Ctrl+Alt+C";
 
 const FILE_NAME: &str = "screen-coach.json";
 
@@ -31,6 +33,13 @@ pub struct Hotkeys {
     pub talk: String,
     /// Pause or resume Screen Coach.
     pub pause: String,
+    /// Save to the notebook (S3; files written before it existed get the default).
+    #[serde(default = "default_clip_hotkey")]
+    pub clip: String,
+}
+
+fn default_clip_hotkey() -> String {
+    DEFAULT_CLIP_HOTKEY.to_owned()
 }
 
 impl Default for Hotkeys {
@@ -38,7 +47,14 @@ impl Default for Hotkeys {
         Self {
             talk: DEFAULT_TALK_HOTKEY.to_owned(),
             pause: DEFAULT_PAUSE_HOTKEY.to_owned(),
+            clip: default_clip_hotkey(),
         }
+    }
+}
+
+impl Hotkeys {
+    pub fn all(&self) -> [&str; 3] {
+        [&self.talk, &self.pause, &self.clip]
     }
 }
 
@@ -133,8 +149,18 @@ pub fn parse(text: &str) -> Loaded {
     let Ok(config) = serde_json::from_str::<ScreenConfig>(text) else {
         return Loaded::Reset(ScreenConfig::default());
     };
-    let hotkeys_ok = validate_hotkey(&config.hotkeys.talk).is_ok()
-        && validate_hotkey(&config.hotkeys.pause).is_ok();
+    let shortcuts: Vec<_> = config
+        .hotkeys
+        .all()
+        .iter()
+        .filter_map(|text| validate_hotkey(text).ok())
+        .collect();
+    // All valid, and no two the same.
+    let hotkeys_ok = shortcuts.len() == 3
+        && shortcuts
+            .iter()
+            .enumerate()
+            .all(|(i, a)| shortcuts[i + 1..].iter().all(|b| a != b));
     // A blocked list that only loads after "cleaning" was edited by hand: start over from the
     // defaults rather than guess what was meant.
     let privacy_ok = config
@@ -238,12 +264,21 @@ mod tests {
 
     #[test]
     fn a_damaged_or_unexpected_file_turns_everything_off() {
-        // A file written by S0 (before privacy settings existed) loads with the defaults.
-        let on = r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
-        assert!(
-            matches!(parse(on), Loaded::Read(c) if c.is_on() && c.privacy == Privacy::default())
-        );
+        // A file written by S0 (before privacy settings and the clip hotkey existed) loads with
+        // the defaults.
+        let on = r#"{"enabled":true,"consentVersion":2,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
+        assert!(matches!(
+            parse(on),
+            Loaded::Read(c) if c.is_on()
+                && c.privacy == Privacy::default()
+                && c.hotkeys.clip == DEFAULT_CLIP_HOTKEY
+        ));
+        // Consent given before S3 explained clips no longer turns Screen Coach on.
+        let before_clips = on.replace(r#""consentVersion":2"#, r#""consentVersion":1"#);
+        assert!(matches!(parse(&before_clips), Loaded::Read(c) if !c.is_on()));
         for bad in [
+            // Two actions on one shortcut.
+            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P","clip":"Ctrl+Alt+P"}}"#,
             // A hand-edited blocked list with a path in it.
             r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"},"privacy":{"blockedApps":["C:\\x.exe"]}}"#,
             // A privacy setting we don't know.

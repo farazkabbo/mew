@@ -11,6 +11,7 @@ import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
 import { useQuiz } from "../quiz/store";
 import { type CanvasHandle, NotebookCanvas } from "./canvas/NotebookCanvas";
+import { ClipSource } from "./ClipSource";
 import { NotebookDb } from "./db";
 import { PageEngine } from "./engine";
 import { cropCurrentLine, downloadBlob } from "./export-line";
@@ -20,6 +21,7 @@ import { Sidebar } from "./Sidebar";
 import { useNotebookUi } from "./store";
 import { Toolbar } from "./Toolbar";
 import { useAppServices } from "./useAppServices";
+import { useClipImport } from "./useClipImport";
 import { useShortcuts } from "./useShortcuts";
 
 type Notice = { text: string; tone: "info" | "error" };
@@ -131,6 +133,16 @@ export function NotebookApp({ userId }: { userId: string }) {
     [engine],
   );
   useShortcuts(actions);
+
+  // A clip saved from the screen (Screen Coach) becomes a new page of this notebook.
+  const openClipPage = useCallback((page: Page) => {
+    setPages((list) => (list.some((p) => p.id === page.id) ? list : [...list, page]));
+    setPageId(page.id);
+    setNotice({ text: "Saved from your screen. Work on it right here.", tone: "info" });
+  }, []);
+  const clipFailed = useCallback((text: string) => setNotice({ text, tone: "error" }), []);
+  useClipImport({ repo, notebookId, onOpened: openClipPage, onError: clipFailed });
+  const clipImage = engine?.images.at(-1);
   const courseId = notebooks.find((n) => n.id === notebookId)?.courseId ?? null;
   const mew = useMewSession(engine, courseId);
   const { quiz } = mew;
@@ -209,6 +221,12 @@ export function NotebookApp({ userId }: { userId: string }) {
             onExportLine={() => void exportLine().catch(report)}
           />
         </div>
+
+        {clipImage && !quizActive && (
+          <div className="pointer-events-none absolute inset-x-0 top-[4.5rem] flex justify-center px-4">
+            <ClipSource image={clipImage} />
+          </div>
+        )}
 
         <div className="pointer-events-none absolute top-20 left-4">
           <QuizCard session={quiz} />

@@ -47,6 +47,23 @@ export const RATE_RULES = {
   /** Work checks (SymPy on the API service: CPU, not money, but still bounded). */
   check: { limit: 30, windowMs: MINUTE },
   checkDaily: { limit: 2000, windowMs: DAY },
+  /**
+   * Screen Coach questions (a model call with a screenshot). The monthly budget is the brief's
+   * quota (§7.6); like every rule here it lives in memory, so a restart resets it.
+   */
+  screen: { limit: 10, windowMs: MINUTE },
+  screenDaily: { limit: 200, windowMs: DAY },
+  screenMonthly: { limit: 2000, windowMs: 30 * DAY },
+  /** Saving clips from the screen (an upload to storage each), and reading them back. */
+  clip: { limit: 10, windowMs: MINUTE },
+  clipDaily: { limit: 200, windowMs: DAY },
+  clipRead: { limit: 240, windowMs: MINUTE },
+  /** Desktop sign-in: link codes per user, and code exchanges per client address. */
+  deviceLink: { limit: 5, windowMs: MINUTE },
+  deviceLinkDaily: { limit: 30, windowMs: DAY },
+  deviceExchange: { limit: 10, windowMs: MINUTE },
+  /** Listing and revoking devices. */
+  devices: { limit: 60, windowMs: MINUTE },
   /** Text-to-speech, measured in characters (that's how it is billed). */
   ttsCharsPerMinute: { limit: 3000, windowMs: MINUTE },
   ttsCharsDaily: { limit: 40_000, windowMs: DAY },

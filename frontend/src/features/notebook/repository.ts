@@ -1,7 +1,8 @@
-import { Notebook, Page, Stroke } from "@mew/shared";
+import { type ClipView, ImageBlock, Notebook, Page, Stroke } from "@mew/shared";
 import Dexie from "dexie";
 import type { z } from "zod";
 
+import { clipToPage } from "./clip-page";
 import type { NotebookDb } from "./db";
 
 /** Data access for notebooks, pages and strokes. Everything read back is schema-validated. */
@@ -90,6 +91,38 @@ export class NotebookRepository {
 
   async deleteStrokes(ids: readonly string[]): Promise<void> {
     if (ids.length > 0) await this.db.strokes.bulkDelete([...ids]);
+  }
+
+  async loadImages(pageId: string): Promise<ImageBlock[]> {
+    const rows = await this.db.images.where("pageId").equals(pageId).toArray();
+    return validRows(ImageBlock, rows, "image").sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  /**
+   * A new page for a clip saved from the screen, at the end of the notebook: the image and the
+   * tutor's annotations as ink. In one transaction, and only once per clip (a second tab or a
+   * repeated event gets the page already made).
+   */
+  async importClip(notebookId: string, clip: ClipView): Promise<Page> {
+    return this.db.transaction(
+      "rw",
+      [this.db.pages, this.db.images, this.db.strokes, this.db.notebooks],
+      async () => {
+        const existing = await this.db.images.where("clipId").equals(clip.id).first();
+        const existingPage = existing && (await this.db.pages.get(existing.pageId));
+        if (existingPage) return Page.parse(existingPage);
+
+        const page = await this.addPage(notebookId);
+        const { image, strokes } = clipToPage(clip, page.id, {
+          now: Date.now(),
+          newId: () => crypto.randomUUID(),
+        });
+        await this.db.images.add(ImageBlock.parse(image));
+        await this.db.strokes.bulkAdd(strokes.map((s) => Stroke.parse(s)));
+        await this.touchNotebook(notebookId);
+        return page;
+      },
+    );
   }
 }
 

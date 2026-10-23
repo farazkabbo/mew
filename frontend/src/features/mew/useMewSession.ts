@@ -72,6 +72,7 @@ function createPipeline() {
     quiz: () => quiz?.context() ?? null,
     voiceId: () => useSettings.getState().settings.voice_id,
     doc: () => engine?.doc ?? null,
+    images: () => engine?.images ?? [],
     onFinished: () => mew?.tutorFinished(),
   });
   quiz = new QuizSession({

@@ -11,12 +11,15 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from . import __version__
 from .auth import ClerkTokenVerifier, JwksCache, TokenVerifier
 from .checker.sandbox import CheckerPool, limit_memory
+from .clips.store import MemoryClipStore
 from .config import Settings
 from .courses.store import MemoryCourseStore
 from .deps import require_internal_caller
+from .devices.store import MemoryDeviceStore
+from .devices.tokens import LinkCodes
 from .mew_events.store import MemoryMewEventStore
 from .profiles.store import MemoryProfileStore
-from .routes import check, courses, health, learner, me, mew_events
+from .routes import check, clips, courses, devices, health, learner, me, mew_events
 from .routes import settings as user_settings
 
 logger = logging.getLogger(__name__)
@@ -63,6 +66,10 @@ def create_app(
     app.state.local_courses = MemoryCourseStore()
     app.state.local_profiles = MemoryProfileStore()
     app.state.local_mew_events = MemoryMewEventStore()
+    # Desktop sign-in (Screen Coach): one-time link codes, and local-mode devices.
+    app.state.link_codes = LinkCodes()
+    app.state.local_devices = MemoryDeviceStore()
+    app.state.local_clips = MemoryClipStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -74,6 +81,8 @@ def create_app(
     v1.include_router(learner.router)
     v1.include_router(user_settings.router)
     v1.include_router(mew_events.router)
+    v1.include_router(devices.router)
+    v1.include_router(clips.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

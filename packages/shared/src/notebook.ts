@@ -33,6 +33,38 @@ export const Stroke = z.object({
 });
 export type Stroke = z.infer<typeof Stroke>;
 
+/** Where a clipped image came from (Screen Coach S3), shown in a line under it. */
+export const ImageSource = z.object({
+  app: z.string().min(1).max(64),
+  title: z.string().max(200).optional(),
+  /** https only; checked again before it's rendered as a link. */
+  url: z.string().max(2000).optional(),
+  timestampSec: z.number().int().nonnegative().optional(),
+  capturedAt: z.string().max(40),
+});
+export type ImageSource = z.infer<typeof ImageSource>;
+
+/**
+ * An image on a page (a clip saved from the screen), drawn under the ink. Its pixels are fetched
+ * from the clip's own route; only the clip id is kept here.
+ */
+export const ImageBlock = z.object({
+  id: z.uuid(),
+  pageId: z.uuid(),
+  type: z.literal("image"),
+  clipId: z.uuid(),
+  /** Top-left and size, in page units. */
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive().max(10_000),
+  height: z.number().positive().max(10_000),
+  source: ImageSource.optional(),
+  /** Text read from the image on the device: context for the notebook tutor. */
+  ocrText: z.string().max(8_000).optional(),
+  createdAt: z.number().int().nonnegative(),
+});
+export type ImageBlock = z.infer<typeof ImageBlock>;
+
 export const PageBackground = z.enum(["dot_grid", "blank", "lined", "grid"]);
 export type PageBackground = z.infer<typeof PageBackground>;
 

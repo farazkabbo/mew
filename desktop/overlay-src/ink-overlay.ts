@@ -1,0 +1,131 @@
+import { planScreenInk, type ScreenStroke, strokePath } from "@mew/ink";
+import { HexColor, ScreenAction } from "@mew/shared";
+import { z } from "zod";
+
+import { schedule, visiblePoints } from "./animation";
+import { invoke, on } from "./tauri";
+
+/**
+ * Screen Coach's ink overlay (S3): a transparent, click-through window over one monitor. Rust
+ * sends what to draw (the tutor's actions, where the capture is, and the on-screen text as
+ * rectangles only, never the words); this page plans the ink with the notebook's handwriting,
+ * reports the strokes back (a saved clip keeps them as vectors), and draws them.
+ *
+ * Everything is in physical pixels of the monitor: the canvas has one pixel per screen pixel.
+ */
+
+const Rect = z.tuple([z.number(), z.number(), z.number().min(0), z.number().min(0)]);
+
+const InkRequest = z.object({
+  id: z.number().int().nonnegative(),
+  seed: z.string().max(100),
+  actions: z.array(ScreenAction).max(8),
+  frame: Rect,
+  bounds: Rect,
+  obstacles: z.array(Rect).max(20_000),
+  textHeight: z.number().positive().optional(),
+  scale: z.number().min(1).max(8),
+  colors: z.object({ ink: HexColor, highlight: HexColor }),
+  animate: z.boolean(),
+});
+type InkRequest = z.infer<typeof InkRequest>;
+
+/** A sticky note's paper: warm, nearly opaque, readable over any content. */
+const CARD_FILL = "rgba(255, 252, 242, 0.95)";
+const CARD_EDGE = "rgba(138, 123, 240, 0.45)";
+const FADE_MS = 150;
+
+const canvas = document.querySelector("canvas");
+const ctx = canvas?.getContext("2d") ?? null;
+let frame = 0;
+
+function resize(): void {
+  if (!canvas) return;
+  canvas.width = Math.round(window.innerWidth * window.devicePixelRatio);
+  canvas.height = Math.round(window.innerHeight * window.devicePixelRatio);
+}
+
+function clear(): void {
+  cancelAnimationFrame(frame);
+  if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function draw(detail: unknown): void {
+  const parsed = InkRequest.safeParse(detail);
+  if (!parsed.success || !canvas || !ctx) return;
+  const request = parsed.data;
+  clear();
+  resize();
+  canvas.classList.remove("faded");
+
+  const plan = planScreenInk(request.actions, {
+    frame: request.frame,
+    bounds: request.bounds,
+    obstacles: request.obstacles,
+    textHeight: request.textHeight,
+    scale: request.scale,
+    seed: request.seed,
+    colors: request.colors,
+  });
+  const strokes = plan.actions.flatMap((a) => a.strokes);
+  const cards = plan.actions.flatMap((a) => (a.card ? [a.card] : []));
+  report(request, strokes, cards, plan.bbox);
+
+  const timing = schedule(strokes);
+  const started = performance.now();
+  const paint = (now: number) => {
+    const elapsed = request.animate ? now - started : Number.POSITIVE_INFINITY;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const card of cards) paintCard(ctx, card, request.scale);
+    strokes.forEach((stroke, i) => {
+      const shown = visiblePoints(stroke.points, timing.starts[i] ?? 0, timing.speed, elapsed);
+      if (shown === 0) return;
+      const complete = shown >= stroke.points.length;
+      const points = complete ? stroke.points : stroke.points.slice(0, shown);
+      ctx.fillStyle = stroke.color;
+      ctx.fill(new Path2D(strokePath({ ...stroke, points }, complete)));
+    });
+    if (request.animate && now - started < timing.totalMs) frame = requestAnimationFrame(paint);
+  };
+  frame = requestAnimationFrame(paint);
+}
+
+function paintCard(context: CanvasRenderingContext2D, [x, y, w, h]: number[], scale: number) {
+  if (w === undefined || h === undefined || x === undefined || y === undefined) return;
+  context.beginPath();
+  context.roundRect(x, y, w, h, 8 * scale);
+  context.fillStyle = CARD_FILL;
+  context.fill();
+  context.lineWidth = scale;
+  context.strokeStyle = CARD_EDGE;
+  context.stroke();
+}
+
+/** Tells Rust what was drawn (in the same pixels), so a clip can keep it as editable ink. */
+function report(
+  request: InkRequest,
+  strokes: readonly ScreenStroke[],
+  cards: readonly number[][],
+  bbox: readonly number[] | null,
+): void {
+  void invoke("screen_ink_drawn", {
+    ink: {
+      id: request.id,
+      strokes: strokes.map(({ tool, color, width, points }) => ({ tool, color, width, points })),
+      cards,
+      bbox,
+    },
+  }).catch(() => undefined);
+}
+
+function fade(): void {
+  if (!canvas) return;
+  canvas.classList.add("faded");
+  window.setTimeout(clear, FADE_MS);
+}
+
+on("mew:ink-draw", draw);
+on("mew:ink-fade", fade);
+on("mew:ink-clear", clear);
+window.addEventListener("resize", resize);
+resize();

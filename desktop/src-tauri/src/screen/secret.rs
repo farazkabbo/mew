@@ -16,6 +16,11 @@ impl SecretBytes {
         Self(vec![0; len])
     }
 
+    /// Takes ownership of bytes that are already secret (they're wiped when this is dropped).
+    pub fn from_vec(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }

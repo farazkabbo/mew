@@ -28,6 +28,11 @@ tauri-plugin-global-shortcut = "=2.4.0"
 
 # Screen Coach's native code (capture, encoding, the capture indicator). The same version Tauri
 # already depends on, so no new crate enters the tree.
+# WinRT async operations (Windows' media session); already in the tree through `windows`.
+[target.'cfg(windows)'.dependencies.windows-future]
+version = "=0.3.2"
+default-features = false
+
 [target.'cfg(windows)'.dependencies.windows]
 version = "=0.62.2"
 features = [
@@ -40,6 +45,7 @@ features = [
   "Graphics_DirectX_Direct3D11",
   "Graphics_Imaging",
   "Media",
+  "Media_Control",
   "Media_Ocr",
   "Win32_Foundation",
   "Win32_Graphics_Direct3D",
@@ -49,6 +55,9 @@ features = [
   "Win32_Graphics_Dxgi_Common",
   "Win32_Graphics_Gdi",
   "Win32_Graphics_Imaging",
+  "Win32_Networking_WinHttp",
+  "Win32_Security_Credentials",
+  "Win32_Security_Cryptography",
   "Win32_System_Com",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Diagnostics_ToolHelp",
@@ -56,6 +65,7 @@ features = [
   "Win32_System_LibraryLoader",
   "Win32_System_Ole",
   "Win32_System_Registry",
+  "Win32_System_SystemInformation",
   "Win32_System_Threading",
   "Win32_System_Variant",
   "Win32_System_WinRT",
@@ -63,6 +73,7 @@ features = [
   "Win32_System_WinRT_Graphics_Capture",
   "Win32_UI_Accessibility",
   "Win32_UI_HiDpi",
+  "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ]

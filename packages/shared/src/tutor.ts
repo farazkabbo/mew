@@ -15,6 +15,9 @@ export const TUTOR_LIMITS = {
   recognizedLines: 8,
   graphNodes: 16,
   ttsChars: 600,
+  /** Clips on the page whose text the tutor sees, and how much of each. */
+  clippedTexts: 2,
+  clippedTextChars: 4000,
 } as const;
 
 // ─── Board actions (rendered as ink from M4) ────────────────────────────────────────────────
@@ -101,6 +104,13 @@ export const RecognizedLine = z.object({
 });
 export type RecognizedLine = z.infer<typeof RecognizedLine>;
 
+/** Text read (on the device) from a clip on the page, and where the clip came from. */
+export const ClippedText = z.object({
+  source: z.string().max(200),
+  text: z.string().max(TUTOR_LIMITS.clippedTextChars),
+});
+export type ClippedText = z.infer<typeof ClippedText>;
+
 export const TutorRequest = z.object({
   /** Why the tutor is responding (the gate's label; never "ignore"). */
   intent: MewLabel.exclude(["ignore"]),
@@ -119,6 +129,8 @@ export const TutorRequest = z.object({
   courseContext: z.array(CourseExcerpt).max(COURSE_LIMITS.excerptsPerTurn).default([]),
   /** The quiz question the student is answering, if a quiz is running (M8). */
   quiz: QuizContext.nullable().default(null),
+  /** Text of images on the page saved from the screen (Screen Coach S3), newest first. */
+  clippedText: z.array(ClippedText).max(TUTOR_LIMITS.clippedTexts).default([]),
 });
 export type TutorRequest = z.infer<typeof TutorRequest>;
 

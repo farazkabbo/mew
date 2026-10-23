@@ -31,13 +31,13 @@ Last updated 2026-10-21, after M9 and M10 (every milestone of the brief is built
 | M4 Ink output        | ✅ Done (Hershey glyphs, LaTeX subset, placement, animation, undo, hide toggle)        |
 | M5 Checking work     | ✅ Done (SymPy service, chemistry balance, Pyodide code runner, quiet ticks)           |
 | M6 Visuals           | ✅ Done (plots, mind maps, flowcharts, sketches: ELK + roughjs → ink)                  |
-| M7 Courses           | ✅ Done locally; **Supabase migrations not applied to the hosted project yet** (§6)    |
+| M7 Courses           | ✅ Done; migrations applied to the hosted project on 2026-10-22 (§6)                   |
 | M8 Learner model     | ✅ Done (attempts + evidence, statuses, FSRS reviews, exam plan, Quiz me, Review page) |
 | M9 Desktop + polish  | ✅ Done for **Windows** (Tauri: hotkey, tray, reminders), PWA, settings, intro, errors |
 | M10 Mew v2           | ✅ Pipeline done (opt-in logging → Teach Mew → dataset → training → in-browser model)  |
 
 **Screen Coach** (new feature, [SCREEN_COACH.md](SCREEN_COACH.md); its Decisions section is
-binding): **S0 and S1 built** (2026-10-22), all in `desktop/src-tauri/src/screen/`.
+binding): **S0, S1, S2 and S3 built** (2026-10-22). Desktop code is in `desktop/src-tauri/src/screen/`.
 
 - **S0 (plumbing):** local settings + opt-in, hotkeys, an in-memory capture with
   Windows.Graphics.Capture, the edge glow and tray states, plus
@@ -45,15 +45,49 @@ binding): **S0 and S1 built** (2026-10-22), all in `desktop/src-tauri/src/screen
 - **S1 (privacy layer):** blocked apps, password fields (UI Automation), private windows, calls
   and microphone, blackout in monitor captures, and on-device OCR redaction (fail closed). See
   desktop/README.md for details and limits.
-- **Tests:** 61 unit tests plus 2 real-Windows tests (`cargo test -- --ignored`); threat check 3
-  passes there.
-- **Still to verify:** the hotkey flow, password fields, InPrivate and calls by hand.
-- **Database:** the Supabase project (`gvwynloprjomqqovpoem`, confirmed by the owner) still has
-  no tables. Applying the migrations through the Supabase connector was blocked by Claude
-  Code's auto-mode check, waiting on the owner.
-- **Next:** S2 (ask about your screen; device tokens per decision 8).
+- **S2 (ask about your screen):**
+  - Device sign-in per decision 8: `device_tokens` migration, FastAPI `routes/devices.py`, Next
+    `/api/devices/*`, the `/desktop/link` page, and Settings → Signed-in devices.
+  - `/api/screen/ask`: Gemini, the rule-based safety check, speech streamed first.
+  - Hold-to-talk with manual commit (`features/screen/`).
+  - Rust side: PKCE pair, Credential Manager, a WinHTTP upload from a wipeable buffer
+    (`account.rs`, `ask.rs`).
+- **Tests:**
+  - 72 Rust unit tests, plus 3 real-Windows tests (`cargo test -- --ignored`). One is an
+    end-to-end S2 test against running dev servers and real Gemini: link → capture → ask →
+    sign out → 401.
+  - Threat checks 3 (redaction) and 4 (prompt injection) pass.
+- **Still to verify by hand:** the hotkey flow, password fields, InPrivate, calls, and voice
+  (microphone and TTS) while the main window is hidden in the tray.
+- **Not done yet:** revoking device tokens on password change. This needs a Clerk webhook;
+  account deletion and in-app sign-out already revoke them.
+- **Database:** all migrations are applied to the Supabase project (`gvwynloprjomqqovpoem`,
+  confirmed by the owner), including `foreign_key_indexes` and `device_tokens`
+  (2026-10-22); see §6.
+- **S3 (annotate on screen + save to notebook)** — brief `SCREEN_COACH_S3.md`, decision 9:
+  - Ink: the tutor's v2 actions (`focus_region`, `circle_region`, `underline`, `highlight`,
+    `point_at`, `margin_note`, `write_step`) planned by `packages/ink/src/tutor/screen/plan.ts`
+    beside the on-screen text (OCR rectangles), drawn by a click-through overlay excluded from
+    capture, faded when the content moves, re-placed by "show that again".
+  - Clips: Ctrl+Alt+C, "save this" or the ink pill → the local preview → `/api/screen/clips` →
+    FastAPI `routes/clips.py` (re-checks the device token) → the private `clips` bucket and the
+    `clips` table. The notebook builds the page locally (`useClipImport`, Dexie v2 `images`
+    store), draws the picture under the ink, keeps the tutor's ink off it, shows the source line
+    with its link, and passes the clip's text to the tutor (`clippedText`, tutor prompt v6).
+  - Screen tutor prompt v2, reanchor prompt v1; consent version 2 (the settings page explains ink
+    and saving, so earlier consent no longer turns Screen Coach on).
+  - `clips` migration applied to the hosted project (2026-10-22); the security advisor reports
+    nothing.
+- **Still to verify by hand (S3):** ink at 150 % and on a second monitor with other scaling,
+  fading on scroll in Edge's PDF viewer and on YouTube, the pill never taking focus, Alt+Tab not
+  showing the overlay, the overlay absent from a Teams/OBS capture, a full save in the running app
+  (preview → Save → notebook page), and `check-no-screenshots.ps1` after a clip is cancelled.
+- **Next:** S4 (coach mode).
 
-Tests: **531 unit tests** (frontend 203, backend 114, ink 108, shared 68, database 38), **5 Rust
+Tests (after S3): **712 unit tests** (frontend 254, backend 161, ink 123, shared 113, database 54,
+desktop overlays 7), **106 Rust tests** (+4 real-Windows ones) and **44 Playwright tests**.
+
+Before Screen Coach: **531 unit tests** (frontend 203, backend 114, ink 108, shared 68, database 38), **5 Rust
 tests** (desktop) and **38 Playwright tests**. `pnpm check`, the Playwright suite, the
 production build, `cargo test` / `cargo clippy -D warnings` and the Windows installer build
 all pass.
@@ -318,19 +352,29 @@ Added in M10:
 ## 6. Environment
 
 One file: **`.env.local` at the repo root** (gitignored), read by both frontend and backend.
-Template: `.env.example` (every variable is commented there). As of 2026-10-21 every key is set
-**except `SUPABASE_SECRET_KEY`**; the owner switched `GEMINI_TUTOR_MODEL` to Flash-Lite and
-`ELEVENLABS_VOICE_ID` to George (free-plan voice) on 2026-10-18.
+Template: `.env.example` (every variable is commented there). As of 2026-10-22 every key is set,
+including `SUPABASE_SECRET_KEY` (a new-style `sb_secret_` key, verified against the project).
+The owner switched `GEMINI_TUTOR_MODEL` to Flash-Lite and `ELEVENLABS_VOICE_ID` to George
+(free-plan voice) on 2026-10-18.
 
 Before courses work when signed in (Clerk mode):
 
-1. Apply the migrations to the hosted project (`backend/supabase/migrations/*.sql`, in order;
-   README → Supabase). The courses migration also creates the `course-sources` bucket; the
-   learner migration (M8) adds `attempts` and `review_cards`; the settings migration (M9)
-   constrains `profiles.settings`.
-2. Make sure Supabase third-party auth trusts Clerk (README → Supabase step 1); `/status`
-   checks it.
-3. Set `SUPABASE_SECRET_KEY` (API service only; Render too).
+1. ✅ Done 2026-10-22: the five migrations in `backend/supabase/migrations/` were applied to the
+   hosted project (`gvwynloprjomqqovpoem`) through the Supabase connector, in order. Results:
+   - 14 tables, RLS on every one, no `anon` grants, and the private `course-sources` bucket with
+     its three storage policies.
+   - Supabase's security advisor reports nothing.
+   - A live cross-user test (rolled back) showed user B can neither read nor update user A's
+     course.
+   - The performance advisor's `auth_rls_initplan` warnings are a false positive: the policies
+     already use `(select auth.jwt() ->> 'sub')`, and the query plan shows a one-off InitPlan
+     using the index.
+   - New migrations must be applied the same way, after the owner confirms.
+2. ✅ Done 2026-10-22 (by the owner): Supabase third-party auth trusts Clerk
+   (`still-mosquito-3338.clerk.accounts.dev`, the development instance). The owner confirmed
+   `/status` is green (FastAPI and Supabase both accept the Clerk session). A production Clerk
+   instance needs adding too.
+3. ✅ `SUPABASE_SECRET_KEY` is set locally (API service only). Render needs it too.
 
 Render also needs `GEMINI_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY` (see `render.yaml`), and more

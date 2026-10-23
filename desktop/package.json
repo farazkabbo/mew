@@ -2,13 +2,24 @@
   "name": "@mew/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Mew for Windows: a Tauri v2 shell around the web app, with a summon hotkey and review reminders.",
+  "type": "module",
+  "description": "Mew for Windows: a Tauri v2 shell around the web app, with a summon hotkey, review reminders and Screen Coach.",
   "scripts": {
     "app": "tauri dev",
     "bundle": "tauri build",
-    "icons": "tauri icon icon.svg"
+    "icons": "tauri icon icon.svg",
+    "build:shell": "node scripts/build-shell.mjs",
+    "lint": "eslint --max-warnings 0 overlay-src",
+    "typecheck": "tsc --noEmit -p overlay-src",
+    "test": "vitest run --root overlay-src"
+  },
+  "dependencies": {
+    "@mew/ink": "workspace:*",
+    "@mew/shared": "workspace:*",
+    "zod": "^4"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.12.1"
+    "@tauri-apps/cli": "2.12.1",
+    "esbuild": "0.28.2"
   }
 }

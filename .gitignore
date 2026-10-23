@@ -3,6 +3,8 @@ node_modules/
 .pnpm-store/
 
 # Build output
+# Screen Coach's overlay bundles (desktop/scripts/build-shell.mjs)
+desktop/shell/gen/
 .next/
 .next-e2e/
 .next-build/

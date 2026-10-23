@@ -25,7 +25,7 @@ function render(view) {
   $("pause").setAttribute("aria-pressed", String(view.paused));
   $("consent").disabled = !usable;
 
-  for (const which of ["talk", "pause"]) {
+  for (const which of ["talk", "pause", "clip"]) {
     const report = view[which];
     const input = $(`hotkey-${which}`);
     if (document.activeElement !== input) input.value = report.accelerator;
@@ -38,6 +38,7 @@ function render(view) {
   }
 
   renderPrivacy(view);
+  renderAccount(view);
 
   if (!usable) showNotice(view.unsupportedReason);
   else if (view.settingsReset)
@@ -96,6 +97,26 @@ for (const form of document.querySelectorAll("form.hotkey")) {
     }
   });
 }
+
+// ─── Account ─────────────────────────────────────────────────────────────────────────────────
+
+function renderAccount(view) {
+  $("account-state").textContent = view.connected
+    ? "Connected to your Mew account."
+    : "Connect Screen Coach to your Mew account so it can answer your questions.";
+  $("connect").hidden = view.connected;
+  $("disconnect").hidden = !view.connected;
+}
+
+$("connect").addEventListener("click", async () => {
+  const ok = await run(() => invoke("screen_coach_link_start"));
+  if (ok) showNotice("Finish connecting in the Mew window that just opened.");
+});
+
+$("disconnect").addEventListener("click", async () => {
+  const ok = await run(() => invoke("screen_coach_disconnect"));
+  if (ok) showNotice("Disconnected. This computer's sign-in was removed.");
+});
 
 // ─── Privacy ─────────────────────────────────────────────────────────────────────────────────
 

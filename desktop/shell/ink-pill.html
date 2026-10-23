@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Mew ink</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/ink-pill.js" defer></script>
+  </head>
+  <body class="pill">
+    <div class="pill-bar" role="toolbar" aria-label="Tutor ink">
+      <button type="button" data-action="save" aria-keyshortcuts="Control+Alt+C">
+        Save to notebook <kbd>Ctrl+Alt+C</kbd>
+      </button>
+      <button type="button" data-action="clear" class="quiet" aria-keyshortcuts="Escape">
+        Clear <kbd>Esc</kbd>
+      </button>
+    </div>
+  </body>
+</html>

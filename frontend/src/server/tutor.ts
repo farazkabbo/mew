@@ -107,14 +107,15 @@ export function unavailableMessage(error: unknown): string {
 
 function tutorInput(request: TutorRequest): InputPart[] {
   const parts: InputPart[] = [{ type: "text", text: renderTutorInput(request) }];
-  if (request.pageImage) parts.push({ type: "image", png: request.pageImage });
+  if (request.pageImage)
+    parts.push({ type: "image", base64: request.pageImage, mimeType: "image/png" });
   return parts;
 }
 
 /** Keeps speech within limits, cutting at a sentence end where possible. */
-function clipSpeech(speech: string): string {
-  if (speech.length <= TUTOR_LIMITS.speechChars) return speech;
-  const cut = speech.slice(0, TUTOR_LIMITS.speechChars);
+export function clipSpeech(speech: string, maxChars: number = TUTOR_LIMITS.speechChars): string {
+  if (speech.length <= maxChars) return speech;
+  const cut = speech.slice(0, maxChars);
   const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
   return end > 40 ? cut.slice(0, end + 1) : cut;
 }
@@ -129,7 +130,7 @@ export async function recognizeHandwriting(
     system: RECOGNITION_PROMPT.system,
     input: [
       { type: "text", text: "Transcribe this handwritten line." },
-      { type: "image", png },
+      { type: "image", base64: png, mimeType: "image/png" },
     ],
     schema: RecognitionSchema,
     thinkingLevel: "minimal",

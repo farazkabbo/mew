@@ -59,14 +59,30 @@ export const geminiEnv = defineEnv(
     GEMINI_API_KEY: z.string().min(1),
     GEMINI_GATE_MODEL: z.string().min(1),
     GEMINI_TUTOR_MODEL: z.string().min(1),
+    /** Screen Coach answers (decision 4); unset = the tutor model. */
+    GEMINI_SCREEN_MODEL: z.string().min(1).optional(),
+    /** Screen Coach step checks (S4): frequent yes/no calls, so a fast model. */
+    GEMINI_VERIFIER_MODEL: z.string().min(1),
   }),
   {
     defaults: {
       GEMINI_GATE_MODEL: "gemini-3.5-flash-lite",
       GEMINI_TUTOR_MODEL: "gemini-3.8-flash",
+      GEMINI_VERIFIER_MODEL: "gemini-3.5-flash-lite",
     },
   },
 );
+
+/** The fast model for Screen Coach's checks (coach steps, re-placing ink). */
+export function verifierModel(): string {
+  return geminiEnv().GEMINI_VERIFIER_MODEL;
+}
+
+/** The model that answers Screen Coach questions. */
+export function screenModel(): string {
+  const env = geminiEnv();
+  return env.GEMINI_SCREEN_MODEL ?? env.GEMINI_TUTOR_MODEL;
+}
 
 export const elevenLabsEnv = defineEnv(
   z.object({

@@ -18,6 +18,7 @@ const request: TutorRequest = {
   checks: [],
   courseContext: [],
   quiz: null,
+  clippedText: [],
 };
 
 const RESPONSE: TutorResponse = {

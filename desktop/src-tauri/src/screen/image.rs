@@ -98,6 +98,29 @@ fn downscale(
     }
 }
 
+/// The part of `source` inside `left..right` × `top..bottom` (clamped to the image), as a new
+/// buffer of the same kind.
+pub fn crop(source: &Pixels, left: u32, top: u32, right: u32, bottom: u32) -> Pixels {
+    let channels = source.channels as usize;
+    let (right, bottom) = (right.min(source.width), bottom.min(source.height));
+    let (left, top) = (left.min(right), top.min(bottom));
+    let (width, height) = (right - left, bottom - top);
+    let row_bytes = width as usize * channels;
+    let mut data = SecretBytes::zeroed(row_bytes * height as usize);
+    let src = source.data.as_slice();
+    let stride = source.stride();
+    for (row, out) in data.as_mut_slice().chunks_exact_mut(row_bytes.max(1)).enumerate() {
+        let at = (top as usize + row) * stride + left as usize * channels;
+        out.copy_from_slice(&src[at..at + row_bytes]);
+    }
+    Pixels {
+        width,
+        height,
+        channels: source.channels,
+        data,
+    }
+}
+
 /// True when every sampled pixel is (near) black: what exclusive-fullscreen games and protected
 /// (DRM) content look like to Windows.Graphics.Capture. We say so instead of sending it.
 pub fn looks_blank(pixels: &Pixels) -> bool {
@@ -190,6 +213,18 @@ mod tests {
         let grey = downscale_bgra_to_gray(&source, 1600);
         assert_eq!((grey.width, grey.height, grey.channels), (4, 1, 1));
         assert_eq!(grey.data.as_slice(), &[76, 150, 29, 255]);
+    }
+
+    #[test]
+    fn crops_and_clamps() {
+        let source = bgra(4, 3, |x, y| [x as u8, y as u8, 0, 255]);
+        let part = crop(&source, 1, 1, 3, 3);
+        assert_eq!((part.width, part.height, part.channels), (2, 2, 4));
+        assert_eq!(&part.data.as_slice()[..8], &[1, 1, 0, 255, 2, 1, 0, 255]);
+        let clamped = crop(&source, 3, 2, 10, 10);
+        assert_eq!((clamped.width, clamped.height), (1, 1));
+        let empty = crop(&source, 5, 5, 9, 9);
+        assert_eq!((empty.width, empty.height), (0, 0));
     }
 
     #[test]

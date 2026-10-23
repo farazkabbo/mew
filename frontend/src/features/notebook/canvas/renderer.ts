@@ -8,6 +8,9 @@ export type Layers = { grid: HTMLCanvasElement; ink: HTMLCanvasElement; live: HT
 
 export type Theme = { dark: boolean; dot: string; tutor: string; accent: string };
 
+/** An image on the page (a clip from the screen), and its picture once it has loaded. */
+export type PagePicture = { box: BBox; bitmap: CanvasImageSource | null };
+
 const GRID_SPACING = 24; // page units
 const MIN_DOT_SPACING_PX = 12;
 
@@ -78,12 +81,21 @@ export class CanvasRenderer {
     }
   }
 
-  /** Full redraw of committed ink. Pass only strokes in `visible(camera)` to cull off-screen work. */
-  drawInk(camera: Camera, strokes: readonly Stroke[], lines?: readonly Line[]): void {
+  /**
+   * Full redraw of committed ink, over the page's pictures. Pass only strokes in
+   * `visible(camera)` to cull off-screen work.
+   */
+  drawInk(
+    camera: Camera,
+    strokes: readonly Stroke[],
+    lines?: readonly Line[],
+    pictures: readonly PagePicture[] = [],
+  ): void {
     const ctx = this.ink;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     this.applyCamera(ctx, camera);
+    for (const picture of pictures) this.paintPicture(ctx, camera, picture);
     paintStrokes(ctx, strokes, this.theme.dark);
     if (lines) this.outlineLines(ctx, camera, lines);
   }
@@ -133,6 +145,28 @@ export class CanvasRenderer {
       ctx.strokeStyle = this.theme.dot;
       ctx.stroke();
     }
+  }
+
+  /** A picture with a hairline frame; a soft placeholder while it loads (or if it can't). */
+  private paintPicture(
+    ctx: CanvasRenderingContext2D,
+    camera: Camera,
+    { box: [x, y, w, h], bitmap }: PagePicture,
+  ): void {
+    ctx.save();
+    if (bitmap) {
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(bitmap, x, y, w, h);
+    } else {
+      ctx.fillStyle = this.theme.dot;
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+    }
+    ctx.lineWidth = 1 / camera.zoom;
+    ctx.strokeStyle = this.theme.dot;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
   }
 
   private applyCamera(ctx: CanvasRenderingContext2D, camera: Camera): void {

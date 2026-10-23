@@ -5,6 +5,7 @@ export * from "./handwriting";
 export * from "./inkify";
 export * from "./placement";
 export * from "./random";
+export * from "./screen/plan";
 export * from "./typeset/box";
 export * from "./typeset/latex-layout";
 export { LatexError, latexToPlainText, type MathNode, parseLatex } from "./typeset/latex-parse";

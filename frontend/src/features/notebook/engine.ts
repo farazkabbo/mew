@@ -1,4 +1,4 @@
-import type { Stroke } from "@mew/shared";
+import type { ImageBlock, Stroke } from "@mew/shared";
 import {
   addCommand,
   type Command,
@@ -49,6 +49,8 @@ export class PageEngine {
     private readonly repo: NotebookRepository,
     readonly pageId: string,
     strokes: Stroke[],
+    /** Images on the page (clips saved from the screen), drawn under the ink. */
+    readonly images: readonly ImageBlock[],
     private readonly onError: (error: unknown) => void,
   ) {
     this.doc = new PageDocument(strokes);
@@ -66,7 +68,11 @@ export class PageEngine {
     pageId: string,
     onError: (error: unknown) => void,
   ): Promise<PageEngine> {
-    return new PageEngine(repo, pageId, await repo.loadStrokes(pageId), onError);
+    const [strokes, images] = await Promise.all([
+      repo.loadStrokes(pageId),
+      repo.loadImages(pageId),
+    ]);
+    return new PageEngine(repo, pageId, strokes, images, onError);
   }
 
   get canUndo(): boolean {

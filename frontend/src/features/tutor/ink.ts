@@ -275,6 +275,7 @@ export class TutorInk implements InkLayer {
       strokes: [...engine.doc.all()],
       lines,
       activeLine: currentLine(lines),
+      obstacles: engine.images.map((i): BBox => [i.x, i.y, i.width, i.height]),
       viewport: this.viewportOf?.() ?? FALLBACK_VIEWPORT,
       colors: this.deps.colors(),
       now: Date.now(),

@@ -1,0 +1,115 @@
+/* Screen Coach's overlay pages (S3): the ink layer, the ink pill and a clip's preview. */
+
+:root {
+  color-scheme: light dark;
+  --violet: #8a7bf0;
+  --violet-strong: #6b5ce0;
+  --paper: #fffcf2;
+  --ink: #1d1c1a;
+  --muted: #5d5a54;
+  --line: rgba(29, 28, 26, 0.14);
+  --surface: #ffffff;
+  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #23221f;
+    --ink: #ece9e2;
+    --muted: #b3afa6;
+    --line: rgba(236, 233, 226, 0.16);
+    --surface: #2c2b28;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+/* ─── The ink layer: transparent, click-through (the window ignores the mouse) ───────────── */
+
+body.ink {
+  background: transparent;
+  overflow: hidden;
+}
+
+body.ink canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 1;
+  transition: opacity 150ms ease-out;
+}
+
+body.ink canvas.faded {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.ink canvas {
+    transition: none;
+  }
+}
+
+/* ─── The pill ──────────────────────────────────────────────────────────────────────────── */
+
+body.pill {
+  background: transparent;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.pill-bar {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.pill-bar button {
+  font: inherit;
+  font-size: 13px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  background: var(--violet-strong);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pill-bar button.quiet {
+  background: transparent;
+  color: var(--ink);
+}
+
+.pill-bar button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pill-bar kbd {
+  font: inherit;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+@media (forced-colors: active) {
+  .pill-bar,
+  .pill-bar button {
+    border: 1px solid CanvasText;
+  }
+}

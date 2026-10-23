@@ -1,0 +1,63 @@
+import "server-only";
+
+import { CLIP_LIMITS, type ClipCreateRequest, ClipCreated, clipPointCount } from "@mew/shared";
+
+import { ApiError, apiFetch } from "./api-client";
+import { HttpError } from "./http-error";
+import { assertJpeg } from "./jpeg";
+
+/** The JSON body of a clip: a base64 JPEG (~3 MB at most), strokes and a little text. */
+export const MAX_CLIP_BODY_BYTES = 4_600_000;
+
+/** How far a stroke may run past the image's edges (a circle drawn around the edge of a crop). */
+const STROKE_MARGIN = 0.5;
+
+/**
+ * Checks a clip from the desktop app beyond its schema: the image really is a JPEG of the size
+ * it claims (the page sizes it by that), the ink stays near the image, and the total amount of
+ * ink is capped. Anything else is 400.
+ */
+export function assertClip(clip: ClipCreateRequest): void {
+  const size = assertJpeg(clip.image.jpeg, CLIP_LIMITS.longSide);
+  if (size.width !== clip.image.width || size.height !== clip.image.height) {
+    throw new HttpError(400, "The image's size doesn't match");
+  }
+  if (clipPointCount(clip.strokes) > CLIP_LIMITS.points) {
+    throw new HttpError(400, "Too much ink");
+  }
+  const { width, height } = clip.image;
+  const inside = (v: number, size: number) =>
+    v >= -size * STROKE_MARGIN && v <= size * (1 + STROKE_MARGIN);
+  for (const stroke of clip.strokes) {
+    for (const [x, y] of stroke.points) {
+      if (!inside(x, width) || !inside(y, height))
+        throw new HttpError(400, "Ink outside the image");
+    }
+  }
+}
+
+/**
+ * Stores a clip for the device's user. The API checks the device token again itself (it never
+ * takes a user id from us for this), uploads the image to the private bucket and adds the row.
+ */
+export async function createClip(
+  deviceToken: string,
+  clip: ClipCreateRequest,
+): Promise<ClipCreated> {
+  try {
+    return await apiFetch("/v1/clips", ClipCreated, {
+      method: "POST",
+      body: clip,
+      headers: { "X-Mew-Device-Token": deviceToken },
+      timeoutMs: 20_000,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+    if (error.status === 401) throw new HttpError(401, "Unauthorized");
+    if (error.status === 413) throw new HttpError(413, "Clip too large");
+    if (error.status === null || error.status === 503) {
+      throw new HttpError(503, "Saving clips isn't available right now");
+    }
+    throw new HttpError(502, "Couldn't save the clip");
+  }
+}
