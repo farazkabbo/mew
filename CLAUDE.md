@@ -6,4 +6,7 @@
 - **Screen Coach** (the on-screen Windows tutor, milestones S0–S7) is specified in
   [docs/SCREEN_COACH.md](docs/SCREEN_COACH.md). Its **Decisions** section at the end records the
   owner's answers to the planning questions; follow them and don't ask again.
+- **Notes Check** (S3.5, milestones N1–N5: compare the screen with the student's notebook) is
+  specified in [docs/SCREEN_COACH_NOTES_CHECK.md](docs/SCREEN_COACH_NOTES_CHECK.md); its
+  **Decisions** section is binding too.
 - Onboarding a new developer: [ONBOARDING.md](ONBOARDING.md).

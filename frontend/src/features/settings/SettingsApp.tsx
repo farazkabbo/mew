@@ -109,6 +109,12 @@ export function SettingsApp() {
             checked={settings.auto_check}
             onChange={(auto_check) => void update({ auto_check })}
           />
+          <Toggle
+            label="Let the tutor check my notes"
+            hint="Keeps the text of your notes (never your handwriting itself) with your account, so the tutor can compare what's on your screen with what you wrote. Turning this off deletes that copy."
+            checked={settings.notes_index}
+            onChange={(notes_index) => void update({ notes_index })}
+          />
         </Section>
 
         <Section title="Voice">

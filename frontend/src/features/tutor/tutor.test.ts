@@ -349,7 +349,9 @@ describe("RecognitionService", () => {
 
   it("caches by the line's strokes and shares concurrent requests", async () => {
     const fetchMock = vi.fn(() =>
-      Promise.resolve(Response.json({ text: "x = 4", latex: "x = 4", subject: "math" })),
+      Promise.resolve(
+        Response.json({ text: "x = 4", latex: "x = 4", subject: "math", confidence: 0.9 }),
+      ),
     );
     const service = new RecognitionService(fetchMock as unknown as typeof fetch);
     const { doc } = line();

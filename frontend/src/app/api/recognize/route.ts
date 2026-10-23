@@ -6,7 +6,7 @@ import { ModelBusyError } from "@/server/gemini";
 import { assertSameOrigin, handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { assertPng } from "@/server/png";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
-import { recognizeHandwriting } from "@/server/tutor";
+import { recognizeHandwriting } from "@/server/recognition";
 
 const MAX_BODY_BYTES = 1_700_000;
 

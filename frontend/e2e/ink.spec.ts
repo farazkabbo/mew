@@ -55,7 +55,9 @@ async function fakeTutor(page: Page, actions: unknown[], speech = "Here's the ne
     route.fulfill({ contentType: "audio/pcm;rate=24000", body: silence(1) }),
   );
   await page.route("**/api/recognize", (route) =>
-    route.fulfill({ json: { text: "2x + 3 = 7", latex: "2x + 3 = 7", subject: "math" } }),
+    route.fulfill({
+      json: { text: "2x + 3 = 7", latex: "2x + 3 = 7", subject: "math", confidence: 0.9 },
+    }),
   );
 }
 

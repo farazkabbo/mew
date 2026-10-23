@@ -11,6 +11,21 @@ export function fnv1a(input: string): string {
 }
 
 /**
+ * What a line says, as far as its strokes go: their ids and point counts, in any order. Strokes
+ * are immutable apart from being moved, so this changes when one is written, erased or undone,
+ * but not when the line is moved (its text is the same). Notes Check re-recognises a line when
+ * this changes (docs/SCREEN_COACH_NOTES_CHECK.md, decision 5).
+ */
+export function lineContentHash(strokes: readonly Pick<Stroke, "id" | "points">[]): string {
+  return fnv1a(
+    strokes
+      .map((s) => `${s.id}:${s.points.length}`)
+      .sort()
+      .join("|"),
+  );
+}
+
+/**
  * Cache key for a group of strokes (e.g. a line sent for recognition). Order-independent; changes
  * when any stroke is added, removed or moved.
  */

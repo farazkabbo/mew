@@ -82,7 +82,33 @@ binding): **S0, S1, S2 and S3 built** (2026-10-22). Desktop code is in `desktop/
   fading on scroll in Edge's PDF viewer and on YouTube, the pill never taking focus, Alt+Tab not
   showing the overlay, the overlay absent from a Teams/OBS capture, a full save in the running app
   (preview → Save → notebook page), and `check-no-screenshots.ps1` after a clip is cancelled.
-- **Next:** S4 (coach mode).
+- **Next:** S3.5 Notes Check N2 (retrieval and the eval harness), then N3–N5, then S4 (coach
+  mode).
+
+**Notes Check (S3.5)** — brief and binding Decisions in
+[SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1 built** (2026-10-23):
+
+- Every notebook line's recognised text is kept with its page (Dexie v3 `noteLines`) and, when the
+  `notes_index` setting is on (default), synced to Supabase `note_lines` through one RPC
+  (`sync_note_page`, RLS as the student), which also mirrors notebook and page metadata (never
+  strokes).
+- Line ids last across edits (`assignLineIds` in `packages/ink`); `content_hash` is stroke ids +
+  point counts, so a moved line isn't re-recognised. A line that changed and isn't re-read yet is
+  withdrawn from the server, so stale text can't be compared.
+- Cost: the tutor's own pen-pause recognition is reused (same cache and in-flight request);
+  never-read lines go through `/api/recognize/batch` (8 per call, one batch per 15 s, only while
+  the student and tutor are idle); only lines whose text changed are embedded again.
+- Recognition now returns `confidence` (prompt `recognition.v2`; the Interactions API has no
+  logprobs); blank → 0.
+- Client: `frontend/src/features/notes/` (planner, sync plan, indexer, backfill; pure parts tested
+  without a browser). Server: `backend/src/mew_api/notes/`, `routes/notes.py`; Next routes
+  `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
+- **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
+  then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after Notes Check N1): **806 unit tests** (frontend 290, backend 185, ink 132, shared 123,
+database 69, desktop overlays 7), the same Rust tests, and **46 Playwright tests** (`notes.spec.ts`
+measured an edited line on the server 1.6 s after the pen stopped).
 
 Tests (after S3): **712 unit tests** (frontend 254, backend 161, ink 123, shared 113, database 54,
 desktop overlays 7), **106 Rust tests** (+4 real-Windows ones) and **44 Playwright tests**.

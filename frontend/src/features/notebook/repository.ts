@@ -56,6 +56,16 @@ export class NotebookRepository {
     });
   }
 
+  async getNotebook(id: string): Promise<Notebook | null> {
+    const row = await this.db.notebooks.get(id);
+    return row ? (validRows(Notebook, [row], "notebook")[0] ?? null) : null;
+  }
+
+  async getPage(id: string): Promise<Page | null> {
+    const row = await this.db.pages.get(id);
+    return row ? (validRows(Page, [row], "page")[0] ?? null) : null;
+  }
+
   async touchNotebook(id: string): Promise<void> {
     await this.db.notebooks.update(id, { updatedAt: Date.now() });
   }

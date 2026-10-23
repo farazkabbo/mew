@@ -231,7 +231,7 @@ export function useMewSession(engine: PageEngine | null, courseId: string | null
   /** The pen touched the page: don't talk over someone who's writing. */
   const penDown = useCallback(() => tutor.writing(), [tutor]);
 
-  return { startListening, stopListening, say, summon, penDown, ink, quiz };
+  return { startListening, stopListening, say, summon, penDown, ink, quiz, recognition };
 }
 
 /** Recognises the line being written after the pen rests, so Mew and the tutor know its text. */

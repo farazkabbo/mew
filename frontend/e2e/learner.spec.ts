@@ -51,7 +51,9 @@ test.beforeEach(async ({ page }) => {
     }),
   );
   await page.route("**/api/recognize", (route) =>
-    route.fulfill({ json: { text: "against the motion", latex: null, subject: "physics" } }),
+    route.fulfill({
+      json: { text: "against the motion", latex: null, subject: "physics", confidence: 0.9 },
+    }),
   );
 });
 

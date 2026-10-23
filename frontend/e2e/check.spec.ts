@@ -38,7 +38,7 @@ async function fakeServices(
     const image = (route.request().postDataJSON() as { image: string }).image;
     if (!seen.has(image)) seen.set(image, seen.size);
     const answer = lines[seen.get(image) ?? 0] ?? { text: "", latex: null, subject: "other" };
-    return route.fulfill({ json: answer });
+    return route.fulfill({ json: { confidence: 0.9, ...answer } });
   });
   await page.route("**/api/mew", (route) =>
     route.fulfill({

@@ -9,12 +9,17 @@ Two modes:
 
 import json
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+def vector_literal(values: Sequence[float]) -> str:
+    """A pgvector value in its text form, as PostgREST passes it on: "[0.1,0.2,…]"."""
+    return "[" + ",".join(f"{v:.6f}" for v in values) + "]"
 
 
 class StoreError(RuntimeError):

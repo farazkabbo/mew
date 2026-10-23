@@ -1,9 +1,6 @@
 import "server-only";
 
 import {
-  RECOGNITION_PROMPT,
-  type Recognition,
-  Recognition as RecognitionSchema,
   renderTutorInput,
   TUTOR_LIMITS,
   TUTOR_PROMPT,
@@ -118,23 +115,4 @@ export function clipSpeech(speech: string, maxChars: number = TUTOR_LIMITS.speec
   const cut = speech.slice(0, maxChars);
   const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
   return end > 40 ? cut.slice(0, end + 1) : cut;
-}
-
-/** Transcribes one cropped line of handwriting with the fast model. */
-export async function recognizeHandwriting(
-  png: string,
-  generate: GenerateStructured = generateStructured,
-): Promise<Recognition> {
-  return generate({
-    model: geminiEnv().GEMINI_GATE_MODEL,
-    system: RECOGNITION_PROMPT.system,
-    input: [
-      { type: "text", text: "Transcribe this handwritten line." },
-      { type: "image", base64: png, mimeType: "image/png" },
-    ],
-    schema: RecognitionSchema,
-    thinkingLevel: "minimal",
-    maxOutputTokens: 512,
-    timeoutMs: 8000,
-  });
 }
