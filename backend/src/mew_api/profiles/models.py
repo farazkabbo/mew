@@ -21,6 +21,8 @@ class UserSettings(BaseModel):
     voice_id: VoiceId | None = None
     #: Lets the app keep Mew's decisions to improve it (M10). Off unless the student opts in.
     mew_logging_opt_in: bool = False
+    #: Notes Check keeps a searchable copy of the notes' text (S3.5). On unless turned off.
+    notes_index: bool = True
     onboarded: bool = False
 
 
@@ -36,4 +38,5 @@ class SettingsPatch(BaseModel):
     listen_on_open: bool | None = None
     voice_id: VoiceId | None = None
     mew_logging_opt_in: bool | None = None
+    notes_index: bool | None = None
     onboarded: bool | None = None

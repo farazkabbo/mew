@@ -1,6 +1,8 @@
 import type { ImageBlock, Notebook, Page, Stroke } from "@mew/shared";
 import Dexie, { type EntityTable } from "dexie";
 
+import type { LocalNoteLine } from "../notes/local-lines";
+
 /** Local-first notebook storage (IndexedDB). One database per user, so accounts never mix. */
 export class NotebookDb extends Dexie {
   notebooks!: EntityTable<Notebook, "id">;
@@ -8,6 +10,8 @@ export class NotebookDb extends Dexie {
   strokes!: EntityTable<Stroke, "id">;
   /** Images on pages: clips saved from the screen (Screen Coach S3). */
   images!: EntityTable<ImageBlock, "id">;
+  /** Each page's lines with their recognised text and sync state (Notes Check N1). */
+  noteLines!: EntityTable<LocalNoteLine, "id">;
 
   constructor(userId: string) {
     super(databaseName(userId));
@@ -17,6 +21,7 @@ export class NotebookDb extends Dexie {
       strokes: "id, pageId",
     });
     this.version(2).stores({ images: "id, pageId, clipId" });
+    this.version(3).stores({ noteLines: "id, pageId" });
   }
 }
 

@@ -12,6 +12,8 @@ export const TUTOR_LIMITS = {
   /** Base64 PNG of the student's recent work (~1.1 MB decoded). */
   imageBase64Chars: 1_500_000,
   imagePixelsPerSide: 2048,
+  /** Base64 PNG of one cropped line (at most 1024 px on its long side; mostly white). */
+  lineImageBase64Chars: 300_000,
   recognizedLines: 8,
   graphNodes: 16,
   ttsChars: 600,
@@ -166,8 +168,37 @@ export const Recognition = z.object({
   text: z.string().max(300),
   latex: z.string().max(300).nullable(),
   subject: Subject,
+  /**
+   * How sure the model is that `text` is exactly what's written (its own estimate: the API has
+   * no token probabilities). Notes Check treats lines under 0.6 as "can't tell".
+   */
+  confidence: z.number().min(0).max(1),
 });
 export type Recognition = z.infer<typeof Recognition>;
+
+/** Lines recognised in one call (Notes Check backfill): fewer requests for the same work. */
+export const RECOGNIZE_BATCH_MAX = 8;
+
+/** `POST /api/recognize/batch`: cropped lines, each a PNG, recognised together. */
+export const RecognizeBatchRequest = z.object({
+  images: z
+    .array(z.string().min(1).max(TUTOR_LIMITS.lineImageBase64Chars))
+    .min(1)
+    .max(RECOGNIZE_BATCH_MAX),
+});
+export type RecognizeBatchRequest = z.infer<typeof RecognizeBatchRequest>;
+
+/** One result per image, in order; null when the model skipped that line. */
+export const RecognizeBatchResponse = z.object({
+  lines: z.array(Recognition.nullable()).max(RECOGNIZE_BATCH_MAX),
+});
+export type RecognizeBatchResponse = z.infer<typeof RecognizeBatchResponse>;
+
+/** What the model returns for a batch: each line names the label of its image ("Line 3"). */
+export const RecognitionBatchOutput = z.object({
+  lines: z.array(Recognition.extend({ line: z.number().int().min(1) })).max(RECOGNIZE_BATCH_MAX),
+});
+export type RecognitionBatchOutput = z.infer<typeof RecognitionBatchOutput>;
 
 export const TtsRequest = z.object({
   text: z.string().min(1).max(TUTOR_LIMITS.ttsChars),

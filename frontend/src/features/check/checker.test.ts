@@ -43,7 +43,7 @@ function fakeRecognition(doc: PageDocument, answers: Partial<Recognition>[]) {
   };
   const answer = (line: Line): Recognition | null => {
     const a = answers[top(line)];
-    return a ? { text: "", latex: null, subject: "math", ...a } : null;
+    return a ? { text: "", latex: null, subject: "math", confidence: 0.9, ...a } : null;
   };
   return {
     cached: (_doc: PageDocument, line: Line) => answer(line) ?? undefined,

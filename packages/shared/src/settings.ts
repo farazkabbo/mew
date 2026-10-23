@@ -19,6 +19,11 @@ export const UserSettings = z.object({
   voice_id: VoiceId.nullable(),
   /** Keep Mew's decisions (with what was said) so they can be labelled to improve Mew (M10). */
   mew_logging_opt_in: z.boolean(),
+  /**
+   * Notes Check keeps a searchable copy of the notes' text on the server (S3.5 decision 2).
+   * Turning it off deletes that copy.
+   */
+  notes_index: z.boolean(),
   /** The first-run introduction has been seen. */
   onboarded: z.boolean(),
 });
@@ -32,6 +37,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   listen_on_open: false,
   voice_id: null,
   mew_logging_opt_in: false,
+  notes_index: true,
   onboarded: false,
 };
 

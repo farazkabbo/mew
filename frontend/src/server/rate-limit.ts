@@ -22,6 +22,15 @@ export const RATE_RULES = {
   /** Handwriting recognition of single lines. */
   recognize: { limit: 30, windowMs: MINUTE },
   recognizeDaily: { limit: 1500, windowMs: DAY },
+  /**
+   * Notes Check backfill: lines that were never recognised, up to 8 per call. The client sends
+   * one batch every 15 s at most; the daily budget is counted in lines, not calls.
+   */
+  recognizeBatch: { limit: 6, windowMs: MINUTE },
+  recognizeBatchLinesDaily: { limit: 2000, windowMs: DAY },
+  /** Notes Check: syncing a page's line text (an embedding call for the lines that changed). */
+  notesSync: { limit: 40, windowMs: MINUTE },
+  notesSyncDaily: { limit: 4000, windowMs: DAY },
   /** Building a course from a PDF (parsing, embeddings, a model call). */
   courseCreate: { limit: 6, windowMs: 60 * MINUTE },
   courseCreateDaily: { limit: 20, windowMs: DAY },

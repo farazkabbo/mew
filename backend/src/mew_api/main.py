@@ -18,8 +18,9 @@ from .deps import require_internal_caller
 from .devices.store import MemoryDeviceStore
 from .devices.tokens import LinkCodes
 from .mew_events.store import MemoryMewEventStore
+from .notes.store import MemoryNoteLineStore
 from .profiles.store import MemoryProfileStore
-from .routes import check, clips, courses, devices, health, learner, me, mew_events
+from .routes import check, clips, courses, devices, health, learner, me, mew_events, notes
 from .routes import settings as user_settings
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ def create_app(
     app.state.link_codes = LinkCodes()
     app.state.local_devices = MemoryDeviceStore()
     app.state.local_clips = MemoryClipStore()
+    app.state.local_notes = MemoryNoteLineStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -83,6 +85,7 @@ def create_app(
     v1.include_router(mew_events.router)
     v1.include_router(devices.router)
     v1.include_router(clips.router)
+    v1.include_router(notes.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

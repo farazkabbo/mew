@@ -11,6 +11,7 @@ export * from "./mew-events";
 export * from "./mew-features";
 export * from "./mew-policy";
 export * from "./notebook";
+export * from "./notes";
 export * from "./prompts/checker";
 export * from "./prompts/mew";
 export * from "./prompts/quiz";

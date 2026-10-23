@@ -38,6 +38,7 @@ describe("/api/settings", () => {
     listen_on_open: false,
     voice_id: null,
     mew_logging_opt_in: false,
+    notes_index: true,
     onboarded: true,
   };
 

@@ -20,7 +20,7 @@ from ..learner.models import (
     FsrsCard,
     LearnerData,
 )
-from ..supabase_rest import StoreError, SupabaseRest
+from ..supabase_rest import StoreError, SupabaseRest, vector_literal
 from .models import Concept, Course, Edge, NewChunk, NewConcept, RetrievedChunk, Source
 from .store import CourseNotFoundError
 
@@ -104,7 +104,7 @@ class SupabaseCourseStore(SupabaseRest):
                     "page": c.page,
                     "heading": c.heading,
                     "text": c.text,
-                    "embedding": _vector(c.embedding),
+                    "embedding": vector_literal(c.embedding),
                 },
             )
             for c in chunks
@@ -121,7 +121,7 @@ class SupabaseCourseStore(SupabaseRest):
         rows = self._request(
             "POST",
             "/rest/v1/rpc/match_chunks",
-            json={"course": str(course_id), "query": _vector(embedding), "match_count": k},
+            json={"course": str(course_id), "query": vector_literal(embedding), "match_count": k},
         ).json()
         title = next((s.title for s in self.list_sources(user, course_id)), "")
         return [
@@ -293,10 +293,6 @@ class SupabaseCourseStore(SupabaseRest):
     def _patch_one(self, table: str, params: dict[str, str], fields: dict[str, Any]) -> None:
         if not self._patch(table, params, fields):
             raise CourseNotFoundError(params.get("id", ""))
-
-
-def _vector(values: Sequence[float]) -> str:
-    return "[" + ",".join(f"{v:.6f}" for v in values) + "]"
 
 
 def _ids(ids: Iterable[UUID]) -> str:

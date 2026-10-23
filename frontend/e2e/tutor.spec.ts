@@ -63,7 +63,9 @@ async function fakeBackends(page: Page, audioSeconds: number): Promise<TutorCall
     route.fulfill({ contentType: "audio/pcm;rate=24000", body: tone(audioSeconds) }),
   );
   await page.route("**/api/recognize", (route) =>
-    route.fulfill({ json: { text: "F1 + F2 = 0", latex: "F_1 + F_2 = 0", subject: "physics" } }),
+    route.fulfill({
+      json: { text: "F1 + F2 = 0", latex: "F_1 + F_2 = 0", subject: "physics", confidence: 0.9 },
+    }),
   );
   return calls;
 }

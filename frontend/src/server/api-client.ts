@@ -18,7 +18,7 @@ type ApiFetchOptions = {
   /** Clerk session token of the user on whose behalf the call is made. */
   token?: string | null;
   timeoutMs?: number;
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   /** JSON body. */
   body?: unknown;
   /** A raw body (e.g. an uploaded PDF), sent with its own content type. */

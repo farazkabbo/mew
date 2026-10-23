@@ -7,6 +7,7 @@ import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
 import { useMewSession } from "../mew/useMewSession";
+import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
 import { useQuiz } from "../quiz/store";
@@ -31,7 +32,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const QUIZ_CARD_INSET = 352;
 
 export function NotebookApp({ userId }: { userId: string }) {
-  const repo = useMemo(() => new NotebookRepository(new NotebookDb(userId)), [userId]);
+  const db = useMemo(() => new NotebookDb(userId), [userId]);
+  const repo = useMemo(() => new NotebookRepository(db), [db]);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [notebookId, setNotebookId] = useState<string | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
@@ -146,6 +148,8 @@ export function NotebookApp({ userId }: { userId: string }) {
   const courseId = notebooks.find((n) => n.id === notebookId)?.courseId ?? null;
   const mew = useMewSession(engine, courseId);
   const { quiz } = mew;
+  // Notes Check: every line's text, kept with the page and (if allowed) on the server.
+  useNoteIndexing({ db, repo, engine, notebookId, recognition: mew.recognition });
   const app = useAppServices({
     ready: engine !== null,
     listen: mew.startListening,

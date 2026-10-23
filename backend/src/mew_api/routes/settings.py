@@ -7,6 +7,7 @@ from ..deps import Caller, CurrentCaller, SettingsDep
 from ..profiles.models import SettingsPatch, UserSettings
 from ..profiles.store import ProfileStore, SupabaseProfileStore
 from .courses import _call
+from .notes import delete_all_lines
 
 router = APIRouter(prefix="/me/settings", tags=["settings"])
 
@@ -35,4 +36,9 @@ def update_settings(
 ) -> UserSettings:
     store = profile_store(request, caller, settings)
     changes = body.model_dump(exclude_unset=True)
-    return _call(lambda: store.update_settings(caller.user_id, changes))
+    updated = _call(lambda: store.update_settings(caller.user_id, changes))
+    # Turning Notes Check's copy off deletes it. The setting is saved first, so the database
+    # already refuses new lines; repeating the change repeats the deletion.
+    if changes.get("notes_index") is False:
+        delete_all_lines(request, caller, settings)
+    return updated
