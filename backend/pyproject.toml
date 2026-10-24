@@ -5,7 +5,7 @@ description = "Mew backend: checkers, course ingestion and heavy LLM orchestrati
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "fastapi>=0.143,<0.144",
+    "fastapi>=0.143,<0.157",
     "uvicorn[standard]>=0.54,<0.55",
     "pydantic>=2.12,<3",
     "pydantic-settings>=2.16,<3",
