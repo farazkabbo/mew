@@ -37,7 +37,8 @@ Last updated 2026-10-21, after M9 and M10 (every milestone of the brief is built
 | M10 Mew v2           | ✅ Pipeline done (opt-in logging → Teach Mew → dataset → training → in-browser model)  |
 
 **Screen Coach** (new feature, [SCREEN_COACH.md](SCREEN_COACH.md); its Decisions section is
-binding): **S0, S1, S2 and S3 built** (2026-10-22). Desktop code is in `desktop/src-tauri/src/screen/`.
+binding): **S0–S3 built** (2026-10-22), **S4 built** (2026-10-23). Desktop code is in
+`desktop/src-tauri/src/screen/`.
 
 - **S0 (plumbing):** local settings + opt-in, hotkeys, an in-memory capture with
   Windows.Graphics.Capture, the edge glow and tray states, plus
@@ -82,7 +83,35 @@ binding): **S0, S1, S2 and S3 built** (2026-10-22). Desktop code is in `desktop/
   fading on scroll in Edge's PDF viewer and on YouTube, the pill never taking focus, Alt+Tab not
   showing the overlay, the overlay absent from a Teams/OBS capture, a full save in the running app
   (preview → Save → notebook page), and `check-no-screenshots.ps1` after a clip is cancelled.
-- **Next:** S4 (coach mode). Notes Check (S3.5) N1–N5 are built; see below.
+- **S4 (coach mode)** — decision 10 of SCREEN_COACH.md:
+  - **The walkthrough lives on the server.** Its state machine is pure TypeScript
+    (`packages/shared/src/coach-machine.ts`: hint ladder, the 0.75 confidence rule, off track,
+    3 retries per step, confirming, pause, stop, resume, completion), run by
+    `frontend/src/server/coach/run.ts` behind `/api/screen/coach/start`, `/resume` and `/step`
+    (device token). Walkthroughs are stored by FastAPI (`routes/walkthroughs.py`, migration
+    `walkthroughs`: text only, compare-and-set on `revision`, the plan can't change).
+  - **Models:** the planner (`coach-planner.v1`, the screen model) plans 3–15 steps and finds
+    step 1's control; the verifier (`coach-verifier.v1`, `GEMINI_VERIFIER_MODEL`) checks each step
+    and finds the next control in the same call. Hints 1 and 3 are planned text. Every model text
+    passes the rule-based safety check (`coachPlanReasons`, `coachVerdictReasons`).
+  - **Desktop:** `coach_mode.rs` (requests, replies, the progress pill, ending on pause),
+    `walkthrough.rs` (pure: bodies, reply checks, words → events, pill view and placement),
+    coach words in `intent.rs`, the pill page `overlay-src/coach-pill.ts`. During a walkthrough
+    the hotkey captures the monitor, ink doesn't take Esc, and the ink pill isn't shown; a
+    one-time notice says coach mode sees the whole monitor.
+  - A question asked mid-walkthrough is answered in its context (screen tutor prompt v3).
+  - Rate limits: `coachStart*` (4/min, 30/day), `coachStep*` (20/min, 400/day, 4,000/month).
+  - **The `walkthroughs` migration is not applied to the hosted project yet** (needs the owner's
+    go).
+  - **To verify by hand:** the acceptance check, a 5+ step walkthrough in Excel or Word (e.g.
+    "teach me how to make a pivot table"), saying "done" once without doing the step (it must be
+    caught and hinted), "I'm stuck" (an arrow with the control's name), the pill's buttons and
+    its position, Stop then "continue where we left off", Esc still reaching Excel during a
+    walkthrough, and pausing Screen Coach mid-walkthrough. The ignored Rust test
+    `coach_e2e_plans_a_walkthrough_and_catches_a_skipped_step` does the first part against the dev
+    servers and real Gemini on a mock spreadsheet window.
+- **Next:** S5 (learner integration: skills from walkthroughs, evidence, FSRS re-checks).
+  Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in
 [SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1–N5 built** (2026-10-23). The
@@ -143,6 +172,10 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after S4): **1,021 unit tests** (frontend 362, backend 257, ink 134, shared 172, database
+87, desktop overlays 9), **126 Rust tests** (+5 real-Windows ones; clippy clean) and
+**54 Playwright tests**.
 
 Tests (after Notes Check N5): **940 unit tests** (frontend 336, backend 240, ink 134, shared 142,
 database 81, desktop overlays 7), **116 Rust tests** (+4 real-Windows ones; clippy clean) and

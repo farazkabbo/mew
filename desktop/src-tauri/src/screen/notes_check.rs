@@ -146,6 +146,7 @@ fn check<R: Runtime>(
                 detail,
                 video_time_sec: None,
                 clip_when_drawn: false,
+                coaching: false,
             },
         );
     }

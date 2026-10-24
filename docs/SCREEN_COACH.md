@@ -488,3 +488,61 @@ don't ask them again. Where a decision changes the brief above, the decision win
        shows, and saving clips.
      - The notebook tutor sees the newest clips' text on the page (`clippedText`) and keeps its
        ink off clipped images.
+10. **S4, coach mode** (decided 2026-10-23; the owner asked for what's best for the app and
+    cost-efficient, with rate limits):
+    - **The walkthrough lives on the server.** Its state machine is pure TypeScript
+      (`packages/shared/src/coach-machine.ts`), run by the Next server; FastAPI stores each
+      walkthrough in a `walkthroughs` table (text only), written by the API service after it
+      checked the device token, like clips. The hints and outcomes recorded there are what S5
+      turns into evidence, so the device can't claim them, and "continue where we left off"
+      survives restarts. The desktop app keeps only what's on screen: the id, the step number,
+      the phase.
+    - **Model calls:** starting is one planner call (the screen model): 3–15 steps, each with an
+      instruction, a success condition, a nudge and an explicit instruction, plus where step 1's
+      control is. Each check ("done") is one verifier call (`GEMINI_VERIFIER_MODEL`) that judges
+      the step _and_ says where to point next: the next step's control if it's done, this
+      step's otherwise. Hints 1 and 3 are the planned texts (no call). A 7-step walkthrough
+      without hints costs about 8 calls.
+    - **Verdicts:** `completed`, `not_completed` or `off_track`, with a confidence. The
+      walkthrough advances only at confidence ≥ 0.75. Below that it asks the student ("I can't
+      quite tell. Is it done?"); "yes" advances (recorded as confirmed by the student, without an
+      arrow for the next step), "no" climbs the hint ladder.
+    - **The hint ladder** is per step. Each check that fails and each "I'm stuck" climbs one
+      level: 1 a spoken nudge, 2 an arrow with the control's name, 3 the explicit instruction.
+      Every reply with a known position points at the control. Off track: a short redirect and
+      the arrow, without a hint counted. "I'm stuck" (and "Hint") is checked first, with the
+      fresh capture: it may already be done.
+    - **Caps:** at most 15 steps. A step's fourth failed check (3 retries) pauses the walkthrough
+      ("have another go, then press Resume"); resuming gives the step its tries back. Resuming
+      checks the current step on the new screen (it may be done) without counting a hint.
+    - **Words** (hold-to-talk, as before) are rules in Rust (`intent.rs`), not new `MewLabel`s.
+      This replaces decision 9's "fold into `MewLabel` in S4": the hotkey is always an explicit
+      summon, so there's no speak-or-stay-silent decision for Mew to make, and adding screen
+      labels to the notebook gate (Gemini and the trained v2 classifier, whose labels are
+      stored in `mew_events`) would let it answer "coach_done" while a student writes. During
+      a walkthrough: nothing, "done", "okay", "next" → check; "I'm stuck", "what now", "hint"
+      → hint; "yes"/"no" when asked; "pause"; "stop"; anything else is a question, answered with
+      the walkthrough as context (screen tutor v3), and the walkthrough waits. "Teach me how
+      to …", "walk me through …" and "guide me through …" start one; "continue where we left
+      off" resumes the latest one from the last 7 days.
+    - **Captures:** a walkthrough's events (the hotkey, and the progress pill's Done, Hint, No
+      and Resume) capture the monitor under the cursor (decision 6), through the usual privacy
+      pipeline. The pill is a bundled page with its own capability, like the ink pill's Save
+      (decision 2's "coach-mode done events"). The first walkthrough shows a one-time notice
+      that coach mode sees the whole monitor (a notification; the flag is a local setting).
+    - **No Esc during a walkthrough.** Excel and Word use Esc to close dialogs and cancel edits,
+      and a global Esc hotkey would take it from them. Stop with the pill, by saying "stop", or
+      from the tray ("Stop the walkthrough"). Pausing Screen Coach stops the walkthrough too
+      (saved, so it can be resumed).
+    - **The progress pill:** "Step 3 of ~7 · Pivot tables" with Done · Hint · Pause · Stop (Yes ·
+      No when asked; Resume · Stop when paused). Bottom centre of the coached monitor, moved to
+      the top when the arrow points near it. Never takes focus, excluded from captures. The ink
+      pill (Save · Clear) isn't shown during a walkthrough. Finishing draws a tick in the pill
+      and says "You did it with 1 hint."
+    - **Rate limits** (in memory, like the rest): starting 4/min and 30/day; steps 20/min,
+      400/day and 4,000 a month.
+    - **Stored:** the title, the student's goal (their words, ≤ 200 characters), the app's name,
+      the steps' texts, each step's hints, checks and outcome, the status, and timestamps. Never
+      a screenshot, and never what the verifier saw (its observation isn't stored or logged).
+    - **Not in S4:** auto-check on pause (§9.3, with the S7 settings), skills, evidence and
+      re-checks (S5; S4 records what they need).

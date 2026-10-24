@@ -17,6 +17,8 @@ export const SCREEN_EVENTS = {
   speech: "mew:screen-speech",
   /** The full reply. */
   answer: "mew:screen-answer",
+  /** Coach mode (S4): a line to say now, whatever else is being said. */
+  say: "mew:screen-say",
   /** A clip was saved from the screen (S3): build its notebook page. */
   clipSaved: "mew:screen-clip-saved",
   /** A notes check's findings (Notes Check): mark the notebook's lines. */

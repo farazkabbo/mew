@@ -10,12 +10,15 @@ export type ScreenCoachDeps = {
   listener: Pick<HoldToTalk, "start" | "finish" | "cancel">;
   ask: (transcript: string) => Promise<void>;
   speak: (text: string) => Promise<void>;
+  /** Stops whatever is being said (the student pressed the hotkey, or newer words came). */
+  hush: () => void;
 };
 
 /**
  * The page's part of "ask about your screen": listen while the hotkey is held, send the words to
  * the desktop app when it's released, and say the answer out loud (once: early from the speech
- * event when it comes first, otherwise from the full answer).
+ * event when it comes first, otherwise from the full answer). Coach mode's lines (`onSay`) are
+ * always said, cutting off anything older; pressing the hotkey cuts off whatever is being said.
  */
 export class ScreenCoachVoice {
   private spokeForThisTurn = false;
@@ -24,6 +27,7 @@ export class ScreenCoachVoice {
 
   onListen(): void {
     this.spokeForThisTurn = false;
+    this.deps.hush();
     this.deps.listener.start();
   }
 
@@ -39,6 +43,12 @@ export class ScreenCoachVoice {
   onSpeech(text: string): void {
     if (this.spokeForThisTurn) return;
     this.spokeForThisTurn = true;
+    void this.deps.speak(text);
+  }
+
+  /** A line from coach mode (S4): said now, instead of anything still being said. */
+  onSay(text: string): void {
+    this.deps.hush();
     void this.deps.speak(text);
   }
 
@@ -64,5 +74,6 @@ function defaultDeps(): ScreenCoachDeps {
       if (!response?.ok || !response.body) return;
       await player.play(response.body, { sampleRate: TTS_SAMPLE_RATE });
     },
+    hush: () => player.stop(),
   };
 }

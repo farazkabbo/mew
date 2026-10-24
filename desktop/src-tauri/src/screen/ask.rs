@@ -6,9 +6,11 @@
 //! (decision 2). The reply is checked (`protocol::parse_event`) before the page sees it, and its
 //! ink goes to the overlay (S3, `annotate.rs`).
 //!
-//! Short commands said over the hotkey aren't questions (decision 9): "save this" clips,
-//! "show that again" re-places the last ink, and "check my notes" compares the screen with the
-//! notes (Notes Check), without asking the tutor anything.
+//! Short commands said over the hotkey aren't questions (decisions 9 and 10): "save this"
+//! clips, "show that again" re-places the last ink, "check my notes" compares the screen with
+//! the notes (Notes Check), and coach mode's words ("teach me how to…", "done", "I'm stuck",
+//! "stop"…) go to the walkthrough (`coach_mode.rs`), without asking the tutor anything. A
+//! question asked during a walkthrough is answered in its context.
 
 use std::time::{Duration, Instant};
 
@@ -19,6 +21,7 @@ use super::account::{forget_revoked_token, wipe_string};
 use super::annotate::{self, ShowInk, TurnState};
 use super::clip;
 use super::coach::{self, ScreenCoach};
+use super::coach_mode;
 use super::frame::{CapturedFrame, FrameDetail, FrameMeta};
 use super::intent::{intent_of, Intent};
 use super::notes_check;
@@ -69,9 +72,13 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         jpeg, meta, detail, ..
     } = frame;
 
-    let intent = intent_of(transcript);
+    let intent = intent_of(transcript, coach_mode::is_coaching(app));
     let command = match intent {
-        Intent::Clip | Intent::NotesCheck { .. } => true,
+        Intent::Clip
+        | Intent::NotesCheck { .. }
+        | Intent::CoachStart
+        | Intent::CoachResume
+        | Intent::Coach(_) => true,
         Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
         Intent::Ask => false,
     };
@@ -81,6 +88,9 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         match intent {
             Intent::Clip => clip::from_voice(app, captured),
             Intent::NotesCheck { all } => notes_check::start(app, captured, all),
+            Intent::CoachStart => coach_mode::start(app, transcript.to_owned(), captured),
+            Intent::CoachResume => coach_mode::resume(app, captured),
+            Intent::Coach(word) => coach_mode::on_word(app, word, captured),
             _ => annotate::reannotate(app, captured, false),
         }
         return Ok(());
@@ -92,7 +102,14 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
 
-    let body = ask_body(transcript, &meta, meta.video_playing, jpeg.as_slice());
+    let walkthrough = coach_mode::active_walkthrough(app);
+    let body = ask_body(
+        transcript,
+        &meta,
+        meta.video_playing,
+        walkthrough.as_deref(),
+        jpeg.as_slice(),
+    );
     drop(jpeg); // wiped; only the request body holds the image now
                 // Kept for the answer's ink (pixels and text stay in Rust).
     let mut for_ink: Option<(FrameMeta, FrameDetail)> = detail.map(|detail| (meta, detail));
@@ -163,6 +180,7 @@ fn deliver<R: Runtime>(
                         detail,
                         video_time_sec: response.video_time_sec,
                         clip_when_drawn: false,
+                        coaching: false,
                     },
                 );
             }
@@ -189,7 +207,7 @@ fn wait_for_frame(coach: &ScreenCoach) -> Option<CapturedFrame> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     //! End to end against real servers (S2's acceptance check): the dev API and web app must be
     //! running, with a Gemini key. Captures only a window this test draws itself.
     //!
@@ -205,11 +223,11 @@ mod tests {
     use crate::screen::win::{crypto, target, ComThread};
     use tauri::Url;
 
-    fn env_url(name: &str) -> Url {
+    pub(crate) fn env_url(name: &str) -> Url {
         Url::parse(&std::env::var(name).unwrap_or_else(|_| panic!("set {name}"))).unwrap()
     }
 
-    fn post_json(url: &Url, headers: &[String], body: &[u8]) -> (u16, Vec<u8>) {
+    pub(crate) fn post_json(url: &Url, headers: &[String], body: &[u8]) -> (u16, Vec<u8>) {
         let mut reply = Vec::new();
         let status =
             http::post(url, headers, body, |chunk| reply.extend_from_slice(chunk)).unwrap();
@@ -218,7 +236,7 @@ mod tests {
 
     /// Links a device the way the real flow does, except that the link code is minted directly
     /// on the API as the development-only local user (no browser session in a test).
-    fn link_device(app: &Url, api: &Url) -> String {
+    pub(crate) fn link_device(app: &Url, api: &Url) -> String {
         let pkce = crypto::new_pkce().unwrap();
         let secret = std::env::var("INTERNAL_API_SECRET").expect("set INTERNAL_API_SECRET");
         let (status, body) = post_json(
@@ -298,6 +316,7 @@ mod tests {
         let body = ask_body(
             "What should I do on this page?",
             &captured.meta,
+            None,
             None,
             captured.jpeg.as_slice(),
         );

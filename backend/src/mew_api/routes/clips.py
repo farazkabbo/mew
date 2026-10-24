@@ -25,15 +25,12 @@ from ..clips.store import (
 )
 from ..config import Settings
 from ..deps import Caller, CurrentCaller, SettingsDep
-from ..devices.tokens import TOKEN_PATTERN
 from ..supabase_rest import StoreError
-from .devices import find_device
+from .devices import screen_device
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/clips", tags=["clips"])
-
-SCREEN_SCOPE = "screen"
 
 
 def _local(request: Request) -> MemoryClipStore:
@@ -92,13 +89,7 @@ def create_clip(
     x_mew_device_token: Annotated[str | None, Header()] = None,
 ) -> ClipCreated:
     """Stores a clip the student saved in the desktop app's preview, for the device's owner."""
-    if x_mew_device_token is None or not TOKEN_PATTERN.match(x_mew_device_token):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
-    device = find_device(x_mew_device_token, request, settings)
-    if device is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
-    if SCREEN_SCOPE not in device.scopes:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed")
+    device = screen_device(x_mew_device_token, request, settings)
     try:
         image = body.image_bytes()
     except ValueError as error:

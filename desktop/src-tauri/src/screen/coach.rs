@@ -3,7 +3,8 @@
 //! Captures start only here, from the hotkey and tray handlers (decision 2). No command a page
 //! can call starts a capture or returns screen pixels. What a capture does, step by step, is in
 //! `pipeline.rs`; asking about it is in `ask.rs`; connecting to the account in `account.rs`;
-//! ink on screen in `annotate.rs` and saving clips in `clip.rs` (S3).
+//! ink on screen in `annotate.rs` and saving clips in `clip.rs` (S3); walkthroughs in
+//! `coach_mode.rs` (S4).
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,6 +24,7 @@ use super::account::PendingLink;
 use super::annotate::{self, InkState};
 use super::ask;
 use super::clip::{self, ClipDraft, Purpose};
+use super::coach_mode::{self, CoachCapture, CoachState};
 use super::config::{
     self, CaptureScope, HotkeyError, Loaded, Privacy, ScreenConfig, CONSENT_VERSION,
 };
@@ -44,6 +46,8 @@ const CHANGED_SCRIPT: &str = "window.dispatchEvent(new Event('screen-coach:chang
 pub struct TrayItems<R: Runtime> {
     pub look: MenuItem<R>,
     pub pause: CheckMenuItem<R>,
+    /// "Stop the walkthrough": enabled while one is in progress (S4).
+    pub stop_walkthrough: MenuItem<R>,
 }
 
 pub struct ScreenCoach {
@@ -60,6 +64,8 @@ pub struct ScreenCoach {
     ink: Mutex<InkState>,
     /// A clip waiting in its preview (S3).
     clip: Mutex<Option<ClipDraft>>,
+    /// The walkthrough in progress, as far as the desktop knows it (S4).
+    coaching: Mutex<CoachState>,
 }
 
 struct State {
@@ -120,14 +126,15 @@ pub enum HotkeyKind {
 }
 
 /// Who asked for a capture: the hold-to-talk hotkey (the page listens, then asks with the
-/// words), the tray (asked at once, without words), saving a clip (S3), or the Notes Check
-/// hotkey (compared with the notes at once).
+/// words), the tray (asked at once, without words), saving a clip (S3), the Notes Check hotkey
+/// (compared with the notes at once), or the progress pill's Done, Hint and Resume (S4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Origin {
     Hotkey,
     Tray,
     Clip(Purpose),
     NotesCheck,
+    Coach(CoachCapture),
 }
 
 /// Work for the capture worker thread, which owns the Windows objects in `Tools`.
@@ -190,6 +197,12 @@ impl ScreenCoach {
 
     pub fn clip(&self) -> std::sync::MutexGuard<'_, Option<ClipDraft>> {
         self.clip
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn coaching(&self) -> std::sync::MutexGuard<'_, CoachState> {
+        self.coaching
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -271,6 +284,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         pending_link: Mutex::new(None),
         ink: Mutex::new(InkState::default()),
         clip: Mutex::new(None),
+        coaching: Mutex::new(CoachState::default()),
     };
     {
         let mut state = coach.lock();
@@ -303,8 +317,9 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 /// Each overlay page (S3) may call only its own commands, and only from its own window: the
-/// ink overlay reports what it drew, the pill has its two buttons, the preview its three, and
-/// the Notes Check panel its one (close, hide the marks, open a line in the notebook).
+/// ink overlay reports what it drew, the pill has its two buttons, the preview its three, the
+/// Notes Check panel its one (close, hide the marks, open a line in the notebook), and the
+/// progress pill its one (its buttons, S4).
 fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     use super::overlay::Surface;
     app.add_capability(
@@ -324,6 +339,12 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .local(true)
             .window(Surface::Notes.label())
             .permission("allow-screen-notes-panel"),
+    )?;
+    app.add_capability(
+        CapabilityBuilder::new("screen-coach-pill")
+            .local(true)
+            .window(Surface::Coach.label())
+            .permission("allow-screen-coach-pill"),
     )?;
     app.add_capability(
         CapabilityBuilder::new("screen-clip")
@@ -511,6 +532,28 @@ pub fn capture_for_clip<R: Runtime>(app: &AppHandle<R>, scope: CaptureScope, pur
     capture(app, Origin::Clip(purpose), Some(scope));
 }
 
+/// Captures the monitor under the cursor for a walkthrough (decision 6): only from the progress
+/// pill's buttons, which the student clicked (decision 10).
+pub fn capture_for_coach<R: Runtime>(app: &AppHandle<R>, kind: CoachCapture) {
+    if !capture(app, Origin::Coach(kind), Some(CaptureScope::Monitor)) {
+        coach_mode::capture_failed(app);
+    }
+}
+
+/// True the first time a walkthrough starts on this computer (then never again): the one-time
+/// notice that coach mode sees the whole monitor (decision 6).
+pub fn take_coach_notice<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let Some(coach) = app.try_state::<ScreenCoach>() else {
+        return false;
+    };
+    if coach.lock().config.coach_notice_seen {
+        return false;
+    }
+    // If saving fails it's shown again next time: better twice than never.
+    let _ = coach.update(|config| config.coach_notice_seen = true);
+    true
+}
+
 /// On, not paused, on a supported PC: the hotkeys may act.
 fn usable(coach: &ScreenCoach) -> bool {
     let state = coach.lock();
@@ -538,8 +581,15 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
             return false;
         }
         state.status = Status::Looking;
+        // During a walkthrough the hotkey sees the monitor: menus and dialogs are often separate
+        // windows (decision 6).
+        let default_scope = if coach_mode::is_coaching(app) {
+            CaptureScope::Monitor
+        } else {
+            state.config.privacy.ask_scope
+        };
         Request {
-            scope: scope.unwrap_or(state.config.privacy.ask_scope),
+            scope: scope.unwrap_or(default_scope),
             privacy: state.config.privacy.clone(),
         }
     };
@@ -598,6 +648,7 @@ fn finish_capture<R: Runtime>(
     let mut kept = false;
     let mut for_clip = None;
     let mut for_notes = None;
+    let mut for_coach = None;
     match result {
         Ok(captured) => {
             log_capture(&captured.meta, captured.jpeg.len());
@@ -610,6 +661,7 @@ fn finish_capture<R: Runtime>(
                 match origin {
                     Origin::Clip(purpose) => for_clip = Some((purpose, captured)),
                     Origin::NotesCheck => for_notes = Some(captured),
+                    Origin::Coach(kind) => for_coach = Some((kind, captured)),
                     Origin::Hotkey | Origin::Tray => {
                         let Captured { jpeg, meta, detail } = captured;
                         coach.slot.put(jpeg, meta, Some(detail), Instant::now());
@@ -629,12 +681,16 @@ fn finish_capture<R: Runtime>(
     if let Some(captured) = for_notes {
         notes_check::start(app, captured, false);
     }
+    if let Some((kind, captured)) = for_coach {
+        coach_mode::on_captured(app, kind, captured);
+    }
     match (origin, kept) {
         (Origin::Tray, true) => ask::ask_in_background(app, String::new()),
         (Origin::Hotkey, false) => {
             coach.lock().hold_active = false;
             page::dispatch(app, page::CANCEL, serde_json::Value::Null);
         }
+        (Origin::Coach(_), false) => coach_mode::capture_failed(app),
         _ => {}
     }
     let mut state = coach.lock();
@@ -745,6 +801,9 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         let _ = items.look.set_enabled(on && !paused);
         let _ = items.pause.set_enabled(on);
         let _ = items.pause.set_checked(paused);
+        let _ = items
+            .stop_walkthrough
+            .set_enabled(coach_mode::is_coaching(app));
     }
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
         let _ = window.eval(CHANGED_SCRIPT);
@@ -764,10 +823,12 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
         }
     }
     if paused {
-        // Pausing is a promise: nothing held, nothing captured until resumed (brief §7.10).
+        // Pausing is a promise: nothing held, nothing captured until resumed (brief §7.10). A
+        // walkthrough stops too (saved: it can be continued later).
         coach.slot.clear();
         annotate::clear(app);
         clip::discard(app, None);
+        coach_mode::end_quietly(app);
     }
     refresh(app);
     Ok(coach.view())
@@ -830,6 +891,7 @@ pub fn screen_coach_set_enabled<R: Runtime>(
         coach.slot.clear();
         annotate::clear(app);
         clip::discard(app, None);
+        coach_mode::end_quietly(app);
     }
     sync_hotkeys(app);
     refresh(app);

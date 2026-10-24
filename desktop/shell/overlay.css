@@ -1,4 +1,5 @@
-/* Screen Coach's overlay pages (S3): the ink layer, the ink pill and a clip's preview. */
+/* Screen Coach's overlay pages: the ink layer, the ink pill, a clip's preview (S3), the Notes Check
+   panel (S3.5) and the progress pill (S4). */
 
 :root {
   color-scheme: light dark;
@@ -259,5 +260,129 @@ body.notes {
   .notes-panel,
   .notes-panel .icon {
     border: 1px solid CanvasText;
+  }
+}
+
+/* ─── The progress pill (coach mode, S4) ────────────────────────────────────────────────── */
+
+body.coach {
+  background: transparent;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  padding: 4px;
+  color: var(--ink);
+}
+
+.coach-pill {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.coach-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.coach-heading,
+.coach-status {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.coach-heading {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.coach-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.coach-status:empty {
+  display: none;
+}
+
+.coach-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.coach-buttons button {
+  font: inherit;
+  font-size: 13px;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+}
+
+.coach-buttons button.primary {
+  background: var(--violet-strong);
+  color: #fff;
+}
+
+.coach-buttons button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Finished: a tick drawn in the tutor's violet ink, then the summary (brief §10). */
+.coach-pill .tick {
+  display: none;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  fill: none;
+  stroke: var(--violet);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+}
+
+.coach-pill[data-state="finished"] .tick {
+  display: block;
+  animation: draw-tick 500ms ease-out 100ms forwards;
+}
+
+.coach-pill[data-state="finished"] .coach-heading .dot,
+.coach-pill[data-state="finished"] #coach-progress {
+  display: none;
+}
+
+@keyframes draw-tick {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-pill[data-state="finished"] .tick {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .coach-pill,
+  .coach-buttons button {
+    border: 1px solid CanvasText;
+  }
+  .coach-pill .tick {
+    stroke: CanvasText;
   }
 }

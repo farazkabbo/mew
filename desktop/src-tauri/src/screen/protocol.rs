@@ -33,10 +33,12 @@ pub fn clean_transcript(raw: &str) -> String {
 
 /// The JSON body of `POST /api/screen/ask`, built straight into a wipeable buffer (it holds the
 /// screenshot).
+/// `walkthrough`: the walkthrough in progress, if any (coach mode, S4).
 pub fn ask_body(
     transcript: &str,
     meta: &FrameMeta,
     video_playing: Option<bool>,
+    walkthrough: Option<&str>,
     jpeg: &[u8],
 ) -> SecretBytes {
     #[derive(Serialize)]
@@ -47,12 +49,15 @@ pub fn ask_body(
         scope: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         video_playing: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        walkthrough_id: Option<&'a str>,
     }
     let head = Head {
         transcript,
         app: meta.app.as_deref(),
         scope: scope_name(meta.kind),
         video_playing,
+        walkthrough_id: walkthrough,
     };
     with_image(&head, jpeg, meta.width, meta.height)
 }
@@ -90,7 +95,7 @@ pub fn reanchor_body(
     with_image(&head, jpeg, meta.width, meta.height)
 }
 
-fn scope_name(kind: TargetKind) -> &'static str {
+pub(super) fn scope_name(kind: TargetKind) -> &'static str {
     match kind {
         TargetKind::Window => "window",
         TargetKind::Monitor => "monitor",
@@ -540,7 +545,7 @@ mod tests {
 
     #[test]
     fn builds_the_ask_body_the_server_expects() {
-        let body = ask_body("what's \"this\"?", &meta(), None, b"\xff\xd8\xff");
+        let body = ask_body("what's \"this\"?", &meta(), None, None, b"\xff\xd8\xff");
         let value: serde_json::Value = serde_json::from_slice(body.as_slice()).unwrap();
         assert_eq!(
             value,
@@ -551,9 +556,13 @@ mod tests {
                 "image": { "jpeg": "/9j/", "width": 1600, "height": 900 }
             })
         );
-        let playing = ask_body("hi", &meta(), Some(true), b"\xff\xd8\xff");
+        let playing = ask_body("hi", &meta(), Some(true), None, b"\xff\xd8\xff");
         let value: serde_json::Value = serde_json::from_slice(playing.as_slice()).unwrap();
         assert_eq!(value["videoPlaying"], true);
+        assert!(value.get("walkthroughId").is_none());
+        let coached = ask_body("why?", &meta(), None, Some(TURN), b"\xff\xd8\xff");
+        let value: serde_json::Value = serde_json::from_slice(coached.as_slice()).unwrap();
+        assert_eq!(value["walkthroughId"], TURN);
     }
 
     #[test]

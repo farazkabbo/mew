@@ -81,6 +81,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_coach_open_mic_settings, screen_coach_set_enabled, screen_coach_set_hotkey,
         screen_coach_set_paused, screen_coach_set_privacy, screen_coach_status,
     };
+    use screen::coach_mode::screen_coach_pill;
     use screen::notes_check::screen_notes_panel;
     tauri::generate_handler![
         reminders::notify_due,
@@ -99,7 +100,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_clip_ready,
         screen_clip_save,
         screen_clip_cancel,
-        screen_notes_panel
+        screen_notes_panel,
+        screen_coach_pill
     ]
 }
 
@@ -181,6 +183,13 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
+    let stop_walkthrough = MenuItem::with_id(
+        app,
+        "screen-coach-stop",
+        "Stop the walkthrough",
+        false,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(
         app,
         "screen-settings",
@@ -199,6 +208,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             &separator,
             &look,
             &pause,
+            &stop_walkthrough,
             &settings,
             &separator2,
             &quit,
@@ -217,6 +227,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             "screen-look" => screen::coach::look_from_tray(app),
             #[cfg(windows)]
             "screen-pause" => screen::coach::toggle_pause(app),
+            #[cfg(windows)]
+            "screen-coach-stop" => screen::coach_mode::stop_from_tray(app),
             #[cfg(windows)]
             "screen-settings" => screen::coach::open_settings(app),
             "quit" => app.exit(0),
@@ -237,7 +249,11 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     }
     builder.build(app)?;
     #[cfg(windows)]
-    app.manage(screen::coach::TrayItems { look, pause });
+    app.manage(screen::coach::TrayItems {
+        look,
+        pause,
+        stop_walkthrough,
+    });
     Ok(())
 }
 

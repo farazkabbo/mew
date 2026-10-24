@@ -17,8 +17,8 @@ import {
 import { ScreenCoachVoice } from "./screen-coach";
 
 /**
- * Connects the desktop app's Screen Coach events to this page (desktop only): its voice, saved
- * clips, and Notes Check's findings (the notebook marks its lines).
+ * Connects the desktop app's Screen Coach events to this page (desktop only): its voice (answers
+ * and coach mode's lines), saved clips, and Notes Check's findings (the notebook marks its lines).
  */
 export function ScreenCoachBridge() {
   const router = useRouter();
@@ -36,6 +36,13 @@ export function ScreenCoachBridge() {
         (event) => {
           const speech = ScreenSpeechDetail.safeParse(detail(event));
           if (speech.success) coach.onSpeech(speech.data.text);
+        },
+      ],
+      [
+        SCREEN_EVENTS.say,
+        (event) => {
+          const said = ScreenSpeechDetail.safeParse(detail(event));
+          if (said.success) coach.onSay(said.data.text);
         },
       ],
       [

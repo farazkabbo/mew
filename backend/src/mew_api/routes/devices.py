@@ -27,6 +27,7 @@ from ..devices.models import (
     VerifiedDevice,
 )
 from ..devices.store import (
+    SCREEN_SCOPE,
     DeviceRegistry,
     MemoryDeviceStore,
     OwnerDevices,
@@ -35,6 +36,7 @@ from ..devices.store import (
 )
 from ..devices.tokens import (
     LINK_CODE_TTL_S,
+    TOKEN_PATTERN,
     LinkCodes,
     LinkGrant,
     hash_token,
@@ -171,6 +173,21 @@ def find_device(token: str, request: Request, settings: Settings) -> VerifiedDev
             local=isinstance(registry, MemoryDeviceStore),
         )
     return None
+
+
+def screen_device(token: str | None, request: Request, settings: Settings) -> VerifiedDevice:
+    """The desktop app calling a Screen Coach route: its token (the `X-Mew-Device-Token` header)
+    must be active and carry the screen scope (decision 8: device tokens are for Screen Coach
+    only). Checked against the database on every request: a user id is never taken from the
+    caller."""
+    if token is None or not TOKEN_PATTERN.match(token):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
+    device = find_device(token, request, settings)
+    if device is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
+    if SCREEN_SCOPE not in device.scopes:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed")
+    return device
 
 
 @router.post("/verify")

@@ -12,6 +12,7 @@ await build({
     "ink-pill": "overlay-src/ink-pill.ts",
     "clip-preview": "overlay-src/clip-preview.ts",
     "notes-panel": "overlay-src/notes-panel.ts",
+    "coach-pill": "overlay-src/coach-pill.ts",
   },
   outdir: "shell/gen",
   bundle: true,

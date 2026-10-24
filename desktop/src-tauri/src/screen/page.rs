@@ -13,6 +13,8 @@ pub const RELEASE: &str = "mew:screen-release";
 pub const CANCEL: &str = "mew:screen-cancel";
 pub const SPEECH: &str = "mew:screen-speech";
 pub const ANSWER: &str = "mew:screen-answer";
+/// Coach mode (S4): a line to say now, cutting off anything older.
+pub const SAY: &str = "mew:screen-say";
 /// A clip was saved: the page builds its notebook page (S3).
 pub const CLIP_SAVED: &str = "mew:screen-clip-saved";
 /// A notes check's findings: the page marks the notebook lines (Notes Check).
