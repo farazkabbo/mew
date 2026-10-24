@@ -135,6 +135,47 @@ impl ScreenText {
             .join("\n")
     }
 
+    /// Where each word is and which line it's on, in reading order (for the student's marks,
+    /// Circle & Ask: `marks::target_words` picks words by these indexes).
+    pub fn word_boxes(&self) -> Vec<super::marks::WordBox> {
+        self.words
+            .iter()
+            .map(|w| super::marks::WordBox {
+                rect: w.rect,
+                line: w.line,
+            })
+            .collect()
+    }
+
+    /// The text of the words at `indexes` (from `word_boxes`), a line per OCR line, leaving out
+    /// lines that still look sensitive (as `text_in` does).
+    pub fn text_of(&self, indexes: &[usize], rules: &RedactionRules) -> String {
+        let mut picked: Vec<usize> = indexes
+            .iter()
+            .copied()
+            .filter(|&i| i < self.words.len())
+            .collect();
+        picked.sort_unstable();
+        picked.dedup();
+        let mut out = String::new();
+        let mut line = None;
+        for word in picked.into_iter().map(|i| &self.words[i]) {
+            if !out.is_empty() {
+                out.push(if line == Some(word.line) { ' ' } else { '\n' });
+            }
+            out.push_str(&word.text);
+            line = Some(word.line);
+        }
+        let rules = at_least_defaults(rules);
+        let kept = out
+            .lines()
+            .filter(|l| find_sensitive(l, &rules).is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        wipe_string(&mut out);
+        kept
+    }
+
     /// The screen's text as blocks (Notes Check, N4): each a paragraph of consecutive OCR lines
     /// of similar size close together, with where it is. Blocks get ids "b1", "b2"… in reading
     /// order; the positions stay on the device (the marks are placed here), only the words are

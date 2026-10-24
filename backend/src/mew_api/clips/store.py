@@ -5,6 +5,10 @@ Creating uses the secret key (the desktop app has no Clerk session), only after 
 verified the device token, and always sets user_id and the user's own folder. Reading, noting
 the notebook page and deleting use the owner's Clerk token, so RLS and the bucket policies
 apply.
+
+A Circle & Ask entry (S3.2) is a clip with `kind` "entry": its session, the student's marks, and
+its turns; a follow-up in the same session is appended to it (`append`, also with the secret
+key after the device check), within the same caps on ink as any clip.
 """
 
 import threading
@@ -15,7 +19,14 @@ from urllib.parse import quote
 from uuid import UUID
 
 from ..supabase_rest import StoreError, SupabaseRest
-from .models import ClipCreate, ClipView
+from .models import (
+    MAX_POINTS,
+    MAX_STROKES,
+    MAX_TURNS,
+    ClipCreate,
+    ClipView,
+    EntryAppend,
+)
 
 BUCKET = "clips"
 
@@ -26,6 +37,15 @@ def storage_path(user: str, clip_id: UUID) -> str:
 
 class ClipWriter(Protocol):
     def create(self, user: str, clip_id: UUID, clip: ClipCreate, image: bytes) -> None: ...
+
+    def append(self, user: str, entry: EntryAppend) -> UUID | None:
+        """Adds a follow-up to the session's entry; its clip id, or None if there's no such entry.
+        Raises `EntryFullError` if it would go over the caps."""
+        ...
+
+
+class EntryFullError(ValueError):
+    """An entry has as many turns, strokes or points as a clip may hold."""
 
 
 class ClipReader(Protocol):
@@ -51,6 +71,45 @@ def _row(user: str, clip_id: UUID, clip: ClipCreate) -> dict[str, Any]:
         "annotations": [s.model_dump(mode="json") for s in clip.strokes],
         "ocr_text": clip.ocr_text,
         "captured_at": source.captured_at.isoformat(),
+        **_entry_columns(clip),
+    }
+
+
+def _entry_columns(clip: ClipCreate) -> dict[str, Any]:
+    """An entry's own columns (an ordinary clip has the defaults)."""
+    entry = clip.entry
+    if entry is None:
+        return {"kind": "clip"}
+    return {
+        "kind": "entry",
+        "session_id": str(entry.session_id),
+        "student_strokes": [s.model_dump(mode="json") for s in entry.student_strokes],
+        "entry": {
+            "turns": [entry.turn.model_dump(mode="json", by_alias=True, exclude_none=True)],
+            "strokeSteps": [[0, step] for step in entry.stroke_steps],
+            "conceptHints": entry.concept_hints,
+        },
+    }
+
+
+def _appended(row: dict[str, Any], entry: EntryAppend) -> dict[str, Any]:
+    """The row's changed columns once `entry` is added (EntryFullError over the caps)."""
+    stored = row.get("entry") or {"turns": [], "strokeSteps": [], "conceptHints": []}
+    turns = [*stored["turns"], entry.turn.model_dump(mode="json", by_alias=True, exclude_none=True)]
+    annotations = [*row["annotations"], *(s.model_dump(mode="json") for s in entry.strokes)]
+    points = sum(len(s["points"]) for s in annotations)
+    points += sum(len(s["points"]) for s in row.get("student_strokes") or [])
+    if len(turns) > MAX_TURNS or len(annotations) > MAX_STROKES or points > MAX_POINTS:
+        raise EntryFullError("the entry is full")
+    turn = len(turns) - 1
+    hints = list(dict.fromkeys([*stored["conceptHints"], *entry.concept_hints]))[:5]
+    return {
+        "annotations": annotations,
+        "entry": {
+            "turns": turns,
+            "strokeSteps": [*stored["strokeSteps"], *([turn, s] for s in entry.stroke_steps)],
+            "conceptHints": hints,
+        },
     }
 
 
@@ -72,8 +131,22 @@ def _view(row: dict[str, Any]) -> ClipView:
             "ocr_text": row["ocr_text"],
             "notebook_page_id": row.get("notebook_page_id"),
             "created_at": row["created_at"],
+            "entry": _entry_view(row),
         }
     )
+
+
+def _entry_view(row: dict[str, Any]) -> dict[str, Any] | None:
+    entry = row.get("entry")
+    if row.get("kind") != "entry" or not entry:
+        return None
+    return {
+        "session_id": row["session_id"],
+        "student_strokes": row.get("student_strokes") or [],
+        "turns": entry["turns"],
+        "stroke_steps": entry["strokeSteps"],
+        "concept_hints": entry["conceptHints"],
+    }
 
 
 # ─── Local mode ──────────────────────────────────────────────────────────────────────────────
@@ -99,6 +172,14 @@ class MemoryClipStore:
         }
         with self._lock:
             self._clips[(user, clip_id)] = _Stored(row, image)
+
+    def append(self, user: str, entry: EntryAppend) -> UUID | None:
+        with self._lock:
+            for (owner, clip_id), stored in self._clips.items():
+                if owner == user and stored.row.get("session_id") == str(entry.session_id):
+                    stored.row.update(_appended(stored.row, entry))
+                    return clip_id
+        return None
 
     def get(self, user: str, clip_id: UUID) -> ClipView | None:
         with self._lock:
@@ -147,6 +228,34 @@ class SupabaseClipWriter(SupabaseRest):
                 "DELETE", f"/storage/v1/object/{BUCKET}", json={"prefixes": [path]}, ok=(200, 404)
             )
             raise
+
+    def append(self, user: str, entry: EntryAppend) -> UUID | None:
+        if not self.service:
+            raise PermissionError("entries are written by the service")
+        rows = self._get(
+            "clips",
+            {
+                "select": "id,annotations,student_strokes,entry,revision",
+                "user_id": f"eq.{user}",
+                "session_id": f"eq.{entry.session_id}",
+            },
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        # Compare-and-set on the revision: two follow-ups can't overwrite each other's ink.
+        updated = self._patch(
+            "clips",
+            {
+                "user_id": f"eq.{user}",
+                "id": f"eq.{row['id']}",
+                "revision": f"eq.{row['revision']}",
+            },
+            {**_appended(row, entry), "revision": row["revision"] + 1},
+        )
+        if not updated:
+            raise StoreError("the entry changed meanwhile")
+        return UUID(row["id"])
 
 
 class SupabaseClipReader(SupabaseRest):

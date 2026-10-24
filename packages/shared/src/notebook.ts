@@ -61,9 +61,30 @@ export const ImageBlock = z.object({
   source: ImageSource.optional(),
   /** Text read from the image on the device: context for the notebook tutor. */
   ocrText: z.string().max(8_000).optional(),
+  /** A Circle & Ask entry (S3.2): the explanation shown under the picture. */
+  entry: z
+    .object({
+      sessionId: z.uuid(),
+      turns: z
+        .array(
+          z.object({
+            question: z.string().max(500),
+            steps: z.array(z.string().max(220)).max(5),
+            summary: z.string().max(320),
+            followUpQuestion: z.string().max(220).optional(),
+          }),
+        )
+        .max(12),
+      /** The tutor strokes' group for each turn's each step (Replay draws them in order). */
+      stepGroups: z.array(z.array(z.uuid()).max(5)).max(12),
+      /** How many of the clip's tutor strokes are already on the page (follow-ups add more). */
+      strokeCount: z.number().int().nonnegative(),
+    })
+    .optional(),
   createdAt: z.number().int().nonnegative(),
 });
 export type ImageBlock = z.infer<typeof ImageBlock>;
+export type ImageEntry = NonNullable<ImageBlock["entry"]>;
 
 export const PageBackground = z.enum(["dot_grid", "blank", "lined", "grid"]);
 export type PageBackground = z.infer<typeof PageBackground>;
@@ -74,6 +95,8 @@ export const Page = z.object({
   index: z.number().int().nonnegative(),
   background: PageBackground,
   createdAt: z.number().int().nonnegative(),
+  /** The day's "From screen" page (Circle & Ask's entries stack on it, S3.2 §2.5). */
+  fromScreenDay: z.iso.date().optional(),
 });
 export type Page = z.infer<typeof Page>;
 

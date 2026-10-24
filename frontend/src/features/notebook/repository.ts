@@ -2,7 +2,7 @@ import { type ClipView, ImageBlock, Notebook, Page, Stroke } from "@mew/shared";
 import Dexie from "dexie";
 import type { z } from "zod";
 
-import { clipToPage } from "./clip-page";
+import { clipToPage, entryFollowUps, entryToPage, nextEntryTop, today } from "./clip-page";
 import type { NotebookDb } from "./db";
 
 /** Data access for notebooks, pages and strokes. Everything read back is schema-validated. */
@@ -78,13 +78,19 @@ export class NotebookRepository {
     return validRows(Page, rows, "page");
   }
 
-  async addPage(notebookId: string): Promise<Page> {
+  async addPage(
+    notebookId: string,
+    extra: Partial<Pick<Page, "fromScreenDay">> = {},
+  ): Promise<Page> {
     return this.db.transaction("rw", this.db.pages, async () => {
       const pages = await this.db.pages.where("notebookId").equals(notebookId).toArray();
-      const page = newPage(
-        notebookId,
-        pages.reduce((max, p) => Math.max(max, p.index + 1), 0),
-      );
+      const page: Page = {
+        ...newPage(
+          notebookId,
+          pages.reduce((max, p) => Math.max(max, p.index + 1), 0),
+        ),
+        ...extra,
+      };
       await this.db.pages.add(page);
       return page;
     });
@@ -131,6 +137,44 @@ export class NotebookRepository {
         await this.db.strokes.bulkAdd(strokes.map((s) => Stroke.parse(s)));
         await this.touchNotebook(notebookId);
         return page;
+      },
+    );
+  }
+
+  /**
+   * Adds a Circle & Ask entry (S3.2 §2.5) to the notebook's "From screen" page for today (made
+   * when there's none), below the entries already there. An entry already on a page is brought
+   * up to date instead: a follow-up's turns and strokes are added to it. Returns its page.
+   */
+  async importEntry(notebookId: string, clip: ClipView): Promise<Page> {
+    const ids = { now: Date.now(), newId: () => crypto.randomUUID() };
+    return this.db.transaction(
+      "rw",
+      [this.db.pages, this.db.images, this.db.strokes, this.db.notebooks],
+      async () => {
+        const existing = await this.db.images.where("clipId").equals(clip.id).first();
+        const existingPage = existing && (await this.db.pages.get(existing.pageId));
+        if (existing && existingPage) {
+          const followUps = entryFollowUps(clip, ImageBlock.parse(existing), ids);
+          if (followUps) {
+            await this.db.images.put(ImageBlock.parse(followUps.image));
+            await this.db.strokes.bulkAdd(followUps.strokes.map((s) => Stroke.parse(s)));
+            await this.touchNotebook(notebookId);
+          }
+          return Page.parse(existingPage);
+        }
+
+        const day = today();
+        const pages = await this.db.pages.where("notebookId").equals(notebookId).toArray();
+        const page =
+          pages.find((p) => p.fromScreenDay === day) ??
+          (await this.addPage(notebookId, { fromScreenDay: day }));
+        const above = await this.db.images.where("pageId").equals(page.id).toArray();
+        const { image, strokes } = entryToPage(clip, page.id, nextEntryTop(above), ids);
+        await this.db.images.add(ImageBlock.parse(image));
+        await this.db.strokes.bulkAdd(strokes.map((s) => Stroke.parse(s)));
+        await this.touchNotebook(notebookId);
+        return Page.parse(page);
       },
     );
   }

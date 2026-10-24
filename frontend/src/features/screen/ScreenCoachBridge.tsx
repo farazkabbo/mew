@@ -8,18 +8,34 @@ import { isDesktop } from "../desktop/bridge";
 import { useNotesCheck } from "../notes/check-store";
 import {
   OPEN_CLIP_EVENT,
+  OPEN_ENTRY_EVENT,
   SCREEN_EVENTS,
   ScreenAnswerDetail,
   ScreenClipSavedDetail,
+  ScreenEntrySavedDetail,
   ScreenNotesOpenDetail,
+  ScreenSayDetail,
   ScreenSpeechDetail,
 } from "./events";
 import { ScreenCoachVoice } from "./screen-coach";
 
 /**
- * Connects the desktop app's Screen Coach events to this page (desktop only): its voice (answers
- * and coach mode's lines), saved clips, and Notes Check's findings (the notebook marks its lines).
+ * Connects the desktop app's Screen Coach events to this page (desktop only): its voice (answers,
+ * coach mode's lines, Circle & Ask's steps), saved clips and entries, and Notes Check's findings
+ * (the notebook marks its lines).
  */
+/**
+ * Entries saved while the notebook wasn't open: added the next time it is (`/notebook` reads
+ * them on load through `takePendingEntries`).
+ */
+const pendingEntries = new Set<string>();
+
+export function takePendingEntries(): string[] {
+  const ids = [...pendingEntries];
+  pendingEntries.clear();
+  return ids;
+}
+
 export function ScreenCoachBridge() {
   const router = useRouter();
   useEffect(() => {
@@ -41,8 +57,24 @@ export function ScreenCoachBridge() {
       [
         SCREEN_EVENTS.say,
         (event) => {
-          const said = ScreenSpeechDetail.safeParse(detail(event));
-          if (said.success) coach.onSay(said.data.text);
+          const said = ScreenSayDetail.safeParse(detail(event));
+          if (said.success) coach.onSay(said.data.text, said.data.token);
+        },
+      ],
+      [SCREEN_EVENTS.hush, () => coach.onHush()],
+      [
+        SCREEN_EVENTS.entrySaved,
+        (event) => {
+          const saved = ScreenEntrySavedDetail.safeParse(detail(event));
+          if (!saved.success) return;
+          // The notebook adds the entry; it only comes to the front when asked (Open).
+          if (window.location.pathname === "/notebook") {
+            window.dispatchEvent(new CustomEvent(OPEN_ENTRY_EVENT, { detail: saved.data }));
+          } else if (saved.data.open) {
+            router.push(`/notebook?entry=${saved.data.clipId}`);
+          } else {
+            pendingEntries.add(saved.data.clipId);
+          }
         },
       ],
       [

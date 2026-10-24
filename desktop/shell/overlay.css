@@ -386,3 +386,266 @@ body.coach {
     stroke: CanvasText;
   }
 }
+
+/* ─── Circle & Ask (S3.2): the pointer, the draw overlay and the card ──────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+body.pointer {
+  background: transparent;
+  overflow: hidden;
+}
+
+.mew-pointer {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  transition: opacity 120ms ease-out;
+}
+
+.mew-pointer .halo {
+  fill: none;
+  stroke: var(--violet);
+  stroke-width: 2;
+  opacity: 0;
+}
+
+.mew-pointer .ears,
+.mew-pointer .face {
+  fill: var(--violet);
+}
+
+.mew-pointer .pen,
+.mew-pointer .dot,
+.mew-pointer .slash {
+  display: none;
+}
+
+.mew-pointer[data-look="idle"] {
+  opacity: 0.45;
+}
+
+.mew-pointer[data-look="drawing"] .pen {
+  display: block;
+  fill: #3b5b8c;
+}
+
+.mew-pointer[data-look="listening"] .halo {
+  opacity: 1;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.mew-pointer[data-look="thinking"] .dot,
+.mew-pointer[data-look="explaining"] .dot {
+  display: block;
+  fill: #fff;
+  animation: blink 1s ease-in-out infinite;
+}
+
+.mew-pointer .dot.two {
+  animation-delay: 150ms;
+}
+
+.mew-pointer .dot.three {
+  animation-delay: 300ms;
+}
+
+.mew-pointer[data-look="explaining"] .halo {
+  opacity: 0.6;
+}
+
+.mew-pointer[data-look="blocked"] .ears,
+.mew-pointer[data-look="blocked"] .face {
+  fill: #9a9a9a;
+}
+
+.mew-pointer[data-look="blocked"] .slash {
+  display: block;
+  stroke: #b42318;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+body.draw {
+  background: transparent;
+  overflow: hidden;
+}
+
+body.draw canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  transition: opacity 200ms ease-out;
+}
+
+body.draw canvas.faded {
+  opacity: 0;
+}
+
+/* While drawing, the overlay must take the mouse: Windows lets clicks on fully transparent
+   pixels fall through to the window underneath, so it gets a tint too faint to see. */
+body.draw.capturing {
+  cursor: crosshair;
+  background: rgba(255, 255, 255, 0.004);
+}
+
+.draw-hint {
+  position: fixed;
+  left: 50%;
+  top: 24px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.draw-hint:empty {
+  display: none;
+}
+
+body.card {
+  background: transparent;
+  overflow: hidden;
+  padding: 6px;
+  color: var(--ink);
+}
+
+.circle-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.card-top {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.card-top:empty,
+.card-text:empty,
+.card-chips:empty {
+  display: none;
+}
+
+/* Captions follow Windows text scaling (rem) and never go below 16 px (brief §4). */
+.card-text {
+  margin: 0;
+  font-size: max(16px, 1rem);
+  line-height: 1.35;
+}
+
+.card-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.card-chips button {
+  min-height: 44px;
+  text-align: left;
+}
+
+.card-ask input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: max(16px, 1rem);
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.card-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.circle-card button {
+  font: inherit;
+  font-size: 14px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+}
+
+.circle-card button.primary {
+  background: var(--violet-strong);
+  color: #fff;
+}
+
+.circle-card button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.circle-card button:focus-visible,
+.card-ask input:focus-visible {
+  outline: 2px solid var(--violet-strong);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mew-pointer,
+  .mew-pointer .halo,
+  .mew-pointer .dot,
+  body.draw canvas {
+    animation: none;
+    transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .circle-card,
+  .circle-card button,
+  .draw-hint {
+    border: 1px solid CanvasText;
+  }
+  .mew-pointer .ears,
+  .mew-pointer .face {
+    fill: CanvasText;
+  }
+}

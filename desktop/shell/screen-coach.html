@@ -59,6 +59,18 @@
             marks what matches, what differs and what's missing. Only short quotes are kept, with
             what Mew found, in your account; Mew never changes your notes.
           </li>
+          <li>
+            <strong>Draw on your screen to ask about something.</strong> Mew's small pointer rides
+            beside your cursor (it only knows where the cursor is, nothing you click or type). Hold
+            left Ctrl and left Alt, or press <kbd data-hotkey="draw">Ctrl+Alt+D</kbd>, and draw
+            around what's confusing: Mew takes one picture of that screen when you finish your first
+            mark, and explains it step by step with ink.
+          </li>
+          <li>
+            <strong>Explanations go to your notebook after a few seconds</strong> (the picture, your
+            marks and Mew's ink), unless you press Undo. You can choose to be asked each time, or
+            never, below. Nothing is saved from blocked apps, and nothing hidden is ever saved.
+          </li>
           <li><strong>Mew never clicks or types for you.</strong> It points the way; you do it.</li>
           <li>
             <strong>Pause any time</strong> from the tray or with
@@ -132,10 +144,59 @@
           </div>
           <p class="problem" id="problem-notes" role="alert" hidden></p>
         </form>
+        <form class="hotkey" data-which="draw">
+          <label for="hotkey-draw">Draw on the screen (on and off)</label>
+          <div class="row">
+            <input id="hotkey-draw" name="accelerator" autocomplete="off" spellcheck="false" />
+            <button type="submit">Change</button>
+          </div>
+          <p class="problem" id="problem-draw" role="alert" hidden></p>
+        </form>
         <p class="hint">
           Use Ctrl or Alt with a key, for example Ctrl+Alt+Space. Shortcuts work only while Screen
           Coach is on.
         </p>
+      </section>
+
+      <section aria-labelledby="circle">
+        <h2 id="circle">Circle &amp; Ask</h2>
+        <fieldset>
+          <legend>Show the pointer beside the cursor</legend>
+          <label><input type="radio" name="pointer" value="always" /> Always</label>
+          <label
+            ><input type="radio" name="pointer" value="while_drawing" /> Only while drawing</label
+          >
+          <label><input type="radio" name="pointer" value="never" /> Never</label>
+        </fieldset>
+        <div class="row">
+          <label for="pointer-size">Size</label>
+          <select id="pointer-size">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+          <label for="pointer-corner">Where</label>
+          <select id="pointer-corner">
+            <option value="bottom_right">Below right</option>
+            <option value="bottom_left">Below left</option>
+            <option value="top_right">Above right</option>
+            <option value="top_left">Above left</option>
+          </select>
+        </div>
+        <fieldset>
+          <legend>Save explanations to the notebook</legend>
+          <label><input type="radio" name="save" value="auto" /> Automatically (with Undo)</label>
+          <label><input type="radio" name="save" value="ask" /> Ask each time</label>
+          <label><input type="radio" name="save" value="never" /> Never</label>
+        </fieldset>
+        <label class="check">
+          <input type="checkbox" id="include-link" /> Keep the page's title and link (web pages and
+          videos)
+        </label>
+        <label class="check">
+          <input type="checkbox" id="silent" /> I'd rather not use my voice (type instead; captions,
+          no speech)
+        </label>
       </section>
 
       <section aria-labelledby="privacy">

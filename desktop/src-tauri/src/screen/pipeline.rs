@@ -130,6 +130,7 @@ pub fn run_on(
     if target.kind == super::frame::TargetKind::Monitor {
         hidden = black_out_blocked_windows(&mut raw, target, privacy);
     }
+    let blacked_out = hidden.clone();
     let text = cover_sensitive_text(tools, &mut raw, target, privacy, hidden)?;
     let redact_ms = elapsed_ms(started);
 
@@ -167,7 +168,11 @@ pub fn run_on(
     Ok(Captured {
         jpeg,
         meta,
-        detail: FrameDetail { pixels: raw, text },
+        detail: FrameDetail {
+            pixels: raw,
+            text,
+            blacked_out,
+        },
     })
 }
 

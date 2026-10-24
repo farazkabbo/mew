@@ -104,6 +104,28 @@ export function coachVerdictReasons(verdict: Pick<CoachVerdict, "redirect" | "ta
   return [...new Set(texts.flatMap(unsafeReasons))];
 }
 
+/** Every reason a circle-ask step's words (what's said and what's written) break a rule. */
+export function circleStepReasons(step: { say: string; actions: readonly ScreenAction[] }) {
+  return [...new Set([step.say, ...actionTexts(step.actions)].flatMap(unsafeReasons))];
+}
+
+/**
+ * Every reason the rest of a circle-ask answer (kept in the notebook) breaks a rule. The question
+ * as read is the student's own, so it isn't checked.
+ */
+export function circleAnswerReasons(answer: {
+  summary: string;
+  followUpQuestion: string | null;
+  conceptHints: readonly string[];
+}) {
+  const texts = [
+    answer.summary,
+    ...(answer.followUpQuestion ? [answer.followUpQuestion] : []),
+    ...answer.conceptHints,
+  ];
+  return [...new Set(texts.flatMap(unsafeReasons))];
+}
+
 /** The reply if it's safe, otherwise the fallback (with why, for logging counts only). */
 export function checkScreenReply(response: ScreenTutorResponse): {
   response: ScreenTutorResponse;

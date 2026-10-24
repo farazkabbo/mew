@@ -18,6 +18,7 @@ function coach(transcript = "what does this do?") {
     ask: vi.fn(() => Promise.resolve()),
     speak: vi.fn(() => Promise.resolve()),
     hush: vi.fn(),
+    spoken: vi.fn(),
   };
   return { voice: new ScreenCoachVoice(deps), deps };
 }

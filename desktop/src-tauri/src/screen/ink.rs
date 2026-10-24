@@ -53,6 +53,10 @@ pub struct InkRequest {
     pub colors: InkColors,
     /// Windows' "Animation effects": off → draw at once (brief §4.3).
     pub animate: bool,
+    /// Circle & Ask (S3.2): this is step `step` of an explanation, drawn beside the earlier
+    /// steps' ink (kept clear of it) instead of replacing it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -104,6 +108,7 @@ pub fn ink_request(
             question,
         },
         animate,
+        step: None,
     }
 }
 
@@ -136,6 +141,9 @@ pub struct DrawnInk {
     pub cards: Vec<Rect>,
     /// The focus region and everything drawn (the default crop before padding).
     pub bbox: Option<Rect>,
+    /// The explanation step this was (Circle & Ask), as asked.
+    #[serde(default)]
+    pub step: Option<u8>,
 }
 
 /// Checks what the overlay reported before keeping it: sizes capped, numbers finite and on the
@@ -226,34 +234,54 @@ pub fn clip_strokes(
     crop: Rect,
     scale: f32,
 ) -> Vec<ClipStroke> {
+    clip_strokes_kept(strokes, meta, crop, scale)
+        .into_iter()
+        .map(|(_, stroke)| stroke)
+        .collect()
+}
+
+/// `clip_strokes`, with the index each kept stroke had in `strokes` (an entry keeps each
+/// stroke's explanation step alongside it).
+pub fn clip_strokes_kept(
+    strokes: &[InkStroke],
+    meta: &FrameMeta,
+    crop: Rect,
+    scale: f32,
+) -> Vec<(usize, ClipStroke)> {
     let (dx, dy) = overlay_to_frame(meta);
     strokes
         .iter()
-        .filter(|stroke| {
+        .enumerate()
+        .filter(|(_, stroke)| {
             stroke.points.iter().any(|[x, y, ..]| {
                 let (fx, fy) = (x + dx, y + dy);
                 fx >= crop[0] && fx <= crop[0] + crop[2] && fy >= crop[1] && fy <= crop[1] + crop[3]
             })
         })
-        .map(|stroke| ClipStroke {
-            tool: match stroke.tool {
-                InkTool::Pen => "pen",
-                InkTool::Highlighter => "highlighter",
-            },
-            color: stroke.color.clone(),
-            width: (stroke.width * scale).clamp(0.1, 100.0),
-            points: stroke
-                .points
-                .iter()
-                .map(|[x, y, p, t]| {
-                    [
-                        (x + dx - crop[0]) * scale,
-                        (y + dy - crop[1]) * scale,
-                        *p,
-                        *t,
-                    ]
-                })
-                .collect(),
+        .map(|(index, stroke)| {
+            (
+                index,
+                ClipStroke {
+                    tool: match stroke.tool {
+                        InkTool::Pen => "pen",
+                        InkTool::Highlighter => "highlighter",
+                    },
+                    color: stroke.color.clone(),
+                    width: (stroke.width * scale).clamp(0.1, 100.0),
+                    points: stroke
+                        .points
+                        .iter()
+                        .map(|[x, y, p, t]| {
+                            [
+                                (x + dx - crop[0]) * scale,
+                                (y + dy - crop[1]) * scale,
+                                *p,
+                                *t,
+                            ]
+                        })
+                        .collect(),
+                },
+            )
         })
         .collect()
 }
@@ -380,6 +408,7 @@ mod tests {
             strokes: vec![stroke(&[[10.0, 10.0], [20.0, 12.0]])],
             cards: vec![[0.0, 0.0, 100.0, 50.0]],
             bbox: Some([5.0, 5.0, 40.0, 20.0]),
+            step: None,
         };
         assert!(check_drawn(good.clone(), monitor).is_some());
 

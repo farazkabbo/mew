@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Mew</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/pointer.js" defer></script>
+  </head>
+  <body class="pointer">
+    <!-- The tutor pointer (Circle & Ask): click-through, so it's never in the way. -->
+    <svg id="pointer" class="mew-pointer" data-look="idle" viewBox="0 0 32 32" aria-hidden="true">
+      <circle class="halo" cx="16" cy="16" r="14" />
+      <path class="ears" d="M8 12 L10 5 L14 10 Z M24 12 L22 5 L18 10 Z" />
+      <circle class="face" cx="16" cy="17" r="9" />
+      <path class="pen" d="M21 25 L28 18 L30 20 L23 27 Z M21 25 L20 29 L23 27 Z" />
+      <circle class="dot one" cx="11" cy="17" r="1.6" />
+      <circle class="dot two" cx="16" cy="17" r="1.6" />
+      <circle class="dot three" cx="21" cy="17" r="1.6" />
+      <path class="slash" d="M7 7 L25 25" />
+    </svg>
+  </body>
+</html>

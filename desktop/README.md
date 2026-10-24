@@ -147,6 +147,25 @@ PowerShell's name.
   - `windows-future` (=0.3.2, already in the tree through `windows`) is used directly for the
     media session's async calls.
 
+- **Circle & Ask** (S3.2, `docs/SCREEN_COACH_S3_2.md`, decision 11: `circle.rs`,
+  `circle_answer.rs`, `marks.rs`, `pointer.rs`, `circle_steps.rs`, `circle_protocol.rs`,
+  `raster.rs`):
+  - One tracker thread polls the cursor and left Ctrl + left Alt (`win/input.rs`,
+    `GetAsyncKeyState`: no hooks, nothing recorded; AltGr never draws), a frame at a time while
+    something moves, ten times a second otherwise, not at all while Screen Coach is off or paused.
+  - The pointer and the draw overlay are click-through, never focused and excluded from captures;
+    the overlay takes the mouse, pen and touch only while drawing, and the keyboard only for
+    keyboard drawing (silent mode), then gives the focus back. The card takes the focus only when
+    clicked. None of them sees pixels: Rust sends paths and rectangles.
+  - The privacy checks run as drawing starts; the first finished mark captures the monitor once,
+    which is watched (it fades if the window moves or scrolls) and wiped when the session ends.
+    The model gets the marked crop (marks drawn on that copy only) and the window, small; the
+    saved picture stays clean, with the marks as the student's strokes.
+  - Replies are checked in Rust (`circle_protocol::parse_circle_event`); a step that fails the
+    server's safety check aborts the answer and its ink is taken back.
+  - Saving waits for the 5-second toast (Undo: nothing is sent); it's never automatic when blocked
+    windows were blacked out under the crop, or for a black (protected) picture.
+
 - **Coach mode** (S4, `docs/SCREEN_COACH.md` decision 10: `coach_mode.rs`, `walkthrough.rs`,
   `intent.rs`):
   - The walkthrough lives on the server (`/api/screen/coach/start`, `/resume`, `/step`, device

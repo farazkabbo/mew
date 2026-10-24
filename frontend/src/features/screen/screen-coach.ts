@@ -1,6 +1,6 @@
 import { TTS_SAMPLE_RATE } from "@mew/shared";
 
-import { askAboutScreen } from "../desktop/bridge";
+import { askAboutScreen, reportSpoken } from "../desktop/bridge";
 import { useSettings } from "../settings/store";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
 import type { ScreenAnswerDetail } from "./events";
@@ -12,6 +12,8 @@ export type ScreenCoachDeps = {
   speak: (text: string) => Promise<void>;
   /** Stops whatever is being said (the student pressed the hotkey, or newer words came). */
   hush: () => void;
+  /** Tells the desktop app a line with a token has been said. */
+  spoken: (token: number) => void;
 };
 
 /**
@@ -46,10 +48,20 @@ export class ScreenCoachVoice {
     void this.deps.speak(text);
   }
 
-  /** A line from coach mode (S4): said now, instead of anything still being said. */
-  onSay(text: string): void {
+  /**
+   * A line from coach mode (S4) or Circle & Ask (S3.2): said now, instead of anything still being
+   * said. A Circle & Ask step's `token` is reported once it's been said (even if it couldn't be:
+   * the explanation goes on either way).
+   */
+  onSay(text: string, token?: number): void {
     this.deps.hush();
-    void this.deps.speak(text);
+    const said = this.deps.speak(text).catch(() => undefined);
+    if (token !== undefined) void said.then(() => this.deps.spoken(token));
+  }
+
+  /** Stop talking (Circle & Ask: a step skipped, paused or stopped). */
+  onHush(): void {
+    this.deps.hush();
   }
 
   onAnswer(answer: ScreenAnswerDetail): void {
@@ -75,5 +87,6 @@ function defaultDeps(): ScreenCoachDeps {
       await player.play(response.body, { sampleRate: TTS_SAMPLE_RATE });
     },
     hush: () => player.stop(),
+    spoken: (token) => void reportSpoken(token).catch(() => undefined),
   };
 }

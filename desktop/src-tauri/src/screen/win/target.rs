@@ -162,6 +162,36 @@ pub fn visible_windows_over(area: ScreenRect) -> Vec<VisibleWindow> {
         .collect()
 }
 
+/// The monitor at a screen point (the nearest one), and its DPI.
+pub fn monitor_at(x: i32, y: i32) -> Option<(ScreenRect, u32)> {
+    // SAFETY: plain value arguments.
+    let monitor = unsafe { MonitorFromPoint(POINT { x, y }, MONITOR_DEFAULTTONEAREST) };
+    Some((monitor_rect(monitor)?, monitor_dpi(monitor)))
+}
+
+/// The app in front covers its whole monitor: a game or a full-screen video (the pointer hides,
+/// S3.2 §2.1). Maximised windows don't: the taskbar is still showing.
+pub fn foreground_is_fullscreen() -> bool {
+    // SAFETY: no arguments; returns a handle or null.
+    let Some(hwnd) = root_of(unsafe { GetForegroundWindow() }) else {
+        return false;
+    };
+    if !is_app_window(hwnd) {
+        return false;
+    }
+    let Some(bounds) = window_bounds(hwnd) else {
+        return false;
+    };
+    // SAFETY: plain value arguments; Windows validates the handle.
+    let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+    monitor_rect(monitor).is_some_and(|m| {
+        bounds.left <= m.left
+            && bounds.top <= m.top
+            && bounds.right >= m.right
+            && bounds.bottom >= m.bottom
+    })
+}
+
 pub fn overlaps(a: ScreenRect, b: ScreenRect) -> bool {
     a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 }

@@ -86,6 +86,71 @@ export const ClipSource = z.object({
 });
 export type ClipSource = z.infer<typeof ClipSource>;
 
+/** Caps on a Circle & Ask entry (mirrors backend/src/mew_api/clips/models.py). */
+export const ENTRY_LIMITS = { steps: 5, markStrokes: 12, turns: 12 } as const;
+
+// ─── Circle & Ask entries (S3.2 §5) ──────────────────────────────────────────────────────────────────────
+
+/** One question and its explanation, as saved in an entry's note. */
+export const EntryTurn = z.object({
+  question: PlainText(500).min(1),
+  steps: z.array(PlainText(220).min(1)).min(1).max(ENTRY_LIMITS.steps),
+  summary: PlainText(320).min(1),
+  followUpQuestion: PlainText(220).min(1).optional(),
+});
+export type EntryTurn = z.infer<typeof EntryTurn>;
+
+/**
+ * What makes a clip an entry (brief §5): the student's marks and the explanation. The tutor's
+ * strokes are the clip's `strokes`; `strokeSteps` says which step each one belongs to (for
+ * Replay), counting steps across the entry's turns.
+ */
+export const EntryPart = z.object({
+  sessionId: z.uuid(),
+  studentStrokes: z.array(ClipStroke).max(ENTRY_LIMITS.markStrokes),
+  turn: EntryTurn,
+  /** The step of each tutor stroke in this turn (0-based, within the turn). */
+  strokeSteps: z.array(
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(ENTRY_LIMITS.steps - 1),
+  ),
+  conceptHints: z.array(PlainText(80).min(1)).max(5),
+});
+export type EntryPart = z.infer<typeof EntryPart>;
+
+/** An entry as its owner's notebook reads it: every turn so far, and each stroke's step. */
+export const EntryView = z.object({
+  sessionId: z.uuid(),
+  studentStrokes: z.array(ClipStroke),
+  turns: z.array(EntryTurn),
+  /** For each of the clip's strokes: [turn, step]. */
+  strokeSteps: z.array(z.tuple([z.number().int().min(0), z.number().int().min(0)])),
+  conceptHints: z.array(z.string()),
+});
+export type EntryView = z.infer<typeof EntryView>;
+
+/** `POST /api/screen/entries/append`: a follow-up added to its session's entry. */
+export const EntryAppendRequest = z
+  .object({
+    sessionId: z.uuid(),
+    turn: EntryTurn,
+    strokes: z.array(ClipStroke).max(CLIP_LIMITS.strokes),
+    /** The step of each stroke (within this turn). */
+    strokeSteps: z.array(
+      z
+        .number()
+        .int()
+        .min(0)
+        .max(ENTRY_LIMITS.steps - 1),
+    ),
+    conceptHints: z.array(PlainText(80).trim().min(1)).max(5),
+  })
+  .refine((a) => a.strokeSteps.length === a.strokes.length, "each stroke has its step");
+export type EntryAppendRequest = z.infer<typeof EntryAppendRequest>;
+
 /** `POST /api/screen/clips`, from the desktop app (device token). */
 export const ClipCreateRequest = z.object({
   image: z.object({
@@ -99,6 +164,8 @@ export const ClipCreateRequest = z.object({
   source: ClipSource,
   /** Text read on the device from the saved (already redacted) image. */
   ocrText: PlainText(CLIP_LIMITS.ocrChars),
+  /** Circle & Ask: the explanation that makes this clip a notebook entry. */
+  entry: EntryPart.optional(),
 });
 export type ClipCreateRequest = z.infer<typeof ClipCreateRequest>;
 
@@ -117,6 +184,8 @@ export const ClipView = z.object({
   /** The notebook page built from it (on the device that built it), once there is one. */
   notebookPageId: z.uuid().nullable(),
   createdAt: z.iso.datetime({ offset: true }),
+  /** A Circle & Ask entry's explanation; null for an ordinary clip. */
+  entry: EntryView.nullable().default(null),
 });
 export type ClipView = z.infer<typeof ClipView>;
 

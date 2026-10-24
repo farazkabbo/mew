@@ -91,6 +91,13 @@ export const RATE_RULES = {
   coachStep: { limit: 20, windowMs: MINUTE },
   coachStepDaily: { limit: 400, windowMs: DAY },
   coachStepMonthly: { limit: 4000, windowMs: 30 * DAY },
+  /** Circle & Ask (S3.2, decision 11): an answer is a model call with two images. */
+  circleAsk: { limit: 10, windowMs: MINUTE },
+  circleAskDaily: { limit: 150, windowMs: DAY },
+  circleAskMonthly: { limit: 1500, windowMs: 30 * DAY },
+  /** Reading a handwritten question the student selected on screen (one small image). */
+  readQuestion: { limit: 10, windowMs: MINUTE },
+  readQuestionDaily: { limit: 100, windowMs: DAY },
   /** Saving clips from the screen (an upload to storage each), and reading them back. */
   clip: { limit: 10, windowMs: MINUTE },
   clipDaily: { limit: 200, windowMs: DAY },

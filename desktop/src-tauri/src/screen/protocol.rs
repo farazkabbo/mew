@@ -464,6 +464,32 @@ pub struct ClipHead {
     pub strokes: Vec<ClipStroke>,
     pub source: ClipSource,
     pub ocr_text: String,
+    /// Circle & Ask (S3.2): what makes this clip a notebook entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entry: Option<EntryHead>,
+}
+
+/// One question and its explanation (`EntryTurn`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryTurnOut {
+    pub question: String,
+    pub steps: Vec<String>,
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub follow_up_question: Option<String>,
+}
+
+/// An entry's part of a clip (`EntryPart`): the student's marks, the explanation, and which step
+/// each of the tutor's strokes belongs to.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryHead {
+    pub session_id: String,
+    pub student_strokes: Vec<ClipStroke>,
+    pub turn: EntryTurnOut,
+    pub stroke_steps: Vec<u8>,
+    pub concept_hints: Vec<String>,
 }
 
 /// The JSON body of `POST /api/screen/clips` (the image goes in last, straight into the buffer).
@@ -603,6 +629,7 @@ mod tests {
                 captured_at: "2026-10-22T10:00:00Z".into(),
             },
             ocr_text: "Question 3".into(),
+            entry: None,
         };
         let body = clip_body(&head, b"\xff\xd8", 640, 320);
         let value: serde_json::Value = serde_json::from_slice(body.as_slice()).unwrap();

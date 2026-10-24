@@ -25,7 +25,7 @@ function render(view) {
   $("pause").setAttribute("aria-pressed", String(view.paused));
   $("consent").disabled = !usable;
 
-  for (const which of ["talk", "pause", "clip", "notes"]) {
+  for (const which of ["talk", "pause", "clip", "notes", "draw"]) {
     const report = view[which];
     const input = $(`hotkey-${which}`);
     if (document.activeElement !== input) input.value = report.accelerator;
@@ -38,6 +38,7 @@ function render(view) {
   }
 
   renderPrivacy(view);
+  renderCircle(view);
   renderAccount(view);
 
   if (!usable) showNotice(view.unsupportedReason);
@@ -117,6 +118,46 @@ $("disconnect").addEventListener("click", async () => {
   const ok = await run(() => invoke("screen_coach_disconnect"));
   if (ok) showNotice("Disconnected. This computer's sign-in was removed.");
 });
+
+// ─── Circle & Ask ────────────────────────────────────────────────────────────────────────────
+
+function renderCircle(view) {
+  const { circle } = view;
+  for (const radio of document.querySelectorAll('input[name="pointer"]')) {
+    radio.checked = radio.value === circle.pointer;
+  }
+  for (const radio of document.querySelectorAll('input[name="save"]')) {
+    radio.checked = radio.value === circle.save;
+  }
+  $("pointer-size").value = circle.pointerSize;
+  $("pointer-corner").value = circle.pointerCorner;
+  $("include-link").checked = circle.includeSourceLink;
+  $("silent").checked = circle.silent;
+}
+
+/** Sends Circle & Ask's settings with `changes` applied; Rust checks and saves them. */
+function saveCircle(changes) {
+  return run(() =>
+    invoke("screen_coach_set_circle", { circle: { ...current.circle, ...changes } }),
+  );
+}
+
+for (const radio of document.querySelectorAll('input[name="pointer"]')) {
+  radio.addEventListener("change", () => saveCircle({ pointer: radio.value }));
+}
+for (const radio of document.querySelectorAll('input[name="save"]')) {
+  radio.addEventListener("change", () => saveCircle({ save: radio.value }));
+}
+$("pointer-size").addEventListener("change", (event) =>
+  saveCircle({ pointerSize: event.target.value }),
+);
+$("pointer-corner").addEventListener("change", (event) =>
+  saveCircle({ pointerCorner: event.target.value }),
+);
+$("include-link").addEventListener("change", (event) =>
+  saveCircle({ includeSourceLink: event.target.checked }),
+);
+$("silent").addEventListener("change", (event) => saveCircle({ silent: event.target.checked }));
 
 // ─── Privacy ─────────────────────────────────────────────────────────────────────────────────
 
