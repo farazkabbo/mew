@@ -7,6 +7,7 @@
 
 use windows::core::{w, HSTRING, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{CloseHandle, ERROR_SUCCESS};
+use windows::Win32::Graphics::Gdi::{GetSysColor, COLOR_HIGHLIGHT};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
 };
@@ -15,7 +16,6 @@ use windows::Win32::System::Registry::{
     HKEY_LOCAL_MACHINE, KEY_READ, RRF_RT_REG_QWORD, RRF_RT_REG_SZ,
 };
 use windows::Win32::System::SystemInformation::{ComputerNameDnsHostname, GetComputerNameExW};
-use windows::Win32::Graphics::Gdi::{GetSysColor, COLOR_HIGHLIGHT};
 use windows::Win32::UI::Accessibility::{HCF_HIGHCONTRASTON, HIGHCONTRASTW};
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -278,7 +278,14 @@ pub fn open_in_browser(url: &tauri::Url) -> bool {
     let target = HSTRING::from(url.as_str());
     // SAFETY: plain strings that outlive the call; "open" on an https URL starts the browser.
     let result = unsafe {
-        ShellExecuteW(None, w!("open"), &target, PCWSTR::null(), PCWSTR::null(), SW_SHOWNORMAL)
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &target,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
     };
     // ShellExecuteW reports success as a value above 32.
     result.0 as isize > 32

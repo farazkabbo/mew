@@ -109,7 +109,11 @@ pub fn crop(source: &Pixels, left: u32, top: u32, right: u32, bottom: u32) -> Pi
     let mut data = SecretBytes::zeroed(row_bytes * height as usize);
     let src = source.data.as_slice();
     let stride = source.stride();
-    for (row, out) in data.as_mut_slice().chunks_exact_mut(row_bytes.max(1)).enumerate() {
+    for (row, out) in data
+        .as_mut_slice()
+        .chunks_exact_mut(row_bytes.max(1))
+        .enumerate()
+    {
         let at = (top as usize + row) * stride + left as usize * channels;
         out.copy_from_slice(&src[at..at + row_bytes]);
     }

@@ -169,6 +169,9 @@ pub enum ScreenAction {
         region: Box2,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
+        /// Notes Check: a question about this text (amber), not the tutor's usual ink.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tone: Option<InkTone>,
     },
     Underline {
         #[serde(rename = "box")]
@@ -198,7 +201,20 @@ pub enum ScreenAction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         side: Option<NoteSide>,
     },
+    /// Notes Check: a small tick beside text the student's notes already have.
+    CheckMark {
+        #[serde(rename = "box")]
+        region: Box2,
+    },
     Clear,
+}
+
+/// A colour variant of the tutor's ink.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InkTone {
+    /// Amber: "look at this again" (Notes Check differences).
+    Question,
 }
 
 impl ScreenAction {
@@ -219,7 +235,8 @@ impl ScreenAction {
             ScreenAction::FocusRegion { region, .. }
             | ScreenAction::CircleRegion { region, .. }
             | ScreenAction::Underline { region }
-            | ScreenAction::Highlight { region } => *region = map_box(region),
+            | ScreenAction::Highlight { region }
+            | ScreenAction::CheckMark { region } => *region = map_box(region),
             ScreenAction::MarginNote { beside, .. } | ScreenAction::WriteStep { beside, .. } => {
                 *beside = map_box(beside)
             }
@@ -320,6 +337,8 @@ pub fn actions_are_valid(actions: &[ScreenAction]) -> bool {
     actions.len() <= MAX_ACTIONS && actions.iter().all(action_is_valid)
 }
 
+/// An action the screen tutor may send. Ticks and amber circles are Notes Check's own marks,
+/// made here on the device from its findings: a reply that carries them is refused.
 fn action_is_valid(action: &ScreenAction) -> bool {
     let label_ok = |label: &Option<String>| label.as_deref().is_none_or(|l| within(l, LABEL_CHARS));
     match action {
@@ -327,13 +346,14 @@ fn action_is_valid(action: &ScreenAction) -> bool {
         | ScreenAction::Underline { region }
         | ScreenAction::Highlight { region } => box_ok(region),
         ScreenAction::PointAt { point, label } => point_ok(point) && label_ok(label),
-        ScreenAction::CircleRegion { region, label } => box_ok(region) && label_ok(label),
-        ScreenAction::MarginNote { text, beside, .. } => {
-            within(text, NOTE_CHARS) && box_ok(beside)
-        }
-        ScreenAction::WriteStep { text, beside, .. } => {
-            within(text, STEP_CHARS) && box_ok(beside)
-        }
+        ScreenAction::CircleRegion {
+            region,
+            label,
+            tone,
+        } => box_ok(region) && label_ok(label) && tone.is_none(),
+        ScreenAction::CheckMark { .. } => false,
+        ScreenAction::MarginNote { text, beside, .. } => within(text, NOTE_CHARS) && box_ok(beside),
+        ScreenAction::WriteStep { text, beside, .. } => within(text, STEP_CHARS) && box_ok(beside),
         ScreenAction::Clear => true,
     }
 }
@@ -361,11 +381,11 @@ fn box_ok(b: &Box2) -> bool {
 }
 
 /// Non-empty, at most `max` characters, no control characters.
-fn within(text: &str, max: usize) -> bool {
+pub(super) fn within(text: &str, max: usize) -> bool {
     !text.trim().is_empty() && text.chars().count() <= max && !text.chars().any(char::is_control)
 }
 
-fn is_uuid(text: &str) -> bool {
+pub(super) fn is_uuid(text: &str) -> bool {
     text.len() == 36
         && text.char_indices().all(|(i, c)| {
             if matches!(i, 8 | 13 | 18 | 23) {
@@ -546,7 +566,13 @@ mod tests {
                 bottom: 4,
             },
         }];
-        let body = reanchor_body(&meta(), FocusKind::Question, "Question 3", &previous, b"\xff");
+        let body = reanchor_body(
+            &meta(),
+            FocusKind::Question,
+            "Question 3",
+            &previous,
+            b"\xff",
+        );
         let value: serde_json::Value = serde_json::from_slice(body.as_slice()).unwrap();
         assert_eq!(value["focus"]["kind"], "question");
         assert_eq!(value["previous"][0]["type"], "underline");

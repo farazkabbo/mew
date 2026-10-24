@@ -104,7 +104,8 @@ pub struct ShowInk {
 }
 
 fn state<R: Runtime>(app: &AppHandle<R>) -> Option<std::sync::MutexGuard<'_, InkState>> {
-    app.try_state::<ScreenCoach>().map(|coach| coach.inner().ink())
+    app.try_state::<ScreenCoach>()
+        .map(|coach| coach.inner().ink())
 }
 
 pub fn turn_state<R: Runtime>(app: &AppHandle<R>) -> TurnState {
@@ -139,7 +140,9 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, ink_to_show: ShowInk) {
         clear(app);
         return;
     }
-    let Some(window) = meta.window.map(|raw| windows::Win32::Foundation::HWND(raw as *mut _))
+    let Some(window) = meta
+        .window
+        .map(|raw| windows::Win32::Foundation::HWND(raw as *mut _))
     else {
         return;
     };
@@ -339,7 +342,10 @@ pub fn reannotate<R: Runtime>(app: &AppHandle<R>, captured: Captured, then_clip:
     };
     let Some((seed, actions, old_bounds, anchor, kind, mut focus_text, video_time_sec)) = previous
     else {
-        say(app, "There's nothing to show again yet. Ask me about your screen first.");
+        say(
+            app,
+            "There's nothing to show again yet. Ask me about your screen first.",
+        );
         return;
     };
 
@@ -465,7 +471,10 @@ pub enum PillAction {
 
 /// The pill's buttons.
 #[tauri::command(async)]
-pub fn screen_ink_pill<R: Runtime>(window: WebviewWindow<R>, action: PillAction) -> Result<(), String> {
+pub fn screen_ink_pill<R: Runtime>(
+    window: WebviewWindow<R>,
+    action: PillAction,
+) -> Result<(), String> {
     overlay::require_surface(&window, Surface::Pill)?;
     let app = window.app_handle();
     match action {

@@ -185,6 +185,24 @@ describe("TutorInk", () => {
     }
   });
 
+  it("writes below the line holding `nearStrokes`, not the latest line", async () => {
+    const first = line();
+    const latest = Array.from({ length: 6 }, (_, i) => studentStroke(100 + i * 20, 500, 10 + i));
+    const { ink, time, committed } = setup([...first, ...latest]);
+    const heading = {
+      type: "write_text",
+      text: "Activation energy — ?",
+      anchor: { near: "below_active_line" },
+    } as const;
+
+    await ink.render([heading], { nearStrokes: first.map((s) => s.id) });
+    time.advance(10_000);
+
+    const top = Math.min(...(committed[0] ?? []).map((s) => s.bbox[1]));
+    expect(top).toBeGreaterThan(124); // under the first line…
+    expect(top).toBeLessThan(500); // …not under the latest one
+  });
+
   it("reports actions it couldn't draw and draws nothing without a page", async () => {
     const { ink } = setup();
     const result = await ink.render([

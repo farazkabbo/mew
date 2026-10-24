@@ -277,3 +277,30 @@ describe("candidates beside a box", () => {
     expect(below).toEqual([100, 160]);
   });
 });
+
+describe("Notes Check marks", () => {
+  const line: BBox = [760, 440, 900, 24];
+  const page = textLines(720, 1660);
+
+  it("puts a tick beside a matched line, never on its words", () => {
+    const plan = planScreenInk([{ type: "check_mark", box: norm(line) }], input(page));
+    const [tick] = plan.actions;
+    expect(tick?.type).toBe("check_mark");
+    expect(tick?.strokes).toHaveLength(1);
+    expect(overlapsAny(tick?.bbox ?? [0, 0, 0, 0], page)).toBe(false);
+    // Small: about the size of a letter, not a scribble across the page.
+    expect(tick?.bbox[2]).toBeLessThan(80);
+  });
+
+  it("draws a question's circle in amber and the tutor's in its own colour", () => {
+    const colors = { ...COLORS, question: "#d97706" };
+    const plan = planScreenInk(
+      [
+        { type: "circle_region", box: norm(line), tone: "question" },
+        { type: "circle_region", box: norm(QUESTION) },
+      ],
+      input(page, { colors }),
+    );
+    expect(plan.actions.map((a) => a.strokes[0]?.color)).toEqual(["#d97706", "#8a7bf0"]);
+  });
+});

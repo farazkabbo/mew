@@ -19,6 +19,8 @@ pub type Rect = [f32; 4];
 /// The tutor's ink colours (light theme; the overlay never remaps them).
 pub const TUTOR_INK: &str = "#8a7bf0";
 pub const TUTOR_HIGHLIGHT: &str = "#8a7bf055";
+/// Notes Check's "look at this again" (amber; shapes, not colour alone, tell the marks apart).
+pub const QUESTION_INK: &str = "#d97706";
 
 /// Caps on what the overlay may report (the planner's own cap is 30,000 points).
 const MAX_STROKES: usize = 400;
@@ -57,6 +59,7 @@ pub struct InkRequest {
 pub struct InkColors {
     pub ink: String,
     pub highlight: String,
+    pub question: String,
 }
 
 /// Builds the overlay's request for a reply's actions on the frame described by `meta`.
@@ -84,6 +87,8 @@ pub fn ink_request(
         Some(colour) => format!("{colour}55"),
         None => TUTOR_HIGHLIGHT.to_owned(),
     };
+    // High contrast: one colour for everything (the marks differ in shape anyway).
+    let question = contrast_colour.unwrap_or(QUESTION_INK).to_owned();
     InkRequest {
         id,
         seed: seed.to_owned(),
@@ -93,7 +98,11 @@ pub fn ink_request(
         obstacles: text.rects().map(to_overlay).collect(),
         text_height: text.typical_height(),
         scale: meta.dpi.max(96) as f32 / 96.0,
-        colors: InkColors { ink, highlight },
+        colors: InkColors {
+            ink,
+            highlight,
+            question,
+        },
         animate,
     }
 }
@@ -182,10 +191,20 @@ pub fn overlay_to_frame(meta: &FrameMeta) -> (f32, f32) {
 pub fn default_crop(bbox: Rect, meta: &FrameMeta) -> Option<Rect> {
     let (dx, dy) = overlay_to_frame(meta);
     let pad = CROP_PADDING_CSS * meta.dpi.max(96) as f32 / 96.0;
-    let rect = [bbox[0] + dx - pad, bbox[1] + dy - pad, bbox[2] + 2.0 * pad, bbox[3] + 2.0 * pad];
+    let rect = [
+        bbox[0] + dx - pad,
+        bbox[1] + dy - pad,
+        bbox[2] + 2.0 * pad,
+        bbox[3] + 2.0 * pad,
+    ];
     clamp_rect(
         rect,
-        [0.0, 0.0, meta.bounds.width() as f32, meta.bounds.height() as f32],
+        [
+            0.0,
+            0.0,
+            meta.bounds.width() as f32,
+            meta.bounds.height() as f32,
+        ],
     )
 }
 
@@ -226,7 +245,14 @@ pub fn clip_strokes(
             points: stroke
                 .points
                 .iter()
-                .map(|[x, y, p, t]| [(x + dx - crop[0]) * scale, (y + dy - crop[1]) * scale, *p, *t])
+                .map(|[x, y, p, t]| {
+                    [
+                        (x + dx - crop[0]) * scale,
+                        (y + dy - crop[1]) * scale,
+                        *p,
+                        *t,
+                    ]
+                })
                 .collect(),
         })
         .collect()
@@ -244,7 +270,10 @@ pub fn move_actions(
     was: ScreenRect,
     now: ScreenRect,
 ) -> Option<Vec<ScreenAction>> {
-    if [old, new, was].iter().any(|r| r.width() <= 0 || r.height() <= 0) {
+    if [old, new, was]
+        .iter()
+        .any(|r| r.width() <= 0 || r.height() <= 0)
+    {
         return None;
     }
     let zoom = (now.width() as f64 / was.width() as f64).clamp(0.5, 2.0);
@@ -254,9 +283,14 @@ pub fn move_actions(
         let nx = now.left as f64 + (sx - was.left as f64) * zoom;
         let ny = now.top as f64 + (sy - was.top as f64) * zoom;
         let to_norm = |v: f64, start: i32, size: i32| {
-            ((v - start as f64) / size as f64 * 1000.0).round().clamp(0.0, 1000.0) as u16
+            ((v - start as f64) / size as f64 * 1000.0)
+                .round()
+                .clamp(0.0, 1000.0) as u16
         };
-        (to_norm(nx, new.left, new.width()), to_norm(ny, new.top, new.height()))
+        (
+            to_norm(nx, new.left, new.width()),
+            to_norm(ny, new.top, new.height()),
+        )
     };
     let moved: Vec<ScreenAction> = actions.iter().map(|a| a.map_coordinates(map)).collect();
 
@@ -326,8 +360,15 @@ mod tests {
         assert_eq!(request.bounds, [0.0, 0.0, 2880.0, 1620.0]);
         assert_eq!(request.scale, 1.5);
         assert_eq!(request.colors.ink, TUTOR_INK);
-        let contrast =
-            ink_request(7, "turn", &[], &meta(), &ScreenText::default(), false, Some("#00ff00"));
+        let contrast = ink_request(
+            7,
+            "turn",
+            &[],
+            &meta(),
+            &ScreenText::default(),
+            false,
+            Some("#00ff00"),
+        );
         assert_eq!(contrast.colors.highlight, "#00ff0055");
     }
 
@@ -371,7 +412,11 @@ mod tests {
         assert_eq!(crop, [0.0, 0.0, 356.0, 156.0]);
         let middle = default_crop([1480.0, 600.0, 200.0, 100.0], &meta()).unwrap();
         assert_eq!(middle, [964.0, 464.0, 272.0, 172.0]);
-        assert_eq!(default_crop([0.0, 0.0, 100.0, 50.0], &meta()), None, "off the frame");
+        assert_eq!(
+            default_crop([0.0, 0.0, 100.0, 50.0], &meta()),
+            None,
+            "off the frame"
+        );
     }
 
     #[test]
@@ -423,7 +468,8 @@ mod tests {
             right: 300,
             bottom: 220,
         };
-        let moved = move_actions(&[focus.clone(), arrow.clone()], window, window, was, now).unwrap();
+        let moved =
+            move_actions(&[focus.clone(), arrow.clone()], window, window, was, now).unwrap();
         assert_eq!(
             moved[1],
             ScreenAction::PointAt {

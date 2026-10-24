@@ -29,7 +29,9 @@ use super::page;
 use super::pipeline::{self, Captured, ScreenError};
 use super::protocol::{clip_body, parse_clip_created, ClipHead, ClipSource};
 use super::secret::SecretBytes;
-use super::source::{clean_title, is_browser, is_video_page, player_time, sanitize_url, with_timestamp};
+use super::source::{
+    clean_title, is_browser, is_video_page, player_time, sanitize_url, with_timestamp,
+};
 use super::win::encode::{encode_jpeg_with, JpegOptions, FOR_CLIP};
 use super::win::{credential, crypto, http, target};
 
@@ -195,7 +197,14 @@ fn draft_from_turn(tools: &mut pipeline::Tools, mut turn: InkTurn) -> Option<Cli
         .map(|[x, y, w, h]| [x + dx, y + dy, *w, *h])
         .collect();
     let source = read_source(tools, &turn.meta, turn.video_time_sec, &detail);
-    draft(turn.meta.clone(), detail, drawn.strokes, cards, crop, source)
+    draft(
+        turn.meta.clone(),
+        detail,
+        drawn.strokes,
+        cards,
+        crop,
+        source,
+    )
 }
 
 fn draft_for_selection(tools: &mut pipeline::Tools, captured: Captured) -> Option<ClipDraft> {
@@ -243,14 +252,16 @@ fn read_source(
     detail: &FrameDetail,
 ) -> DraftSource {
     let app = meta.app.clone().unwrap_or_else(|| "unknown.exe".to_owned());
-    let window = meta.window.map(|raw| windows::Win32::Foundation::HWND(raw as *mut _));
+    let window = meta
+        .window
+        .map(|raw| windows::Win32::Foundation::HWND(raw as *mut _));
     let title = window
         .map(target::window_title)
         .and_then(|raw| clean_title(&raw, &app));
     let url = match window {
-        Some(window) if is_browser(&app) => tools
-            .address_bar(window)
-            .and_then(|raw| sanitize_url(&raw)),
+        Some(window) if is_browser(&app) => {
+            tools.address_bar(window).and_then(|raw| sanitize_url(&raw))
+        }
         _ => None,
     };
     let timestamp = url.as_ref().filter(|u| is_video_page(u)).and_then(|_| {
@@ -268,6 +279,25 @@ fn read_source(
         title,
         url,
         timestamp,
+    }
+}
+
+/// Where a notes check's material came from (for its link chips): the same reading as a
+/// clip's, as the link with its moment, the title and the time.
+pub fn notes_source(
+    tools: &mut pipeline::Tools,
+    meta: &FrameMeta,
+    detail: &FrameDetail,
+) -> super::notes_marks::NotesSource {
+    let source = read_source(tools, meta, None, detail);
+    let url = source.url.as_ref().map(|url| match source.timestamp {
+        Some(seconds) => with_timestamp(url, seconds).to_string(),
+        None => url.to_string(),
+    });
+    super::notes_marks::NotesSource {
+        title: url.as_ref().and(source.title.clone()),
+        timestamp_sec: url.as_ref().and(source.timestamp),
+        url,
     }
 }
 
@@ -329,7 +359,10 @@ fn close_preview<R: Runtime>(app: &AppHandle<R>) {
 
 /// Serves the draft's preview image to the preview window only, at its one-time path, from
 /// memory. Everything else gets 404 (no hint whether a draft exists).
-pub fn serve<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u8>>) -> Response<Vec<u8>> {
+pub fn serve<R: Runtime>(
+    ctx: UriSchemeContext<'_, R>,
+    request: Request<Vec<u8>>,
+) -> Response<Vec<u8>> {
     let not_found = || {
         Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -344,7 +377,10 @@ pub fn serve<R: Runtime>(ctx: UriSchemeContext<'_, R>, request: Request<Vec<u8>>
         return not_found();
     };
     let slot = coach.clip();
-    let Some(draft) = slot.as_ref().filter(|d| d.created.elapsed() < DECISION_TIME) else {
+    let Some(draft) = slot
+        .as_ref()
+        .filter(|d| d.created.elapsed() < DECISION_TIME)
+    else {
         return not_found();
     };
     if request.uri().path() != format!("/{}/frame.jpg", draft.nonce) {
@@ -392,7 +428,11 @@ pub fn screen_clip_ready<R: Runtime>(window: WebviewWindow<R>) -> Result<Preview
                 tool: tool_name(s.tool),
                 color: s.color.clone(),
                 width: s.width,
-                points: s.points.iter().map(|[x, y, p, t]| [x + dx, y + dy, *p, *t]).collect(),
+                points: s
+                    .points
+                    .iter()
+                    .map(|[x, y, p, t]| [x + dx, y + dy, *p, *t])
+                    .collect(),
             })
             .collect(),
         cards: draft.cards.clone(),
@@ -456,7 +496,12 @@ fn save<R: Runtime>(
     include_link: bool,
 ) -> Result<(), String> {
     let meta = &draft.meta;
-    let frame = [0.0, 0.0, meta.bounds.width() as f32, meta.bounds.height() as f32];
+    let frame = [
+        0.0,
+        0.0,
+        meta.bounds.width() as f32,
+        meta.bounds.height() as f32,
+    ];
     let crop_rect = super::ink::clamp_rect(crop_rect, frame)
         .filter(|r| r.iter().all(|v| v.is_finite()))
         .ok_or("Choose a bigger area to save.")?;
@@ -476,7 +521,9 @@ fn save<R: Runtime>(
         return Err("Choose a bigger area to save.".to_owned());
     }
     if looks_blank(&raw) {
-        return Err("This video can't be captured (it's protected), so I didn't save it.".to_owned());
+        return Err(
+            "This video can't be captured (it's protected), so I didn't save it.".to_owned(),
+        );
     }
     let small = downscale_bgra_to_bgr(&raw, CLIP_LONG_SIDE);
     drop(raw);
@@ -506,12 +553,15 @@ fn save<R: Runtime>(
         .chars()
         .take(OCR_TEXT_CHARS)
         .collect();
-    let url = draft.source.url.as_ref().filter(|_| include_link).map(|url| {
-        match draft.source.timestamp {
+    let url = draft
+        .source
+        .url
+        .as_ref()
+        .filter(|_| include_link)
+        .map(|url| match draft.source.timestamp {
             Some(seconds) => with_timestamp(url, seconds).to_string(),
             None => url.to_string(),
-        }
-    });
+        });
     let head = ClipHead {
         pixel_ratio,
         strokes,

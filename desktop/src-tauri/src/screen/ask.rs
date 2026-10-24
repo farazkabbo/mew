@@ -6,8 +6,9 @@
 //! (decision 2). The reply is checked (`protocol::parse_event`) before the page sees it, and its
 //! ink goes to the overlay (S3, `annotate.rs`).
 //!
-//! Short commands said over the hotkey aren't questions (decision 9): "save this" clips and
-//! "show that again" re-places the last ink, without asking the tutor anything.
+//! Short commands said over the hotkey aren't questions (decision 9): "save this" clips,
+//! "show that again" re-places the last ink, and "check my notes" compares the screen with the
+//! notes (Notes Check), without asking the tutor anything.
 
 use std::time::{Duration, Instant};
 
@@ -20,6 +21,7 @@ use super::clip;
 use super::coach::{self, ScreenCoach};
 use super::frame::{CapturedFrame, FrameDetail, FrameMeta};
 use super::intent::{intent_of, Intent};
+use super::notes_check;
 use super::page::{self, require_app_page};
 use super::pipeline::Captured;
 use super::protocol::{ask_body, clean_transcript, parse_event, LineSplitter, StreamEvent};
@@ -69,7 +71,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
 
     let intent = intent_of(transcript);
     let command = match intent {
-        Intent::Clip => true,
+        Intent::Clip | Intent::NotesCheck { .. } => true,
         Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
         Intent::Ask => false,
     };
@@ -78,6 +80,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         let captured = Captured { jpeg, meta, detail };
         match intent {
             Intent::Clip => clip::from_voice(app, captured),
+            Intent::NotesCheck { all } => notes_check::start(app, captured, all),
             _ => annotate::reannotate(app, captured, false),
         }
         return Ok(());
@@ -91,7 +94,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
 
     let body = ask_body(transcript, &meta, meta.video_playing, jpeg.as_slice());
     drop(jpeg); // wiped; only the request body holds the image now
-    // Kept for the answer's ink (pixels and text stay in Rust).
+                // Kept for the answer's ink (pixels and text stay in Rust).
     let mut for_ink: Option<(FrameMeta, FrameDetail)> = detail.map(|detail| (meta, detail));
     let url = coach
         .app_url()

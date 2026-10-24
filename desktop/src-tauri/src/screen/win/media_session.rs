@@ -6,11 +6,11 @@
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use windows_future::{AsyncStatus, IAsyncOperation};
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession, GlobalSystemMediaTransportControlsSessionManager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as Playback,
 };
+use windows_future::{AsyncStatus, IAsyncOperation};
 
 /// Windows answers in a few milliseconds; a hung media service must never hold up a capture.
 const TIMEOUT: Duration = Duration::from_millis(300);
@@ -129,7 +129,10 @@ mod tests {
     fn works_out_the_current_position() {
         let second = 10_000_000;
         // Paused at 12:34: what was reported.
-        assert_eq!(current_seconds(754 * second, 100, 999 * second, false), Some(754));
+        assert_eq!(
+            current_seconds(754 * second, 100, 999 * second, false),
+            Some(754)
+        );
         // Playing, reported 5 s ago at 12:34.
         assert_eq!(
             current_seconds(754 * second, 1_000 * second, 1_005 * second, true),

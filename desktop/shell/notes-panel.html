@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Notes Check</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/notes-panel.js" defer></script>
+  </head>
+  <body class="notes">
+    <main class="notes-panel" aria-labelledby="notes-title">
+      <header>
+        <h1 id="notes-title">Notes Check</h1>
+        <button type="button" class="icon" data-action="close" aria-label="Close Notes Check">
+          ×
+        </button>
+      </header>
+      <p class="speech" id="notes-speech" aria-live="polite"></p>
+      <p class="scope" id="notes-scope"></p>
+      <div id="notes-groups"></div>
+      <footer>
+        <button type="button" class="quiet" data-action="hide_marks">Hide marks on screen</button>
+      </footer>
+    </main>
+  </body>
+</html>

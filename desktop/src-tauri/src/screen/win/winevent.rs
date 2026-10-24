@@ -223,7 +223,8 @@ unsafe extern "system" fn on_win_event(
         return;
     };
     let window = hwnd.0 as isize;
-    let is_target_window = window == target && object == OBJID_WINDOW.0 && child == CHILDID_SELF as i32;
+    let is_target_window =
+        window == target && object == OBJID_WINDOW.0 && child == CHILDID_SELF as i32;
     let change = match event {
         EVENT_SYSTEM_FOREGROUND => {
             // SAFETY: plain value arguments; returns null for invalid handles.

@@ -256,7 +256,13 @@ fn cover_sensitive_text(
 ) -> Result<ScreenText, ScreenError> {
     let rules = &privacy.redaction;
     let required = rules.cards || rules.secrets || rules.codes || rules.emails || rules.phones;
-    let fail = |error: ScreenError| if required { Err(error) } else { Ok(ScreenText::default()) };
+    let fail = |error: ScreenError| {
+        if required {
+            Err(error)
+        } else {
+            Ok(ScreenText::default())
+        }
+    };
     if tools.ocr.is_none() {
         match Ocr::new() {
             Ok(ocr) => tools.ocr = Some(ocr),

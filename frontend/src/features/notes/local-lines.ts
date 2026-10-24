@@ -78,6 +78,12 @@ export function cleanLineText(text: string, max: number = NOTES_LIMITS.textChars
 export class LocalNoteLines {
   constructor(private readonly db: NotebookDb) {}
 
+  /** The record of one line (wherever its page is), or null. */
+  async get(id: string): Promise<LocalNoteLine | null> {
+    const row = await this.db.noteLines.get(id);
+    return row ? (valid([row])[0] ?? null) : null;
+  }
+
   async forPage(pageId: string): Promise<LocalNoteLine[]> {
     return valid(await this.db.noteLines.where("pageId").equals(pageId).toArray());
   }

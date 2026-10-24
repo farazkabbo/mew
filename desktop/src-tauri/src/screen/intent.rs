@@ -1,6 +1,6 @@
 //! What the student meant by what they said while holding the hotkey (decision 9): fixed rules,
-//! no model. "Save this" and "show that again" are short commands; anything else is a question
-//! for the tutor.
+//! no model. "Save this", "show that again" and "check my notes" (Notes Check) are short
+//! commands; anything else is a question for the tutor.
 //!
 //! A command must be the whole utterance, so "how do I save this file?" stays a question.
 
@@ -13,12 +13,15 @@ pub enum Intent {
     Clip,
     /// Re-place the last ink on the screen as it is now.
     Reannotate,
+    /// Compare the screen with the student's notes (Notes Check); `all`: every notebook, not
+    /// just the one they're working in.
+    NotesCheck { all: bool },
 }
 
 /// Words that never change the meaning of a command ("please save this now").
 const FILLER: &[&str] = &[
-    "please", "pls", "now", "mew", "hey", "ok", "okay", "can", "could", "you", "just", "for",
-    "me", "quickly",
+    "please", "pls", "now", "mew", "hey", "ok", "okay", "can", "could", "you", "just", "for", "me",
+    "quickly",
 ];
 const THIS: &[&str] = &["this", "that", "it", "these", "those"];
 const NOTEBOOK_PLACES: &[&str] = &["notebook", "notes", "my notebook", "my notes"];
@@ -36,6 +39,8 @@ pub fn intent_of(transcript: &str) -> Intent {
         .collect();
     if is_clip(&core) {
         Intent::Clip
+    } else if let Some(all) = notes_check(&core) {
+        Intent::NotesCheck { all }
     } else if is_reannotate(&core) {
         Intent::Reannotate
     } else {
@@ -70,15 +75,46 @@ fn is_clip(words: &[&str]) -> bool {
     }
 }
 
+/// "check my notes", "does this match my notes?", "what am I missing?", "compare this with my
+/// notes", "check against all my notes" (Some(true): all of them).
+fn notes_check(words: &[&str]) -> Option<bool> {
+    let all = words.contains(&"all");
+    let text = words
+        .iter()
+        .filter(|w| !matches!(**w, "all" | "this" | "that" | "it" | "the" | "these"))
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let asks = matches!(
+        text.as_str(),
+        "check my notes"
+            | "check notes"
+            | "check against my notes"
+            | "check with my notes"
+            | "check it against my notes"
+            | "compare with my notes"
+            | "compare to my notes"
+            | "compare my notes"
+            | "does match my notes"
+            | "does it match my notes"
+            | "do my notes match"
+            | "is in my notes"
+            | "what am i missing"
+            | "what did i miss"
+            | "what's missing from my notes"
+            | "what is missing from my notes"
+            | "notes check"
+    );
+    asks.then_some(all)
+}
+
 /// "show that again", "show me again", "where was that", "draw it again", "point to that again".
 fn is_reannotate(words: &[&str]) -> bool {
     let text = words.join(" ");
     let again = text.ends_with(" again") || text == "again";
     let verb = words.first().copied().unwrap_or("");
     match verb {
-        "show" | "draw" | "redraw" | "point" | "mark" | "highlight" => {
-            again || verb == "redraw"
-        }
+        "show" | "draw" | "redraw" | "point" | "mark" | "highlight" => again || verb == "redraw",
         "where" => matches!(
             text.as_str(),
             "where was that" | "where was it" | "where was that again" | "where was it again"
@@ -150,6 +186,29 @@ mod tests {
     }
 
     #[test]
+    fn recognises_checking_notes() {
+        for said in [
+            "check my notes",
+            "Check my notes.",
+            "Mew, check my notes please",
+            "does this match my notes?",
+            "what am I missing?",
+            "What did I miss",
+            "compare this with my notes",
+            "check this against my notes",
+        ] {
+            assert_eq!(intent_of(said), Intent::NotesCheck { all: false }, "{said}");
+        }
+        for said in [
+            "check against all my notes",
+            "check all my notes",
+            "compare with all my notes",
+        ] {
+            assert_eq!(intent_of(said), Intent::NotesCheck { all: true }, "{said}");
+        }
+    }
+
+    #[test]
     fn keeps_questions_as_questions() {
         for said in [
             "",
@@ -167,6 +226,9 @@ mod tests {
             "can you explain this again, but slower, and with an example please",
             "where is the insert tab",
             "show me",
+            "how do I check my notes for spelling",
+            "what am I missing in this proof",
+            "check my answer",
         ] {
             assert_eq!(intent_of(said), Intent::Ask, "{said:?}");
         }

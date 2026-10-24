@@ -10,7 +10,7 @@ import { z } from "zod";
 export const Evidence = z.enum(["independent", "with_hint", "after_explanation"]);
 export type Evidence = z.infer<typeof Evidence>;
 
-export const AttemptSource = z.enum(["practice", "quiz"]);
+export const AttemptSource = z.enum(["practice", "quiz", "notes_check"]);
 export type AttemptSource = z.infer<typeof AttemptSource>;
 
 export const ConceptStatus = z.enum([

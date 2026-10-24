@@ -131,17 +131,23 @@ export class TutorInk implements InkLayer {
   /**
    * Plans and starts writing a turn's actions. Any ink still being written from an earlier turn
    * is committed first. `speech` paces the writing to roughly match how long it takes to say.
+   * `nearStrokes` makes the line holding those strokes the active one (e.g. Notes Check writes a
+   * gap's heading under the line it follows), instead of the line written last.
    */
   async render(
     actions: readonly BoardAction[],
-    { speech = "", onStart }: { speech?: string; onStart?: () => void } = {},
+    {
+      speech = "",
+      onStart,
+      nearStrokes,
+    }: { speech?: string; onStart?: () => void; nearStrokes?: readonly string[] } = {},
   ): Promise<InkResult> {
     this.finish();
     const generation = ++this.generation;
     const engine = this.deps.engine();
     if (!engine || actions.length === 0) return { strokes: 0, skipped: [], missing: [] };
 
-    const input = this.boardInput(engine, this.newId());
+    const input = this.boardInput(engine, this.newId(), nearStrokes);
     // Planning is async (graph layout): a newer turn may start meanwhile.
     const plan: BoardPlan = await planBoard(actions, input, this.deps.renderers ?? ALL_RENDERERS);
     const strokes = plan.actions.reduce((n, a) => n + a.strokes.length, 0);
@@ -267,14 +273,16 @@ export class TutorInk implements InkLayer {
     this.animation = null;
   }
 
-  private boardInput(engine: PageEngine, groupId: string) {
+  private boardInput(engine: PageEngine, groupId: string, nearStrokes?: readonly string[]) {
     const lines = studentLines(engine.doc);
+    const near = nearStrokes && new Set(nearStrokes);
+    const nearLine = near && lines.find((line) => line.strokeIds.some((id) => near.has(id)));
     return {
       pageId: engine.pageId,
       groupId,
       strokes: [...engine.doc.all()],
       lines,
-      activeLine: currentLine(lines),
+      activeLine: nearLine ?? currentLine(lines),
       obstacles: engine.images.map((i): BBox => [i.x, i.y, i.width, i.height]),
       viewport: this.viewportOf?.() ?? FALLBACK_VIEWPORT,
       colors: this.deps.colors(),

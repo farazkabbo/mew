@@ -145,22 +145,24 @@ fn is_video_id(id: &str) -> bool {
 /// number in the page isn't mistaken for it.
 pub fn player_time(text: &str) -> Option<u32> {
     let tokens: Vec<&str> = text.split_whitespace().collect();
-    tokens.windows(3).find_map(|w| match w {
-        [current, "/", total] => {
-            let current = clock_seconds(current)?;
-            let total = clock_seconds(total)?;
-            (current <= total).then_some(current)
-        }
-        _ => None,
-    })
-    // OCR sometimes glues the slash on: "12:34/45:00".
-    .or_else(|| {
-        tokens.iter().find_map(|token| {
-            let (current, total) = token.split_once('/')?;
-            let current = clock_seconds(current)?;
-            (current <= clock_seconds(total)?).then_some(current)
+    tokens
+        .windows(3)
+        .find_map(|w| match w {
+            [current, "/", total] => {
+                let current = clock_seconds(current)?;
+                let total = clock_seconds(total)?;
+                (current <= total).then_some(current)
+            }
+            _ => None,
         })
-    })
+        // OCR sometimes glues the slash on: "12:34/45:00".
+        .or_else(|| {
+            tokens.iter().find_map(|token| {
+                let (current, total) = token.split_once('/')?;
+                let current = clock_seconds(current)?;
+                (current <= clock_seconds(total)?).then_some(current)
+            })
+        })
 }
 
 /// "m:ss", "mm:ss" or "h:mm:ss" → seconds.
@@ -274,8 +276,11 @@ mod tests {
     #[test]
     fn cleans_titles() {
         assert_eq!(
-            clean_title("Lecture 5 – Forces - YouTube - Microsoft\u{200b} Edge", "msedge.exe")
-                .as_deref(),
+            clean_title(
+                "Lecture 5 – Forces - YouTube - Microsoft\u{200b} Edge",
+                "msedge.exe"
+            )
+            .as_deref(),
             Some("Lecture 5 – Forces - YouTube")
         );
         assert_eq!(

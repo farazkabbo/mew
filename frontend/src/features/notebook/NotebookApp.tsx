@@ -7,6 +7,10 @@ import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
 import { useMewSession } from "../mew/useMewSession";
+import { useNotesCheck } from "../notes/check-store";
+import { checkClip, pageOfFinding, usePageMarks } from "../notes/notebook-check";
+import { NotesCheckPanel } from "../notes/NotesCheckPanel";
+import { NotesMarks } from "../notes/NotesMarks";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
@@ -40,6 +44,8 @@ export function NotebookApp({ userId }: { userId: string }) {
   const [pageId, setPageId] = useState<string | null>(null);
   const [engine, setEngine] = useState<PageEngine | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  /** The clip page just saved, offered a notes check once (brief §2.1). */
+  const [checkPrompt, setCheckPrompt] = useState<string | null>(null);
   const canvas = useRef<CanvasHandle>(null);
   /** "Quiz me" from a course screen: /notebook?course=…&quiz=1 starts a quiz once open. */
   const quizRequested = useRef(false);
@@ -141,6 +147,7 @@ export function NotebookApp({ userId }: { userId: string }) {
     setPages((list) => (list.some((p) => p.id === page.id) ? list : [...list, page]));
     setPageId(page.id);
     setNotice({ text: "Saved from your screen. Work on it right here.", tone: "info" });
+    setCheckPrompt(page.id); // "Check this against your notes?" (never runs on its own)
   }, []);
   const clipFailed = useCallback((text: string) => setNotice({ text, tone: "error" }), []);
   useClipImport({ repo, notebookId, onOpened: openClipPage, onError: clipFailed });
@@ -150,6 +157,32 @@ export function NotebookApp({ userId }: { userId: string }) {
   const { quiz } = mew;
   // Notes Check: every line's text, kept with the page and (if allowed) on the server.
   useNoteIndexing({ db, repo, engine, notebookId, recognition: mew.recognition });
+  const notebook = notebooks.find((n) => n.id === notebookId) ?? null;
+  const marks = usePageMarks(db, engine);
+  const focus = useNotesCheck((s) => s.focus);
+  const checkResult = useNotesCheck((s) => s.result);
+  const checking = useNotesCheck((s) => s.running);
+  const checkAgainstNotes = (image: NonNullable<typeof clipImage>) => {
+    setCheckPrompt(null);
+    if (notebook) void checkClip(image, notebook);
+  };
+
+  // "Show me" (here or in the desktop app's panel): open the page the finding is on.
+  useEffect(() => {
+    const finding = checkResult?.findings.find((f) => f.id === focus?.findingId);
+    if (!finding) return;
+    let cancelled = false;
+    void (async () => {
+      const target = await pageOfFinding(db, finding);
+      const page = target ? await repo.getPage(target) : null;
+      if (cancelled || !page) return;
+      setNotebookId(page.notebookId);
+      setPageId(page.id);
+    })().catch(report);
+    return () => {
+      cancelled = true;
+    };
+  }, [focus, checkResult, db, repo, report]);
   const app = useAppServices({
     ready: engine !== null,
     listen: mew.startListening,
@@ -226,11 +259,48 @@ export function NotebookApp({ userId }: { userId: string }) {
           />
         </div>
 
+        {engine && (
+          <NotesMarks
+            canvas={canvas}
+            marks={marks}
+            focusId={focus?.findingId ?? null}
+            db={db}
+            ink={mew.ink}
+          />
+        )}
+
         {clipImage && !quizActive && (
-          <div className="pointer-events-none absolute inset-x-0 top-[4.5rem] flex justify-center px-4">
-            <ClipSource image={clipImage} />
+          <div className="pointer-events-none absolute inset-x-0 top-[4.5rem] flex flex-col items-center gap-2 px-4">
+            <ClipSource
+              image={clipImage}
+              {...(clipImage.ocrText &&
+                !checking && { onCheck: () => checkAgainstNotes(clipImage) })}
+            />
+            {checkPrompt === pageId && clipImage.ocrText && (
+              <div
+                role="status"
+                data-testid="notes-check-prompt"
+                className="pointer-events-auto flex items-center gap-3 rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
+              >
+                Check this against your notes?
+                <button
+                  type="button"
+                  className="font-semibold underline"
+                  onClick={() => checkAgainstNotes(clipImage)}
+                >
+                  Check
+                </button>
+                <button type="button" className="opacity-80" onClick={() => setCheckPrompt(null)}>
+                  Not now
+                </button>
+              </div>
+            )}
           </div>
         )}
+
+        <div className="pointer-events-none absolute top-20 right-4 bottom-24 flex flex-col items-end">
+          <NotesCheckPanel />
+        </div>
 
         <div className="pointer-events-none absolute top-20 left-4">
           <QuizCard session={quiz} />

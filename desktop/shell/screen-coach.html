@@ -52,6 +52,13 @@
             page's title and link, and nothing is kept unless you press Save. Saved clips are stored
             privately in your account, like your notes, until you delete them.
           </li>
+          <li>
+            <strong>Checking your notes is up to you too.</strong> Say “check my notes” or press
+            <kbd data-hotkey="notes">Ctrl+Alt+N</kbd>: Mew reads the text on your screen (after
+            hiding private details, never the picture itself), compares it with your notes, and
+            marks what matches, what differs and what's missing. Only short quotes are kept, with
+            what Mew found, in your account; Mew never changes your notes.
+          </li>
           <li><strong>Mew never clicks or types for you.</strong> It points the way; you do it.</li>
           <li>
             <strong>Pause any time</strong> from the tray or with
@@ -116,6 +123,14 @@
             <button type="submit">Change</button>
           </div>
           <p class="problem" id="problem-clip" role="alert" hidden></p>
+        </form>
+        <form class="hotkey" data-which="notes">
+          <label for="hotkey-notes">Check my notes</label>
+          <div class="row">
+            <input id="hotkey-notes" name="accelerator" autocomplete="off" spellcheck="false" />
+            <button type="submit">Change</button>
+          </div>
+          <p class="problem" id="problem-notes" role="alert" hidden></p>
         </form>
         <p class="hint">
           Use Ctrl or Alt with a key, for example Ctrl+Alt+Space. Shortcuts work only while Screen

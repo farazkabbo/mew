@@ -1,0 +1,55 @@
+name: Notes Check evals
+
+# The comparison eval (docs/SCREEN_COACH_NOTES_CHECK.md §10) runs against the real model, so only
+# when what it measures changes: the prompts, the validation layer, the comparison code or the
+# cases (or by hand). Without the GEMINI_API_KEY secret (e.g. pull requests from forks) the eval
+# skips itself and the job passes. Failures print each case that went wrong.
+on:
+  pull_request:
+    paths:
+      - packages/shared/src/prompts/notes.ts
+      - packages/shared/src/notes-check.ts
+      - packages/shared/src/notes-validate.ts
+      - frontend/src/server/notes-check/**
+      - frontend/evals/notes-check/**
+      - frontend/evals/notes-check.eval.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  notes-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --frozen
+        working-directory: backend
+      # The retrieval eval needs no key (hashed-word embeddings): it's part of pytest already.
+      - name: Comparison eval (SymPy through a local API service)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EVAL_RPM: ${{ vars.EVAL_RPM || '12' }}
+          API_BASE_URL: http://127.0.0.1:8000
+          APP_ENV: development
+        run: |
+          export INTERNAL_API_SECRET="$(openssl rand -hex 24)"
+          (cd backend && uv run --frozen uvicorn --factory mew_api.main:create_app --host 127.0.0.1 --port 8000 &)
+          for _ in $(seq 60); do curl -sf http://127.0.0.1:8000/health >/dev/null && break; sleep 1; done
+          pnpm eval:notes --judge

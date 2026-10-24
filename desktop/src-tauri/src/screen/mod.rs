@@ -13,6 +13,9 @@
 //!   content (`annotate.rs`, `ink.rs`, `overlay.rs`), faded when it moves (`watch.rs`), re-placed
 //!   on request (`reanchor.rs`), and saved to the notebook (`clip.rs`, `source.rs`). What was
 //!   said over the hotkey is a question or a command (`intent.rs`).
+//! - S3.5, Notes Check (docs/SCREEN_COACH_NOTES_CHECK.md): the screen's text compared with the
+//!   student's notes, marks beside it and a panel of findings (`notes_check.rs`,
+//!   `notes_marks.rs`).
 //!
 //! Where to start reading: `coach.rs` (what happens when a hotkey is pressed), then
 //! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
@@ -24,6 +27,7 @@ pub mod frame;
 pub mod image;
 pub mod ink;
 pub mod intent;
+pub mod notes_marks;
 pub mod privacy;
 pub mod protocol;
 pub mod screen_text;
@@ -42,6 +46,8 @@ pub mod ask;
 pub mod clip;
 #[cfg(windows)]
 pub mod coach;
+#[cfg(windows)]
+pub mod notes_check;
 #[cfg(windows)]
 pub mod overlay;
 #[cfg(windows)]
