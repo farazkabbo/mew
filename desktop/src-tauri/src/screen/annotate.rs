@@ -69,6 +69,8 @@ pub struct InkTurn {
     pub frame: Option<FrameDetail>,
     pub drawn: Option<DrawnInk>,
     pub visible: bool,
+    /// Drawn for a walkthrough: no Esc, no ink pill.
+    pub coaching: bool,
     pub shown_at: Instant,
     pub faded_at: Option<Instant>,
     /// Open the clip preview as soon as the overlay reports this drawing ("save this" after the
@@ -101,6 +103,9 @@ pub struct ShowInk {
     pub detail: FrameDetail,
     pub video_time_sec: Option<u32>,
     pub clip_when_drawn: bool,
+    /// A walkthrough's arrow (S4): Esc stays with the student's app (Excel and Word use it), and
+    /// the progress pill shows instead of the ink pill.
+    pub coaching: bool,
 }
 
 fn state<R: Runtime>(app: &AppHandle<R>) -> Option<std::sync::MutexGuard<'_, InkState>> {
@@ -132,6 +137,7 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, ink_to_show: ShowInk) {
         detail,
         video_time_sec,
         clip_when_drawn,
+        coaching,
     } = ink_to_show;
     let draws = actions
         .iter()
@@ -150,8 +156,10 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, ink_to_show: ShowInk) {
     let Some(overlay_window) = overlay::ensure(app, Surface::Ink) else {
         return;
     };
-    let _ = overlay::ensure(app, Surface::Pill);
-    let _ = overlay::ensure(app, Surface::Clip);
+    if !coaching {
+        let _ = overlay::ensure(app, Surface::Pill);
+        let _ = overlay::ensure(app, Surface::Clip);
+    }
 
     let focus = actions.iter().find_map(|a| match a {
         ScreenAction::FocusRegion { region, kind } => Some((*region, *kind)),
@@ -206,12 +214,13 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, ink_to_show: ShowInk) {
         frame: Some(detail),
         drawn: None,
         visible: true,
+        coaching,
         shown_at: Instant::now(),
         faded_at: None,
         clip_when_drawn,
     });
     drop(state);
-    set_escape(app, true);
+    set_escape(app, !coaching);
 
     overlay::hide_quietly_named(app, Surface::Pill);
     overlay::place(&overlay_window, meta.monitor);
@@ -243,11 +252,15 @@ pub fn on_drawn<R: Runtime>(app: &AppHandle<R>, ink: DrawnInk) {
     });
     turn.drawn = Some(ink);
     let clip_now = std::mem::take(&mut turn.clip_when_drawn);
+    let coaching = turn.coaching;
     drop(state);
 
     if clip_now {
         clip::from_ink(app);
         return;
+    }
+    if coaching {
+        return; // the progress pill is showing instead
     }
     if let (Some(rect), Some(pill)) = (ink_rect, app.get_webview_window(Surface::Pill.label())) {
         overlay::place(&pill, overlay::pill_spot(rect, monitor, scale));
@@ -337,10 +350,12 @@ pub fn reannotate<R: Runtime>(app: &AppHandle<R>, captured: Captured, then_clip:
                 turn.focus.map(|(_, kind)| kind),
                 turn.focus_text.clone(),
                 turn.video_time_sec,
+                turn.coaching,
             )
         })
     };
-    let Some((seed, actions, old_bounds, anchor, kind, mut focus_text, video_time_sec)) = previous
+    let Some((seed, actions, old_bounds, anchor, kind, mut focus_text, video_time_sec, coaching)) =
+        previous
     else {
         say(
             app,
@@ -376,6 +391,7 @@ pub fn reannotate<R: Runtime>(app: &AppHandle<R>, captured: Captured, then_clip:
                 detail: captured.detail,
                 video_time_sec,
                 clip_when_drawn: then_clip,
+                coaching,
             },
         ),
         None => say(

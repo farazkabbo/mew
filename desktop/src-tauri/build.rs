@@ -19,6 +19,7 @@ fn main() {
         "screen_clip_save",
         "screen_clip_cancel",
         "screen_notes_panel",
+        "screen_coach_pill",
     ]);
     // Our own manifest replaces Tauri's default: the same Common Controls dependency, plus
     // Per-Monitor DPI Awareness V2 (Screen Coach maps screenshot pixels to screen pixels).

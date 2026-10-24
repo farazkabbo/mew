@@ -33,7 +33,8 @@ pnpm icons    # regenerate src-tauri/icons from icon.svg
 pnpm build:shell   # bundle Screen Coach's overlay pages (runs before app/bundle by itself)
 ```
 
-Screen Coach's overlay pages (the ink overlay, the ink pill, a clip's preview) are TypeScript in
+Screen Coach's overlay pages (the ink overlay, the ink pill, a clip's preview, the Notes Check
+panel and coach mode's progress pill) are TypeScript in
 `overlay-src/`, bundled by esbuild into `shell/gen/` (gitignored) so they reuse the notebook's
 handwriting from `packages/ink`. `pnpm lint`, `pnpm typecheck` and `pnpm test` cover them.
 
@@ -145,6 +146,22 @@ PowerShell's name.
   - The main window's links that open a new window go to the default browser (https only).
   - `windows-future` (=0.3.2, already in the tree through `windows`) is used directly for the
     media session's async calls.
+
+- **Coach mode** (S4, `docs/SCREEN_COACH.md` decision 10: `coach_mode.rs`, `walkthrough.rs`,
+  `intent.rs`):
+  - The walkthrough lives on the server (`/api/screen/coach/start`, `/resume`, `/step`, device
+    token). The desktop keeps its id, step and phase, and checks every reply in Rust
+    (`walkthrough::parse_coach_reply`): only a focus region and an arrow may be drawn, and
+    speech, title and step numbers are bounded.
+  - Captures happen only on the student's action: the hotkey ("done", "I'm stuck"…), or the
+    progress pill's Done, Hint, No and Resume. During a walkthrough they're of the monitor under
+    the cursor (decision 6; blocked apps blacked out as usual), and the first walkthrough shows a
+    one-time notice saying so.
+  - The progress pill is an overlay window like the ink pill: never focused, excluded from
+    captures, one command (`screen_coach_pill`). Ink drawn for a walkthrough doesn't register Esc
+    (Excel and Word need it) and doesn't show the ink pill. Stop from the pill, by voice or from
+    the tray; pausing Screen Coach stops the walkthrough (saved), and a reply still on its way
+    is dropped.
 
 ## Tests
 

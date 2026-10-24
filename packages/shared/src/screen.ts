@@ -180,7 +180,7 @@ export const AppName = z
   .max(64)
   .regex(/^[a-z0-9 ._+()-]+\.exe$/);
 
-const ScreenImage = z.object({
+export const ScreenImage = z.object({
   /** Base64 JPEG, already redacted on the device. Never stored. */
   jpeg: z.string().min(1).max(SCREEN_LIMITS.imageBase64Chars),
   width: z.number().int().min(1).max(SCREEN_LIMITS.imagePixelsPerSide),
@@ -195,6 +195,8 @@ export const ScreenAskRequest = z.object({
   scope: z.enum(["window", "monitor"]),
   /** A video is playing in the app in front (Windows' media session says so). */
   videoPlaying: z.boolean().optional(),
+  /** Asked in the middle of a walkthrough (S4): the tutor answers in its context. */
+  walkthroughId: z.uuid().optional(),
   image: ScreenImage,
 });
 export type ScreenAskRequest = z.infer<typeof ScreenAskRequest>;

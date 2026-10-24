@@ -21,8 +21,20 @@ from .mew_events.store import MemoryMewEventStore
 from .notes.checks import MemoryCheckStore
 from .notes.store import MemoryNoteLineStore
 from .profiles.store import MemoryProfileStore
-from .routes import check, clips, courses, devices, health, learner, me, mew_events, notes
+from .routes import (
+    check,
+    clips,
+    courses,
+    devices,
+    health,
+    learner,
+    me,
+    mew_events,
+    notes,
+    walkthroughs,
+)
 from .routes import settings as user_settings
+from .walkthroughs.store import MemoryWalkthroughStore
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +86,7 @@ def create_app(
     app.state.local_clips = MemoryClipStore()
     app.state.local_notes = MemoryNoteLineStore()
     app.state.local_checks = MemoryCheckStore(app.state.local_notes.pages_of)
+    app.state.local_walkthroughs = MemoryWalkthroughStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -88,6 +101,7 @@ def create_app(
     v1.include_router(devices.router)
     v1.include_router(clips.router)
     v1.include_router(notes.router)
+    v1.include_router(walkthroughs.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

@@ -16,6 +16,10 @@
 //! - S3.5, Notes Check (docs/SCREEN_COACH_NOTES_CHECK.md): the screen's text compared with the
 //!   student's notes, marks beside it and a panel of findings (`notes_check.rs`,
 //!   `notes_marks.rs`).
+//! - S4, coach mode (decision 10): a guided walkthrough, one step at a time, checked on the
+//!   screen after each, with a progress pill (`coach_mode.rs`; the protocol, the words and the
+//!   pill's view are pure, in `walkthrough.rs` and `intent.rs`). The walkthrough itself lives on
+//!   the web app's server.
 //!
 //! Where to start reading: `coach.rs` (what happens when a hotkey is pressed), then
 //! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
@@ -34,6 +38,7 @@ pub mod screen_text;
 pub mod secret;
 pub mod source;
 pub mod tray_badge;
+pub mod walkthrough;
 pub mod watch;
 
 #[cfg(windows)]
@@ -46,6 +51,8 @@ pub mod ask;
 pub mod clip;
 #[cfg(windows)]
 pub mod coach;
+#[cfg(windows)]
+pub mod coach_mode;
 #[cfg(windows)]
 pub mod notes_check;
 #[cfg(windows)]

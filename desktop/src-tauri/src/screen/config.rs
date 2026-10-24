@@ -126,6 +126,9 @@ pub struct ScreenConfig {
     pub hotkeys: Hotkeys,
     #[serde(default)]
     pub privacy: Privacy,
+    /// The one-time notice that coach mode sees the whole monitor was shown (decision 6, S4).
+    #[serde(default)]
+    pub coach_notice_seen: bool,
 }
 
 impl ScreenConfig {
@@ -341,6 +344,7 @@ mod tests {
                 ask_scope: CaptureScope::Monitor,
                 ..Privacy::default()
             },
+            coach_notice_seen: true,
         };
         save(&path, &config).unwrap();
         assert_eq!(load(&path), Loaded::Read(config));

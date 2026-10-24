@@ -341,3 +341,71 @@ test("the ink overlay draws Notes Check's ticks and amber circles, and the ticks
   await expect.poll(colours, { timeout: 8_000 }).toEqual({ violet: false, amber: true });
   expect(shell.violations).toEqual([]);
 });
+
+// ─── The progress pill (coach mode, S4) ──────────────────────────────────────────────────────
+
+const view = (change: Record<string, unknown> = {}) => ({
+  title: "Pivot tables",
+  progress: "Step 3 of ~7",
+  state: "awaiting",
+  ...change,
+});
+
+test("the progress pill shows the step and sends its buttons, one event at a time", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "coach-pill.html");
+  await shell.dispatch("mew:coach-pill-show", view());
+
+  await expect(page.getByText("Step 3 of ~7")).toBeVisible();
+  await expect(page.getByText("Pivot tables")).toBeVisible();
+  const buttons = page.locator("#coach-buttons button");
+  await expect(buttons).toHaveText(["Done", "Hint", "Pause", "Stop"]);
+
+  await page.getByRole("button", { name: "Done" }).click();
+  // Until Rust sends the next view, nothing else can be pressed.
+  for (const button of await buttons.all()) await expect(button).toBeDisabled();
+  expect(await shell.calls()).toEqual([{ cmd: "screen_coach_pill", args: { action: "done" } }]);
+
+  await shell.dispatch("mew:coach-pill-show", view({ state: "busy" }));
+  await expect(page.getByText("Checking…")).toBeVisible();
+  await expect(buttons).toHaveCount(0);
+
+  await shell.dispatch("mew:coach-pill-show", view({ state: "confirming" }));
+  await expect(page.getByText("Is it done?")).toBeVisible();
+  await expect(buttons).toHaveText(["Yes", "No", "Stop"]);
+  await page.getByRole("button", { name: "No" }).click();
+
+  await shell.dispatch("mew:coach-pill-show", view({ state: "paused" }));
+  await expect(buttons).toHaveText(["Resume", "Stop"]);
+  await page.getByRole("button", { name: "Resume" }).click();
+  expect((await shell.calls()).map((c) => (c.args as { action: string }).action)).toEqual([
+    "done",
+    "no",
+    "resume",
+  ]);
+  expect(shell.violations).toEqual([]);
+});
+
+test("the progress pill ends with a tick and the summary", async ({ page }) => {
+  const shell = await openShellPage(page, "coach-pill.html");
+  await shell.dispatch(
+    "mew:coach-pill-show",
+    view({ state: "finished", progress: "", summary: "You did it with 1 hint." }),
+  );
+  await expect(page.getByText("You did it with 1 hint.")).toBeVisible();
+  await expect(page.locator(".tick")).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  expect(await shell.calls()).toEqual([{ cmd: "screen_coach_pill", args: { action: "close" } }]);
+});
+
+test("the progress pill shows text as text and ignores a malformed view", async ({ page }) => {
+  const shell = await openShellPage(page, "coach-pill.html");
+  await shell.dispatch("mew:coach-pill-show", view({ title: "<img src=x onerror=alert(1)>" }));
+  await expect(page.getByText("<img src=x onerror=alert(1)>")).toBeVisible();
+  expect(await page.locator("img").count()).toBe(0);
+
+  await shell.dispatch("mew:coach-pill-show", view({ state: "run_command", title: "Other" }));
+  await expect(page.getByText("<img src=x onerror=alert(1)>")).toBeVisible();
+  expect(shell.violations).toEqual([]);
+});

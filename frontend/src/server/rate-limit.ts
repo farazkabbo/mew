@@ -81,6 +81,16 @@ export const RATE_RULES = {
   screen: { limit: 10, windowMs: MINUTE },
   screenDaily: { limit: 200, windowMs: DAY },
   screenMonthly: { limit: 2000, windowMs: 30 * DAY },
+  /**
+   * Coach mode (S4, decision 10): starting a walkthrough is a planner call with a screenshot;
+   * each step event is at most one fast verifier call. A 15-step walkthrough with every hint is
+   * ~60 checks, so the daily budget allows several long ones.
+   */
+  coachStart: { limit: 4, windowMs: MINUTE },
+  coachStartDaily: { limit: 30, windowMs: DAY },
+  coachStep: { limit: 20, windowMs: MINUTE },
+  coachStepDaily: { limit: 400, windowMs: DAY },
+  coachStepMonthly: { limit: 4000, windowMs: 30 * DAY },
   /** Saving clips from the screen (an upload to storage each), and reading them back. */
   clip: { limit: 10, windowMs: MINUTE },
   clipDaily: { limit: 200, windowMs: DAY },

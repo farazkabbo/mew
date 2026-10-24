@@ -17,6 +17,7 @@ function coach(transcript = "what does this do?") {
     },
     ask: vi.fn(() => Promise.resolve()),
     speak: vi.fn(() => Promise.resolve()),
+    hush: vi.fn(),
   };
   return { voice: new ScreenCoachVoice(deps), deps };
 }
@@ -44,6 +45,26 @@ describe("ScreenCoachVoice", () => {
     voice.onAnswer(ANSWER);
     expect(deps.speak).toHaveBeenCalledTimes(2);
     expect(deps.speak).toHaveBeenCalledWith("That inserts a chart.");
+  });
+
+  it("stops talking when the hotkey goes down", () => {
+    const { voice, deps } = coach();
+    voice.onListen();
+    expect(deps.hush).toHaveBeenCalledOnce();
+  });
+
+  it("always says coach mode's lines, cutting off anything older", () => {
+    const { voice, deps } = coach();
+    voice.onListen();
+    voice.onSpeech("An answer.");
+    voice.onSay("Nice. Click PivotTable.");
+    voice.onSay("Look where I'm pointing.");
+    expect(deps.speak.mock.calls).toEqual([
+      ["An answer."],
+      ["Nice. Click PivotTable."],
+      ["Look where I'm pointing."],
+    ]);
+    expect(deps.hush).toHaveBeenCalledTimes(3); // the hotkey, then each line
   });
 
   it("stops listening without asking when the capture was refused", () => {

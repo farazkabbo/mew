@@ -10,6 +10,7 @@ import {
   type ScreenStreamEvent,
   ScreenTutorResponse,
   unsafeReasons,
+  type WalkthroughContext,
   withFocusRegion,
 } from "@mew/shared";
 
@@ -34,6 +35,9 @@ type ScreenTutorDeps = {
   newTurnId: () => string;
 };
 
+/** A question about the screen, and the walkthrough it was asked in (coach mode, S4), if any. */
+export type ScreenQuestion = ScreenAskRequest & { walkthrough?: WalkthroughContext };
+
 const defaultDeps: ScreenTutorDeps = {
   stream: streamStructuredText,
   generate: generateStructured,
@@ -51,7 +55,7 @@ const defaultDeps: ScreenTutorDeps = {
  * The screenshot is only forwarded to the model (`store: false`), never kept.
  */
 export async function* runScreenTutor(
-  request: ScreenAskRequest,
+  request: ScreenQuestion,
   signal?: AbortSignal,
   deps: ScreenTutorDeps = defaultDeps,
 ): AsyncGenerator<ScreenStreamEvent> {
@@ -61,7 +65,7 @@ export async function* runScreenTutor(
     model: screenModel(),
     system: SCREEN_TUTOR_PROMPT.system,
     input: [
-      { type: "text" as const, text: renderScreenInput(request) },
+      { type: "text" as const, text: renderScreenInput(request, request.walkthrough) },
       { type: "image" as const, base64: request.image.jpeg, mimeType: "image/jpeg" as const },
     ],
     schema: ScreenTutorResponse,

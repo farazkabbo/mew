@@ -9,6 +9,8 @@
 //!   excluded from captures.
 //! - The Notes Check panel lists a check's findings beside the screen: shown without taking
 //!   the focus, clickable and keyboard-usable once the student clicks it, excluded from captures.
+//! - The progress pill (coach mode, S4) shows the walkthrough's step and its buttons: like the
+//!   ink pill, clickable but never focused, and excluded from captures.
 //! - The preview is an ordinary focused window: the only WebView that ever sees screen pixels,
 //!   and only for a clip the student asked to save (decision 2, S3 §5).
 //!
@@ -34,6 +36,7 @@ pub enum Surface {
     Pill,
     Clip,
     Notes,
+    Coach,
 }
 
 /// Size of the pill, in CSS pixels.
@@ -46,6 +49,7 @@ impl Surface {
             Surface::Pill => "screen-ink-pill",
             Surface::Clip => "screen-clip",
             Surface::Notes => "screen-notes",
+            Surface::Coach => "screen-coach-pill",
         }
     }
 
@@ -55,6 +59,7 @@ impl Surface {
             Surface::Pill => "ink-pill.html",
             Surface::Clip => "clip-preview.html",
             Surface::Notes => "notes-panel.html",
+            Surface::Coach => "coach-pill.html",
         }
     }
 }
@@ -95,6 +100,20 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
                 } else {
                     600.0
                 },
+            ),
+        Surface::Coach => builder
+            .title("Coach · Mew")
+            .transparent(true)
+            .decorations(false)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            .focusable(false)
+            .inner_size(
+                super::walkthrough::PILL_SIZE.0,
+                super::walkthrough::PILL_SIZE.1,
             ),
         Surface::Notes => builder
             .title("Notes Check · Mew")

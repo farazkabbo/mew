@@ -21,7 +21,6 @@ from ..courses.store import CourseNotFoundError, CourseStore
 from ..courses.supabase_store import SupabaseCourseStore
 from ..deps import Caller, CurrentCaller, SettingsDep
 from ..devices.models import VerifiedDevice
-from ..devices.tokens import TOKEN_PATTERN
 from ..notes.checks import CheckStore, SupabaseCheckStore
 from ..notes.embedding import embed_changed_lines
 from ..notes.equivalence import compare_claims
@@ -42,13 +41,12 @@ from ..notes.retrieval import retrieve
 from ..notes.store import NoteStore, SupabaseNoteLineStore
 from ..supabase_rest import StoreError
 from .courses import _embedder, _retrieve, _user_store
-from .devices import find_device
+from .devices import screen_device
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
-SCREEN_SCOPE = "screen"
 #: Course passages given to the comparison as tie-breaking evidence (brief §5.4).
 PASSAGES = 3
 #: Wall-clock budget for one request's maths checks (like /v1/check/math).
@@ -253,14 +251,7 @@ def equivalence(body: EquivalenceRequest, request: Request) -> EquivalenceRespon
 
 def _verified_device(request: Request, settings: Settings, token: str | None) -> VerifiedDevice:
     """The desktop app's device, checked against the database on every request."""
-    if token is None or not TOKEN_PATTERN.match(token):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
-    device = find_device(token, request, settings)
-    if device is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
-    if SCREEN_SCOPE not in device.scopes:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed")
-    return device
+    return screen_device(token, request, settings)
 
 
 def _service_credentials(settings: Settings) -> tuple[str, str]:

@@ -1,3 +1,4 @@
+import type { CoachPlan, CoachVerdict } from "./coach";
 import type { ScreenAction, ScreenTutorResponse } from "./screen";
 
 /**
@@ -81,6 +82,26 @@ export function checkScreenActions(actions: readonly ScreenAction[]): {
 } {
   const blocked = [...new Set(actionTexts(actions).flatMap(unsafeReasons))];
   return { actions: blocked.length === 0 ? [...actions] : [], blocked };
+}
+
+/**
+ * Every reason a coach plan breaks a rule (S4): its title, intro and each step's texts, the
+ * success conditions included (a goal that needs a command is refused whole, not edited).
+ */
+export function coachPlanReasons(plan: CoachPlan): SafetyReason[] {
+  const texts = [
+    plan.title,
+    plan.intro,
+    ...(plan.firstTarget?.label ? [plan.firstTarget.label] : []),
+    ...plan.steps.flatMap((s) => [s.instruction, s.successCondition, s.hint, s.explicit]),
+  ];
+  return [...new Set(texts.flatMap(unsafeReasons))];
+}
+
+/** Every reason a step check's words (its redirect and the control's name) break a rule. */
+export function coachVerdictReasons(verdict: Pick<CoachVerdict, "redirect" | "target">) {
+  const texts = [verdict.redirect, verdict.target?.label].filter((t): t is string => !!t);
+  return [...new Set(texts.flatMap(unsafeReasons))];
 }
 
 /** The reply if it's safe, otherwise the fallback (with why, for logging counts only). */

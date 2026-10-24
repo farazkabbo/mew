@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Coach · Mew</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/coach-pill.js" defer></script>
+  </head>
+  <body class="coach">
+    <div class="coach-pill" id="coach-pill" role="group" aria-label="Walkthrough">
+      <svg class="tick" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5 12.5l4.5 4.5L19 7.5" />
+      </svg>
+      <div class="coach-text">
+        <p class="coach-heading">
+          <span id="coach-progress"></span><span class="dot" aria-hidden="true"> · </span
+          ><span id="coach-title"></span>
+        </p>
+        <p class="coach-status" id="coach-status" aria-live="polite"></p>
+      </div>
+      <div class="coach-buttons" id="coach-buttons"></div>
+    </div>
+  </body>
+</html>

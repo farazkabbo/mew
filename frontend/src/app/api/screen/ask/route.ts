@@ -1,6 +1,8 @@
 import { ScreenAskRequest } from "@mew/shared";
 
-import { requireDevice } from "@/server/device-auth";
+import { walkthroughContext } from "@/server/coach/run";
+import { deviceWalkthroughs } from "@/server/coach/store";
+import { deviceToken, requireDevice } from "@/server/device-auth";
 import { geminiEnv } from "@/server/env";
 import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
@@ -16,7 +18,8 @@ const MAX_BODY_BYTES = 1_500_000;
  * desktop app can start speaking before the ink actions finish generating.
  *
  * The screenshot was captured and redacted on the device; here it is checked, forwarded to the
- * model, and dropped with the request. It is never stored or logged.
+ * model, and dropped with the request. It is never stored or logged. A question asked during a
+ * walkthrough (coach mode) is answered in its context.
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
@@ -28,11 +31,18 @@ export const POST = handle(async (request: Request) => {
   const body = await readJson(request, ScreenAskRequest, MAX_BODY_BYTES);
   assertJpeg(body.image.jpeg);
   geminiEnv(); // fail fast with 503 (before streaming) when the model isn't configured
+  // Asked in the middle of a walkthrough: the tutor answers about its current step.
+  const walkthrough = body.walkthroughId
+    ? await walkthroughContext(deviceWalkthroughs(deviceToken(request)), body.walkthroughId)
+    : undefined;
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      for await (const event of runScreenTutor(body, request.signal)) {
+      for await (const event of runScreenTutor(
+        { ...body, ...(walkthrough && { walkthrough }) },
+        request.signal,
+      )) {
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       }
       controller.close();
