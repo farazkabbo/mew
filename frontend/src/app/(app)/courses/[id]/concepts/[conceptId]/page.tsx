@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { LessonView } from "@/features/courses/LessonView";
 import { isClerkConfigured } from "@/lib/auth-mode";
 
-export const metadata: Metadata = { title: "Lesson · Mew" };
+export const metadata: Metadata = { title: "Lesson · Neb" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

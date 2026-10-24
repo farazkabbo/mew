@@ -142,7 +142,7 @@ test("tapping the mascot summons Mew", async ({ page }) => {
   const gateCalls = await fakeGate(page);
   await openNotebook(page);
 
-  await page.getByRole("button", { name: /^Ask Mew/ }).click();
+  await page.getByRole("button", { name: /^Ask Neb/ }).click();
 
   await expect.poll(() => gateCalls[0]).toMatchObject({ trigger: "summon", explicitSummon: true });
 });

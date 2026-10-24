@@ -54,6 +54,6 @@ export async function reportSpoken(token: number): Promise<void> {
 /** Gives the desktop app the one-time code for the sign-in it started (it redeems it). */
 export async function finishDeviceLink(code: string): Promise<void> {
   const result = invoke("screen_coach_link_finish", { code });
-  if (!result) throw new Error("Not running in the Mew desktop app");
+  if (!result) throw new Error("Not running in the Neb desktop app");
   await result;
 }

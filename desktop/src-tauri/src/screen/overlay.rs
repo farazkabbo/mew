@@ -29,8 +29,10 @@ use tauri::{
 };
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    SetWindowDisplayAffinity, SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SW_HIDE, SW_SHOWNOACTIVATE, WDA_EXCLUDEFROMCAPTURE,
+    GetWindowLongPtrW, SetWindowDisplayAffinity, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    GWL_STYLE, HWND_TOPMOST, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, WDA_EXCLUDEFROMCAPTURE, WINDOW_STYLE, WS_CAPTION,
+    WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
 };
 
 use super::frame::ScreenRect;
@@ -97,7 +99,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             .visible(false);
     let builder = match surface {
         Surface::Ink | Surface::Pill => builder
-            .title("Mew ink")
+            .title("Neb ink")
             .transparent(true)
             .decorations(false)
             .shadow(false)
@@ -119,7 +121,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
                 },
             ),
         Surface::Coach => builder
-            .title("Coach · Mew")
+            .title("Coach · Neb")
             .transparent(true)
             .decorations(false)
             .shadow(false)
@@ -133,7 +135,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
                 super::walkthrough::PILL_SIZE.1,
             ),
         Surface::Pointer | Surface::Draw => builder
-            .title("Mew")
+            .title("Neb")
             .transparent(true)
             .decorations(false)
             .shadow(false)
@@ -146,7 +148,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             .focusable(false)
             .inner_size(40.0, 40.0),
         Surface::Card => builder
-            .title("Circle & Ask · Mew")
+            .title("Circle & Ask · Neb")
             .transparent(true)
             .decorations(false)
             .shadow(false)
@@ -156,7 +158,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             .focused(false)
             .inner_size(CARD_SIZE.0, CARD_SIZE.1),
         Surface::Notes => builder
-            .title("Notes Check · Mew")
+            .title("Notes Check · Neb")
             .transparent(true)
             .decorations(false)
             .shadow(false)
@@ -166,7 +168,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             .focused(false)
             .inner_size(380.0, 520.0),
         Surface::Clip => builder
-            .title("Save to notebook · Mew")
+            .title("Save to notebook · Neb")
             .always_on_top(true)
             .inner_size(920.0, 700.0)
             .min_inner_size(520.0, 420.0)
@@ -226,6 +228,7 @@ pub fn show_quietly<R: Runtime>(window: &WebviewWindow<R>) {
     let raw = hwnd.0 as isize;
     let _ = window.run_on_main_thread(move || {
         let hwnd = HWND(raw as *mut _);
+        strip_frame(hwnd);
         // SAFETY: a window of this process, on its own thread; no pointers.
         unsafe {
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
@@ -240,6 +243,41 @@ pub fn show_quietly<R: Runtime>(window: &WebviewWindow<R>) {
             );
         }
     });
+}
+
+/// The title-bar styles an overlay must never have. tao keeps them on undecorated windows and
+/// hides the frame only while it handles WM_NCCALCSIZE, so when that's skipped Windows draws a
+/// full title bar (seen on the ink pill, over the pill's buttons).
+const FRAME_STYLES: WINDOW_STYLE = WINDOW_STYLE(
+    WS_CAPTION.0 | WS_THICKFRAME.0 | WS_SYSMENU.0 | WS_MINIMIZEBOX.0 | WS_MAXIMIZEBOX.0,
+);
+
+/// `style` without the title bar and frame: a plain popup.
+fn frameless(style: WINDOW_STYLE) -> WINDOW_STYLE {
+    WINDOW_STYLE((style.0 & !FRAME_STYLES.0) | WS_POPUP.0)
+}
+
+/// Removes the title bar and frame styles from an overlay window, on the thread that owns it.
+/// Run before every show, since tao writes its styles back whenever its own flags change.
+fn strip_frame(hwnd: HWND) {
+    // SAFETY: a top-level window of this process, on its own thread; no pointers.
+    unsafe {
+        let style = WINDOW_STYLE(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32);
+        let wanted = frameless(style);
+        if wanted != style {
+            SetWindowLongPtrW(hwnd, GWL_STYLE, wanted.0 as isize);
+            // The frame is recalculated only when told to.
+            let _ = SetWindowPos(
+                hwnd,
+                None,
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+    }
 }
 
 /// Hides an overlay window (shown with `show_quietly`).
@@ -345,6 +383,25 @@ pub fn pill_spot(ink: ScreenRect, monitor: ScreenRect, scale: f64) -> ScreenRect
 #[cfg(test)]
 mod tests {
     use super::*;
+    use windows::Win32::UI::WindowsAndMessaging::{WS_CLIPSIBLINGS, WS_VISIBLE};
+
+    #[test]
+    fn overlays_lose_the_title_bar_and_keep_everything_else() {
+        // What tao gives an undecorated window: caption, system menu, min/max boxes.
+        let tao = WINDOW_STYLE(
+            WS_CAPTION.0 | WS_SYSMENU.0 | WS_MINIMIZEBOX.0 | WS_MAXIMIZEBOX.0 | WS_CLIPSIBLINGS.0,
+        );
+        let style = frameless(WINDOW_STYLE(tao.0 | WS_VISIBLE.0));
+        assert_eq!(style.0 & FRAME_STYLES.0, 0, "no caption, frame or buttons");
+        assert_ne!(style.0 & WS_POPUP.0, 0);
+        assert_ne!(style.0 & WS_VISIBLE.0, 0, "other styles stay");
+        assert_ne!(style.0 & WS_CLIPSIBLINGS.0, 0, "other styles stay");
+        assert_eq!(
+            frameless(style),
+            style,
+            "already frameless: nothing changes"
+        );
+    }
 
     #[test]
     fn puts_the_pill_under_the_ink_and_on_the_monitor() {

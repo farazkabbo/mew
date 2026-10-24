@@ -49,7 +49,7 @@ export function EventCard({
         {input.tutorSpokeRecently && " · tutor had just spoken"}
       </p>
       <p className="mt-2 text-sm">
-        Mew decided <strong>{MEW_LABEL_NAMES[output.label]}</strong>{" "}
+        Neb decided <strong>{MEW_LABEL_NAMES[output.label]}</strong>{" "}
         <span className="text-ink-muted">
           ({Math.round(output.confidence * 100)}%{output.source ? `, ${output.source}` : ""})
         </span>
@@ -57,7 +57,7 @@ export function EventCard({
 
       <div
         role="group"
-        aria-label="What should Mew have done?"
+        aria-label="What should Neb have done?"
         className="mt-3 flex flex-wrap gap-1.5"
       >
         {LABELS.map((option, i) => (
@@ -79,7 +79,7 @@ export function EventCard({
             className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs text-check hover:underline"
           >
             <Check className="size-3.5" aria-hidden />
-            Mew was right
+            Neb was right
           </button>
         )}
       </div>

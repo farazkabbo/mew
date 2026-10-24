@@ -745,14 +745,14 @@ pub fn show_notebook<R: Runtime>(app: &AppHandle<R>) {
 fn upload<R: Runtime>(app: &AppHandle<R>, body: &SecretBytes) -> Result<String, String> {
     let coach = coach::coach_of(app)?;
     let token = credential::load().ok_or(
-        "Connect Screen Coach to your Mew account first: tray → Screen Coach settings → Connect.",
+        "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
     )?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
     let url = coach
         .app_url()
         .join("api/screen/clips")
-        .map_err(|_| "The Mew address is invalid.")?;
+        .map_err(|_| "The Neb address is invalid.")?;
     let mut headers = [
         "Content-Type: application/json".to_owned(),
         format!("Authorization: Bearer {token}"),
@@ -764,17 +764,17 @@ fn upload<R: Runtime>(app: &AppHandle<R>, body: &SecretBytes) -> Result<String, 
         }
     });
     headers.iter_mut().for_each(|header| wipe_string(header));
-    match status.map_err(|_| "I couldn't reach Mew to save the clip. Check your connection.")? {
+    match status.map_err(|_| "I couldn't reach Neb to save the clip. Check your connection.")? {
         200 | 201 => {
-            parse_clip_created(&reply).ok_or_else(|| "Mew sent an unexpected reply.".to_owned())
+            parse_clip_created(&reply).ok_or_else(|| "Neb sent an unexpected reply.".to_owned())
         }
         401 => {
             forget_revoked_token(app);
-            Err("Screen Coach was signed out of your Mew account. Connect again in Screen Coach settings.".to_owned())
+            Err("Screen Coach was signed out of your Neb account. Connect again in Screen Coach settings.".to_owned())
         }
         413 => Err("That area is too big to save. Choose a smaller one.".to_owned()),
         429 => Err("You've saved a lot of clips recently. Try again in a little while.".to_owned()),
-        _ => Err("Mew couldn't save the clip just now. Try again in a moment.".to_owned()),
+        _ => Err("Neb couldn't save the clip just now. Try again in a moment.".to_owned()),
     }
 }
 

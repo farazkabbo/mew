@@ -87,8 +87,8 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
         <button
           type="button"
           onClick={onSummon}
-          aria-label={`Ask Mew. ${mascotLabel(state)}.`}
-          title="Ask Mew (or say “Hey Mew”)"
+          aria-label={`Ask Neb. ${mascotLabel(state)}.`}
+          title="Ask Neb (or say “Hey Neb”)"
           data-mascot-state={state}
           className="rounded-full bg-paper-raised shadow-[0_8px_30px_-10px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95"
         >

@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 /** Installable web app (PWA): Edge and Chrome can install Mew as its own window. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Mew",
-    short_name: "Mew",
+    name: "Neb",
+    short_name: "Neb",
     description: "A quiet tutor that lives in your notebook.",
     start_url: "/notebook",
     scope: "/",

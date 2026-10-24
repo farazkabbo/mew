@@ -5,11 +5,11 @@ import type { CSSProperties } from "react";
 export type MascotState = "sleeping" | "listening" | "thinking" | "speaking" | "muted";
 
 const LABEL: Record<MascotState, string> = {
-  sleeping: "Mew is asleep",
-  listening: "Mew is listening",
-  thinking: "Mew is thinking",
-  speaking: "Mew is speaking",
-  muted: "Mew is muted",
+  sleeping: "Neb is asleep",
+  listening: "Neb is listening",
+  thinking: "Neb is thinking",
+  speaking: "Neb is speaking",
+  muted: "Neb is muted",
 };
 
 export function mascotLabel(state: MascotState): string {

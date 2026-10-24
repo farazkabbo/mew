@@ -102,7 +102,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     }
 
     let token = credential::load().ok_or(
-        "Connect Screen Coach to your Mew account first: tray → Screen Coach settings → Connect.",
+        "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
     )?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
@@ -121,7 +121,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     let url = coach
         .app_url()
         .join("api/screen/ask")
-        .map_err(|_| "The Mew address is invalid.")?;
+        .map_err(|_| "The Neb address is invalid.")?;
     let mut headers = [
         "Content-Type: application/json".to_owned(),
         "Accept: application/x-ndjson".to_owned(),
@@ -140,7 +140,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     drop(for_ink); // no answer with ink came: the frame is wiped
 
     let status =
-        result.map_err(|_| "I couldn't reach Mew. Check your connection and try again.")?;
+        result.map_err(|_| "I couldn't reach Neb. Check your connection and try again.")?;
     eprintln!(
         "[screen] asked: status {status} in {} ms",
         started.elapsed().as_millis()
@@ -149,7 +149,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         200 => Ok(()),
         401 => {
             forget_revoked_token(app);
-            Err("Screen Coach was signed out of your Mew account. Connect again in Screen Coach settings.".to_owned())
+            Err("Screen Coach was signed out of your Neb account. Connect again in Screen Coach settings.".to_owned())
         }
         429 => {
             Err("You've asked Screen Coach a lot recently. Try again in a little while.".to_owned())

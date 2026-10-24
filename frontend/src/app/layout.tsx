@@ -15,7 +15,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Mew",
+  title: "Neb",
   description: "A quiet tutor that lives in your notebook.",
 };
 

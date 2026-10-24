@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { isClerkConfigured } from "@/lib/auth-mode";
 import { type Check, checkApiAuth, checkSupabaseRls } from "@/server/diagnostics";
 
-export const metadata: Metadata = { title: "Status · Mew" };
+export const metadata: Metadata = { title: "Status · Neb" };
 
 export default async function StatusPage() {
   const checks = isClerkConfigured ? await authChainChecks() : [CLERK_MISSING];

@@ -85,7 +85,7 @@ fn check<R: Runtime>(
         return Err("I couldn't read any text on your screen to compare with your notes.".into());
     }
     let token = credential::load().ok_or(
-        "Connect Screen Coach to your Mew account first: tray → Screen Coach settings → Connect.",
+        "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
     )?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
@@ -93,7 +93,7 @@ fn check<R: Runtime>(
     let url = coach
         .app_url()
         .join("api/screen/notes-check")
-        .map_err(|_| "The Mew address is invalid.")?;
+        .map_err(|_| "The Neb address is invalid.")?;
     let mut headers = [
         "Content-Type: application/json".to_owned(),
         "Accept: application/json".to_owned(),
@@ -113,7 +113,7 @@ fn check<R: Runtime>(
     headers.iter_mut().for_each(|header| wipe_string(header));
     drop(body);
     let status =
-        result.map_err(|_| "I couldn't reach Mew. Check your connection and try again.")?;
+        result.map_err(|_| "I couldn't reach Neb. Check your connection and try again.")?;
     // Timings and counts only: never what was on screen or in the notes.
     eprintln!(
         "[screen] notes check: status {status}, {} blocks, in {} ms",
@@ -124,7 +124,7 @@ fn check<R: Runtime>(
         200 if !too_large => {}
         401 => {
             forget_revoked_token(app);
-            return Err("Screen Coach was signed out of your Mew account. Connect again in Screen Coach settings.".into());
+            return Err("Screen Coach was signed out of your Neb account. Connect again in Screen Coach settings.".into());
         }
         429 => return Err("You've checked your notes a lot today. Try again later.".into()),
         _ => return Err("I couldn't check your notes just now. Try again in a moment.".into()),

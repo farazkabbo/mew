@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { NotebookApp } from "@/features/notebook/NotebookApp";
 import { isClerkConfigured, LOCAL_USER_ID } from "@/lib/auth-mode";
 
-export const metadata: Metadata = { title: "Notebook · Mew" };
+export const metadata: Metadata = { title: "Notebook · Neb" };
 
 export default async function NotebookPage() {
   // Local notebook data is partitioned per signed-in user (one IndexedDB database each).

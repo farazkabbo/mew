@@ -39,7 +39,7 @@ export function TeachApp() {
         setMore(page.length === PAGE);
         setError(null);
       },
-      () => setError("Couldn't load Mew's decisions."),
+      () => setError("Couldn't load Neb's decisions."),
     );
   }, []);
 
@@ -75,7 +75,7 @@ export function TeachApp() {
 
   const deleteAll = async () => {
     if (
-      !window.confirm("Delete every decision Mew kept, and their labels? This can't be undone.")
+      !window.confirm("Delete every decision Neb kept, and their labels? This can't be undone.")
     ) {
       return;
     }
@@ -89,15 +89,15 @@ export function TeachApp() {
   return (
     <CourseShell
       back={{ href: "/settings", label: "Settings" }}
-      title="Teach Mew"
-      subtitle="Mark what Mew should have done. Your labels train a faster Mew that runs on your device."
+      title="Teach Neb"
+      subtitle="Mark what Neb should have done. Your labels train a faster Neb that runs on your device."
     >
       {loaded && !optedIn && (
         <p
           role="status"
           className="mb-6 rounded-2xl border border-rule bg-paper-raised p-4 text-sm"
         >
-          Mew isn&apos;t keeping new decisions. Turn on <em>Keep Mew&apos;s decisions</em> in{" "}
+          Neb isn&apos;t keeping new decisions. Turn on <em>Keep Neb&apos;s decisions</em> in{" "}
           <Link href="/settings" className="underline hover:text-accent">
             Settings
           </Link>{" "}
@@ -142,7 +142,7 @@ export function TeachApp() {
       {events === null && !error && <p className="mt-6 text-ink-muted">Loading…</p>}
       {events?.length === 0 && (
         <p className="mt-6 text-ink-muted" data-testid="teach-empty">
-          Nothing here yet. Mew keeps its decisions while you study (with the setting on).
+          Nothing here yet. Neb keeps its decisions while you study (with the setting on).
         </p>
       )}
       {events && events.length > 0 && (

@@ -314,6 +314,13 @@ scripts/                      health.ts, build-glyphs.ts (regenerates the glyph 
 
 ## 4. Decisions and deviations from the brief (and why)
 
+- **The app is called Neb** (renamed from Mew, 2026-10-24). Only what users see or hear changed:
+  page titles, the PWA name, UI text, window titles, tray and notification text, and the
+  wake phrase ("Hey Neb"; "Hey Mew" still works, in the web app and in Screen Coach's voice
+  rules). Code names stay Mew: `@mew/*` packages, `mew_api`, `app.mew.desktop` (its settings
+  folder), the `Mew/ScreenCoach/DeviceToken` credential, the `X-Mew-*` headers, and the gate
+  ("Mew", "Mew v2") in code and in its versioned prompt. The docs still say Mew.
+
 Earlier decisions (M0–M3) still hold:
 
 - **Auth: Clerk instead of Supabase Auth** (owner's choice). Supabase trusts Clerk through

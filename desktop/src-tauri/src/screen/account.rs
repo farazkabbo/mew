@@ -41,14 +41,14 @@ pub fn screen_coach_link_start<R: Runtime>(window: WebviewWindow<R>) -> Result<S
     let mut url = coach
         .app_url()
         .join("desktop/link")
-        .map_err(|_| "The Mew address is invalid.".to_owned())?;
+        .map_err(|_| "The Neb address is invalid.".to_owned())?;
     // In the fragment: the browser never sends it to the server.
     url.set_fragment(Some(&format!("challenge={}", pkce.challenge)));
     let main = app
         .get_webview_window(crate::MAIN)
-        .ok_or("The Mew window isn't available.")?;
+        .ok_or("The Neb window isn't available.")?;
     main.navigate(url)
-        .map_err(|_| "Couldn't open the Mew window.".to_owned())?;
+        .map_err(|_| "Couldn't open the Neb window.".to_owned())?;
     let _ = main.show();
     let _ = main.unminimize();
     let _ = main.set_focus();
@@ -86,7 +86,7 @@ pub fn screen_coach_link_finish<R: Runtime>(
     let url = coach
         .app_url()
         .join("api/devices/exchange")
-        .map_err(|_| "The Mew address is invalid.".to_owned())?;
+        .map_err(|_| "The Neb address is invalid.".to_owned())?;
     // Sized for the whole reply (it holds the token): growing would leave unwiped copies.
     let mut reply = Vec::with_capacity(4096);
     let status = http::post(
@@ -95,17 +95,17 @@ pub fn screen_coach_link_finish<R: Runtime>(
         body.as_slice(),
         |chunk| reply.extend_from_slice(chunk),
     )
-    .map_err(|_| "Couldn't reach Mew. Check your connection and try again.".to_owned())?;
+    .map_err(|_| "Couldn't reach Neb. Check your connection and try again.".to_owned())?;
     let reply = SecretBytes::from_vec(reply);
     if status != 200 {
         return Err("Connecting didn't work. Start again from Screen Coach settings.".to_owned());
     }
     let issued: IssuedToken = serde_json::from_slice(reply.as_slice())
-        .map_err(|_| "Mew sent an unexpected reply.".to_owned())?;
+        .map_err(|_| "Neb sent an unexpected reply.".to_owned())?;
     let mut token = SecretBytes::from_vec(issued.token.into_bytes());
     let token_text = std::str::from_utf8(token.as_slice()).unwrap_or("");
     if !is_device_token(token_text) {
-        return Err("Mew sent an unexpected reply.".to_owned());
+        return Err("Neb sent an unexpected reply.".to_owned());
     }
     credential::save(token_text)
         .map_err(|_| "Couldn't save the sign-in on this computer.".to_owned())?;

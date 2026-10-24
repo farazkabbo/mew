@@ -69,7 +69,7 @@ export function LinkDevice() {
       <div className="max-w-prose space-y-4">
         {step.kind === "checking" && <p className="text-ink-muted">One moment…</p>}
         {step.kind === "not-desktop" && (
-          <p>Open this page from the Mew desktop app: tray → Screen Coach settings → Connect.</p>
+          <p>Open this page from the Neb desktop app: tray → Screen Coach settings → Connect.</p>
         )}
         {step.kind === "no-request" && (
           <p>
@@ -80,7 +80,7 @@ export function LinkDevice() {
         {step.kind === "confirm" && (
           <>
             <p>
-              Connect the Mew desktop app on this computer to your account? Screen Coach will then
+              Connect the Neb desktop app on this computer to your account? Screen Coach will then
               be able to answer your questions about your screen.
             </p>
             <p className="text-sm text-ink-muted">

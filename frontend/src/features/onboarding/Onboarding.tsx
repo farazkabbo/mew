@@ -7,12 +7,12 @@ const STEPS: { icon: ReactNode; title: string; body: string }[] = [
   {
     icon: <PenLine className="size-6 text-accent" aria-hidden />,
     title: "Write here",
-    body: "This is your notebook. Write with a pen, a mouse or a trackpad, just as on paper. When you pause, Mew reads your handwriting.",
+    body: "This is your notebook. Write with a pen, a mouse or a trackpad, just as on paper. When you pause, Neb reads your handwriting.",
   },
   {
     icon: <Mic className="size-6 text-tutor" aria-hidden />,
     title: "Talk while you study",
-    body: "Mew listens and stays quiet until you need it. Ask a question, say “is this right?”, or tap Mew in the corner. It answers out loud and writes on your page.",
+    body: "Neb listens and stays quiet until you need it. Ask a question, say “is this right?”, or tap Neb in the corner. It answers out loud and writes on your page.",
   },
   {
     icon: <GraduationCap className="size-6 text-check" aria-hidden />,

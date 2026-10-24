@@ -17,7 +17,7 @@ export const LATENCY_STAGES = [
 export type LatencyStage = (typeof LATENCY_STAGES)[number];
 
 export const LATENCY_STAGE_LABELS: Record<LatencyStage, string> = {
-  gateMs: "Mew decides",
+  gateMs: "Neb decides",
   tutorSpeechMs: "Reply ready",
   firstAudioMs: "First audio",
   inkStartMs: "Ink starts",

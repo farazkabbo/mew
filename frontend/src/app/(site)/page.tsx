@@ -19,7 +19,7 @@ export default function Home() {
         until you need it.
       </h1>
       <p className="max-w-lg text-lg text-ink-muted">
-        Write and think out loud in your notebook. Mew stays quiet — and when you&apos;re stuck,
+        Write and think out loud in your notebook. Neb stays quiet — and when you&apos;re stuck,
         answers with a short hint in ink, right on the page.
       </p>
       <div className="flex gap-3">

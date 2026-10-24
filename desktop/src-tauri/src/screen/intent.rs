@@ -43,8 +43,8 @@ pub enum CoachWord {
 
 /// Words that never change the meaning of a command ("please save this now").
 const FILLER: &[&str] = &[
-    "please", "pls", "now", "mew", "hey", "ok", "okay", "can", "could", "you", "just", "for", "me",
-    "quickly",
+    "please", "pls", "now", "neb", "mew", "hey", "ok", "okay", "can", "could", "you", "just",
+    "for", "me", "quickly",
 ];
 const THIS: &[&str] = &["this", "that", "it", "these", "those"];
 const NOTEBOOK_PLACES: &[&str] = &["notebook", "notes", "my notebook", "my notes"];
@@ -161,9 +161,9 @@ fn is_reannotate(words: &[&str]) -> bool {
 
 // ─── Coach mode (S4) ─────────────────────────────────────────────────────────────────────────
 
-/// Polite words before a request ("hey Mew, can you teach me…").
+/// Polite words before a request ("hey Neb, can you teach me…"; Mew is the app's old name).
 const LEAD_IN: &[&str] = &[
-    "hey", "mew", "ok", "okay", "please", "so", "can", "could", "would", "will", "you",
+    "hey", "neb", "mew", "ok", "okay", "please", "so", "can", "could", "would", "will", "you",
 ];
 /// How a walkthrough is asked for; the task follows.
 const START_PREFIXES: &[&str] = &[
@@ -340,6 +340,7 @@ mod tests {
             "Put it into my notebook!",
             "add this to my notebook",
             "keep this",
+            "Neb, save this.",
             "Mew, save this.",
             "okay, save it now",
             "could you save this for me",
@@ -370,6 +371,7 @@ mod tests {
         for said in [
             "check my notes",
             "Check my notes.",
+            "Neb, check my notes please",
             "Mew, check my notes please",
             "does this match my notes?",
             "what am I missing?",
@@ -427,6 +429,7 @@ mod tests {
         for said in [
             "Teach me how to make a pivot table.",
             "teach me to add a header in Word",
+            "Hey Neb, can you teach me how to make a chart?",
             "Hey Mew, can you teach me how to make a chart?",
             "walk me through making a pivot table",
             "Could you guide me through adding page numbers",
@@ -454,6 +457,7 @@ mod tests {
         for said in [
             "continue where we left off",
             "Continue where we left off.",
+            "Neb, let's continue",
             "Mew, let's continue",
             "keep going",
             "resume",

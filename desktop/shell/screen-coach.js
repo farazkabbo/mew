@@ -76,7 +76,7 @@ $("turn-off").addEventListener("click", async () => {
   const ok = await run(() =>
     invoke("screen_coach_set_enabled", { enabled: false, consentVersion: 0 }),
   );
-  if (ok) showNotice("Screen Coach is off. Mew won't look at your screen.");
+  if (ok) showNotice("Screen Coach is off. Neb won't look at your screen.");
 });
 
 $("pause").addEventListener("click", () =>
@@ -103,15 +103,15 @@ for (const form of document.querySelectorAll("form.hotkey")) {
 
 function renderAccount(view) {
   $("account-state").textContent = view.connected
-    ? "Connected to your Mew account."
-    : "Connect Screen Coach to your Mew account so it can answer your questions.";
+    ? "Connected to your Neb account."
+    : "Connect Screen Coach to your Neb account so it can answer your questions.";
   $("connect").hidden = view.connected;
   $("disconnect").hidden = !view.connected;
 }
 
 $("connect").addEventListener("click", async () => {
   const ok = await run(() => invoke("screen_coach_link_start"));
-  if (ok) showNotice("Finish connecting in the Mew window that just opened.");
+  if (ok) showNotice("Finish connecting in the Neb window that just opened.");
 });
 
 $("disconnect").addEventListener("click", async () => {

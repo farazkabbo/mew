@@ -370,7 +370,7 @@ export function NotebookApp({ userId }: { userId: string }) {
               data-testid="offline-notice"
               className="rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
             >
-              You&apos;re offline. Your notes are saved on this device; Mew needs a connection.
+              You&apos;re offline. Your notes are saved on this device; Neb needs a connection.
             </p>
           )}
         </div>

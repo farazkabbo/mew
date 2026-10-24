@@ -44,11 +44,11 @@ export function SettingsApp() {
           />
         </Section>
 
-        <Section title="Mew">
+        <Section title="Neb">
           <label className="block">
-            <span className="font-medium">How readily Mew speaks up</span>
+            <span className="font-medium">How readily Neb speaks up</span>
             <span className="mt-1 block text-sm text-ink-muted">
-              Mew only answers when it&apos;s this sure you want help. Tapping Mew always works.
+              Neb only answers when it&apos;s this sure you want help. Tapping Neb always works.
             </span>
             <span className="mt-3 flex items-center gap-3 text-sm text-ink-muted">
               <span>More often</span>
@@ -58,7 +58,7 @@ export function SettingsApp() {
                 max={0.95}
                 step={0.05}
                 value={settings.mew_threshold}
-                aria-label="Mew sensitivity threshold"
+                aria-label="Neb sensitivity threshold"
                 aria-valuetext={`${Math.round(settings.mew_threshold * 100)}% sure`}
                 onChange={(e) => void update({ mew_threshold: Number(e.target.value) })}
                 className="flex-1 accent-(--accent)"
@@ -99,7 +99,7 @@ export function SettingsApp() {
           </fieldset>
           <Toggle
             label="Captions"
-            hint="Show what the tutor says next to Mew."
+            hint="Show what the tutor says next to Neb."
             checked={settings.captions}
             onChange={(captions) => void update({ captions })}
           />
@@ -183,7 +183,7 @@ function VoicePicker({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: "Hi, I'm Mew. I'll stay quiet until you need me.",
+          text: "Hi, I'm Neb. I'll stay quiet until you need me.",
           voiceId: value,
         }),
         cache: "no-store",

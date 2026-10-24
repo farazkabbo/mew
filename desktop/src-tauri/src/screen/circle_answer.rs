@@ -515,7 +515,7 @@ fn stream_answer<R: Runtime>(app: &AppHandle<R>, request: Request) {
         Ok(429) => Some("You've asked a lot recently. Try again in a little while."),
         Ok(401) => {
             forget_revoked_token(app);
-            Some("Screen Coach was signed out of your Mew account. Connect again in its settings.")
+            Some("Screen Coach was signed out of your Neb account. Connect again in its settings.")
         }
         Ok(_) | Err(_) => Some("I couldn't explain that just now. Try again in a moment."),
     };
@@ -1070,7 +1070,7 @@ fn append<R: Runtime>(
         }
         401 => {
             forget_revoked_token(app);
-            Err("Screen Coach was signed out of your Mew account.".to_owned())
+            Err("Screen Coach was signed out of your Neb account.".to_owned())
         }
         _ => Err("I couldn't add that to your notebook just now.".to_owned()),
     }

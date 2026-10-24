@@ -30,11 +30,11 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
 
   return (
     <aside
-      aria-label="Mew debug panel"
+      aria-label="Neb debug panel"
       className="pointer-events-auto flex h-full w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-rule bg-paper-raised/95 text-sm shadow-xl backdrop-blur"
     >
       <header className="flex items-center justify-between border-b border-rule px-4 py-3">
-        <h2 className="font-serif text-lg">Mew debug</h2>
+        <h2 className="font-serif text-lg">Neb debug</h2>
         <button
           aria-label="Close debug panel"
           onClick={useMew.getState().toggleDebug}
@@ -93,7 +93,7 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
             onClick={onSummon}
             className="mt-2 text-xs text-accent underline-offset-2 hover:underline"
           >
-            Summon Mew (tap mascot)
+            Summon Neb (tap mascot)
           </button>
         </section>
 
@@ -119,7 +119,7 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
         </section>
 
         <section aria-label="Decisions">
-          <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Mew decisions</h3>
+          <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Neb decisions</h3>
           {decisions.length === 0 ? (
             <p className="text-ink-muted">Nothing yet. Speak, write, or simulate an utterance.</p>
           ) : (

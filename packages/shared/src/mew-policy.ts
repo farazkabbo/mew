@@ -59,11 +59,12 @@ export function prefilterMew(input: MewInput): MewOutput | null {
 }
 
 const WAKE_PHRASE =
-  /^(.*?)\b(?:hey|hi|hello|okay|ok)[\s,!.]+(?:mew|mu|mue|meow|miu|mieu|myu|mewl)\b[\s,!.?]*(.*)$/is;
+  /^(.*?)\b(?:hey|hi|hello|okay|ok)[\s,!.]+(?:neb|nebb|nab|mew|mu|mue|meow|miu|mieu|myu|mewl)\b[\s,!.?]*(.*)$/is;
 
 /**
- * Detects "Hey Mew" (and common mis-transcriptions) anywhere in an utterance. `request` is what
- * follows the wake phrase (or what preceded it, if nothing follows).
+ * Detects "Hey Neb" (and common mis-transcriptions) anywhere in an utterance. `request` is what
+ * follows the wake phrase (or what preceded it, if nothing follows). "Hey Mew", the app's old
+ * name, still works.
  */
 export function detectWakePhrase(text: string): { summoned: boolean; request: string } {
   const match = WAKE_PHRASE.exec(text);

@@ -47,6 +47,8 @@ describe("prefilterMew", () => {
 
 describe("detectWakePhrase", () => {
   it.each([
+    ["Hey Neb, why is this negative?", "why is this negative?"],
+    ["hey nab what's next", "what's next"],
     ["Hey Mew, why is this negative?", "why is this negative?"],
     ["hey mu what's next", "what's next"],
     ["OK mew. Is this right?", "Is this right?"],
@@ -55,7 +57,7 @@ describe("detectWakePhrase", () => {
     expect(detectWakePhrase(text)).toEqual({ summoned: true, request });
   });
 
-  it.each(["they knew it", "hey, new idea", "mew", "the cat said mew", "heymew"])(
+  it.each(["they knew it", "hey, new idea", "mew", "the cat said mew", "heymew", "neb", "heyneb"])(
     "does not fire on %j",
     (text) => {
       expect(detectWakePhrase(text).summoned).toBe(false);

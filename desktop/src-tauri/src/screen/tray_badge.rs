@@ -31,12 +31,12 @@ impl Status {
 
     pub fn tooltip(self) -> &'static str {
         match self {
-            Status::Unsupported | Status::Off => "Mew",
-            Status::Idle => "Mew · Screen Coach is on",
-            Status::Listening => "Mew · Screen Coach is listening",
-            Status::Looking => "Mew · Screen Coach is looking at your screen",
-            Status::Speaking => "Mew · Screen Coach is speaking",
-            Status::Paused => "Mew · Screen Coach is paused",
+            Status::Unsupported | Status::Off => "Neb",
+            Status::Idle => "Neb · Screen Coach is on",
+            Status::Listening => "Neb · Screen Coach is listening",
+            Status::Looking => "Neb · Screen Coach is looking at your screen",
+            Status::Speaking => "Neb · Screen Coach is speaking",
+            Status::Paused => "Neb · Screen Coach is paused",
         }
     }
 }

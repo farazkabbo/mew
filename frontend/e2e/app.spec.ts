@@ -84,16 +84,16 @@ test("settings are saved to the account and used by the notebook", async ({ page
 
   await page.getByRole("radio", { name: /Direct answers/ }).check();
   await page.getByRole("checkbox", { name: /Captions/ }).uncheck();
-  await page.getByRole("checkbox", { name: /Keep Mew's decisions/ }).check();
-  await page.getByRole("slider", { name: "Mew sensitivity threshold" }).fill("0.85");
+  await page.getByRole("checkbox", { name: /Keep Neb's decisions/ }).check();
+  await page.getByRole("slider", { name: "Neb sensitivity threshold" }).fill("0.85");
   // No ElevenLabs key in this test server.
   await expect(page.getByText(/voice isn.t set up on this server/)).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole("radio", { name: /Direct answers/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /Captions/ })).not.toBeChecked();
-  await expect(page.getByRole("checkbox", { name: /Keep Mew's decisions/ })).toBeChecked();
-  await expect(page.getByRole("slider", { name: "Mew sensitivity threshold" })).toHaveValue("0.85");
+  await expect(page.getByRole("checkbox", { name: /Keep Neb's decisions/ })).toBeChecked();
+  await expect(page.getByRole("slider", { name: "Neb sensitivity threshold" })).toHaveValue("0.85");
 
   // The notebook's tutor and gate use them.
   await page.goto("/notebook");
@@ -180,7 +180,7 @@ test("tutor turn latencies are reported and shown in Settings", async ({ page })
       { timeout: 15_000 },
     )
     .toBe(1);
-  await expect(page.getByTestId("latency-table")).toContainText("Mew decides");
+  await expect(page.getByTestId("latency-table")).toContainText("Neb decides");
 });
 
 test("the web app is installable (manifest and icons)", async ({ page }) => {
@@ -193,7 +193,7 @@ test("the web app is installable (manifest and icons)", async ({ page }) => {
     start_url: string;
     icons: { src: string; sizes: string }[];
   };
-  expect(manifest).toMatchObject({ name: "Mew", display: "standalone", start_url: "/notebook" });
+  expect(manifest).toMatchObject({ name: "Neb", display: "standalone", start_url: "/notebook" });
   for (const icon of manifest.icons) {
     const response = await page.request.get(icon.src, { headers: ORIGIN_HEADER(page) });
     expect(response.headers()["content-type"]).toBe("image/png");

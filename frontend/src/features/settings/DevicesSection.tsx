@@ -36,8 +36,8 @@ export function DevicesSection() {
   return (
     <Section title="Signed-in devices">
       <p className="text-sm text-ink-muted">
-        Computers where the Mew desktop app is connected to your account for Screen Coach. To
-        connect one, open Mew&apos;s tray menu → Screen Coach settings → Connect.
+        Computers where the Neb desktop app is connected to your account for Screen Coach. To
+        connect one, open Neb&apos;s tray menu → Screen Coach settings → Connect.
       </p>
       {state.status === "loading" && <p className="text-sm text-ink-muted">Loading…</p>}
       {state.status === "error" && (

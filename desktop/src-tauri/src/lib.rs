@@ -141,7 +141,7 @@ fn main_window(app: &AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
     let allowed = app_url.clone();
     let start = app_url.join("notebook").unwrap_or(app_url);
     let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::External(start))
-        .title("Mew")
+        .title("Neb")
         .inner_size(1280.0, 840.0)
         .min_inner_size(900.0, 600.0)
         .additional_browser_args(BROWSER_ARGS)
@@ -184,8 +184,8 @@ fn summon(app: &AppHandle) {
 }
 
 fn tray(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open Mew", true, None::<&str>)?;
-    let ask = MenuItem::with_id(app, "summon", "Ask Mew  (Ctrl+Shift+M)", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Open Neb", true, None::<&str>)?;
+    let ask = MenuItem::with_id(app, "summon", "Ask Neb  (Ctrl+Shift+M)", true, None::<&str>)?;
     // Screen Coach: enabled and checked by `screen::coach::refresh` as its state changes.
     let look = MenuItem::with_id(app, "screen-look", "Look at my screen", false, None::<&str>)?;
     let pause = CheckMenuItem::with_id(
@@ -228,7 +228,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .tooltip("Mew")
+        .tooltip("Neb")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {

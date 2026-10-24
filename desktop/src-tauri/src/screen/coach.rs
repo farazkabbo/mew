@@ -423,7 +423,7 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
     let dev_url = app.config().build.dev_url.clone();
     let built =
         WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App(SETTINGS_PAGE.into()))
-            .title("Mew · Screen Coach")
+            .title("Neb · Screen Coach")
             .inner_size(600.0, 760.0)
             .min_inner_size(420.0, 520.0)
             .additional_browser_args(crate::BROWSER_ARGS)
@@ -661,7 +661,7 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
         }
         if !state.connected {
             drop(state);
-            notify(app, "Connect Screen Coach to your Mew account first: tray → Screen Coach settings → Connect.");
+            notify(app, "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.");
             return false;
         }
         if coach.capturing.swap(true, Ordering::SeqCst) {
@@ -1046,7 +1046,7 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
             return Err("That shortcut is already used by another Screen Coach action.".to_owned());
         }
         if crate::is_summon_hotkey(&shortcut) {
-            return Err("That shortcut already summons Mew. Choose a different one.".to_owned());
+            return Err("That shortcut already summons Neb. Choose a different one.".to_owned());
         }
     }
     // Check it's free before switching, so a taken shortcut never leaves the user with none.

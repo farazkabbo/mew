@@ -243,14 +243,14 @@ fn send<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Coach
         .try_state::<ScreenCoach>()
         .ok_or("Screen Coach isn't ready.")?;
     let token = credential::load().ok_or(
-        "Connect Screen Coach to your Mew account first: tray → Screen Coach settings → Connect.",
+        "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
     )?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
     let url = coach
         .app_url()
         .join(path)
-        .map_err(|_| "The Mew address is invalid.")?;
+        .map_err(|_| "The Neb address is invalid.")?;
     let mut headers = [
         "Content-Type: application/json".to_owned(),
         "Accept: application/json".to_owned(),
@@ -269,7 +269,7 @@ fn send<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Coach
     });
     headers.iter_mut().for_each(|header| wipe_string(header));
     let status =
-        result.map_err(|_| "I couldn't reach Mew. Check your connection and try again.")?;
+        result.map_err(|_| "I couldn't reach Neb. Check your connection and try again.")?;
     // Timings and statuses only: never what was said or on screen.
     eprintln!(
         "[screen] coach {path}: status {status} in {} ms",
@@ -279,7 +279,7 @@ fn send<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Coach
         200 if !too_large => {}
         401 => {
             forget_revoked_token(app);
-            return Err("Screen Coach was signed out of your Mew account. Connect again in Screen Coach settings.".into());
+            return Err("Screen Coach was signed out of your Neb account. Connect again in Screen Coach settings.".into());
         }
         404 | 409 => return Err(String::new()), // that walkthrough ended or moved on elsewhere
         429 => {

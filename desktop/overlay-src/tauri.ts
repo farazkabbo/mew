@@ -7,7 +7,7 @@ type TauriGlobal = { core: { invoke: (cmd: string, args?: object) => Promise<unk
 
 export function invoke(command: string, args?: object): Promise<unknown> {
   const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
-  if (!tauri) return Promise.reject(new Error("Not running in the Mew desktop app"));
+  if (!tauri) return Promise.reject(new Error("Not running in the Neb desktop app"));
   return tauri.core.invoke(command, args);
 }
 

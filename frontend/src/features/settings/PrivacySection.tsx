@@ -9,18 +9,18 @@ import { useSettings } from "./store";
 export function PrivacySection() {
   const { settings, update } = useSettings();
   return (
-    <Section title="Help improve Mew">
+    <Section title="Help improve Neb">
       <Toggle
-        label="Keep Mew's decisions"
-        hint="Saves what Mew heard (your words, not audio), what you were doing on the page, and what it decided, so you can correct it and help train a faster Mew. Off by default."
+        label="Keep Neb's decisions"
+        hint="Saves what Neb heard (your words, not audio), what you were doing on the page, and what it decided, so you can correct it and help train a faster Neb. Off by default."
         checked={settings.mew_logging_opt_in}
         onChange={(mew_logging_opt_in) => void update({ mew_logging_opt_in })}
       />
       <p className="text-sm text-ink-muted">
         <Link href="/teach" className="text-accent underline-offset-2 hover:underline">
-          Teach Mew
+          Teach Neb
         </Link>
-        : review what Mew kept, mark what it should have done, download your labels, or delete
+        : review what Neb kept, mark what it should have done, download your labels, or delete
         everything.
       </p>
     </Section>
