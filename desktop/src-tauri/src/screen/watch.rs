@@ -111,9 +111,17 @@ mod tests {
         assert_eq!(judge.on(Mouse::Move { x: 0, y: 0 }), None);
         assert_eq!(judge.on(Mouse::Move { x: 500, y: 500 }), None);
         assert_eq!(judge.on(Mouse::LeftDown { x: 10, y: 10 }), None);
-        assert_eq!(judge.on(Mouse::Move { x: 13, y: 12 }), None, "a shaky click");
+        assert_eq!(
+            judge.on(Mouse::Move { x: 13, y: 12 }),
+            None,
+            "a shaky click"
+        );
         assert_eq!(judge.on(Mouse::LeftUp), None);
-        assert_eq!(judge.on(Mouse::Move { x: 40, y: 40 }), None, "button already up");
+        assert_eq!(
+            judge.on(Mouse::Move { x: 40, y: 40 }),
+            None,
+            "button already up"
+        );
         assert_eq!(judge.on(Mouse::LeftDown { x: 10, y: 10 }), None);
         assert_eq!(
             judge.on(Mouse::Move { x: 10, y: 40 }),
@@ -129,7 +137,11 @@ mod tests {
         let mut judge = KeyJudge::default();
         assert_eq!(judge.poll(at(0), 100, false, false), None, "first poll");
         assert_eq!(judge.poll(at(50), 100, false, false), None, "no input");
-        assert_eq!(judge.poll(at(100), 140, true, false), None, "the mouse moved");
+        assert_eq!(
+            judge.poll(at(100), 140, true, false),
+            None,
+            "the mouse moved"
+        );
         assert_eq!(
             judge.poll(at(150), 190, false, false),
             Some(Change::Typed),
@@ -151,6 +163,9 @@ mod tests {
     fn switching_away_counts_but_coming_back_doesnt() {
         assert!(left_target(0x2000, 0x1000));
         assert!(!left_target(0x1000, 0x1000));
-        assert!(!left_target(0, 0x1000), "no foreground window (desktop switching)");
+        assert!(
+            !left_target(0, 0x1000),
+            "no foreground window (desktop switching)"
+        );
     }
 }

@@ -18,11 +18,14 @@ use super::privacy::detect::RedactionRules;
 /// in substance: an older consent then no longer counts and Screen Coach stays off until the
 /// user reads the new one.
 /// 2: S3 added ink on screen (and noticing scrolls while it shows) and saving clips.
-pub const CONSENT_VERSION: u32 = 2;
+/// 3: Notes Check sends the screen's text (after redaction) to compare with your notes, and keeps
+///    short quotes from it with the findings.
+pub const CONSENT_VERSION: u32 = 3;
 
 pub const DEFAULT_TALK_HOTKEY: &str = "Ctrl+Alt+Space";
 pub const DEFAULT_PAUSE_HOTKEY: &str = "Ctrl+Alt+P";
 pub const DEFAULT_CLIP_HOTKEY: &str = "Ctrl+Alt+C";
+pub const DEFAULT_NOTES_HOTKEY: &str = "Ctrl+Alt+N";
 
 const FILE_NAME: &str = "screen-coach.json";
 
@@ -36,10 +39,17 @@ pub struct Hotkeys {
     /// Save to the notebook (S3; files written before it existed get the default).
     #[serde(default = "default_clip_hotkey")]
     pub clip: String,
+    /// Check my notes (Notes Check; files written before it existed get the default).
+    #[serde(default = "default_notes_hotkey")]
+    pub notes: String,
 }
 
 fn default_clip_hotkey() -> String {
     DEFAULT_CLIP_HOTKEY.to_owned()
+}
+
+fn default_notes_hotkey() -> String {
+    DEFAULT_NOTES_HOTKEY.to_owned()
 }
 
 impl Default for Hotkeys {
@@ -48,13 +58,14 @@ impl Default for Hotkeys {
             talk: DEFAULT_TALK_HOTKEY.to_owned(),
             pause: DEFAULT_PAUSE_HOTKEY.to_owned(),
             clip: default_clip_hotkey(),
+            notes: default_notes_hotkey(),
         }
     }
 }
 
 impl Hotkeys {
-    pub fn all(&self) -> [&str; 3] {
-        [&self.talk, &self.pause, &self.clip]
+    pub fn all(&self) -> [&str; 4] {
+        [&self.talk, &self.pause, &self.clip, &self.notes]
     }
 }
 
@@ -149,14 +160,13 @@ pub fn parse(text: &str) -> Loaded {
     let Ok(config) = serde_json::from_str::<ScreenConfig>(text) else {
         return Loaded::Reset(ScreenConfig::default());
     };
-    let shortcuts: Vec<_> = config
-        .hotkeys
-        .all()
+    let hotkeys = config.hotkeys.all();
+    let shortcuts: Vec<_> = hotkeys
         .iter()
         .filter_map(|text| validate_hotkey(text).ok())
         .collect();
     // All valid, and no two the same.
-    let hotkeys_ok = shortcuts.len() == 3
+    let hotkeys_ok = shortcuts.len() == hotkeys.len()
         && shortcuts
             .iter()
             .enumerate()
@@ -264,18 +274,34 @@ mod tests {
 
     #[test]
     fn a_damaged_or_unexpected_file_turns_everything_off() {
-        // A file written by S0 (before privacy settings and the clip hotkey existed) loads with
-        // the defaults.
-        let on = r#"{"enabled":true,"consentVersion":2,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
+        // A file written by S0 (before privacy settings and the clip and notes hotkeys existed)
+        // loads with the defaults.
+        let on = r#"{"enabled":true,"consentVersion":3,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
         assert!(matches!(
             parse(on),
             Loaded::Read(c) if c.is_on()
                 && c.privacy == Privacy::default()
                 && c.hotkeys.clip == DEFAULT_CLIP_HOTKEY
+                && c.hotkeys.notes == DEFAULT_NOTES_HOTKEY
         ));
-        // Consent given before S3 explained clips no longer turns Screen Coach on.
-        let before_clips = on.replace(r#""consentVersion":2"#, r#""consentVersion":1"#);
-        assert!(matches!(parse(&before_clips), Loaded::Read(c) if !c.is_on()));
+        // Consent given before S3 explained clips, or before Notes Check explained sending the
+        // screen's text, no longer turns Screen Coach on.
+        for older in ["1", "2"] {
+            let before = on.replace(
+                r#""consentVersion":3"#,
+                &format!(r#""consentVersion":{older}"#),
+            );
+            assert!(
+                matches!(parse(&before), Loaded::Read(c) if !c.is_on()),
+                "{older}"
+            );
+        }
+        // The notes hotkey can't share a shortcut with another action either.
+        let clash = on.replace(
+            r#""pause":"Ctrl+Alt+P""#,
+            r#""pause":"Ctrl+Alt+P","notes":"Ctrl+Alt+P""#,
+        );
+        assert!(matches!(parse(&clash), Loaded::Reset(_)));
         for bad in [
             // Two actions on one shortcut.
             r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P","clip":"Ctrl+Alt+P"}}"#,

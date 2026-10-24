@@ -537,3 +537,91 @@ cost-efficient, with rate limits"; these follow from that. Don't ask them again.
     model replies so reruns don't spend quota.
 12. **Rate limits on every new route** (in memory, like the rest): recognition batches, line
     syncs, checks per minute/day/month, resolves.
+13. **No topic-extraction model call** (N2). The screen's text is embedded as the query, and
+    its salient words (no common words; numbers with two or more digits) are the keyword terms.
+    That saves a call and ~0.6 s per check; the comparison's own `topic` field names the topic.
+    The `notes/topic` prompt isn't built.
+14. **The default scope** is the notebook whose lines changed last ("the one the student is
+    working in"), widened to its course when it has one. The desktop app can ask only for that or
+    for all notes; it never names a notebook or a course.
+15. **Exact search per student**, no approximate (HNSW) index: a shared index filters by owner
+    after searching and can miss a student's best lines. Pages are kept only when they score at
+    least 0.4 of the best page (cuts stray-word pages without losing recall on the evals).
+16. **Embedding quota.** The Gemini free tier embeds 1,000 texts a day (hit while running the
+    N2 eval on 2026-10-23). Every changed note line is one text, so billing must be on before
+    release (SCREEN_COACH.md decision 4).
+17. **The comparison sees JSON with short line ids** ("L1"…), mapped back to the stored UUIDs in
+    code: fewer tokens, no id typos, and screen text can't pass itself off as a note line.
+18. **`noteQuote` and `question` are required fields** ("" where they don't apply). With them
+    optional, the model left them out of real differences, which validation then dropped (found
+    by the eval; prompt v3).
+19. **A quote shortened with "..." counts** when each of its pieces is verbatim, in order.
+20. **SymPy can clear a note, never accuse one on its own.** An equivalent "difference" becomes a
+    match; a SymPy-confirmed one gains confidence but still gets the second opinion (the LaTeX
+    comes from the model, so it isn't independent evidence). This departs from §6.5's "skip".
+21. **The summary is rebuilt** from the final findings whenever validation, SymPy or the second
+    opinion changed the differences, gaps or unclears the model talked about; otherwise the
+    model's own summary is used, after the tone and safety checks.
+22. **Code rules beyond §6.4:** a question with accusing words ("wrong", "mistake",
+    "incorrect"…) drops its finding; a heading on its own is never a gap; a gap on a block another
+    finding covers is dropped.
+23. **What's kept of the screen:** the ≤ 200-character quotes on findings, the app's exe name, and
+    (only for matched lines, as link chips) the trimmed page or video link, its title and time.
+    Block positions never leave the device (the desktop app places its own marks).
+24. **The "gives the answer away" judge** looks at differences and unclears only: a gap's offer
+    names its topic by design.
+25. **Eval, 2026-10-23** (Flash-Lite for the comparison and the verifier): difference precision
+    1.000, recall 0.938, gap precision 1.000, no injection succeeded, no question gave the answer
+    (3 of 26 couldn't be judged). One case was relabelled while tuning (DNA: the nucleotide's parts
+    are a real gap; the block was split). To tune next: one unclear question hints at the answer
+    ("the slide shows a minus sign").
+26. **Screen marks reuse S3's ink** (N4): a check's findings become overlay actions (a tick for a
+    match, an amber circle for a difference, a highlight for a gap) drawn by the same overlay, so
+    they're placed beside the text, fade when the content moves, clear with Esc and come back with
+    "show that again". `check_mark` and the circle's `tone` exist only for these marks: they're
+    not in the screen tutor's model schema, and a tutor reply carrying them is refused. Ticks fade
+    after 4 s on their own.
+27. **Only text leaves the device for a check**, as paragraphs of the redacted OCR (`blocks`); the
+    picture is wiped unsent, and the blocks' positions stay on the device. Hence **consent
+    version 3**: the settings page now explains it, and Screen Coach stays off until the student
+    reads and agrees again.
+28. **The Notes Check panel** (desktop) is a bundled page beside the screen: shown without taking
+    focus, clickable and keyboard-usable, excluded from captures; one command
+    (`screen_notes_panel`: close, hide the marks, open a line in the notebook).
+29. **Notebook marks are a DOM layer**, not canvas ink: one transformed layer over the page that
+    follows the camera, with real buttons for "?" and "+" and links for the chips. It can't touch
+    the student's strokes (tested), and pen input never lands on a mark by accident.
+30. **A clip checked from its page is never compared with itself**: retrieval leaves out that
+    clip's own lines (`p_exclude_clip`).
+31. **Follow-ups are decided on the server** (N5, `frontend/src/server/notes-check/resolve.ts`):
+    the model sees only the finding's two quotes, its question and the student's reply or the
+    line's new text, never the rest of the notes. Resolving and explaining use
+    `GEMINI_NOTES_MODEL`; a gap's heading uses the verifier model. Every reply goes through the
+    safety and tone checks and falls back to a fixed sentence per outcome.
+32. **What reaches the learner model** (§9): fixed after the question → `with_hint` (a gap filled
+    in the student's own words → `independent`); explained → `after_explanation`, not correct;
+    "my note is right" (when the tutor agrees) and Dismiss → nothing. Evidence goes on the
+    finding's concept, or on the course concept whose title shares at least half its words with
+    the hint (`matchConcept`), and is recorded with source `notes_check`. Notes outside a course
+    record nothing.
+33. **A finding changes status only while it's open**: the API service's update filters on
+    `status = open` and answers 409 otherwise, so a reply from a second tab can't record twice.
+    The database grant allows updating only `status`, `resolved_at` and `concept_id`.
+34. **The tutor explains after two answers that still differ** (the count is kept in the
+    notebook), or as soon as the student taps "Tell me". The explanation may quote one passage
+    from the course, when the check was about one.
+35. **Editing a line re-checks it** once per change of its recognised text, quietly: the mark
+    changes only when the line now matches. Edits are not answers, so they never count as misses.
+36. **A gap's "Add it"** writes a heading of at most six words ending in "?" as tutor ink under
+    the line the gap follows (`TutorInk.render`'s `nearStrokes`). It's never the content. "Check
+    what I wrote" then sends the first line under that line.
+37. **Open findings come back after a reload**, fetched once per page per session and only while
+    the server copy of the notes is allowed. Only differences and unclear lines come back: a
+    gap's place isn't stored.
+38. **Rate limits for follow-ups:** 20 a minute and 300 a day per student, shared by resolve,
+    explain, gap-heading and dismiss; listing a page's open findings, 120 a minute.
+39. **Known limits:**
+    - The Review page shows "Revisit" only for a concept with an earlier success. A misunderstanding
+      explained before any success simply comes back as due.
+    - The desktop app's re-anchor path refuses Notes Check marks: they fade when the content
+      moves and are redrawn on "show that again".

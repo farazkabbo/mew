@@ -81,6 +81,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_coach_open_mic_settings, screen_coach_set_enabled, screen_coach_set_hotkey,
         screen_coach_set_paused, screen_coach_set_privacy, screen_coach_status,
     };
+    use screen::notes_check::screen_notes_panel;
     tauri::generate_handler![
         reminders::notify_due,
         screen_coach_status,
@@ -97,7 +98,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_ink_pill,
         screen_clip_ready,
         screen_clip_save,
-        screen_clip_cancel
+        screen_clip_cancel,
+        screen_notes_panel
     ]
 }
 

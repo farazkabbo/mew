@@ -19,12 +19,18 @@ export const SCREEN_EVENTS = {
   answer: "mew:screen-answer",
   /** A clip was saved from the screen (S3): build its notebook page. */
   clipSaved: "mew:screen-clip-saved",
+  /** A notes check's findings (Notes Check): mark the notebook's lines. */
+  notesChecked: "mew:screen-notes-checked",
+  /** "Show in notebook" in the desktop panel: open that finding's line. */
+  notesOpen: "mew:screen-notes-open",
 } as const;
 
 /** Asks the open notebook to build (and show) the page for a saved clip. */
 export const OPEN_CLIP_EVENT = "mew:open-clip";
 
 export const ScreenClipSavedDetail = z.object({ clipId: z.uuid() });
+
+export const ScreenNotesOpenDetail = z.object({ findingId: z.uuid() });
 export type ScreenClipSavedDetail = z.infer<typeof ScreenClipSavedDetail>;
 
 export const ScreenSpeechDetail = z.object({

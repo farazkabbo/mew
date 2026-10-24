@@ -1,0 +1,142 @@
+[
+  {
+    "title": "Physics: electricity",
+    "pages": [
+      [
+        "Series circuits",
+        "same current everywhere in series",
+        "total resistance = R1 + R2",
+        "parallel → same p.d. across each branch",
+        "energy transferred = power × time",
+        "fuses melt if current too high"
+      ],
+      [
+        "Static electricity",
+        "rubbing transfers electrons",
+        "like charges repel, opposite attract",
+        "earthing removes charge"
+      ]
+    ]
+  },
+  {
+    "title": "Chemistry: organic",
+    "pages": [
+      [
+        "Alkanes",
+        "CnH2n+2, saturated (single bonds only)",
+        "combustion reaction: alkane + O2 → CO2 + H2O",
+        "cracking breaks long chains → shorter + alkenes",
+        "alkenes decolourise bromine water"
+      ],
+      [
+        "Fractional distillation",
+        "crude oil heated, vapours rise up the column",
+        "short chains condense near the top (low boiling point)"
+      ]
+    ]
+  },
+  {
+    "title": "History: Ancient Rome",
+    "pages": [
+      [
+        "Roman Republic",
+        "consuls elected every year",
+        "Senate = advisers, wealthy patricians",
+        "Julius Caesar crossed the Rubicon 49 BC",
+        "civil war → Augustus first emperor 27 BC"
+      ],
+      [
+        "Fall of the Western Empire",
+        "476 AD last emperor deposed",
+        "causes: invasions, economic crisis, divided empire"
+      ]
+    ]
+  },
+  {
+    "title": "Biology: ecology",
+    "pages": [
+      [
+        "Food chains",
+        "producer → primary consumer → secondary consumer",
+        "energy lost at each trophic level (~90%)",
+        "decomposers recycle nutrients"
+      ],
+      [
+        "Cells and transport",
+        "diffusion: particles spread from high to low concentration",
+        "active transport needs energy from respiration",
+        "root hair cells have a large surface area"
+      ]
+    ]
+  },
+  {
+    "title": "Maths: statistics",
+    "pages": [
+      [
+        "Averages",
+        "mean = total ÷ number of values",
+        "median = middle value when ordered",
+        "mode = most common value",
+        "range = largest − smallest"
+      ],
+      ["Probability", "P(not A) = 1 − P(A)", "independent events: P(A and B) = P(A) × P(B)"]
+    ]
+  },
+  {
+    "title": "Literature: Dickens",
+    "pages": [
+      [
+        "A Christmas Carol",
+        "Scrooge – miser, transformed by three spirits",
+        "themes: poverty, redemption, family",
+        "published 1843"
+      ]
+    ]
+  },
+  {
+    "title": "Economics: trade",
+    "pages": [
+      [
+        "International trade",
+        "exports = goods sold abroad",
+        "tariff = tax on imports, raises the price for consumers",
+        "comparative advantage → specialise",
+        "exchange rate affects price of exports"
+      ]
+    ]
+  },
+  {
+    "title": "Geography: glaciers",
+    "pages": [
+      [
+        "Glacial landforms",
+        "corrie, arête, pyramidal peak",
+        "U-shaped valleys carved by ice",
+        "moraine = rock deposited by a glacier"
+      ]
+    ]
+  },
+  {
+    "title": "Computer science: networks",
+    "pages": [
+      [
+        "Networks",
+        "LAN = small area, WAN = large area",
+        "IP address identifies a device",
+        "packets routed separately, reassembled at destination",
+        "HTTPS encrypts web traffic"
+      ]
+    ]
+  },
+  {
+    "title": "Psychology: sleep",
+    "pages": [
+      [
+        "Sleep stages",
+        "REM sleep – dreaming, rapid eye movement",
+        "circadian rhythm ~24 h, controlled by the SCN",
+        "melatonin released when it gets dark"
+      ]
+    ]
+  }
+]

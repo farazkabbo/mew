@@ -159,3 +159,225 @@ test("nothing is sent while the student has turned Notes Check's copy off", asyn
   await page.waitForTimeout(2_500);
   expect(syncs).toEqual([]);
 });
+
+// ─── N4: the check's marks in the notebook ───────────────────────────────────────────────────
+
+const CLIP_ID = "55555555-5555-4555-8555-555555555555";
+const DB_NAME = "mew-notebooks-local";
+
+/** The student's strokes as stored, to prove marks never change them. */
+async function studentStrokes(page: Page): Promise<string> {
+  return page.evaluate(
+    (name) =>
+      new Promise<string>((resolve, reject) => {
+        const open = indexedDB.open(name);
+        open.onerror = () => reject(new Error("can't open the notebook"));
+        open.onsuccess = () => {
+          const request = open.result.transaction("strokes").objectStore("strokes").getAll();
+          request.onsuccess = () => {
+            const strokes = (request.result as { author: string; id: string }[])
+              .filter((s) => s.author === "student")
+              .sort((a, b) => a.id.localeCompare(b.id));
+            resolve(JSON.stringify(strokes));
+            open.result.close();
+          };
+        };
+      }),
+    DB_NAME,
+  );
+}
+
+async function mockClip(page: Page) {
+  await page.route(`**/api/clips/${CLIP_ID}`, (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({ json: {} })
+      : route.fulfill({
+          json: {
+            id: CLIP_ID,
+            width: 300,
+            height: 100,
+            pixelRatio: 1,
+            strokes: [],
+            source: {
+              app: "msedge.exe",
+              title: "Enzymes lecture",
+              url: "https://www.youtube.com/watch?v=abc&t=754",
+              timestampSec: 754,
+              capturedAt: "2026-10-23T10:00:00.000Z",
+            },
+            ocrText:
+              "Enzymes lower the activation energy\nEnzymes are not consumed by the reaction",
+            notebookPageId: null,
+            createdAt: "2026-10-23T10:00:01.000+00:00",
+          },
+        }),
+  );
+  await page.route(`**/api/clips/${CLIP_ID}/image`, (route) =>
+    route.fulfill({ status: 404, body: "" }),
+  );
+}
+
+test("a clip checked against the notes marks the lines, asks, and never touches the ink", async ({
+  page,
+}) => {
+  await fakeRecognition(page, [
+    "enzymes lower activation energy",
+    "they are used up in the reaction",
+  ]);
+  const syncs = await recordSyncs(page);
+  await mockClip(page);
+  await page.goto("/notebook");
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+  await write(page, 120, 4);
+  await expect.poll(() => serverLines(syncs).length, { timeout: 10_000 }).toBe(1);
+  await write(page, 220, 6);
+  await expect.poll(() => serverLines(syncs).length, { timeout: 10_000 }).toBe(2);
+  const idOf = (text: string) => serverLines(syncs).find((l) => l.text === text)?.id ?? "";
+  const lowersId = idOf("enzymes lower activation energy");
+  const usedUpId = idOf("they are used up in the reaction");
+  const inkBefore = await studentStrokes(page);
+
+  let asked: { screen: { text: string }[]; scope: unknown; clipId: string } | null = null;
+  await page.route("**/api/notes/check", (route) => {
+    asked = route.request().postDataJSON() as typeof asked;
+    return route.fulfill({
+      json: {
+        checkId: "44444444-4444-4444-8444-444444444444",
+        related: true,
+        topic: "Enzymes",
+        speech: "Most of this matches your notes. There's one line I'd like you to look at again.",
+        scopeLabel: "Compared with My first notebook, page 1",
+        pages: [],
+        findings: [
+          {
+            id: "66666666-6666-4666-8666-000000000001",
+            type: "difference",
+            lineIds: [usedUpId],
+            blockIds: ["b2"],
+            noteQuote: "used up",
+            screenQuote: "not consumed",
+            question: "Your notes say enzymes get used up. What does the slide say?",
+            sourceConflict: false,
+            confidence: 0.93,
+            evidence: ["model", "second_opinion"],
+          },
+          {
+            id: "66666666-6666-4666-8666-000000000002",
+            type: "match",
+            lineIds: [lowersId],
+            blockIds: ["b1"],
+            noteQuote: "enzymes lower activation energy",
+            screenQuote: "Enzymes lower the activation energy",
+            sourceConflict: false,
+            confidence: 0.95,
+            evidence: ["model"],
+          },
+        ],
+        source: { clipId: CLIP_ID },
+        latencyMs: 2100,
+      },
+    });
+  });
+
+  // The clip's page: offered a check once, never run without asking.
+  await page.goto(`/notebook?clip=${CLIP_ID}`);
+  const prompt = page.getByTestId("notes-check-prompt");
+  await expect(prompt).toBeVisible();
+  expect(asked).toBeNull();
+  await prompt.getByRole("button", { name: "Check" }).click();
+
+  const panel = page.getByTestId("notes-check-panel");
+  await expect(panel).toContainText("Compared with My first notebook, page 1");
+  await expect(panel).toContainText("One line to look at again");
+  expect(asked).toMatchObject({
+    clipId: CLIP_ID,
+    scope: { kind: "notebook" },
+    screen: [
+      { blockId: "b1", text: "Enzymes lower the activation energy" },
+      { blockId: "b2", text: "Enzymes are not consumed by the reaction" },
+    ],
+  });
+
+  // "Show me" opens the page with that line; its mark asks the question.
+  await panel.getByRole("button", { name: "Show me" }).click();
+  const question = page.getByRole("button", { name: /Question about this line/ });
+  await expect(question).toBeVisible();
+  await expect(page.getByTestId("mark-match")).toHaveCount(1);
+  await question.click();
+  await expect(page.getByRole("dialog", { name: "Notes Check" })).toContainText(
+    "What does the slide say?",
+  );
+  await page.keyboard.press("Escape");
+
+  // Hiding the marks hides them; the ink is exactly as it was throughout.
+  await panel.getByRole("button", { name: "Hide marks on the page" }).click();
+  await expect(page.getByTestId("mark-question")).toHaveCount(0);
+  await panel.getByRole("button", { name: "Show marks on the page" }).click();
+  await expect(page.getByTestId("mark-question")).toHaveCount(1);
+  expect(await studentStrokes(page)).toBe(inkBefore);
+});
+
+test("an open finding comes back after a reload, and answering it settles its mark (N5)", async ({
+  page,
+}) => {
+  await fakeRecognition(page, ["they are used up in the reaction"]);
+  const syncs = await recordSyncs(page);
+  await page.goto("/notebook");
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+  await write(page, 160, 6);
+  await expect.poll(() => serverLines(syncs).length, { timeout: 10_000 }).toBe(1);
+  const lineId = serverLines(syncs)[0]?.id ?? "";
+  const inkBefore = await studentStrokes(page);
+
+  // An earlier check left this finding open on the server.
+  const findingId = "77777777-7777-4777-8777-000000000001";
+  await page.route("**/api/notes/findings?*", (route) => {
+    const pageId = new URL(route.request().url()).searchParams.get("pageId");
+    return route.fulfill({
+      json: [
+        {
+          id: findingId,
+          checkId: "77777777-7777-4777-8777-000000000002",
+          type: "difference",
+          noteLineIds: [lineId],
+          pageId,
+          noteQuote: "used up",
+          screenSnippet: "Enzymes are not consumed by the reaction",
+          question: "Your notes say enzymes get used up. What does the slide say?",
+          explanation: "Consumed vs not consumed.",
+          conceptHint: "Enzymes",
+          conceptId: null,
+          confidence: 0.9,
+          sourceConflict: false,
+          status: "open",
+          courseId: null,
+        },
+      ],
+    });
+  });
+  let answered: unknown = null;
+  await page.route(`**/api/notes/findings/${findingId}/resolve`, (route) => {
+    answered = route.request().postDataJSON();
+    return route.fulfill({
+      json: {
+        outcome: "fixed",
+        reply: "Yes, that's what the slide says.",
+        status: "resolved_fixed",
+      },
+    });
+  });
+
+  await page.reload();
+  const question = page.getByRole("button", { name: /Question about this line/ });
+  await expect(question).toBeVisible({ timeout: 10_000 });
+  await question.click();
+  const card = page.getByRole("dialog", { name: "Notes Check" });
+  await card.getByPlaceholder("Your answer").fill("they are not consumed");
+  await card.getByRole("button", { name: "Check my answer" }).click();
+
+  await expect(card.getByTestId("finding-reply")).toHaveText("Yes, that's what the slide says.");
+  expect(answered).toEqual({ reply: "they are not consumed" });
+  await expect(page.getByTestId("mark-question")).toHaveAttribute("data-settled", "true");
+  await expect(page.getByRole("button", { name: "Worked through" })).toBeVisible();
+  expect(await studentStrokes(page)).toBe(inkBefore);
+});

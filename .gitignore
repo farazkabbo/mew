@@ -68,3 +68,6 @@ frontend/public/workers/models/
 # Mew v2 datasets contain students' words: never commit them
 ml/data/
 ml/output/
+
+# Eval replies cached by `pnpm eval:notes` (model outputs; never committed)
+frontend/evals/.cache/

@@ -23,7 +23,8 @@ BATCH = 32
 
 logger = logging.getLogger(__name__)
 
-_STOPWORDS = frozenset(
+#: Common words that carry no topic (shared with note search).
+STOPWORDS = frozenset(
     [
         "a",
         "an",
@@ -98,7 +99,7 @@ class LexicalEmbedder:
 
     def _embed(self, text: str) -> list[float]:
         words = [_stem(w) for w in re.findall(r"[a-z0-9]+", text.lower())]
-        words = [w for w in words if len(w) > 1 and w not in _STOPWORDS]
+        words = [w for w in words if len(w) > 1 and w not in STOPWORDS]
         features = words + [f"{a}_{b}" for a, b in itertools.pairwise(words)]
         vector = [0.0] * DIMENSIONS
         for feature in features:

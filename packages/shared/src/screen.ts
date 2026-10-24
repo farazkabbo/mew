@@ -46,31 +46,71 @@ export type FocusKind = z.infer<typeof FocusKind>;
 export const NoteSide = z.enum(["left", "right", "below", "auto"]);
 export type NoteSide = z.infer<typeof NoteSide>;
 
-/** Ink the overlay draws on screen (S3, docs/SCREEN_COACH_S3.md §2.1). */
-export const ScreenAction = z.discriminatedUnion("type", [
+const FocusRegion = z.object({ type: z.literal("focus_region"), box: ScreenBox, kind: FocusKind });
+const CircleRegion = z.object({
+  type: z.literal("circle_region"),
+  box: ScreenBox,
+  label: Label.optional(),
+});
+const Underline = z.object({ type: z.literal("underline"), box: ScreenBox });
+const Highlight = z.object({ type: z.literal("highlight"), box: ScreenBox });
+const PointAt = z.object({
+  type: z.literal("point_at"),
+  point: ScreenPoint,
+  label: Label.optional(),
+});
+const MarginNote = z.object({
+  type: z.literal("margin_note"),
+  text: z.string().min(1).max(SCREEN_LIMITS.noteChars),
+  besideBox: ScreenBox,
+  side: NoteSide.optional(),
+});
+const WriteStep = z.object({
+  type: z.literal("write_step"),
+  latexOrText: z.string().min(1).max(SCREEN_LIMITS.stepChars),
+  besideBox: ScreenBox,
+  side: NoteSide.optional(),
+});
+const Clear = z.object({ type: z.literal("clear") });
+
+/**
+ * The ink the screen tutor's model may ask for (S3, docs/SCREEN_COACH_S3.md §2.1): what's in its
+ * response schema. Notes Check's marks (ticks, amber circles) aren't: the desktop app makes those
+ * itself from a check's findings, and refuses them in a tutor reply.
+ */
+export const TutorScreenAction = z.discriminatedUnion("type", [
   /** What the tutor is talking about: anchors placement and is the default clip crop. */
-  z.object({ type: z.literal("focus_region"), box: ScreenBox, kind: FocusKind }),
-  z.object({ type: z.literal("circle_region"), box: ScreenBox, label: Label.optional() }),
-  z.object({ type: z.literal("underline"), box: ScreenBox }),
+  FocusRegion,
+  CircleRegion,
+  Underline,
   /** A translucent marker stroke over a line of text. */
-  z.object({ type: z.literal("highlight"), box: ScreenBox }),
+  Highlight,
   /** An arrow to a spot, with an optional short handwritten label. */
-  z.object({ type: z.literal("point_at"), point: ScreenPoint, label: Label.optional() }),
+  PointAt,
   /** A few handwritten words in the free space beside a box. */
-  z.object({
-    type: z.literal("margin_note"),
-    text: z.string().min(1).max(SCREEN_LIMITS.noteChars),
-    besideBox: ScreenBox,
-    side: NoteSide.optional(),
-  }),
+  MarginNote,
   /** A hint or first step (LaTeX or plain text) beside a box. */
-  z.object({
-    type: z.literal("write_step"),
-    latexOrText: z.string().min(1).max(SCREEN_LIMITS.stepChars),
-    besideBox: ScreenBox,
-    side: NoteSide.optional(),
-  }),
-  z.object({ type: z.literal("clear") }),
+  WriteStep,
+  Clear,
+]);
+export type TutorScreenAction = z.infer<typeof TutorScreenAction>;
+
+/** A colour variant of the tutor's ink: "question" is amber (Notes Check: look again here). */
+export const InkTone = z.enum(["question"]);
+export type InkTone = z.infer<typeof InkTone>;
+
+/** Ink the overlay draws on screen: the tutor's, plus Notes Check's marks (N4). */
+export const ScreenAction = z.discriminatedUnion("type", [
+  FocusRegion,
+  CircleRegion.extend({ tone: InkTone.optional() }),
+  Underline,
+  Highlight,
+  PointAt,
+  MarginNote,
+  WriteStep,
+  /** Notes Check: a small tick beside text the student's notes already have. */
+  z.object({ type: z.literal("check_mark"), box: ScreenBox }),
+  Clear,
 ]);
 export type ScreenAction = z.infer<typeof ScreenAction>;
 
@@ -80,7 +120,7 @@ export type ScreenMode = z.infer<typeof ScreenMode>;
 /** What the screen tutor model returns. `speech` comes first so it can be spoken early. */
 export const ScreenTutorResponse = z.object({
   speech: z.string().min(1).max(SCREEN_LIMITS.speechChars),
-  actions: z.array(ScreenAction).max(SCREEN_LIMITS.actions),
+  actions: z.array(TutorScreenAction).max(SCREEN_LIMITS.actions),
   mode: ScreenMode,
   /** The video player's current time, when one is visible (for a saved clip's link). */
   videoTimeSec: z.number().int().min(0).max(SCREEN_LIMITS.videoSeconds).optional(),
@@ -88,7 +128,7 @@ export const ScreenTutorResponse = z.object({
 export type ScreenTutorResponse = z.infer<typeof ScreenTutorResponse>;
 
 /** Actions that draw something, with the box they're about (focus_region and clear don't). */
-const DRAWN_BOX = (action: ScreenAction): ScreenBox | null => {
+const DRAWN_BOX = (action: TutorScreenAction): ScreenBox | null => {
   switch (action.type) {
     case "circle_region":
     case "underline":
@@ -127,7 +167,7 @@ export function withFocusRegion(response: ScreenTutorResponse): ScreenTutorRespo
     bottom: Math.max(a.bottom, b.bottom),
   }));
   // A point alone has no area; and the cap on actions still holds after adding one.
-  const derived: ScreenAction = { type: "focus_region", box, kind: "text" };
+  const derived: TutorScreenAction = { type: "focus_region", box, kind: "text" };
   return {
     ...response,
     actions: [derived, ...others].slice(0, SCREEN_LIMITS.actions),

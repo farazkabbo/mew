@@ -8,6 +8,12 @@ export type RateRule = { limit: number; windowMs: number };
 const MINUTE = 60_000;
 const DAY = 86_400_000;
 
+/** Notes checks a student may run a day (brief §11: configurable): NOTES_CHECKS_PER_DAY. */
+const NOTES_CHECKS_PER_DAY = Math.min(
+  Math.max(Number.parseInt(process.env.NOTES_CHECKS_PER_DAY ?? "", 10) || 60, 1),
+  1000,
+);
+
 /** Per-user budgets for paid upstream APIs. */
 export const RATE_RULES = {
   /** Gate calls: one per utterance or pen pause. */
@@ -31,6 +37,18 @@ export const RATE_RULES = {
   /** Notes Check: syncing a page's line text (an embedding call for the lines that changed). */
   notesSync: { limit: 40, windowMs: MINUTE },
   notesSyncDaily: { limit: 4000, windowMs: DAY },
+  /**
+   * Notes checks: one comparison call and up to five verifier calls each (brief §11), so the
+   * daily budget is what really caps the cost.
+   */
+  notesCheck: { limit: 6, windowMs: MINUTE },
+  notesCheckDaily: { limit: NOTES_CHECKS_PER_DAY, windowMs: DAY },
+  notesCheckMonthly: { limit: NOTES_CHECKS_PER_DAY * 10, windowMs: 30 * DAY },
+  /** Resolving a finding (a model call each: resolve, explain or a gap's heading). */
+  notesResolve: { limit: 20, windowMs: MINUTE },
+  notesResolveDaily: { limit: 300, windowMs: DAY },
+  /** Reading a page's open findings (no model call). */
+  notesFindings: { limit: 120, windowMs: MINUTE },
   /** Building a course from a PDF (parsing, embeddings, a model call). */
   courseCreate: { limit: 6, windowMs: 60 * MINUTE },
   courseCreateDaily: { limit: 20, windowMs: DAY },

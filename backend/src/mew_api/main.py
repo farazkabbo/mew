@@ -18,6 +18,7 @@ from .deps import require_internal_caller
 from .devices.store import MemoryDeviceStore
 from .devices.tokens import LinkCodes
 from .mew_events.store import MemoryMewEventStore
+from .notes.checks import MemoryCheckStore
 from .notes.store import MemoryNoteLineStore
 from .profiles.store import MemoryProfileStore
 from .routes import check, clips, courses, devices, health, learner, me, mew_events, notes
@@ -72,6 +73,7 @@ def create_app(
     app.state.local_devices = MemoryDeviceStore()
     app.state.local_clips = MemoryClipStore()
     app.state.local_notes = MemoryNoteLineStore()
+    app.state.local_checks = MemoryCheckStore(app.state.local_notes.pages_of)
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)

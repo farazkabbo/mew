@@ -29,6 +29,11 @@ import { isShown } from "../visibility";
 export type CanvasHandle = {
   zoomBy(factor: number): void;
   resetView(): void;
+  /**
+   * Follows the camera (pan and zoom), e.g. to keep an overlay over the page: called at once,
+   * then on every change. Returns a function that stops following.
+   */
+  onCamera(listener: (camera: Camera) => void): () => void;
 };
 
 type CanvasProps = {
@@ -49,7 +54,9 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
   const gridRef = useRef<HTMLCanvasElement>(null);
   const inkRef = useRef<HTMLCanvasElement>(null);
   const liveRef = useRef<HTMLCanvasElement>(null);
-  const controls = useRef<CanvasHandle | null>(null);
+  const controls = useRef<Pick<CanvasHandle, "zoomBy" | "resetView"> | null>(null);
+  const cameraListeners = useRef(new Set<(camera: Camera) => void>());
+  const latestCamera = useRef<Camera>(DEFAULT_CAMERA);
   const penDown = useRef(onPenDown);
   const inset = useRef(leftInset);
   useEffect(() => {
@@ -60,6 +67,12 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
   useImperativeHandle(ref, () => ({
     zoomBy: (factor) => controls.current?.zoomBy(factor),
     resetView: () => controls.current?.resetView(),
+    onCamera: (listener) => {
+      const listeners = cameraListeners.current;
+      listeners.add(listener);
+      listener(latestCamera.current);
+      return () => listeners.delete(listener);
+    },
   }));
 
   useEffect(() => {
@@ -76,6 +89,11 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       tutor: [],
     };
     let camera: Camera = DEFAULT_CAMERA;
+    const announceCamera = () => {
+      latestCamera.current = camera;
+      for (const listener of cameraListeners.current) listener(camera);
+    };
+    announceCamera(); // a new page starts at the default view
 
     // --- Frame scheduling: mark layers dirty, draw them once on the next animation frame.
     const dirty = { grid: true, ink: true, live: true };
@@ -121,6 +139,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     const setCamera = (next: Camera) => {
       camera = next;
       useNotebookUi.getState().setView({ zoom: camera.zoom });
+      announceCamera();
       schedule(all);
     };
     controls.current = {

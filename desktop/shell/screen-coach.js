@@ -25,7 +25,7 @@ function render(view) {
   $("pause").setAttribute("aria-pressed", String(view.paused));
   $("consent").disabled = !usable;
 
-  for (const which of ["talk", "pause", "clip"]) {
+  for (const which of ["talk", "pause", "clip", "notes"]) {
     const report = view[which];
     const input = $(`hotkey-${which}`);
     if (document.activeElement !== input) input.value = report.accelerator;

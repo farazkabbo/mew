@@ -82,11 +82,49 @@ binding): **S0, S1, S2 and S3 built** (2026-10-22). Desktop code is in `desktop/
   fading on scroll in Edge's PDF viewer and on YouTube, the pill never taking focus, Alt+Tab not
   showing the overlay, the overlay absent from a Teams/OBS capture, a full save in the running app
   (preview → Save → notebook page), and `check-no-screenshots.ps1` after a clip is cancelled.
-- **Next:** S3.5 Notes Check N2 (retrieval and the eval harness), then N3–N5, then S4 (coach
-  mode).
+- **Next:** S4 (coach mode). Notes Check (S3.5) N1–N5 are built; see below.
 
-**Notes Check (S3.5)** — brief and binding Decisions in
-[SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1 built** (2026-10-23):
+**Notes Check (S3.5)** — brief and binding Decisions (1–39) in
+[SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1–N5 built** (2026-10-23). The
+whole flow: **lines** (N1) → **retrieval** (N2) → **comparison** (N3) → **marks** on the screen
+and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
+
+- **N2, retrieval** (`backend/src/mew_api/notes/retrieval.py`, migration `note_search`): exact
+  pgvector search plus Postgres full-text search, fused by RRF, ±3 neighbouring lines, and pages
+  kept when they score at least 0.4 of the best one. A clip is never compared with itself.
+  `test_notes_retrieval.py` includes the eval gate (98% of cases find every expected line).
+- **N3, comparison** (`frontend/src/server/notes-check/`):
+  - The steps: prompt v3 (short line ids) → a validation layer in code (`notes-validate.ts`) →
+    SymPy for maths (it can clear a note, never accuse one) → a second opinion on differences →
+    speech rebuilt from the final findings.
+  - Checks and findings are stored in `notes_checks` / `notes_findings` (migration
+    `notes_checks`).
+  - Eval: `pnpm eval:notes`, 62 cases, cached in `frontend/evals/.cache`; results are in
+    decision 25.
+- **N4, marks:**
+  - Desktop: Ctrl+Alt+N (consent v3) sends only redacted OCR text blocks. Marks are drawn as
+    overlay actions, beside a Notes Check panel (`notes_check.rs`, `notes_marks.rs`,
+    `overlay-src/notes-panel.ts`).
+  - Notebook: a DOM marks layer (`NotesMarks.tsx`), `NotesCheckPanel.tsx`, and "Check against my
+    notes" on a clip.
+- **N5, follow-ups** (`server/notes-check/resolve.ts`, `features/notes/follow-up.ts`,
+  `FindingCard.tsx`):
+  - The student can answer, say "My note is right", tap "Tell me" (explained automatically after
+    two misses), Dismiss, or tap "Add it" on a gap (a heading in tutor ink, then "Check what I
+    wrote").
+  - Editing a line re-checks it quietly.
+  - Open findings come back after a reload.
+  - Outcomes become learner-model evidence (`recordAttempt`, source `notes_check`; migration
+    `notes_resolution`).
+- Rate limits: `notesCheck*` (6/min; `NOTES_CHECKS_PER_DAY`, default 60) and `notesResolve*`
+  (20/min, 300/day).
+- **Not applied to the hosted project yet:** migrations `note_lines`, `note_search`,
+  `notes_checks`, `notes_resolution` (the owner's go is needed).
+- **To verify by hand:** a real lecture video in the desktop app (Ctrl+Alt+N, the panel, marks
+  beside the right text, "Open in notebook").
+- **Needs billing:** embeddings and evals hit the Gemini free tier's 1,000 embedded texts a day.
+
+**N1 details:**
 
 - Every notebook line's recognised text is kept with its page (Dexie v3 `noteLines`) and, when the
   `notes_index` setting is on (default), synced to Supabase `note_lines` through one RPC
@@ -105,6 +143,10 @@ binding): **S0, S1, S2 and S3 built** (2026-10-22). Desktop code is in `desktop/
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after Notes Check N5): **940 unit tests** (frontend 336, backend 240, ink 134, shared 142,
+database 81, desktop overlays 7), **116 Rust tests** (+4 real-Windows ones; clippy clean) and
+**51 Playwright tests**.
 
 Tests (after Notes Check N1): **806 unit tests** (frontend 290, backend 185, ink 132, shared 123,
 database 69, desktop overlays 7), the same Rust tests, and **46 Playwright tests** (`notes.spec.ts`

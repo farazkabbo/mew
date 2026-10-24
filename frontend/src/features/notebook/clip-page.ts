@@ -91,7 +91,8 @@ export function sourceLabel(image: ImageBlock): string {
   return `${name}${at}`;
 }
 
-function clock(seconds: number): string {
+/** "12:34" or "1:02:03". */
+export function clock(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = String(seconds % 60).padStart(2, "0");

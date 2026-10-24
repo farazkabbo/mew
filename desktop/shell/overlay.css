@@ -113,3 +113,151 @@ body.pill {
     border: 1px solid CanvasText;
   }
 }
+
+/* ─── The Notes Check panel ─────────────────────────────────────────────────────────────── */
+
+body.notes {
+  background: transparent;
+  overflow: hidden;
+  padding: 8px;
+  color: var(--ink);
+}
+
+.notes-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.notes-panel header,
+.notes-panel footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+
+.notes-panel h1 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.notes-panel .speech {
+  margin: 0 14px 4px;
+  font-size: 14px;
+}
+
+.notes-panel .scope {
+  margin: 0 14px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#notes-groups {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 14px;
+}
+
+.notes-panel .group {
+  margin: 10px 0;
+}
+
+.notes-panel .group h2,
+.notes-panel .group summary {
+  font-size: 13px;
+  margin: 0 0 6px;
+  cursor: default;
+}
+
+.notes-panel .group summary {
+  cursor: pointer;
+}
+
+.notes-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notes-panel li {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.notes-panel .icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--line);
+}
+
+.notes-panel .difference .icon,
+.notes-panel .unclear .icon {
+  background: #fde7c4;
+  color: #8a4b00;
+}
+
+.notes-panel .gap .icon {
+  background: #e6e1ff;
+  color: var(--violet-strong);
+}
+
+.notes-panel .title {
+  margin: 0;
+  font-size: 13px;
+}
+
+.notes-panel .detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notes-panel button {
+  font: inherit;
+  font-size: 13px;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+}
+
+.notes-panel button.link {
+  padding: 4px 0;
+  color: var(--violet-strong);
+}
+
+.notes-panel button.icon {
+  font-size: 18px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.notes-panel button:focus-visible,
+.notes-panel summary:focus-visible {
+  outline: 2px solid var(--violet-strong);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .notes-panel,
+  .notes-panel .icon {
+    border: 1px solid CanvasText;
+  }
+}

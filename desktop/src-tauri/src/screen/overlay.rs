@@ -7,6 +7,8 @@
 //!   It receives drawing requests and reports back what it drew; it never sees pixels.
 //! - The pill is clickable but never takes focus (the student's app stays active), and is also
 //!   excluded from captures.
+//! - The Notes Check panel lists a check's findings beside the screen: shown without taking
+//!   the focus, clickable and keyboard-usable once the student clicks it, excluded from captures.
 //! - The preview is an ordinary focused window: the only WebView that ever sees screen pixels,
 //!   and only for a clip the student asked to save (decision 2, S3 §5).
 //!
@@ -20,8 +22,8 @@ use tauri::{
 };
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    SetWindowDisplayAffinity, SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SW_HIDE, SW_SHOWNOACTIVATE, WDA_EXCLUDEFROMCAPTURE,
+    SetWindowDisplayAffinity, SetWindowPos, ShowWindow, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SW_HIDE, SW_SHOWNOACTIVATE, WDA_EXCLUDEFROMCAPTURE,
 };
 
 use super::frame::ScreenRect;
@@ -31,6 +33,7 @@ pub enum Surface {
     Ink,
     Pill,
     Clip,
+    Notes,
 }
 
 /// Size of the pill, in CSS pixels.
@@ -42,6 +45,7 @@ impl Surface {
             Surface::Ink => "screen-ink",
             Surface::Pill => "screen-ink-pill",
             Surface::Clip => "screen-clip",
+            Surface::Notes => "screen-notes",
         }
     }
 
@@ -50,6 +54,7 @@ impl Surface {
             Surface::Ink => "ink-overlay.html",
             Surface::Pill => "ink-pill.html",
             Surface::Clip => "clip-preview.html",
+            Surface::Notes => "notes-panel.html",
         }
     }
 }
@@ -60,13 +65,14 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
         return Some(window);
     }
     let dev_url = app.config().build.dev_url.clone();
-    let builder = WebviewWindowBuilder::new(app, surface.label(), WebviewUrl::App(surface.page().into()))
-        .additional_browser_args(crate::BROWSER_ARGS)
-        // Bundled pages only: the page can't be navigated or open anything else.
-        .on_navigation(move |url| super::is_local_page(url, dev_url.as_ref()))
-        .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
-        .disable_drag_drop_handler()
-        .visible(false);
+    let builder =
+        WebviewWindowBuilder::new(app, surface.label(), WebviewUrl::App(surface.page().into()))
+            .additional_browser_args(crate::BROWSER_ARGS)
+            // Bundled pages only: the page can't be navigated or open anything else.
+            .on_navigation(move |url| super::is_local_page(url, dev_url.as_ref()))
+            .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
+            .disable_drag_drop_handler()
+            .visible(false);
     let builder = match surface {
         Surface::Ink | Surface::Pill => builder
             .title("Mew ink")
@@ -79,9 +85,27 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             .focused(false)
             .focusable(false)
             .inner_size(
-                if surface == Surface::Pill { PILL_SIZE.0 } else { 800.0 },
-                if surface == Surface::Pill { PILL_SIZE.1 } else { 600.0 },
+                if surface == Surface::Pill {
+                    PILL_SIZE.0
+                } else {
+                    800.0
+                },
+                if surface == Surface::Pill {
+                    PILL_SIZE.1
+                } else {
+                    600.0
+                },
             ),
+        Surface::Notes => builder
+            .title("Notes Check · Mew")
+            .transparent(true)
+            .decorations(false)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            .inner_size(380.0, 520.0),
         Surface::Clip => builder
             .title("Save to notebook · Mew")
             .always_on_top(true)
@@ -92,7 +116,10 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
     let window = match builder.build() {
         Ok(window) => window,
         Err(error) => {
-            eprintln!("[screen] couldn't open the {} window ({error})", surface.label());
+            eprintln!(
+                "[screen] couldn't open the {} window ({error})",
+                surface.label()
+            );
             return None;
         }
     };
@@ -113,8 +140,7 @@ fn exclude_from_capture<R: Runtime>(window: &WebviewWindow<R>) {
     let raw = hwnd.0 as isize;
     let _ = window.run_on_main_thread(move || {
         // SAFETY: a top-level window of this process, on the thread that owns it.
-        if unsafe { SetWindowDisplayAffinity(HWND(raw as *mut _), WDA_EXCLUDEFROMCAPTURE) }
-            .is_err()
+        if unsafe { SetWindowDisplayAffinity(HWND(raw as *mut _), WDA_EXCLUDEFROMCAPTURE) }.is_err()
         {
             eprintln!("[screen] couldn't exclude an overlay from captures");
         }
@@ -191,7 +217,10 @@ pub fn dispatch<R: Runtime>(app: &AppHandle<R>, surface: Surface, name: &str, de
 }
 
 /// Commands for a surface's page must come from that window, showing its bundled page.
-pub fn require_surface<R: Runtime>(window: &WebviewWindow<R>, surface: Surface) -> Result<(), String> {
+pub fn require_surface<R: Runtime>(
+    window: &WebviewWindow<R>,
+    surface: Surface,
+) -> Result<(), String> {
     let dev_url = window.app_handle().config().build.dev_url.clone();
     let local = window
         .url()
@@ -211,13 +240,18 @@ pub fn pill_spot(ink: ScreenRect, monitor: ScreenRect, scale: f64) -> ScreenRect
         (PILL_SIZE.1 * scale).round() as i32,
     );
     let gap = (8.0 * scale).round() as i32;
-    let left = (ink.right - w).clamp(monitor.left + gap, (monitor.right - w - gap).max(monitor.left));
+    let left = (ink.right - w).clamp(
+        monitor.left + gap,
+        (monitor.right - w - gap).max(monitor.left),
+    );
     let below = ink.bottom + gap;
     let top = if below + h + gap <= monitor.bottom {
         below
     } else {
         // No room below: above the ink, or failing that, inside the monitor's bottom edge.
-        (ink.top - gap - h).max(monitor.top + gap).min(monitor.bottom - h - gap)
+        (ink.top - gap - h)
+            .max(monitor.top + gap)
+            .min(monitor.bottom - h - gap)
     };
     ScreenRect {
         left,

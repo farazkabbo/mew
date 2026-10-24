@@ -19,13 +19,14 @@ const Rect = z.tuple([z.number(), z.number(), z.number().min(0), z.number().min(
 const InkRequest = z.object({
   id: z.number().int().nonnegative(),
   seed: z.string().max(100),
-  actions: z.array(ScreenAction).max(8),
+  /** The tutor's ink (at most 8 actions), or a notes check's marks (up to 24). */
+  actions: z.array(ScreenAction).max(24),
   frame: Rect,
   bounds: Rect,
   obstacles: z.array(Rect).max(20_000),
   textHeight: z.number().positive().optional(),
   scale: z.number().min(1).max(8),
-  colors: z.object({ ink: HexColor, highlight: HexColor }),
+  colors: z.object({ ink: HexColor, highlight: HexColor, question: HexColor.optional() }),
   animate: z.boolean(),
 });
 type InkRequest = z.infer<typeof InkRequest>;
@@ -34,10 +35,13 @@ type InkRequest = z.infer<typeof InkRequest>;
 const CARD_FILL = "rgba(255, 252, 242, 0.95)";
 const CARD_EDGE = "rgba(138, 123, 240, 0.45)";
 const FADE_MS = 150;
+/** Notes Check's ticks are a quiet "you've got this": they fade on their own (brief §8). */
+const TICK_VISIBLE_MS = 4000;
 
 const canvas = document.querySelector("canvas");
 const ctx = canvas?.getContext("2d") ?? null;
 let frame = 0;
+let tickTimer = 0;
 
 function resize(): void {
   if (!canvas) return;
@@ -47,6 +51,7 @@ function resize(): void {
 
 function clear(): void {
   cancelAnimationFrame(frame);
+  window.clearTimeout(tickTimer);
   if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
@@ -68,6 +73,10 @@ function draw(detail: unknown): void {
     colors: request.colors,
   });
   const strokes = plan.actions.flatMap((a) => a.strokes);
+  const ticks = new Set(
+    plan.actions.filter((a) => a.type === "check_mark").flatMap((a) => a.strokes),
+  );
+  let showTicks = true;
   const cards = plan.actions.flatMap((a) => (a.card ? [a.card] : []));
   report(request, strokes, cards, plan.bbox);
 
@@ -78,6 +87,7 @@ function draw(detail: unknown): void {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const card of cards) paintCard(ctx, card, request.scale);
     strokes.forEach((stroke, i) => {
+      if (!showTicks && ticks.has(stroke)) return;
       const shown = visiblePoints(stroke.points, timing.starts[i] ?? 0, timing.speed, elapsed);
       if (shown === 0) return;
       const complete = shown >= stroke.points.length;
@@ -88,6 +98,12 @@ function draw(detail: unknown): void {
     if (request.animate && now - started < timing.totalMs) frame = requestAnimationFrame(paint);
   };
   frame = requestAnimationFrame(paint);
+  if (ticks.size > 0) {
+    tickTimer = window.setTimeout(() => {
+      showTicks = false;
+      frame = requestAnimationFrame(paint);
+    }, timing.totalMs + TICK_VISIBLE_MS);
+  }
 }
 
 function paintCard(context: CanvasRenderingContext2D, [x, y, w, h]: number[], scale: number) {

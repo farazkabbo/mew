@@ -15,6 +15,10 @@ pub const SPEECH: &str = "mew:screen-speech";
 pub const ANSWER: &str = "mew:screen-answer";
 /// A clip was saved: the page builds its notebook page (S3).
 pub const CLIP_SAVED: &str = "mew:screen-clip-saved";
+/// A notes check's findings: the page marks the notebook lines (Notes Check).
+pub const NOTES_CHECKED: &str = "mew:screen-notes-checked";
+/// "Show in notebook" from the Notes Check panel: the page opens that finding's line.
+pub const NOTES_OPEN: &str = "mew:screen-notes-open";
 
 /// Dispatches `name` on the page with `detail`. Both are serialised as JSON, so whatever text
 /// the server sent arrives as data, never as script.

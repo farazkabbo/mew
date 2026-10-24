@@ -63,6 +63,8 @@ export const geminiEnv = defineEnv(
     GEMINI_SCREEN_MODEL: z.string().min(1).optional(),
     /** Screen Coach step checks (S4): frequent yes/no calls, so a fast model. */
     GEMINI_VERIFIER_MODEL: z.string().min(1),
+    /** Notes Check comparisons (S3.5); unset = the screen model. */
+    GEMINI_NOTES_MODEL: z.string().min(1).optional(),
   }),
   {
     defaults: {
@@ -76,6 +78,11 @@ export const geminiEnv = defineEnv(
 /** The fast model for Screen Coach's checks (coach steps, re-placing ink). */
 export function verifierModel(): string {
   return geminiEnv().GEMINI_VERIFIER_MODEL;
+}
+
+/** The model that compares the screen with the student's notes (Notes Check §7). */
+export function notesModel(): string {
+  return geminiEnv().GEMINI_NOTES_MODEL ?? screenModel();
 }
 
 /** The model that answers Screen Coach questions. */

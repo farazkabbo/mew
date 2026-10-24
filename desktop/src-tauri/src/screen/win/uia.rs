@@ -51,18 +51,23 @@ impl Automation {
         // interface is released when dropped. Windows validates the window handle.
         unsafe {
             let root = self.client.ElementFromHandle(window).ok()?;
-            let edit = self.client.CreatePropertyCondition(
-                UIA_ControlTypePropertyId,
-                &VARIANT::from(UIA_EditControlTypeId.0),
-            )
-            .ok()?;
+            let edit = self
+                .client
+                .CreatePropertyCondition(
+                    UIA_ControlTypePropertyId,
+                    &VARIANT::from(UIA_EditControlTypeId.0),
+                )
+                .ok()?;
             let chromium = self
                 .client
                 .CreatePropertyCondition(UIA_ClassNamePropertyId, &VARIANT::from(CHROMIUM_OMNIBOX))
                 .ok()?;
             let firefox = self
                 .client
-                .CreatePropertyCondition(UIA_AutomationIdPropertyId, &VARIANT::from(FIREFOX_URL_BAR))
+                .CreatePropertyCondition(
+                    UIA_AutomationIdPropertyId,
+                    &VARIANT::from(FIREFOX_URL_BAR),
+                )
                 .ok()?;
             let either = self.client.CreateOrCondition(&chromium, &firefox).ok()?;
             let condition = self.client.CreateAndCondition(&edit, &either).ok()?;

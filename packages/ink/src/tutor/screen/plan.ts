@@ -40,6 +40,8 @@ export type ScreenInkColors = {
   ink: string;
   /** The highlighter's translucent tutor colour. */
   highlight: string;
+  /** Notes Check's amber: "look at this again" (a circle with tone "question"). */
+  question?: string | undefined;
 };
 
 export type ScreenInkInput = {
@@ -177,7 +179,9 @@ class ScreenPlanner {
     switch (action.type) {
       case "circle_region": {
         const box = boxToPixels(action.box, frame);
-        const strokes = [this.pen(ellipseAround(box, this.xHeight * 0.35, this.rng))];
+        const color = action.tone === "question" ? (colors.question ?? colors.ink) : colors.ink;
+        const ellipse = timed(ellipseAround(box, this.xHeight * 0.35, this.rng));
+        const strokes = [this.stroke(ellipse, { color })];
         if (action.label) {
           const label = this.note(action.label, box, "auto", { scale: 0.85, card: false });
           if (label) strokes.push(...label.strokes);
@@ -201,6 +205,10 @@ class ScreenPlanner {
           action.type,
           index,
         );
+      }
+      case "check_mark": {
+        const tick = this.tickBeside(boxToPixels(action.box, frame));
+        return this.commit([this.pen(tick)], action.type, index);
       }
       case "point_at": {
         const arrow = this.arrowTo(pointToPixels(action.point, frame), action.label);
@@ -379,6 +387,27 @@ class ScreenPlanner {
 
   private isFree(rect: BBox): boolean {
     return contains(this.area, rect) && this.grid.isFree(rect) && this.inkGrid.isFree(rect);
+  }
+
+  /**
+   * A small tick beside a line of text (Notes Check: "your notes have this"): in the free space
+   * just right of it, else just left, else at its right edge anyway; never over the words.
+   */
+  private tickBeside(target: BBox): [number, number][] {
+    const size = this.xHeight * 1.3;
+    const [x, y, w, h] = target;
+    const top = y + h / 2 - size / 2;
+    const spots: [number, number][] = [
+      [x + w + this.gap / 2, top],
+      [x - this.gap / 2 - size, top],
+    ];
+    const [left, tickTop] = spots.find(([sx, sy]) => this.isFree([sx, sy, size, size])) ??
+      spots[0] ?? [x + w, top];
+    return [
+      [left, tickTop + size * 0.55],
+      [left + size * 0.35, tickTop + size],
+      [left + size, tickTop],
+    ];
   }
 
   /** A free-hand pen path. */

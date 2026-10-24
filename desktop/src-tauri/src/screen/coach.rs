@@ -27,6 +27,7 @@ use super::config::{
     self, CaptureScope, HotkeyError, Loaded, Privacy, ScreenConfig, CONSENT_VERSION,
 };
 use super::frame::{CapturedFrame, FrameMeta, FrameSlot, Timings, FRAME_TTL};
+use super::notes_check;
 use super::page;
 use super::pipeline::{self, Captured, Request, ScreenError, Tools};
 use super::privacy::blocklist::DEFAULT_BLOCKED_APPS;
@@ -74,6 +75,7 @@ struct State {
     talk: HotkeyReport,
     pause: HotkeyReport,
     clip: HotkeyReport,
+    notes: HotkeyReport,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -100,6 +102,7 @@ pub struct StatusView {
     pub talk: HotkeyReport,
     pub pause: HotkeyReport,
     pub clip: HotkeyReport,
+    pub notes: HotkeyReport,
     pub privacy: Privacy,
     pub default_blocked_apps: &'static [&'static str],
     pub microphone: MicAccess,
@@ -113,15 +116,18 @@ pub enum HotkeyKind {
     Talk,
     Pause,
     Clip,
+    Notes,
 }
 
 /// Who asked for a capture: the hold-to-talk hotkey (the page listens, then asks with the
-/// words), the tray (asked at once, without words), or saving a clip (S3).
+/// words), the tray (asked at once, without words), saving a clip (S3), or the Notes Check
+/// hotkey (compared with the notes at once).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Origin {
     Hotkey,
     Tray,
     Clip(Purpose),
+    NotesCheck,
 }
 
 /// Work for the capture worker thread, which owns the Windows objects in `Tools`.
@@ -154,6 +160,7 @@ impl ScreenCoach {
             talk: state.talk.clone(),
             pause: state.pause.clone(),
             clip: state.clip.clone(),
+            notes: state.notes.clone(),
             privacy: state.config.privacy.clone(),
             default_blocked_apps: DEFAULT_BLOCKED_APPS,
             microphone: system::mic_access(),
@@ -245,6 +252,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         talk: report(&config.hotkeys.talk),
         pause: report(&config.hotkeys.pause),
         clip: report(&config.hotkeys.clip),
+        notes: report(&config.hotkeys.notes),
         config,
         config_reset,
         status: Status::Off,
@@ -295,7 +303,8 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 /// Each overlay page (S3) may call only its own commands, and only from its own window: the
-/// ink overlay reports what it drew, the pill has its two buttons, the preview its three.
+/// ink overlay reports what it drew, the pill has its two buttons, the preview its three, and
+/// the Notes Check panel its one (close, hide the marks, open a line in the notebook).
 fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     use super::overlay::Surface;
     app.add_capability(
@@ -309,6 +318,12 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .local(true)
             .window(Surface::Pill.label())
             .permission("allow-screen-ink-pill"),
+    )?;
+    app.add_capability(
+        CapabilityBuilder::new("screen-notes")
+            .local(true)
+            .window(Surface::Notes.label())
+            .permission("allow-screen-notes-panel"),
     )?;
     app.add_capability(
         CapabilityBuilder::new("screen-clip")
@@ -351,7 +366,12 @@ fn sync_hotkeys<R: Runtime>(app: &AppHandle<R>) {
     let shortcuts = app.global_shortcut();
     let mut guard = coach.lock();
     let state = &mut *guard;
-    for report in [&mut state.talk, &mut state.pause, &mut state.clip] {
+    for report in [
+        &mut state.talk,
+        &mut state.pause,
+        &mut state.clip,
+        &mut state.notes,
+    ] {
         if report.registered {
             if let Ok(shortcut) = config::validate_hotkey(&report.accelerator) {
                 let _ = shortcuts.unregister(shortcut);
@@ -363,10 +383,16 @@ fn sync_hotkeys<R: Runtime>(app: &AppHandle<R>) {
     state.talk.accelerator = state.config.hotkeys.talk.clone();
     state.pause.accelerator = state.config.hotkeys.pause.clone();
     state.clip.accelerator = state.config.hotkeys.clip.clone();
+    state.notes.accelerator = state.config.hotkeys.notes.clone();
     if coach.support.is_err() || !state.config.is_on() {
         return;
     }
-    for report in [&mut state.talk, &mut state.pause, &mut state.clip] {
+    for report in [
+        &mut state.talk,
+        &mut state.pause,
+        &mut state.clip,
+        &mut state.notes,
+    ] {
         match config::validate_hotkey(&report.accelerator) {
             Ok(shortcut) => match shortcuts.register(shortcut) {
                 Ok(()) => report.registered = true,
@@ -411,7 +437,7 @@ pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed:
         }
         return;
     }
-    let (is_talk, is_pause, is_clip) = {
+    let (is_talk, is_pause, is_clip, is_notes) = {
         let state = coach.lock();
         let matches = |report: &HotkeyReport| {
             report.registered
@@ -421,8 +447,15 @@ pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed:
             matches(&state.talk),
             matches(&state.pause),
             matches(&state.clip),
+            matches(&state.notes),
         )
     };
+    if is_notes {
+        if pressed == ShortcutState::Pressed && usable(&coach) {
+            capture(app, Origin::NotesCheck, None);
+        }
+        return;
+    }
     if is_clip {
         if pressed == ShortcutState::Pressed && usable(&coach) {
             clip::on_hotkey(app);
@@ -564,6 +597,7 @@ fn finish_capture<R: Runtime>(
     };
     let mut kept = false;
     let mut for_clip = None;
+    let mut for_notes = None;
     match result {
         Ok(captured) => {
             log_capture(&captured.meta, captured.jpeg.len());
@@ -575,6 +609,7 @@ fn finish_capture<R: Runtime>(
                 indicator::flash(monitor, dpi);
                 match origin {
                     Origin::Clip(purpose) => for_clip = Some((purpose, captured)),
+                    Origin::NotesCheck => for_notes = Some(captured),
                     Origin::Hotkey | Origin::Tray => {
                         let Captured { jpeg, meta, detail } = captured;
                         coach.slot.put(jpeg, meta, Some(detail), Instant::now());
@@ -590,6 +625,9 @@ fn finish_capture<R: Runtime>(
     coach.capturing.store(false, Ordering::SeqCst);
     if let Some((purpose, captured)) = for_clip {
         clip::on_captured(app, purpose, captured);
+    }
+    if let Some(captured) = for_notes {
+        notes_check::start(app, captured, false);
     }
     match (origin, kept) {
         (Origin::Tray, true) => ask::ask_in_background(app, String::new()),
@@ -828,18 +866,17 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
     {
         let state = coach.lock();
         let hotkeys = &state.config.hotkeys;
-        let others: [&String; 2] = match which {
-            HotkeyKind::Talk => [&hotkeys.pause, &hotkeys.clip],
-            HotkeyKind::Pause => [&hotkeys.talk, &hotkeys.clip],
-            HotkeyKind::Clip => [&hotkeys.talk, &hotkeys.pause],
+        let others: [&String; 3] = match which {
+            HotkeyKind::Talk => [&hotkeys.pause, &hotkeys.clip, &hotkeys.notes],
+            HotkeyKind::Pause => [&hotkeys.talk, &hotkeys.clip, &hotkeys.notes],
+            HotkeyKind::Clip => [&hotkeys.talk, &hotkeys.pause, &hotkeys.notes],
+            HotkeyKind::Notes => [&hotkeys.talk, &hotkeys.pause, &hotkeys.clip],
         };
         if others
             .iter()
             .any(|other| config::validate_hotkey(other).is_ok_and(|s| s == shortcut))
         {
-            return Err(
-                "That shortcut is already used by another Screen Coach action.".to_owned(),
-            );
+            return Err("That shortcut is already used by another Screen Coach action.".to_owned());
         }
         if crate::is_summon_hotkey(&shortcut) {
             return Err("That shortcut already summons Mew. Choose a different one.".to_owned());
@@ -849,10 +886,12 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
     let shortcuts = app.global_shortcut();
     let already_ours = {
         let state = coach.lock();
-        [&state.talk, &state.pause, &state.clip].iter().any(|report| {
-            report.registered
-                && config::validate_hotkey(&report.accelerator).is_ok_and(|s| s == shortcut)
-        })
+        [&state.talk, &state.pause, &state.clip, &state.notes]
+            .iter()
+            .any(|report| {
+                report.registered
+                    && config::validate_hotkey(&report.accelerator).is_ok_and(|s| s == shortcut)
+            })
     };
     if !already_ours {
         shortcuts.register(shortcut).map_err(|_| {
@@ -864,6 +903,7 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
         HotkeyKind::Talk => config.hotkeys.talk = normalised,
         HotkeyKind::Pause => config.hotkeys.pause = normalised,
         HotkeyKind::Clip => config.hotkeys.clip = normalised,
+        HotkeyKind::Notes => config.hotkeys.notes = normalised,
     })?;
     sync_hotkeys(app);
     refresh(app);
