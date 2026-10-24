@@ -20,20 +20,29 @@
 //!   screen after each, with a progress pill (`coach_mode.rs`; the protocol, the words and the
 //!   pill's view are pure, in `walkthrough.rs` and `intent.rs`). The walkthrough itself lives on
 //!   the web app's server.
+//! - S3.2, Circle & Ask (docs/SCREEN_COACH_S3_2.md, decision 11): a pointer beside the cursor;
+//!   the student draws around something and asks; the tutor explains it step by step with ink, and
+//!   it's saved to the notebook (`circle.rs`, `circle_answer.rs`; pure: `marks.rs`, `pointer.rs`,
+//!   `circle_steps.rs`, `circle_protocol.rs`, `raster.rs`).
 //!
 //! Where to start reading: `coach.rs` (what happens when a hotkey is pressed), then
 //! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
 //! `annotate.rs` and `clip.rs`.
 
 pub mod base64;
+pub mod circle_protocol;
+pub mod circle_steps;
 pub mod config;
 pub mod frame;
 pub mod image;
 pub mod ink;
 pub mod intent;
+pub mod marks;
 pub mod notes_marks;
+pub mod pointer;
 pub mod privacy;
 pub mod protocol;
+pub mod raster;
 pub mod screen_text;
 pub mod secret;
 pub mod source;
@@ -47,6 +56,10 @@ pub mod account;
 pub mod annotate;
 #[cfg(windows)]
 pub mod ask;
+#[cfg(windows)]
+pub mod circle;
+#[cfg(windows)]
+pub mod circle_answer;
 #[cfg(windows)]
 pub mod clip;
 #[cfg(windows)]

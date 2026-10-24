@@ -1,6 +1,7 @@
 export * from "./auth";
 export * from "./check";
 export * from "./chemistry";
+export * from "./circle";
 export * from "./clips";
 export * from "./coach";
 export * from "./coach-machine";
@@ -20,6 +21,7 @@ export * from "./notes-validate";
 export * from "./prompts/coach";
 export * from "./prompts/notes";
 export * from "./prompts/checker";
+export * from "./prompts/circle";
 export * from "./prompts/mew";
 export * from "./prompts/quiz";
 export * from "./prompts/screen";

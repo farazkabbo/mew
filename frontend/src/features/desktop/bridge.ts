@@ -6,7 +6,9 @@ import { ReviewQueue } from "@mew/shared";
  * - `notify_due`: show a review reminder;
  * - `screen_coach_ask`: ask Screen Coach about the frame the desktop app captured on the hotkey
  *   (the page sends only the words; it never sees the screenshot);
- * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code.
+ * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code;
+ * - `screen_coach_spoken`: a line Screen Coach asked to be said has been said (Circle & Ask plays
+ *   its steps to that timing).
  * The desktop app's Ctrl+Shift+M hotkey arrives as a `mew:summon` event.
  */
 
@@ -42,6 +44,11 @@ export async function remindAboutReviews(
 /** Asks Screen Coach about the captured screen. The answer arrives as `mew:screen-*` events. */
 export async function askAboutScreen(transcript: string): Promise<void> {
   await invoke("screen_coach_ask", { transcript });
+}
+
+/** Tells the desktop app the line with `token` has been said (or couldn't be). */
+export async function reportSpoken(token: number): Promise<void> {
+  await invoke("screen_coach_spoken", { token });
 }
 
 /** Gives the desktop app the one-time code for the sign-in it started (it redeems it). */

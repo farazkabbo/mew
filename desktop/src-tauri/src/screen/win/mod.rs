@@ -7,6 +7,7 @@ pub mod crypto;
 pub mod encode;
 pub mod http;
 pub mod indicator;
+pub mod input;
 pub mod media_session;
 pub mod ocr;
 pub mod system;

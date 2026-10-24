@@ -1,5 +1,5 @@
 import { planScreenInk, type ScreenStroke, strokePath } from "@mew/ink";
-import { HexColor, ScreenAction } from "@mew/shared";
+import { type BBox, HexColor, ScreenAction } from "@mew/shared";
 import { z } from "zod";
 
 import { schedule, visiblePoints } from "./animation";
@@ -12,6 +12,9 @@ import { invoke, on } from "./tauri";
  * reports the strokes back (a saved clip keeps them as vectors), and draws them.
  *
  * Everything is in physical pixels of the monitor: the canvas has one pixel per screen pixel.
+ *
+ * Circle & Ask (S3.2) draws an explanation a step at a time: a request with `step` > 0 keeps the
+ * earlier steps' ink on screen, and is planned clear of it.
  */
 
 const Rect = z.tuple([z.number(), z.number(), z.number().min(0), z.number().min(0)]);
@@ -28,6 +31,7 @@ const InkRequest = z.object({
   scale: z.number().min(1).max(8),
   colors: z.object({ ink: HexColor, highlight: HexColor, question: HexColor.optional() }),
   animate: z.boolean(),
+  step: z.number().int().min(0).max(4).optional(),
 });
 type InkRequest = z.infer<typeof InkRequest>;
 
@@ -43,6 +47,11 @@ const ctx = canvas?.getContext("2d") ?? null;
 let frame = 0;
 let tickTimer = 0;
 
+/** Ink already on screen from earlier steps of the same explanation. */
+type Kept = { strokes: ScreenStroke[]; cards: number[][]; boxes: BBox[] };
+const nothingKept = (): Kept => ({ strokes: [], cards: [], boxes: [] });
+let kept = nothingKept();
+
 function resize(): void {
   if (!canvas) return;
   canvas.width = Math.round(window.innerWidth * window.devicePixelRatio);
@@ -52,6 +61,7 @@ function resize(): void {
 function clear(): void {
   cancelAnimationFrame(frame);
   window.clearTimeout(tickTimer);
+  kept = nothingKept();
   if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
@@ -59,14 +69,21 @@ function draw(detail: unknown): void {
   const parsed = InkRequest.safeParse(detail);
   if (!parsed.success || !canvas || !ctx) return;
   const request = parsed.data;
-  clear();
-  resize();
+  const appending = (request.step ?? 0) > 0;
+  if (appending) {
+    // Finish the earlier step's animation at once: it's kept, drawn in full.
+    cancelAnimationFrame(frame);
+  } else {
+    clear();
+    resize();
+  }
   canvas.classList.remove("faded");
+  const earlier = kept;
 
   const plan = planScreenInk(request.actions, {
     frame: request.frame,
     bounds: request.bounds,
-    obstacles: request.obstacles,
+    obstacles: [...request.obstacles, ...earlier.boxes],
     textHeight: request.textHeight,
     scale: request.scale,
     seed: request.seed,
@@ -79,13 +96,22 @@ function draw(detail: unknown): void {
   let showTicks = true;
   const cards = plan.actions.flatMap((a) => (a.card ? [a.card] : []));
   report(request, strokes, cards, plan.bbox);
+  kept = {
+    strokes: [...earlier.strokes, ...strokes],
+    cards: [...earlier.cards, ...cards],
+    boxes: plan.bbox ? [...earlier.boxes, plan.bbox] : earlier.boxes,
+  };
 
   const timing = schedule(strokes);
   const started = performance.now();
   const paint = (now: number) => {
     const elapsed = request.animate ? now - started : Number.POSITIVE_INFINITY;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const card of cards) paintCard(ctx, card, request.scale);
+    for (const card of [...earlier.cards, ...cards]) paintCard(ctx, card, request.scale);
+    for (const stroke of earlier.strokes) {
+      ctx.fillStyle = stroke.color;
+      ctx.fill(new Path2D(strokePath(stroke, true)));
+    }
     strokes.forEach((stroke, i) => {
       if (!showTicks && ticks.has(stroke)) return;
       const shown = visiblePoints(stroke.points, timing.starts[i] ?? 0, timing.speed, elapsed);
@@ -130,6 +156,7 @@ function report(
       strokes: strokes.map(({ tool, color, width, points }) => ({ tool, color, width, points })),
       cards,
       bbox,
+      ...(request.step !== undefined && { step: request.step }),
     },
   }).catch(() => undefined);
 }

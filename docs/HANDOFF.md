@@ -110,6 +110,34 @@ binding): **S0–S3 built** (2026-10-22), **S4 built** (2026-10-23). Desktop cod
     walkthrough, and pausing Screen Coach mid-walkthrough. The ignored Rust test
     `coach_e2e_plans_a_walkthrough_and_catches_a_skipped_step` does the first part against the dev
     servers and real Gemini on a mock spreadsheet window.
+- **S3.2 (Circle & Ask)** — brief [SCREEN_COACH_S3_2.md](SCREEN_COACH_S3_2.md), decision 11:
+  - **Desktop** (`circle.rs`: the session, tracker, draw mode, marks, capture; `circle_answer.rs`:
+    the request, streamed steps, playback, the toast and saving; pure: `marks.rs` classification
+    and targets, `pointer.rs`, `circle_steps.rs` playback timing, `circle_protocol.rs`,
+    `raster.rs` marks on the focus image). Three new overlay pages: `pointer`, `draw-overlay`
+    (mouse, pen, touch, the select-question box, keyboard drawing) and `circle-card` (ask bar,
+    captions with Pause · Repeat · Next · Stop, the save toast). The S3 ink overlay draws one step
+    at a time (`step` in its requests). Left Ctrl + left Alt are polled (no hooks); Ctrl+Alt+D
+    toggles; Ctrl+Alt+. / Ctrl+Alt+, and Esc are registered only during a session.
+  - **Server:** `/api/screen/circle-ask` (prompt `circle-ask.v1`, two images, steps streamed and
+    checked in code: ink within 120 px of the marks, 25 words, the safety check, abort on an unsafe
+    step), `/api/screen/read-question` (`read-question.v1`, handwriting), `/api/screen/entries/
+append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) and
+    `readQuestion*` (10/min, 100/day).
+  - **Entries** are clips with `kind = 'entry'` (migration `clip_entries`: session, student
+    strokes, the turns, `strokeSteps`, `revision` for compare-and-set appends). The notebook puts
+    them on the day's "From screen" page (`Page.fromScreenDay`), the note under the picture
+    (`EntryNotes.tsx`), Replay a step at a time (`entry-replay.ts`), and their text in
+    `note_lines`.
+  - Consent version 4 (the settings page explains the pointer, drawing and auto-saving); its
+    Circle & Ask section has the pointer, saving and silent-mode settings.
+  - **The `clip_entries` migration is not applied to the hosted project yet.**
+  - **To verify by hand:** the pointer at 150 % on two monitors, drawing with mouse and pen, normal
+    clicks while the keys aren't held, the overlays absent from a Teams share, AltGr typing never
+    drawing, scrolling fading the marks, a v–t graph on YouTube (Enter → steps with ink before
+    words), the toast (Undo leaves nothing; Open shows the entry), "Select question on screen"
+    on handwriting, and silent mode with only the keyboard. Not done (left for S5, decision 11):
+    course context in the answer, and evidence from the follow-up question.
 - **Next:** S5 (learner integration: skills from walkthroughs, evidence, FSRS re-checks).
   Notes Check (S3.5) N1–N5 are built; see below.
 
@@ -172,6 +200,10 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after S3.2): **1,081 unit tests** (frontend 386, backend 271, ink 134, shared 182,
+database 91, desktop overlays 17), **151 Rust tests** (+5 real-Windows ones; clippy clean) and
+**59 Playwright tests**.
 
 Tests (after S4): **1,021 unit tests** (frontend 362, backend 257, ink 134, shared 172, database
 87, desktop overlays 9), **126 Rust tests** (+5 real-Windows ones; clippy clean) and

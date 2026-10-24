@@ -474,7 +474,11 @@ fn set_escape<R: Runtime>(app: &AppHandle<R>, on: bool) {
 #[tauri::command(async)]
 pub fn screen_ink_drawn<R: Runtime>(window: WebviewWindow<R>, ink: DrawnInk) -> Result<(), String> {
     overlay::require_surface(&window, Surface::Ink)?;
-    on_drawn(window.app_handle(), ink);
+    if ink.id >= super::circle_answer::INK_IDS_FROM {
+        super::circle_answer::on_drawn(window.app_handle(), ink);
+    } else {
+        on_drawn(window.app_handle(), ink);
+    }
     Ok(())
 }
 

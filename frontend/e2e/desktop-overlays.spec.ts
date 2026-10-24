@@ -409,3 +409,174 @@ test("the progress pill shows text as text and ignores a malformed view", async 
   await expect(page.getByText("<img src=x onerror=alert(1)>")).toBeVisible();
   expect(shell.violations).toEqual([]);
 });
+
+// ─── Circle & Ask (S3.2): the ink's steps, the pointer, the draw overlay and the card ────────
+
+test("the ink overlay draws an explanation a step at a time, keeping the earlier steps", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "ink-overlay.html");
+  const box = (l: number, t: number, r: number, b: number) => ({
+    left: l,
+    top: t,
+    right: r,
+    bottom: b,
+  });
+  const request = (step: number, actions: unknown[]) => ({
+    id: 2 ** 40,
+    seed: "session",
+    actions,
+    frame: [200, 200, 600, 300],
+    bounds: [0, 0, 1280, 800],
+    obstacles: [],
+    scale: 1,
+    colors: { ink: "#8a7bf0", highlight: "#8a7bf055" },
+    animate: false,
+    step,
+  });
+  await shell.dispatch(
+    "mew:ink-draw",
+    request(0, [{ type: "underline", box: box(100, 600, 900, 640) }]),
+  );
+  await shell.dispatch(
+    "mew:ink-draw",
+    request(1, [{ type: "circle_region", box: box(300, 200, 600, 400) }]),
+  );
+  await expect.poll(async () => (await shell.calls()).length).toBe(2);
+  const steps = (await shell.calls()).map((c) => (c.args as { ink: { step?: number } }).ink.step);
+  expect(steps).toEqual([0, 1]);
+
+  // Step 0's underline is still on the canvas with step 1's circle (both violet).
+  const violetRows = await page.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
+    const data = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data;
+    const rows = new Set<number>();
+    for (let i = 0; data && i < data.length; i += 4) {
+      if ((data[i + 3] ?? 0) > 100 && (data[i + 2] ?? 0) > 200)
+        rows.add(Math.floor(i / 4 / canvas.width));
+    }
+    return [...rows];
+  });
+  // The underline sits at about y = 200 + 0.6 × 300; the circle higher up.
+  expect(violetRows.some((y) => y > 370 && y < 400)).toBe(true);
+  expect(violetRows.some((y) => y > 250 && y < 330)).toBe(true);
+  expect(shell.violations).toEqual([]);
+});
+
+test("the pointer shows its look", async ({ page }) => {
+  const shell = await openShellPage(page, "pointer.html");
+  const pointer = page.locator("#pointer");
+  await expect(pointer).toHaveAttribute("data-look", "idle");
+  await shell.dispatch("mew:pointer-look", { look: "drawing" });
+  await expect(pointer).toHaveAttribute("data-look", "drawing");
+  await shell.dispatch("mew:pointer-look", { look: "<script>" });
+  await expect(pointer).toHaveAttribute("data-look", "drawing");
+  expect(shell.violations).toEqual([]);
+});
+
+test("the draw overlay sends a finished mark, a selected question area, and a keyboard mark", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "draw-overlay.html");
+  await shell.dispatch("mew:draw-show", { marks: [], grey: false, drawing: true, mode: "draw" });
+  // While drawing, the page isn't fully transparent: Windows would pass the mouse through.
+  const tint = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(tint).toMatch(/^rgba\(255, 255, 255, 0\.00\d+\)$/);
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(100 + i * 20, 100 + (i % 2) * 30);
+  await page.mouse.up();
+  await expect.poll(async () => (await shell.calls()).length).toBe(1);
+  const [mark] = await shell.calls();
+  expect(mark?.cmd).toBe("screen_draw_mark");
+  const points = (mark?.args as { stroke: { points: number[][] } }).stroke.points;
+  expect(points.length).toBeGreaterThan(5);
+  expect(points[0]).toEqual([100, 100, 0.5]);
+
+  // "Select question on screen": a drag is a box.
+  await shell.dispatch("mew:draw-show", { mode: "select" });
+  await expect(page.getByText("Drag a box around your question.")).toBeVisible();
+  await page.mouse.move(400, 300);
+  await page.mouse.down();
+  await page.mouse.move(600, 360);
+  await page.mouse.up();
+  await expect.poll(async () => (await shell.calls()).length).toBe(2);
+  expect((await shell.calls())[1]).toEqual({
+    cmd: "screen_draw_select",
+    args: { rect: [400, 300, 200, 60] },
+  });
+
+  // Keyboard drawing: Tab to a block, Space marks it (a closed path around it).
+  await shell.dispatch("mew:draw-show", {
+    mode: "keyboard",
+    blocks: [
+      [50, 50, 200, 40],
+      [50, 120, 300, 40],
+    ],
+    pointer: [60, 60],
+  });
+  await page.keyboard.press("Tab");
+  await expect(page.getByText("Text block 1 of 2. Space to mark it.")).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect.poll(async () => (await shell.calls()).length).toBe(3);
+  const keyed = (await shell.calls())[2]?.args as { stroke: { points: number[][] } };
+  expect(keyed.stroke.points[0]).toEqual([50, 50, 0.5]);
+  expect(keyed.stroke.points.at(-1)).toEqual([50, 50, 0.5]);
+  expect(shell.violations).toEqual([]);
+});
+
+test("the Circle & Ask card asks, plays steps with their controls, and counts the save down", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "circle-card.html");
+  await shell.dispatch("mew:card-show", { mode: "ask", silent: false });
+  await expect(page.getByText("Hold Ctrl+Alt+Space to ask out loud")).toBeVisible();
+  await page.getByLabel("Your question").fill("why does this go up?");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await shell.calls()).length).toBe(1);
+  expect((await shell.calls())[0]).toEqual({
+    cmd: "screen_circle_card",
+    args: { action: "ask", text: "why does this go up?" },
+  });
+
+  await shell.dispatch("mew:card-show", {
+    mode: "explain",
+    step: 1,
+    total: 3,
+    say: "This axis is velocity, not position.",
+    paused: false,
+  });
+  await expect(page.getByText("Step 1 of 3")).toBeVisible();
+  await expect(page.getByText("This axis is velocity, not position.")).toBeVisible();
+  await page.getByRole("button", { name: "Next" }).click();
+  expect((await shell.calls()).at(-1)).toEqual({
+    cmd: "screen_circle_card",
+    args: { action: "next" },
+  });
+
+  await shell.dispatch("mew:card-show", {
+    mode: "toast",
+    seconds: 5,
+    canSave: true,
+    followUp: "What's the acceleration there?",
+  });
+  await expect(page.getByText("✓ Saving to your notebook · From screen · 5")).toBeVisible();
+  await expect(page.getByText("To check: What's the acceleration there?")).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  expect((await shell.calls()).at(-1)).toEqual({
+    cmd: "screen_circle_card",
+    args: { action: "undo" },
+  });
+
+  // Text from the screen is text, never markup.
+  await shell.dispatch("mew:card-show", {
+    mode: "confirm",
+    questions: ["<b>Find x</b>", "Find y"],
+  });
+  await page.getByRole("button", { name: "<b>Find x</b>" }).click();
+  expect((await shell.calls()).at(-1)).toEqual({
+    cmd: "screen_circle_card",
+    args: { action: "confirm", text: "<b>Find x</b>" },
+  });
+  expect(await page.locator("b").count()).toBe(0);
+  expect(shell.violations).toEqual([]);
+});

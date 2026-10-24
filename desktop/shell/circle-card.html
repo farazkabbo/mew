@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Circle &amp; Ask · Mew</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/circle-card.js" defer></script>
+  </head>
+  <body class="card">
+    <main class="circle-card" id="card" data-mode="ask" aria-label="Circle and Ask">
+      <p class="card-top" id="card-top"></p>
+      <p class="card-text" id="card-text" aria-live="polite"></p>
+      <ul class="card-chips" id="card-chips"></ul>
+      <form class="card-ask" id="card-ask">
+        <label class="sr-only" for="card-input">Your question</label>
+        <input id="card-input" type="text" maxlength="500" autocomplete="off" />
+      </form>
+      <div class="card-buttons" id="card-buttons"></div>
+    </main>
+  </body>
+</html>

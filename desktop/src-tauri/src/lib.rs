@@ -4,7 +4,8 @@
 //!
 //! Security: the window shows a remote origin (the web app). That origin may call three
 //! commands, each checked in Rust: `notify_due`, and Screen Coach's `screen_coach_ask` (the
-//! words of a question; never pixels) and `screen_coach_link_finish` (a one-time sign-in code).
+//! words of a question; never pixels), `screen_coach_spoken` (a spoken line ended: Circle & Ask's
+//! timing) and `screen_coach_link_finish` (a one-time sign-in code).
 //! Everything else (hotkeys, tray, windows, screen capture) happens in Rust. Screen Coach's
 //! settings commands are granted to its bundled local page only, and its overlay commands to
 //! its overlay pages only (each window its own). Links the web page opens in a new window go to
@@ -76,10 +77,15 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     };
     use screen::annotate::{screen_ink_drawn, screen_ink_pill};
     use screen::ask::screen_coach_ask;
+    use screen::circle::{
+        screen_circle_card, screen_draw_erase, screen_draw_mark, screen_draw_select,
+    };
+    use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
-        screen_coach_open_mic_settings, screen_coach_set_enabled, screen_coach_set_hotkey,
-        screen_coach_set_paused, screen_coach_set_privacy, screen_coach_status,
+        screen_coach_open_mic_settings, screen_coach_set_circle, screen_coach_set_enabled,
+        screen_coach_set_hotkey, screen_coach_set_paused, screen_coach_set_privacy,
+        screen_coach_status,
     };
     use screen::coach_mode::screen_coach_pill;
     use screen::notes_check::screen_notes_panel;
@@ -101,7 +107,13 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_clip_save,
         screen_clip_cancel,
         screen_notes_panel,
-        screen_coach_pill
+        screen_coach_pill,
+        screen_coach_set_circle,
+        screen_coach_spoken,
+        screen_draw_mark,
+        screen_draw_erase,
+        screen_draw_select,
+        screen_circle_card
     ]
 }
 
@@ -120,6 +132,7 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
             .window(MAIN)
             .permission("allow-notify-due")
             .permission("allow-screen-coach-ask")
+            .permission("allow-screen-coach-spoken")
             .permission("allow-screen-coach-link-finish"),
     )
 }

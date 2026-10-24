@@ -1,6 +1,10 @@
 """Wire models for clips (camelCase, like packages/shared/src/clips.ts): part of the screen a
 student saved to their notebook from the desktop app (Screen Coach S3, decision 9).
 
+A clip can also be a Circle & Ask **entry** (S3.2, decision 11): the explanation the tutor gave
+about what the student marked, with the student's marks as their own strokes. Its follow-ups in
+the same session are added to it (`EntryAppend`), without a new picture.
+
 Everything is checked again here even though the web app checked it: the image really is a
 JPEG of the size it claims, links can't carry secrets, and the amount of ink is capped.
 """
@@ -30,6 +34,10 @@ MAX_STROKES = 300
 MAX_POINTS_PER_STROKE = 2_000
 MAX_POINTS = 30_000
 OCR_CHARS = 8_000
+#: An entry's turns (a question and its explanation each), and the student's marks.
+MAX_TURNS = 12
+MAX_STEPS = 5
+MAX_MARK_STROKES = 12
 
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _APP = re.compile(r"^[a-z0-9 ._+()-]+\.exe$")
@@ -101,17 +109,83 @@ class ClipImage(_Camel):
     height: int = Field(ge=1, le=LONG_SIDE)
 
 
+class EntryTurn(_Camel):
+    """One question and its explanation, as the notebook shows it under the picture."""
+
+    question: Annotated[PlainText, StringConstraints(min_length=1, max_length=500)]
+    steps: list[Annotated[PlainText, StringConstraints(min_length=1, max_length=220)]] = Field(
+        min_length=1, max_length=MAX_STEPS
+    )
+    summary: Annotated[PlainText, StringConstraints(min_length=1, max_length=320)]
+    follow_up_question: (
+        Annotated[PlainText, StringConstraints(min_length=1, max_length=220)] | None
+    ) = None
+
+
+ConceptHint = Annotated[PlainText, StringConstraints(min_length=1, max_length=80)]
+
+
+class EntryPart(_Camel):
+    """What makes a new clip an entry: the session, the student's marks, the first turn, and
+    the explanation step of each of the clip's tutor strokes."""
+
+    session_id: UUID
+    student_strokes: list[ClipStroke] = Field(max_length=MAX_MARK_STROKES)
+    turn: EntryTurn
+    stroke_steps: list[int] = Field(max_length=MAX_STROKES)
+    concept_hints: list[ConceptHint] = Field(max_length=5)
+
+    @field_validator("stroke_steps")
+    @classmethod
+    def _steps_exist(cls, steps: list[int]) -> list[int]:
+        if any(not 0 <= step < MAX_STEPS for step in steps):
+            raise ValueError("a stroke's step is one of the turn's steps")
+        return steps
+
+
+class EntryAppend(_Camel):
+    """A follow-up in the same session: its turn and its strokes, added to the entry (in the
+    entry image's pixels, placed like the first turn's)."""
+
+    session_id: UUID
+    turn: EntryTurn
+    strokes: list[ClipStroke] = Field(max_length=MAX_STROKES)
+    stroke_steps: list[int] = Field(max_length=MAX_STROKES)
+    concept_hints: list[ConceptHint] = Field(max_length=5)
+
+    @model_validator(mode="after")
+    def _a_step_per_stroke(self) -> "EntryAppend":
+        if len(self.stroke_steps) != len(self.strokes):
+            raise ValueError("each stroke has its step")
+        if any(not 0 <= step < MAX_STEPS for step in self.stroke_steps):
+            raise ValueError("a stroke's step is one of the turn's steps")
+        return self
+
+
+class EntryView(_Camel):
+    session_id: UUID
+    student_strokes: list[ClipStroke]
+    turns: list[EntryTurn]
+    #: For each of the clip's strokes: [turn, step].
+    stroke_steps: list[tuple[int, int]]
+    concept_hints: list[str]
+
+
 class ClipCreate(_Camel):
     image: ClipImage
     pixel_ratio: float = Field(ge=0.25, le=8)
     strokes: list[ClipStroke] = Field(max_length=MAX_STROKES)
     source: ClipSource
     ocr_text: Annotated[PlainText, StringConstraints(max_length=OCR_CHARS)]
+    entry: EntryPart | None = None
 
     @model_validator(mode="after")
     def _ink_is_capped(self) -> "ClipCreate":
-        if sum(len(s.points) for s in self.strokes) > MAX_POINTS:
+        marks = self.entry.student_strokes if self.entry else []
+        if sum(len(s.points) for s in [*self.strokes, *marks]) > MAX_POINTS:
             raise ValueError("too much ink")
+        if self.entry and len(self.entry.stroke_steps) != len(self.strokes):
+            raise ValueError("each stroke has its step")
         return self
 
     def image_bytes(self) -> bytes:
@@ -146,6 +220,8 @@ class ClipView(_Camel):
     ocr_text: str
     notebook_page_id: UUID | None
     created_at: datetime
+    #: A Circle & Ask entry's explanation; None for an ordinary clip.
+    entry: EntryView | None = None
 
 
 class ClipPatch(_Camel):

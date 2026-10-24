@@ -33,6 +33,7 @@ const CLIP: ClipView = {
   },
   ocrText: "Question 3",
   notebookPageId: null,
+  entry: null,
   createdAt: "2026-10-22T10:00:01.000+00:00",
 };
 

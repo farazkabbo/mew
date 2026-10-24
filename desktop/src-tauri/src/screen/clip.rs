@@ -8,6 +8,10 @@
 //! 3. Save: the crop is checked (a protected video captures black), encoded, its visible text
 //!    read, and uploaded with the device token. The web page gets only the new clip's id.
 //!    Cancel, or a minute without an answer: everything is wiped, nothing was sent.
+//!
+//! A Circle & Ask explanation (S3.2, decision 11) is saved the same way as an **entry**: a clip
+//! with the student's marks and the explanation attached. It's saved straight away once its toast
+//! ends (`save_entry`), or through the preview ("Edit crop", `open_entry`).
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -23,11 +27,15 @@ use super::coach::{self, ScreenCoach};
 use super::config::CaptureScope;
 use super::frame::{FrameDetail, FrameMeta};
 use super::image::{crop, downscale_bgra_to_bgr, looks_blank};
-use super::ink::{clip_strokes, default_crop, overlay_to_frame, InkStroke, InkTool, Rect};
+use super::ink::{
+    clip_strokes, clip_strokes_kept, default_crop, overlay_to_frame, InkStroke, InkTool, Rect,
+};
 use super::overlay::{self, Surface};
 use super::page;
 use super::pipeline::{self, Captured, ScreenError};
-use super::protocol::{clip_body, parse_clip_created, ClipHead, ClipSource};
+use super::protocol::{
+    clip_body, parse_clip_created, ClipHead, ClipSource, EntryHead, EntryTurnOut,
+};
 use super::secret::SecretBytes;
 use super::source::{
     clean_title, is_browser, is_video_page, player_time, sanitize_url, with_timestamp,
@@ -66,6 +74,30 @@ pub struct ClipDraft {
     /// The default crop, in frame pixels; None to drag one out (no ink).
     crop: Option<Rect>,
     source: DraftSource,
+    /// Circle & Ask: what makes it an entry.
+    entry: Option<EntryDraft>,
+}
+
+/// A Circle & Ask explanation to save with its picture (S3.2 §5). Strokes are in overlay pixels,
+/// like the tutor's.
+pub struct EntryDraft {
+    pub session_id: String,
+    pub student_strokes: Vec<InkStroke>,
+    pub turn: EntryTurnOut,
+    /// The explanation step of each of the draft's tutor strokes.
+    pub stroke_steps: Vec<u8>,
+    pub concept_hints: Vec<String>,
+}
+
+/// What an entry is drawn and saved from: the capture and everything on it.
+pub struct EntryCapture {
+    pub meta: FrameMeta,
+    pub detail: FrameDetail,
+    /// The tutor's strokes, in overlay pixels.
+    pub strokes: Vec<InkStroke>,
+    /// The crop, in frame pixels.
+    pub crop: Rect,
+    pub entry: EntryDraft,
 }
 
 struct DraftSource {
@@ -186,6 +218,47 @@ pub fn on_captured<R: Runtime>(app: &AppHandle<R>, purpose: Purpose, captured: C
     }
 }
 
+/// Saves an explanation as an entry now (its toast ended, or Open was pressed), without the
+/// preview. Runs on the capture worker (WIC and UI Automation). With `open`, the notebook comes
+/// forward at the entry; otherwise the page adds it quietly.
+pub fn save_entry<R: Runtime>(
+    app: &AppHandle<R>,
+    tools: &mut pipeline::Tools,
+    capture: EntryCapture,
+    include_link: bool,
+    open: bool,
+) -> Result<Saved, String> {
+    let crop = capture.crop;
+    let draft = entry_draft(tools, capture).ok_or("I couldn't prepare that for your notebook.")?;
+    save(app, draft, crop, Saving::Entry { include_link, open })
+}
+
+/// "Edit crop": the explanation in the preview, to save with a different crop (or not at all).
+pub fn open_entry<R: Runtime>(
+    app: &AppHandle<R>,
+    tools: &mut pipeline::Tools,
+    capture: EntryCapture,
+) {
+    match entry_draft(tools, capture) {
+        Some(draft) => open(app, draft),
+        None => coach::notify(app, "I couldn't open the preview."),
+    }
+}
+
+fn entry_draft(tools: &mut pipeline::Tools, capture: EntryCapture) -> Option<ClipDraft> {
+    let EntryCapture {
+        meta,
+        detail,
+        strokes,
+        crop,
+        entry,
+    } = capture;
+    let source = read_source(tools, &meta, None, &detail);
+    let mut draft = draft(meta, detail, strokes, Vec::new(), Some(crop), source)?;
+    draft.entry = Some(entry);
+    Some(draft)
+}
+
 fn draft_from_turn(tools: &mut pipeline::Tools, mut turn: InkTurn) -> Option<ClipDraft> {
     let detail = turn.frame.take()?;
     let drawn = turn.drawn.take()?;
@@ -240,6 +313,7 @@ fn draft(
         cards,
         crop,
         source,
+        entry: None,
     })
 }
 
@@ -424,6 +498,7 @@ pub fn screen_clip_ready<R: Runtime>(window: WebviewWindow<R>) -> Result<Preview
         strokes: draft
             .strokes
             .iter()
+            .chain(draft.entry.iter().flat_map(|e| e.student_strokes.iter()))
             .map(|s| PreviewStroke {
                 tool: tool_name(s.tool),
                 color: s.color.clone(),
@@ -465,8 +540,19 @@ pub fn screen_clip_save<R: Runtime>(
     close_preview(&app);
     let (done, result) = mpsc::channel();
     let handle = app.clone();
+    let saving = if draft.entry.is_some() {
+        Saving::Entry {
+            include_link,
+            open: true,
+        }
+    } else {
+        Saving::Clip {
+            include_notes,
+            include_link,
+        }
+    };
     let queued = coach::on_worker(&app, move |_tools| {
-        let _ = done.send(save(&handle, draft, crop, include_notes, include_link));
+        let _ = done.send(save(&handle, draft, crop, saving).map(|_| ()));
     });
     if !queued {
         return Err("Couldn't save the clip just now.".to_owned());
@@ -487,14 +573,42 @@ pub fn screen_clip_cancel<R: Runtime>(window: WebviewWindow<R>) -> Result<(), St
     Ok(())
 }
 
+/// What is being saved: a clip from the preview (the main window opens it), or a Circle & Ask
+/// entry (the notebook adds it quietly, unless `open`).
+#[derive(Debug, Clone, Copy)]
+enum Saving {
+    Clip {
+        include_notes: bool,
+        include_link: bool,
+    },
+    Entry {
+        include_link: bool,
+        open: bool,
+    },
+}
+
+/// A saved clip: its id, and how its image was cut (crop in frame pixels; image pixels per
+/// frame pixel), so later strokes can be placed on it the same way.
+pub struct Saved {
+    pub clip_id: String,
+    pub crop: Rect,
+    pub scale: f32,
+}
+
 /// Crops, encodes and uploads (on the capture worker: WIC needs its COM apartment).
 fn save<R: Runtime>(
     app: &AppHandle<R>,
-    draft: ClipDraft,
+    mut draft: ClipDraft,
     crop_rect: Rect,
-    include_notes: bool,
-    include_link: bool,
-) -> Result<(), String> {
+    saving: Saving,
+) -> Result<Saved, String> {
+    let (include_notes, include_link) = match saving {
+        Saving::Clip {
+            include_notes,
+            include_link,
+        } => (include_notes, include_link),
+        Saving::Entry { include_link, .. } => (true, include_link),
+    };
     let meta = &draft.meta;
     let frame = [
         0.0,
@@ -534,11 +648,22 @@ fn save<R: Runtime>(
     // Clip image pixels per frame pixel, and per CSS pixel of the screen it came from.
     let scale = width as f32 / crop_rect[2];
     let pixel_ratio = scale * meta.dpi.max(96) as f32 / 96.0;
-    let strokes = if include_notes {
-        clip_strokes(&draft.strokes, meta, crop_rect, scale)
+    let kept = if include_notes {
+        clip_strokes_kept(&draft.strokes, meta, crop_rect, scale)
     } else {
         Vec::new()
     };
+    let entry = draft.entry.take().map(|entry| EntryHead {
+        session_id: entry.session_id,
+        student_strokes: clip_strokes(&entry.student_strokes, meta, crop_rect, scale),
+        turn: entry.turn,
+        stroke_steps: kept
+            .iter()
+            .map(|(i, _)| entry.stroke_steps.get(*i).copied().unwrap_or(0))
+            .collect(),
+        concept_hints: entry.concept_hints,
+    });
+    let strokes = kept.into_iter().map(|(_, stroke)| stroke).collect();
     let rules = coach::privacy_of(app).redaction;
     let on_screen = super::frame::ScreenRect {
         left: meta.bounds.left + crop_rect[0] as i32,
@@ -573,6 +698,7 @@ fn save<R: Runtime>(
             captured_at: rfc3339(SystemTime::now()),
         },
         ocr_text: ocr_text.clone(),
+        entry,
     };
     wipe_string(&mut ocr_text);
     let body = clip_body(&head, jpeg.as_slice(), width, height);
@@ -582,14 +708,38 @@ fn save<R: Runtime>(
 
     let clip_id = upload(app, &body)?;
     drop(body);
-    page::dispatch(app, page::CLIP_SAVED, json!({ "clipId": clip_id }));
+    match saving {
+        Saving::Clip { .. } => {
+            page::dispatch(app, page::CLIP_SAVED, json!({ "clipId": clip_id }));
+            show_notebook(app);
+        }
+        // An entry is added to the notebook quietly, unless asked: the student is in their app.
+        Saving::Entry { open, .. } => {
+            page::dispatch(
+                app,
+                page::ENTRY_SAVED,
+                json!({ "clipId": clip_id, "open": open }),
+            );
+            if open {
+                show_notebook(app);
+            }
+        }
+    }
+    eprintln!("[screen] clip saved ({width}x{height})");
+    Ok(Saved {
+        clip_id,
+        crop: crop_rect,
+        scale,
+    })
+}
+
+/// Brings the main window (the notebook) forward.
+pub fn show_notebook<R: Runtime>(app: &AppHandle<R>) {
     if let Some(main) = app.get_webview_window(crate::MAIN) {
         let _ = main.show();
         let _ = main.unminimize();
         let _ = main.set_focus();
     }
-    eprintln!("[screen] clip saved ({width}x{height})");
-    Ok(())
 }
 
 fn upload<R: Runtime>(app: &AppHandle<R>, body: &SecretBytes) -> Result<String, String> {

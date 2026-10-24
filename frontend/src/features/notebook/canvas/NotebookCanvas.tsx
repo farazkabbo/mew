@@ -214,7 +214,12 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     });
     const unsubscribeUi = useNotebookUi.subscribe((state, previous) => {
       if (state.showLines !== previous.showLines) schedule({ ink: true });
-      if (state.showTutorInk !== previous.showTutorInk) schedule({ ink: true, live: true });
+      if (
+        state.showTutorInk !== previous.showTutorInk ||
+        state.replayHidden !== previous.replayHidden
+      ) {
+        schedule({ ink: true, live: true });
+      }
       if (state.tool !== previous.tool) tools[previous.tool].deactivate?.();
     });
     const unsubscribeTutor = tutorInk?.subscribe(() => schedule({ live: true }));

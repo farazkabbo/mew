@@ -11,6 +11,11 @@
 //!   the focus, clickable and keyboard-usable once the student clicks it, excluded from captures.
 //! - The progress pill (coach mode, S4) shows the walkthrough's step and its buttons: like the
 //!   ink pill, clickable but never focused, and excluded from captures.
+//! - Circle & Ask (S3.2): the **pointer** beside the cursor (click-through, never focused); the
+//!   **draw overlay** over one monitor (click-through, except while the student draws: then it
+//!   takes the mouse, pen and touch, still without taking the focus, unless they draw with the
+//!   keyboard); and the **card** (the ask bar, the captions, the save toast), which takes the
+//!   focus only when clicked, to type. All excluded from captures; none sees pixels.
 //! - The preview is an ordinary focused window: the only WebView that ever sees screen pixels,
 //!   and only for a clip the student asked to save (decision 2, S3 §5).
 //!
@@ -37,10 +42,16 @@ pub enum Surface {
     Clip,
     Notes,
     Coach,
+    Pointer,
+    Draw,
+    Card,
 }
 
 /// Size of the pill, in CSS pixels.
 pub const PILL_SIZE: (f64, f64) = (300.0, 52.0);
+/// Size of the Circle & Ask card, in CSS pixels (room for a caption and its buttons, targets of
+/// at least 44 px: brief §4).
+pub const CARD_SIZE: (f64, f64) = (440.0, 176.0);
 
 impl Surface {
     pub const fn label(self) -> &'static str {
@@ -50,6 +61,9 @@ impl Surface {
             Surface::Clip => "screen-clip",
             Surface::Notes => "screen-notes",
             Surface::Coach => "screen-coach-pill",
+            Surface::Pointer => "screen-pointer",
+            Surface::Draw => "screen-draw",
+            Surface::Card => "screen-circle-card",
         }
     }
 
@@ -60,6 +74,9 @@ impl Surface {
             Surface::Clip => "clip-preview.html",
             Surface::Notes => "notes-panel.html",
             Surface::Coach => "coach-pill.html",
+            Surface::Pointer => "pointer.html",
+            Surface::Draw => "draw-overlay.html",
+            Surface::Card => "circle-card.html",
         }
     }
 }
@@ -115,6 +132,29 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
                 super::walkthrough::PILL_SIZE.0,
                 super::walkthrough::PILL_SIZE.1,
             ),
+        Surface::Pointer | Surface::Draw => builder
+            .title("Mew")
+            .transparent(true)
+            .decorations(false)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            // Never focused by a click (drawing mustn't take the student's app's focus); the
+            // keyboard gets it only for keyboard drawing (`circle.rs`).
+            .focusable(false)
+            .inner_size(40.0, 40.0),
+        Surface::Card => builder
+            .title("Circle & Ask · Mew")
+            .transparent(true)
+            .decorations(false)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            .inner_size(CARD_SIZE.0, CARD_SIZE.1),
         Surface::Notes => builder
             .title("Notes Check · Mew")
             .transparent(true)
@@ -142,7 +182,8 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             return None;
         }
     };
-    if surface == Surface::Ink {
+    // Click-through until told otherwise (the draw overlay, while the student draws).
+    if matches!(surface, Surface::Ink | Surface::Pointer | Surface::Draw) {
         let _ = window.set_ignore_cursor_events(true);
     }
     if surface != Surface::Clip {
@@ -211,6 +252,27 @@ pub fn hide_quietly<R: Runtime>(window: &WebviewWindow<R>) {
         // SAFETY: a window of this process, on its own thread.
         let _ = unsafe { ShowWindow(HWND(raw as *mut _), SW_HIDE) };
     });
+}
+
+/// Moves a window to `rect` (physical pixels) from any thread, without activating it, and
+/// without waiting for its thread: the pointer follows the cursor this way every frame.
+pub fn move_quickly<R: Runtime>(window: &WebviewWindow<R>, rect: ScreenRect) {
+    use windows::Win32::UI::WindowsAndMessaging::{SWP_ASYNCWINDOWPOS, SWP_NOZORDER};
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    // SAFETY: a window of this process; SWP_ASYNCWINDOWPOS posts the change to its own thread.
+    let _ = unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            rect.left,
+            rect.top,
+            rect.width().max(1),
+            rect.height().max(1),
+            SWP_NOACTIVATE | SWP_NOZORDER | SWP_ASYNCWINDOWPOS,
+        )
+    };
 }
 
 /// Hides a surface's window if it exists.

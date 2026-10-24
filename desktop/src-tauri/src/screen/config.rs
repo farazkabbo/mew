@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
 
+use super::pointer::{Corner, PointerShow, PointerSize};
 use super::privacy::blocklist::{self, default_blocked_apps};
 use super::privacy::detect::RedactionRules;
 
@@ -20,12 +21,15 @@ use super::privacy::detect::RedactionRules;
 /// 2: S3 added ink on screen (and noticing scrolls while it shows) and saving clips.
 /// 3: Notes Check sends the screen's text (after redaction) to compare with your notes, and keeps
 ///    short quotes from it with the findings.
-pub const CONSENT_VERSION: u32 = 3;
+/// 4: Circle & Ask (S3.2): the pointer beside the cursor, drawing on the screen, and explanations
+///    saved to the notebook automatically after a few seconds (with Undo).
+pub const CONSENT_VERSION: u32 = 4;
 
 pub const DEFAULT_TALK_HOTKEY: &str = "Ctrl+Alt+Space";
 pub const DEFAULT_PAUSE_HOTKEY: &str = "Ctrl+Alt+P";
 pub const DEFAULT_CLIP_HOTKEY: &str = "Ctrl+Alt+C";
 pub const DEFAULT_NOTES_HOTKEY: &str = "Ctrl+Alt+N";
+pub const DEFAULT_DRAW_HOTKEY: &str = "Ctrl+Alt+D";
 
 const FILE_NAME: &str = "screen-coach.json";
 
@@ -42,6 +46,10 @@ pub struct Hotkeys {
     /// Check my notes (Notes Check; files written before it existed get the default).
     #[serde(default = "default_notes_hotkey")]
     pub notes: String,
+    /// Draw mode on or off (Circle & Ask, for pen and touch; holding left Ctrl + left Alt draws
+    /// too). Files written before it existed get the default.
+    #[serde(default = "default_draw_hotkey")]
+    pub draw: String,
 }
 
 fn default_clip_hotkey() -> String {
@@ -52,6 +60,10 @@ fn default_notes_hotkey() -> String {
     DEFAULT_NOTES_HOTKEY.to_owned()
 }
 
+fn default_draw_hotkey() -> String {
+    DEFAULT_DRAW_HOTKEY.to_owned()
+}
+
 impl Default for Hotkeys {
     fn default() -> Self {
         Self {
@@ -59,13 +71,54 @@ impl Default for Hotkeys {
             pause: DEFAULT_PAUSE_HOTKEY.to_owned(),
             clip: default_clip_hotkey(),
             notes: default_notes_hotkey(),
+            draw: default_draw_hotkey(),
         }
     }
 }
 
 impl Hotkeys {
-    pub fn all(&self) -> [&str; 4] {
-        [&self.talk, &self.pause, &self.clip, &self.notes]
+    pub fn all(&self) -> [&str; 5] {
+        [&self.talk, &self.pause, &self.clip, &self.notes, &self.draw]
+    }
+}
+
+/// When an explanation is saved to the notebook (decision 11).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SaveMode {
+    /// After a 5-second toast with Undo.
+    #[default]
+    Auto,
+    /// Only when the student presses Save in the toast.
+    Ask,
+    Never,
+}
+
+/// Circle & Ask's settings (S3.2 §2.1, §2.5, §4). Every field has a default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase", default)]
+pub struct CircleSettings {
+    pub pointer: PointerShow,
+    pub pointer_size: PointerSize,
+    pub pointer_corner: Corner,
+    pub save: SaveMode,
+    /// Keep the page's title and link with a saved explanation (browsers and videos).
+    pub include_source_link: bool,
+    /// "I'd rather not use my voice": no microphone, captions instead of speech, keyboard
+    /// drawing (§4).
+    pub silent: bool,
+}
+
+impl Default for CircleSettings {
+    fn default() -> Self {
+        Self {
+            pointer: PointerShow::default(),
+            pointer_size: PointerSize::default(),
+            pointer_corner: Corner::default(),
+            save: SaveMode::default(),
+            include_source_link: true,
+            silent: false,
+        }
     }
 }
 
@@ -129,6 +182,9 @@ pub struct ScreenConfig {
     /// The one-time notice that coach mode sees the whole monitor was shown (decision 6, S4).
     #[serde(default)]
     pub coach_notice_seen: bool,
+    /// Circle & Ask (S3.2).
+    #[serde(default)]
+    pub circle: CircleSettings,
 }
 
 impl ScreenConfig {
@@ -279,19 +335,22 @@ mod tests {
     fn a_damaged_or_unexpected_file_turns_everything_off() {
         // A file written by S0 (before privacy settings and the clip and notes hotkeys existed)
         // loads with the defaults.
-        let on = r#"{"enabled":true,"consentVersion":3,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
+        let on = r#"{"enabled":true,"consentVersion":4,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
         assert!(matches!(
             parse(on),
             Loaded::Read(c) if c.is_on()
                 && c.privacy == Privacy::default()
                 && c.hotkeys.clip == DEFAULT_CLIP_HOTKEY
                 && c.hotkeys.notes == DEFAULT_NOTES_HOTKEY
+                && c.hotkeys.draw == DEFAULT_DRAW_HOTKEY
+                && c.circle == CircleSettings::default()
         ));
-        // Consent given before S3 explained clips, or before Notes Check explained sending the
-        // screen's text, no longer turns Screen Coach on.
-        for older in ["1", "2"] {
+        // Consent given before S3 explained clips, before Notes Check explained sending the
+        // screen's text, or before Circle & Ask explained the pointer and saving, no longer turns
+        // Screen Coach on.
+        for older in ["1", "2", "3"] {
             let before = on.replace(
-                r#""consentVersion":3"#,
+                r#""consentVersion":4"#,
                 &format!(r#""consentVersion":{older}"#),
             );
             assert!(
@@ -345,6 +404,11 @@ mod tests {
                 ..Privacy::default()
             },
             coach_notice_seen: true,
+            circle: CircleSettings {
+                silent: true,
+                save: SaveMode::Ask,
+                ..CircleSettings::default()
+            },
         };
         save(&path, &config).unwrap();
         assert_eq!(load(&path), Loaded::Read(config));

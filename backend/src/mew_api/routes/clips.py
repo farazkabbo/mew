@@ -15,10 +15,11 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
-from ..clips.models import ClipCreate, ClipCreated, ClipPatch, ClipView
+from ..clips.models import ClipCreate, ClipCreated, ClipPatch, ClipView, EntryAppend
 from ..clips.store import (
     ClipReader,
     ClipWriter,
+    EntryFullError,
     MemoryClipStore,
     SupabaseClipReader,
     SupabaseClipWriter,
@@ -105,6 +106,28 @@ def create_clip(
     _call(lambda: writer.create(device.user_id, clip_id, body, image))
     # Ids and sizes only: never titles, links or text.
     logger.info("Saved a clip (%s, %d KB)", clip_id, len(image) // 1024)
+    return ClipCreated(clip_id=clip_id)
+
+
+@router.post("/entries/append")
+def append_to_entry(
+    body: EntryAppend,
+    request: Request,
+    settings: SettingsDep,
+    x_mew_device_token: Annotated[str | None, Header()] = None,
+) -> ClipCreated:
+    """Adds a Circle & Ask follow-up to its session's entry (S3.2 §5): its explanation and its ink,
+    no new picture. 404 if the session has no entry (yet), 413 if the entry is full."""
+    device = screen_device(x_mew_device_token, request, settings)
+    writer = _writer(request, settings, device.local)
+    try:
+        clip_id = _call(lambda: writer.append(device.user_id, body))
+    except EntryFullError:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "The entry is full") from None
+    if clip_id is None:
+        raise _not_found()
+    # Ids and counts only: never the words.
+    logger.info("Added to an entry (%s, %d strokes)", clip_id, len(body.strokes))
     return ClipCreated(clip_id=clip_id)
 
 

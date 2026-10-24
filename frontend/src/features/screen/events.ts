@@ -17,8 +17,12 @@ export const SCREEN_EVENTS = {
   speech: "mew:screen-speech",
   /** The full reply. */
   answer: "mew:screen-answer",
-  /** Coach mode (S4): a line to say now, whatever else is being said. */
+  /** Coach mode (S4) and Circle & Ask (S3.2): a line to say now, whatever else is being said. */
   say: "mew:screen-say",
+  /** Circle & Ask: stop whatever is being said. */
+  hush: "mew:screen-hush",
+  /** Circle & Ask: an explanation was saved as an entry; add it to the notebook (and show it). */
+  entrySaved: "mew:screen-entry-saved",
   /** A clip was saved from the screen (S3): build its notebook page. */
   clipSaved: "mew:screen-clip-saved",
   /** A notes check's findings (Notes Check): mark the notebook's lines. */
@@ -31,6 +35,18 @@ export const SCREEN_EVENTS = {
 export const OPEN_CLIP_EVENT = "mew:open-clip";
 
 export const ScreenClipSavedDetail = z.object({ clipId: z.uuid() });
+
+export const ScreenEntrySavedDetail = z.object({ clipId: z.uuid(), open: z.boolean() });
+export type ScreenEntrySavedDetail = z.infer<typeof ScreenEntrySavedDetail>;
+
+/** Asks the open notebook to add (or update) the entry for a saved explanation. */
+export const OPEN_ENTRY_EVENT = "mew:open-entry";
+
+/** A line to say: Circle & Ask's steps carry a token, reported back once said. */
+export const ScreenSayDetail = z.object({
+  text: z.string().min(1).max(SCREEN_LIMITS.speechChars),
+  token: z.number().int().nonnegative().optional(),
+});
 
 export const ScreenNotesOpenDetail = z.object({ findingId: z.uuid() });
 export type ScreenClipSavedDetail = z.infer<typeof ScreenClipSavedDetail>;

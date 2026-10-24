@@ -4,7 +4,7 @@
 //! can call starts a capture or returns screen pixels. What a capture does, step by step, is in
 //! `pipeline.rs`; asking about it is in `ask.rs`; connecting to the account in `account.rs`;
 //! ink on screen in `annotate.rs` and saving clips in `clip.rs` (S3); walkthroughs in
-//! `coach_mode.rs` (S4).
+//! `coach_mode.rs` (S4); Circle & Ask in `circle.rs` (S3.2).
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -23,6 +23,7 @@ use tauri_plugin_notification::NotificationExt;
 use super::account::PendingLink;
 use super::annotate::{self, InkState};
 use super::ask;
+use super::circle;
 use super::clip::{self, ClipDraft, Purpose};
 use super::coach_mode::{self, CoachCapture, CoachState};
 use super::config::{
@@ -66,6 +67,8 @@ pub struct ScreenCoach {
     clip: Mutex<Option<ClipDraft>>,
     /// The walkthrough in progress, as far as the desktop knows it (S4).
     coaching: Mutex<CoachState>,
+    /// Circle & Ask: draw mode and the session (S3.2).
+    circle: Mutex<circle::CircleState>,
 }
 
 struct State {
@@ -82,6 +85,24 @@ struct State {
     pause: HotkeyReport,
     clip: HotkeyReport,
     notes: HotkeyReport,
+    draw: HotkeyReport,
+}
+
+impl State {
+    /// Every hotkey's report, in `Hotkeys::all` order.
+    fn reports(&self) -> [&HotkeyReport; 5] {
+        [&self.talk, &self.pause, &self.clip, &self.notes, &self.draw]
+    }
+
+    fn reports_mut(&mut self) -> [&mut HotkeyReport; 5] {
+        [
+            &mut self.talk,
+            &mut self.pause,
+            &mut self.clip,
+            &mut self.notes,
+            &mut self.draw,
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -109,7 +130,9 @@ pub struct StatusView {
     pub pause: HotkeyReport,
     pub clip: HotkeyReport,
     pub notes: HotkeyReport,
+    pub draw: HotkeyReport,
     pub privacy: Privacy,
+    pub circle: config::CircleSettings,
     pub default_blocked_apps: &'static [&'static str],
     pub microphone: MicAccess,
     /// Connected to the user's Mew account (a device token is saved).
@@ -123,6 +146,7 @@ pub enum HotkeyKind {
     Pause,
     Clip,
     Notes,
+    Draw,
 }
 
 /// Who asked for a capture: the hold-to-talk hotkey (the page listens, then asks with the
@@ -135,6 +159,10 @@ enum Origin {
     Clip(Purpose),
     NotesCheck,
     Coach(CoachCapture),
+    /// Circle & Ask: the monitor under the first mark (S3.2 §3.2).
+    Circle,
+    /// Circle & Ask: the area the student selected around their question.
+    Question(super::frame::ScreenRect),
 }
 
 /// Work for the capture worker thread, which owns the Windows objects in `Tools`.
@@ -168,7 +196,9 @@ impl ScreenCoach {
             pause: state.pause.clone(),
             clip: state.clip.clone(),
             notes: state.notes.clone(),
+            draw: state.draw.clone(),
             privacy: state.config.privacy.clone(),
+            circle: state.config.circle.clone(),
             default_blocked_apps: DEFAULT_BLOCKED_APPS,
             microphone: system::mic_access(),
             connected: state.connected,
@@ -203,6 +233,12 @@ impl ScreenCoach {
 
     pub fn coaching(&self) -> std::sync::MutexGuard<'_, CoachState> {
         self.coaching
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn circle(&self) -> std::sync::MutexGuard<'_, circle::CircleState> {
+        self.circle
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -266,6 +302,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         pause: report(&config.hotkeys.pause),
         clip: report(&config.hotkeys.clip),
         notes: report(&config.hotkeys.notes),
+        draw: report(&config.hotkeys.draw),
         config,
         config_reset,
         status: Status::Off,
@@ -285,6 +322,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         ink: Mutex::new(InkState::default()),
         clip: Mutex::new(None),
         coaching: Mutex::new(CoachState::default()),
+        circle: Mutex::new(circle::CircleState::default()),
     };
     {
         let mut state = coach.lock();
@@ -295,6 +333,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     overlay_capabilities(app)?;
     sync_hotkeys(app);
     refresh(app);
+    circle::start_tracker(app);
     Ok(())
 }
 
@@ -310,6 +349,7 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-set-paused")
             .permission("allow-screen-coach-set-hotkey")
             .permission("allow-screen-coach-set-privacy")
+            .permission("allow-screen-coach-set-circle")
             .permission("allow-screen-coach-open-mic-settings")
             .permission("allow-screen-coach-link-start")
             .permission("allow-screen-coach-disconnect"),
@@ -345,6 +385,22 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .local(true)
             .window(Surface::Coach.label())
             .permission("allow-screen-coach-pill"),
+    )?;
+    // Circle & Ask (S3.2): the draw overlay reports marks and a selected area; the card has its
+    // buttons. The pointer calls nothing.
+    app.add_capability(
+        CapabilityBuilder::new("screen-draw")
+            .local(true)
+            .window(Surface::Draw.label())
+            .permission("allow-screen-draw-mark")
+            .permission("allow-screen-draw-erase")
+            .permission("allow-screen-draw-select"),
+    )?;
+    app.add_capability(
+        CapabilityBuilder::new("screen-circle-card")
+            .local(true)
+            .window(Surface::Card.label())
+            .permission("allow-screen-circle-card"),
     )?;
     app.add_capability(
         CapabilityBuilder::new("screen-clip")
@@ -387,12 +443,7 @@ fn sync_hotkeys<R: Runtime>(app: &AppHandle<R>) {
     let shortcuts = app.global_shortcut();
     let mut guard = coach.lock();
     let state = &mut *guard;
-    for report in [
-        &mut state.talk,
-        &mut state.pause,
-        &mut state.clip,
-        &mut state.notes,
-    ] {
+    for report in state.reports_mut() {
         if report.registered {
             if let Ok(shortcut) = config::validate_hotkey(&report.accelerator) {
                 let _ = shortcuts.unregister(shortcut);
@@ -401,19 +452,14 @@ fn sync_hotkeys<R: Runtime>(app: &AppHandle<R>) {
         }
         report.problem = None;
     }
-    state.talk.accelerator = state.config.hotkeys.talk.clone();
-    state.pause.accelerator = state.config.hotkeys.pause.clone();
-    state.clip.accelerator = state.config.hotkeys.clip.clone();
-    state.notes.accelerator = state.config.hotkeys.notes.clone();
+    let accelerators = state.config.hotkeys.all().map(str::to_owned);
+    for (report, accelerator) in state.reports_mut().into_iter().zip(accelerators) {
+        report.accelerator = accelerator;
+    }
     if coach.support.is_err() || !state.config.is_on() {
         return;
     }
-    for report in [
-        &mut state.talk,
-        &mut state.pause,
-        &mut state.clip,
-        &mut state.notes,
-    ] {
+    for report in state.reports_mut() {
         match config::validate_hotkey(&report.accelerator) {
             Ok(shortcut) => match shortcuts.register(shortcut) {
                 Ok(()) => report.registered = true,
@@ -458,19 +504,22 @@ pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed:
         }
         return;
     }
-    let (is_talk, is_pause, is_clip, is_notes) = {
+    if circle::on_shortcut(app, shortcut, pressed) {
+        return; // Esc or a step control while Circle & Ask had it registered
+    }
+    let [is_talk, is_pause, is_clip, is_notes, is_draw] = {
         let state = coach.lock();
-        let matches = |report: &HotkeyReport| {
+        state.reports().map(|report| {
             report.registered
                 && config::validate_hotkey(&report.accelerator).is_ok_and(|s| &s == shortcut)
-        };
-        (
-            matches(&state.talk),
-            matches(&state.pause),
-            matches(&state.clip),
-            matches(&state.notes),
-        )
+        })
     };
+    if is_draw {
+        if pressed == ShortcutState::Pressed && usable(&coach) {
+            circle::toggle_draw_mode(app);
+        }
+        return;
+    }
     if is_notes {
         if pressed == ShortcutState::Pressed && usable(&coach) {
             capture(app, Origin::NotesCheck, None);
@@ -484,6 +533,18 @@ pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed:
         return;
     }
     match (is_talk, is_pause, pressed) {
+        (true, _, ShortcutState::Pressed) if circle::takes_words(app) => {
+            // The marks' capture is the one asked about: just listen (and stop any explanation).
+            let silent = circle_settings(app).silent;
+            circle::on_listen(app);
+            if !silent {
+                let mut state = coach.lock();
+                state.talk_held = true;
+                state.hold_active = true;
+                drop(state);
+                page::dispatch(app, page::LISTEN, serde_json::Value::Null);
+            }
+        }
         (true, _, ShortcutState::Pressed) => {
             coach.lock().talk_held = true;
             if capture(app, Origin::Hotkey, None) {
@@ -538,6 +599,32 @@ pub fn capture_for_coach<R: Runtime>(app: &AppHandle<R>, kind: CoachCapture) {
     if !capture(app, Origin::Coach(kind), Some(CaptureScope::Monitor)) {
         coach_mode::capture_failed(app);
     }
+}
+
+/// Captures the monitor under the student's first mark (Circle & Ask: drawing is the trigger,
+/// §7.1).
+pub fn capture_for_circle<R: Runtime>(app: &AppHandle<R>) {
+    if !capture(app, Origin::Circle, Some(CaptureScope::Monitor)) {
+        circle::capture_failed(app);
+    }
+}
+
+/// Captures the monitor to read the question the student selected (`area`, screen pixels).
+pub fn capture_for_question<R: Runtime>(app: &AppHandle<R>, area: super::frame::ScreenRect) {
+    capture(app, Origin::Question(area), Some(CaptureScope::Monitor));
+}
+
+/// On, not paused, on a supported PC (the pointer and draw mode run only then).
+pub fn is_usable<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<ScreenCoach>()
+        .is_some_and(|coach| usable(&coach))
+}
+
+/// Circle & Ask's settings right now.
+pub fn circle_settings<R: Runtime>(app: &AppHandle<R>) -> config::CircleSettings {
+    app.try_state::<ScreenCoach>()
+        .map(|coach| coach.lock().config.circle.clone())
+        .unwrap_or_default()
 }
 
 /// True the first time a walkthrough starts on this computer (then never again): the one-time
@@ -649,6 +736,8 @@ fn finish_capture<R: Runtime>(
     let mut for_clip = None;
     let mut for_notes = None;
     let mut for_coach = None;
+    let mut for_circle = None;
+    let mut for_question = None;
     match result {
         Ok(captured) => {
             log_capture(&captured.meta, captured.jpeg.len());
@@ -662,6 +751,8 @@ fn finish_capture<R: Runtime>(
                     Origin::Clip(purpose) => for_clip = Some((purpose, captured)),
                     Origin::NotesCheck => for_notes = Some(captured),
                     Origin::Coach(kind) => for_coach = Some((kind, captured)),
+                    Origin::Circle => for_circle = Some(captured),
+                    Origin::Question(area) => for_question = Some((area, captured)),
                     Origin::Hotkey | Origin::Tray => {
                         let Captured { jpeg, meta, detail } = captured;
                         coach.slot.put(jpeg, meta, Some(detail), Instant::now());
@@ -684,6 +775,12 @@ fn finish_capture<R: Runtime>(
     if let Some((kind, captured)) = for_coach {
         coach_mode::on_captured(app, kind, captured);
     }
+    if let Some(captured) = for_circle {
+        circle::on_captured(app, captured);
+    }
+    if let Some((area, captured)) = for_question {
+        super::circle_answer::on_question_captured(app, area, captured);
+    }
     match (origin, kept) {
         (Origin::Tray, true) => ask::ask_in_background(app, String::new()),
         (Origin::Hotkey, false) => {
@@ -691,6 +788,7 @@ fn finish_capture<R: Runtime>(
             page::dispatch(app, page::CANCEL, serde_json::Value::Null);
         }
         (Origin::Coach(_), false) => coach_mode::capture_failed(app),
+        (Origin::Circle, false) => circle::capture_failed(app),
         _ => {}
     }
     let mut state = coach.lock();
@@ -829,6 +927,9 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
         annotate::clear(app);
         clip::discard(app, None);
         coach_mode::end_quietly(app);
+        circle::end_session(app);
+    } else {
+        circle::start_tracker(app);
     }
     refresh(app);
     Ok(coach.view())
@@ -892,9 +993,11 @@ pub fn screen_coach_set_enabled<R: Runtime>(
         annotate::clear(app);
         clip::discard(app, None);
         coach_mode::end_quietly(app);
+        circle::end_session(app);
     }
     sync_hotkeys(app);
     refresh(app);
+    circle::start_tracker(app);
     Ok(coach.view())
 }
 
@@ -927,15 +1030,17 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
     let normalised = shortcut.to_string();
     {
         let state = coach.lock();
-        let hotkeys = &state.config.hotkeys;
-        let others: [&String; 3] = match which {
-            HotkeyKind::Talk => [&hotkeys.pause, &hotkeys.clip, &hotkeys.notes],
-            HotkeyKind::Pause => [&hotkeys.talk, &hotkeys.clip, &hotkeys.notes],
-            HotkeyKind::Clip => [&hotkeys.talk, &hotkeys.pause, &hotkeys.notes],
-            HotkeyKind::Notes => [&hotkeys.talk, &hotkeys.pause, &hotkeys.clip],
-        };
+        let own = which as usize; // `HotkeyKind` lists them in `Hotkeys::all` order
+        let others = state
+            .config
+            .hotkeys
+            .all()
+            .into_iter()
+            .enumerate()
+            .filter(|(i, _)| *i != own)
+            .map(|(_, other)| other);
         if others
-            .iter()
+            .into_iter()
             .any(|other| config::validate_hotkey(other).is_ok_and(|s| s == shortcut))
         {
             return Err("That shortcut is already used by another Screen Coach action.".to_owned());
@@ -948,12 +1053,10 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
     let shortcuts = app.global_shortcut();
     let already_ours = {
         let state = coach.lock();
-        [&state.talk, &state.pause, &state.clip, &state.notes]
-            .iter()
-            .any(|report| {
-                report.registered
-                    && config::validate_hotkey(&report.accelerator).is_ok_and(|s| s == shortcut)
-            })
+        state.reports().iter().any(|report| {
+            report.registered
+                && config::validate_hotkey(&report.accelerator).is_ok_and(|s| s == shortcut)
+        })
     };
     if !already_ours {
         shortcuts.register(shortcut).map_err(|_| {
@@ -966,6 +1069,7 @@ pub fn screen_coach_set_hotkey<R: Runtime>(
         HotkeyKind::Pause => config.hotkeys.pause = normalised,
         HotkeyKind::Clip => config.hotkeys.clip = normalised,
         HotkeyKind::Notes => config.hotkeys.notes = normalised,
+        HotkeyKind::Draw => config.hotkeys.draw = normalised,
     })?;
     sync_hotkeys(app);
     refresh(app);
@@ -994,4 +1098,18 @@ pub fn screen_coach_open_mic_settings<R: Runtime>(window: WebviewWindow<R>) -> R
     require_settings_window(&window)?;
     system::open_microphone_settings();
     Ok(())
+}
+
+/// Saves Circle & Ask's settings (the pointer, saving, silent mode).
+#[tauri::command]
+pub fn screen_coach_set_circle<R: Runtime>(
+    window: WebviewWindow<R>,
+    circle: config::CircleSettings,
+) -> Result<StatusView, String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle();
+    let coach = coach_of(app)?;
+    coach.update(|config| config.circle = circle)?;
+    refresh(app);
+    Ok(coach.view())
 }

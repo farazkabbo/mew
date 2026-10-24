@@ -66,6 +66,11 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     let coach = app
         .try_state::<ScreenCoach>()
         .ok_or("Screen Coach isn't ready.")?;
+    // During Circle & Ask, the words are about the marks (their capture is already taken).
+    if super::circle::takes_words(app) {
+        super::circle::on_words(app, transcript);
+        return Ok(());
+    }
     let frame = wait_for_frame(&coach)
         .ok_or("I didn't catch your screen that time. Hold the shortcut and ask again.")?;
     let CapturedFrame {

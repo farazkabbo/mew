@@ -15,8 +15,13 @@ pub const SPEECH: &str = "mew:screen-speech";
 pub const ANSWER: &str = "mew:screen-answer";
 /// Coach mode (S4): a line to say now, cutting off anything older.
 pub const SAY: &str = "mew:screen-say";
+/// Stop whatever is being said (Circle & Ask: a step skipped, paused or stopped).
+pub const HUSH: &str = "mew:screen-hush";
 /// A clip was saved: the page builds its notebook page (S3).
 pub const CLIP_SAVED: &str = "mew:screen-clip-saved";
+/// A Circle & Ask entry was saved (S3.2): the page adds it to the notebook, and shows it if
+/// `open`.
+pub const ENTRY_SAVED: &str = "mew:screen-entry-saved";
 /// A notes check's findings: the page marks the notebook lines (Notes Check).
 pub const NOTES_CHECKED: &str = "mew:screen-notes-checked";
 /// "Show in notebook" from the Notes Check panel: the page opens that finding's line.

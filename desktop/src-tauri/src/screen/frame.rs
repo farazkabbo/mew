@@ -82,6 +82,9 @@ pub struct FrameDetail {
     /// BGRA, after blacking out blocked windows and covering sensitive text.
     pub pixels: Pixels,
     pub text: ScreenText,
+    /// Where other windows were blacked out (blocked apps, private windows), in `pixels`'
+    /// pixels: a Circle & Ask entry whose crop touches one is never saved automatically.
+    pub blacked_out: Vec<super::privacy::redact::PixelRect>,
 }
 
 pub struct CapturedFrame {

@@ -55,6 +55,7 @@ describe("NotebookRepository", () => {
       source: { app: "acrobat.exe", capturedAt: "2026-10-22T10:00:00.000Z" },
       ocrText: "Question 3",
       notebookPageId: null,
+      entry: null,
       createdAt: "2026-10-22T10:00:01.000+00:00",
     };
     const page = await repo.importClip(notebook.id, clip);

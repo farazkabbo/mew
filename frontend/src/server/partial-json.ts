@@ -28,3 +28,44 @@ export function completedStringField(partial: string, field: string): string | n
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+
+/**
+ * The items of an array field that are complete so far in a partially streamed JSON object
+ * (each parsed), in order. Used to play a circle-ask answer's steps as they're written.
+ *
+ * Assumes, like `completedStringField`, that the first `"<field>": [` is the field itself.
+ */
+export function completedArrayItems(partial: string, field: string): unknown[] {
+  const key = new RegExp(`"${escapeRegExp(field)}"\\s*:\\s*\\[`).exec(partial);
+  if (!key) return [];
+  const items: unknown[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  for (let i = key.index + key[0].length; i < partial.length; i++) {
+    const c = partial[i];
+    if (inString) {
+      if (c === "\\") i++;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+    } else if (c === "{" || c === "[") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === "}" || c === "]") {
+      if (depth === 0) break; // the array itself ended
+      depth--;
+      if (depth === 0 && start >= 0) {
+        try {
+          items.push(JSON.parse(partial.slice(start, i + 1)));
+        } catch {
+          return items;
+        }
+        start = -1;
+      }
+    }
+  }
+  return items;
+}

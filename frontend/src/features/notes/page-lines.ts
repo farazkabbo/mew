@@ -101,8 +101,11 @@ function clipLines(
   stored: readonly LocalNoteLine[],
   newId: () => string,
 ): LocalNoteLine[] {
-  const texts = (image.ocrText ?? "")
-    .split("\n")
+  // A Circle & Ask entry's explanation is searchable too (S3.2 §5): the question, its steps
+  // and the summary, after the picture's own text. It's the tutor's words, so Notes Check
+  // compares the screen with it like any clip, never as the student's mistake.
+  const explained = (image.entry?.turns ?? []).flatMap((t) => [t.question, ...t.steps, t.summary]);
+  const texts = [...(image.ocrText ?? "").split("\n"), ...explained]
     .map((t) => cleanLineText(t))
     .filter((t) => t !== "")
     .slice(0, MAX_CLIP_LINES);

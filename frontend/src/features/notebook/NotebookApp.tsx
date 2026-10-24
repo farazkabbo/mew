@@ -11,6 +11,7 @@ import { useNotesCheck } from "../notes/check-store";
 import { checkClip, pageOfFinding, usePageMarks } from "../notes/notebook-check";
 import { NotesCheckPanel } from "../notes/NotesCheckPanel";
 import { NotesMarks } from "../notes/NotesMarks";
+import { EntryNotes } from "./EntryNotes";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
@@ -97,6 +98,9 @@ export function NotebookApp({ userId }: { userId: string }) {
     };
   }, [repo, notebookId, report]);
 
+  // Bumped when the open page changed in storage from outside the engine (a follow-up added to
+  // a Circle & Ask entry on it): the page is opened again, pictures and all.
+  const [pageVersion, setPageVersion] = useState(0);
   useEffect(() => {
     if (!pageId) return;
     let cancelled = false;
@@ -115,7 +119,7 @@ export function NotebookApp({ userId }: { userId: string }) {
       cancelled = true;
       opened?.dispose(); // closes its cross-tab sync channel
     };
-  }, [repo, pageId, report]);
+  }, [repo, pageId, pageVersion, report]);
 
   useEffect(() => {
     if (!engine) return;
@@ -149,8 +153,23 @@ export function NotebookApp({ userId }: { userId: string }) {
     setNotice({ text: "Saved from your screen. Work on it right here.", tone: "info" });
     setCheckPrompt(page.id); // "Check this against your notes?" (never runs on its own)
   }, []);
+  // A Circle & Ask explanation is added to today's "From screen" page quietly (or opened).
+  const entryAdded = useCallback(
+    (page: Page) => {
+      setPages((list) => (list.some((p) => p.id === page.id) ? list : [...list, page]));
+      if (page.id === pageId) setPageVersion((v) => v + 1);
+      setNotice({ text: "Saved to your From screen page.", tone: "info" });
+    },
+    [pageId],
+  );
   const clipFailed = useCallback((text: string) => setNotice({ text, tone: "error" }), []);
-  useClipImport({ repo, notebookId, onOpened: openClipPage, onError: clipFailed });
+  useClipImport({
+    repo,
+    notebookId,
+    onOpened: openClipPage,
+    onAdded: entryAdded,
+    onError: clipFailed,
+  });
   const clipImage = engine?.images.at(-1);
   const courseId = notebooks.find((n) => n.id === notebookId)?.courseId ?? null;
   const mew = useMewSession(engine, courseId);
@@ -258,6 +277,8 @@ export function NotebookApp({ userId }: { userId: string }) {
             onExportLine={() => void exportLine().catch(report)}
           />
         </div>
+
+        {engine && <EntryNotes canvas={canvas} images={engine.images} />}
 
         {engine && (
           <NotesMarks

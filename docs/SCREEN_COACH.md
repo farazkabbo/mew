@@ -546,3 +546,45 @@ don't ask them again. Where a decision changes the brief above, the decision win
       a screenshot, and never what the verifier saw (its observation isn't stored or logged).
     - **Not in S4:** auto-check on pause (§9.3, with the S7 settings), skills, evidence and
       re-checks (S5; S4 records what they need).
+11. **S3.2, Circle & Ask** (brief: [SCREEN_COACH_S3_2.md](SCREEN_COACH_S3_2.md); the owner chose
+    the recommended answers on 2026-10-24):
+    - **Saving changes (the brief's §7.2):** an explanation is saved to the notebook
+      automatically, after a 5-second toast with Undo, Edit crop and Open. Nothing is uploaded
+      before the toast ends. It isn't automatic for crops that needed blocked windows masked,
+      black (protected) frames, or when the setting is "ask each time" or "never". This replaces
+      decision 9's "only through the preview" for Circle & Ask; clips (Ctrl+Alt+C) are unchanged.
+    - **Drawing keys:** hold **left Ctrl + left Alt** (AltGr, which is right Alt plus Ctrl, never
+      draws, so European keyboards can still type @ or €), or toggle with Ctrl+Alt+D. Windows can't
+      register a modifier-only hotkey and decision 9 rules out a keyboard hook, so one tracker
+      thread polls just those two keys' state and the cursor position: every frame while the
+      cursor moves or the keys are held, ten times a second otherwise, and not at all while Screen
+      Coach is off or paused. Nothing is recorded.
+    - **Step controls:** Ctrl+Alt+. (next) and Ctrl+Alt+, (repeat), registered only while an
+      explanation plays; the caption card's buttons; Space and Esc in the card. Ctrl+Alt+P stays
+      "pause Screen Coach" (it also stops an explanation). Ctrl+Alt+arrows are avoided: many Intel
+      drivers rotate the screen with them.
+    - **No `circle_ask` Mew label** (as in decision 10): finishing a mark is the explicit trigger.
+    - **Entries are clips** with more in them: the `clips` table gains a kind (`clip` or
+      `entry`), the student's marks, the note (question, steps, summary, follow-up question) and a
+      session id; a follow-up in the same session adds to the same row. The bucket, its policies
+      and the notebook's import stay as they are. In the notebook, an entry is an image block with
+      its note shown under the picture; the tutor's ink keeps one group per step (for Replay); it
+      goes on the notebook's "From screen" page for the day.
+    - **The pointer** shows "always" by default; it hides while Screen Coach is off or paused,
+      in full-screen apps, during calls and in blocked apps.
+    - **Keyboard drawing (silent mode) focuses the draw overlay** while draw mode is on, then
+      gives the focus back to the window that had it.
+    - **A handwritten question** ("Select question on screen") sends that small crop, after the
+      usual checks and redaction, to the screen model to read. Printed text is read on the device.
+    - **Playback is run by Rust** (`circle_steps.rs`, pure): each step's ink is revealed, then its
+      words are said by the main page, which reports when it finished (`screen_coach_spoken`; a
+      timeout keeps going if it never does). Captions alone use reading time (250 ms a word, at
+      least 1.5 s). The tutor's ink is S3's ink overlay, planned once for all steps and revealed
+      step by step; the student's marks are on the draw overlay.
+    - **Consent version 4:** the pointer, draw mode and automatic saving are new, so Screen Coach
+      stays off until the new explanation is accepted.
+    - **Rate limits:** answers 10/min, 150/day and 1,500 a month; reading a handwritten question
+      10/min and 100/day.
+    - **Left for S5:** course context in the answer, and recording a follow-up question's answer
+      as evidence (both need S5's concept links). `conceptHints` are stored with the entry.
+      UI Automation elements inside a mark aren't read: the model sees the marked crop.
