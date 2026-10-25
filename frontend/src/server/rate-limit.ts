@@ -38,6 +38,12 @@ export const RATE_RULES = {
   notesSync: { limit: 40, windowMs: MINUTE },
   notesSyncDaily: { limit: 4000, windowMs: DAY },
   /**
+   * The notebook tree (K1): titles and places only (a database call, no model), synced soon
+   * after edits and on focus. Room for a student reorganising a lot at once.
+   */
+  notebookTree: { limit: 120, windowMs: MINUTE },
+  notebookTreeDaily: { limit: 5000, windowMs: DAY },
+  /**
    * Notes checks: one comparison call and up to five verifier calls each (brief §11), so the
    * daily budget is what really caps the cost.
    */

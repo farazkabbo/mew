@@ -588,3 +588,12 @@ don't ask them again. Where a decision changes the brief above, the decision win
     - **Left for S5:** course context in the answer, and recording a follow-up question's answer
       as evidence (both need S5's concept links). `conceptHints` are stored with the entry.
       UI Automation elements inside a mark aren't read: the model sees the marked crop.
+12. **The K series changes two rules** (brief: [NOTEBOOKS_K.md](NOTEBOOKS_K.md), decided
+    2026-10-25; its own Decisions section holds the rest):
+    - **Shortcuts are two keys at most.** This replaces every three-key shortcut above
+      (Ctrl+Alt+Space, +P, +C, +N, +D): one held Ctrl + Alt circles and talks, a double tap
+      toggles draw mode, and the rest move to the ask bar, the tray or voice (K2). Holding is
+      detected by polling the key state, never with a keyboard hook.
+    - **Saved items go where the student says** ("save it to my Physics notebook, chapter 5"),
+      or, unsaid, where what they're studying belongs (auto-filing), not only to today's "From
+      screen" page (K3, K8). The "From screen" page is one per notebook node, with date headings.

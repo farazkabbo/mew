@@ -1,10 +1,23 @@
-import type { ImageBlock, Notebook, Page, Stroke } from "@mew/shared";
+import { type ImageBlock, type Notebook, NotebookTree, type Page, type Stroke } from "@mew/shared";
 import Dexie, { type EntityTable } from "dexie";
 
 import type { LocalNoteLine } from "../notes/local-lines";
 
+/**
+ * A notebook-tree change waiting to reach the server (K1): a node to send ("node", its current
+ * state is read when sending) or a node purged from the trash ("removed"). Keyed by node id, so
+ * a node is queued once however often it changes.
+ */
+export type TreeOutboxEntry = {
+  id: string;
+  kind: "node" | "removed";
+  /** Times the server refused it without a copy of its own (it's dropped after a few). */
+  failures: number;
+};
+
 /** Local-first notebook storage (IndexedDB). One database per user, so accounts never mix. */
 export class NotebookDb extends Dexie {
+  /** The notebook tree: notebooks, chapters and sections (K1). */
   notebooks!: EntityTable<Notebook, "id">;
   pages!: EntityTable<Page, "id">;
   strokes!: EntityTable<Stroke, "id">;
@@ -12,6 +25,8 @@ export class NotebookDb extends Dexie {
   images!: EntityTable<ImageBlock, "id">;
   /** Each page's lines with their recognised text and sync state (Notes Check N1). */
   noteLines!: EntityTable<LocalNoteLine, "id">;
+  /** Tree changes not on the server yet (K1). */
+  treeOutbox!: EntityTable<TreeOutboxEntry, "id">;
 
   constructor(userId: string) {
     super(databaseName(userId));
@@ -22,6 +37,31 @@ export class NotebookDb extends Dexie {
     });
     this.version(2).stores({ images: "id, pageId, clipId" });
     this.version(3).stores({ noteLines: "id, pageId" });
+    this.version(4)
+      .stores({ notebooks: "id, updatedAt, parentId", treeOutbox: "id" })
+      .upgrade(async (tx) => {
+        // Every notebook so far becomes a root, in the order it was made, with a unique name
+        // (the server enforces that too), and is queued for the server.
+        const rows = (await tx.table("notebooks").toArray()) as Notebook[];
+        rows.sort((a, b) => a.createdAt - b.createdAt);
+        const positions = new NotebookTree<Notebook>([]).positionsAtEnd(null, rows.length);
+        const placed: Notebook[] = [];
+        rows.forEach((row, i) => {
+          const title = new NotebookTree(placed).freeName(null, row.title);
+          placed.push({
+            ...row,
+            title,
+            parentId: null,
+            position: positions[i] ?? "a0",
+            childLabel: "Chapters",
+            editedAt: row.updatedAt,
+          });
+        });
+        await tx.table("notebooks").bulkPut(placed);
+        await tx
+          .table("treeOutbox")
+          .bulkPut(placed.map((n) => ({ id: n.id, kind: "node", failures: 0 })));
+      });
   }
 }
 

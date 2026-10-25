@@ -133,6 +133,33 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - Consent version 4 (the settings page explains the pointer, drawing and auto-saving); its
     Circle & Ask section has the pointer, saving and silent-mode settings.
   - **The `clip_entries` migration is not applied to the hosted project yet.**
+- **K1 (notebook tree)** — brief [NOTEBOOKS_K.md](NOTEBOOKS_K.md) (the K series, K1–K11; its
+  0.1 and Decisions are binding):
+  - **Data:** `notebooks` is a tree (migration `notebook_tree`: `parent_id` with a composite
+    foreign key so a parent is always the same user's, `root_id`/`depth` kept by the
+    `notebooks_place` trigger whatever a client sends, no cycles, three levels, a moved node's
+    subtree re-placed by `notebooks_place_children`, sibling names unique ignoring case and the
+    trash, `position` fractional keys, `edited_at` for latest-edit-wins). `sync_notebook_tree`
+    applies a device's changes and answers saved / renamed ("Physics 2") / stale / rejected per
+    node with the server's copy. `sync_note_page` no longer changes a notebook's title or course.
+  - **Shared:** `packages/shared/src/notebook-tree.ts`: the rules (`NotebookTree`: paths, depth,
+    moves, free names, positions, trash and 30-day expiry), the sync schemas, styles suggested
+    from a name. `fractional-indexing` 4.0.0 (CC0) does the keys; malformed keys never throw.
+  - **Device (local-first):** Dexie v4 (`notebooks.parentId`, `treeOutbox`), the upgrade turns old
+    notebooks into roots. `TreeRepository` (`repo.tree`) makes every edit one transaction that
+    also queues the node; `TreeSync` pushes the outbox (soon after edits) and pulls the server's
+    tree (start, focus, online, every 5 min); `tree-sync-plan.ts` decides merges (pure).
+    `/api/notebooks/tree` (GET, PUT) → FastAPI `routes/notebooks.py` with the student's token.
+  - **UI** (`features/notebook/tree/`): the sidebar tree (ARIA tree: arrows, Enter, F2, Alt+↑/↓,
+    drag above/below/into, a row menu), the creation popover (name selected, icon and colour from
+    the name, course, "divided into", chapters by list or by number), the node home (chapter
+    cards, loose pages, add a chapter), the breadcrumb, Ctrl+K jump palette, "Move to…"
+    (`DestinationPicker`, for K3 too), delete with a confirmation and Undo, the trash. Shortcuts:
+    Alt+B (Ctrl+N in the desktop app), Alt+N, Alt+P, F2, Ctrl+K, Alt+↑/↓; never on Ctrl+Alt.
+  - **Notes Check through the tree:** a notebook scope is the node and everything under it; a
+    course scope is every notebook linked to it with its chapters. The widest scope is searched
+    and the open chapter's lines rank first (×1.5), then its notebook's (×1.2).
+  - **The `notebook_tree` migration is not applied to the hosted project yet.**
   - **To verify by hand:** the pointer at 150 % on two monitors, drawing with mouse and pen, normal
     clicks while the keys aren't held, the overlays absent from a Teams share, AltGr typing never
     drawing, scrolling fading the marks, a v–t graph on YouTube (Enter → steps with ink before
@@ -201,6 +228,10 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K1): **1,160 unit tests** (frontend 412, backend 293, ink 134, shared 201,
+database 101, desktop overlays 19), **157 Rust tests** (+5 real-Windows ones; clippy clean) and
+**63 Playwright tests**.
 
 Tests (after S3.2): **1,081 unit tests** (frontend 386, backend 271, ink 134, shared 182,
 database 91, desktop overlays 17), **151 Rust tests** (+5 real-Windows ones; clippy clean) and
@@ -574,6 +605,11 @@ $_.CommandLine -match 'next|uvicorn|spawn_main' }`, then confirm ports 3000, 310
 - After editing `.env.local`, restart the dev servers.
 - React's compiler lint rules are on: no ref reads or impure calls during render, and no
   synchronous `setState` in effects (set state from promise callbacks).
+- **Dexie transactions in a real browser:** a helper called inside a transaction must return a
+  Dexie promise chain (`.then`), not be an `async` function that awaits others: across nested
+  native awaits Dexie can lose its transaction, and the browser commits it early
+  ("PrematureCommitError"). fake-indexeddb (the unit tests) doesn't show it; the Playwright run
+  does. See `TreeRepository.nodes`.
 
 ## 9. Known limitations / open items
 

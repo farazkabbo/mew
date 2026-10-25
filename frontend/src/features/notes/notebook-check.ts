@@ -39,17 +39,18 @@ export function clipBlocks(ocrText: string): ScreenTextBlock[] {
   return blocks;
 }
 
-/** The notes a clip is checked against: its notebook's course, else the notebook. */
-export function scopeFor(notebook: Pick<Notebook, "id" | "courseId">): RetrievalScope {
-  return notebook.courseId
-    ? { kind: "course", courseId: notebook.courseId }
-    : { kind: "notebook", notebookId: notebook.id };
+/**
+ * The notes a clip is checked against: the node it's in. The server looks through that chapter
+ * (or notebook) first, then its whole notebook, then the notebook's course (K1, decision 20).
+ */
+export function scopeFor(notebook: Pick<Notebook, "id">): RetrievalScope {
+  return { kind: "notebook", notebookId: notebook.id };
 }
 
 /** Checks a clip against the notes; the result (or what went wrong) lands in the store. */
 export async function checkClip(
   image: ImageBlock,
-  notebook: Pick<Notebook, "id" | "courseId">,
+  notebook: Pick<Notebook, "id">,
   fetchImpl: typeof fetch = (...args) => fetch(...args),
 ): Promise<void> {
   const store = useNotesCheck.getState();

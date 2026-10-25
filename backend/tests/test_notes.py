@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from mew_api.config import Settings
 from mew_api.courses.embeddings import LEXICAL_MODEL
@@ -282,3 +283,13 @@ def test_a_database_refusal_reaches_the_route_as_permission_error() -> None:
     )
     with pytest.raises(PermissionError):
         store.stored_lines("user_1", UUID(PAGE))
+
+
+def test_refuses_blank_titles_and_lines_after_trimming() -> None:
+    def sync(title: str) -> dict[str, object]:
+        notebook = {"id": NOTEBOOK, "title": title, "courseId": None}
+        return {"notebook": notebook, "pageIndex": 0, "upsert": [], "remove": []}
+
+    assert NotePageSync.model_validate(sync(" Physics ")).notebook.title == "Physics"
+    with pytest.raises(ValidationError):
+        NotePageSync.model_validate(sync("   "))

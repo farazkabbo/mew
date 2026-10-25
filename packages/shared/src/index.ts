@@ -14,6 +14,7 @@ export * from "./mew-events";
 export * from "./mew-features";
 export * from "./mew-policy";
 export * from "./notebook";
+export * from "./notebook-tree";
 export * from "./notes";
 export * from "./notes-check";
 export * from "./notes-panel";

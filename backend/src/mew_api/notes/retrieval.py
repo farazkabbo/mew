@@ -128,9 +128,14 @@ _WORD = re.compile(r"[A-Za-z][A-Za-z'-]{2,}|\d+(?:[.,]\d+)?")
 
 @dataclass(frozen=True)
 class NotebookInfo:
+    """A node of the notebook tree (K1): a notebook, chapter or section."""
+
     id: UUID
     title: str
     course_id: UUID | None
+    parent_id: UUID | None = None
+    #: The notebook at the top of its tree (itself for a notebook).
+    root_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -171,7 +176,9 @@ class NoteSearch(Protocol):
 
     def notebooks(
         self, user: str, *, ids: Sequence[UUID] | None = None, course: UUID | None = None
-    ) -> list[NotebookInfo]: ...
+    ) -> list[NotebookInfo]:
+        """The user's nodes: all of them, those in `ids`, or those linked to `course`."""
+        ...
 
     def search(
         self,
@@ -240,6 +247,29 @@ def rank_hits(hits: Sequence[Hit], model: str) -> list[tuple[Hit, float]]:
         for rank, hit in enumerate(ranking):
             score[hit.line_id] += 1 / (RRF_K + rank + 1)
     return sorted(((h, score[h.line_id]) for h in related), key=lambda pair: -pair[1])
+
+
+#: How much more a hit counts in the open chapter, then in its notebook, than elsewhere.
+NEAR_BOOSTS = (1.5, 1.2)
+
+
+def prefer_near(
+    ranked: Sequence[tuple[Hit, float]],
+    notebook_of_page: dict[UUID, UUID],
+    ladder: Sequence[UsedScope],
+) -> list[tuple[Hit, float]]:
+    """`ranked` with the hits in the nearer scopes of `ladder` (all but its last, widest rung)
+    counting more, best first again."""
+    rungs = [set(scope.notebook_ids) for scope in ladder[:-1]]
+
+    def boosted(hit: Hit, score: float) -> float:
+        notebook = notebook_of_page.get(hit.page_id)
+        for rung, boost in zip(rungs, NEAR_BOOSTS, strict=False):
+            if notebook in rung:
+                return score * boost
+        return score
+
+    return sorted(((hit, boosted(hit, score)) for hit, score in ranked), key=lambda p: -p[1])
 
 
 def best_pages(
@@ -314,8 +344,8 @@ def retrieve(
 ) -> RetrieveResponse:
     """The notes related to the screen, with the course passages on the same topic."""
     started = time.perf_counter()
-    scope = _resolve_scope(store, user, request)
-    if scope is None:
+    ladder = _scope_ladder(store, user, request)
+    if not ladder:
         return _nothing(UsedScope(kind="all"))
 
     query = screen_query(request.screen)
@@ -325,17 +355,21 @@ def retrieve(
     except Exception as error:  # words alone still find notes
         logger.warning("Embedding the screen failed (%s)", type(error).__name__)
         vector = None
-    notebooks = scope.notebook_ids or None
     exclude = request.exclude_clip_id
+    # The widest scope is searched (every related line can be found), and the nearest notes
+    # rank first: the open chapter's, then its notebook's (section 2.3).
+    scope = ladder[-1]
+    notebooks = scope.notebook_ids or None
     hits = store.search(user, vector, embedder.model, terms, notebooks, SEARCH_COUNT, exclude)
     ranked = rank_hits(hits, embedder.model)
     if not ranked:
         _log(started, hits, ranked, 0)
         return _nothing(scope)
 
+    infos = {p.id: p for p in store.pages(user, list({hit.page_id for hit, _ in ranked}))}
+    ranked = prefer_near(ranked, {page: info.notebook_id for page, info in infos.items()}, ladder)
     pages = best_pages(ranked)
     lines = select_context(ranked, store.page_lines(user, pages), pages, exclude)
-    infos = {p.id: p for p in store.pages(user, pages)}
     titles = {
         n.id: n.title for n in store.notebooks(user, ids=[p.notebook_id for p in infos.values()])
     }
@@ -359,29 +393,58 @@ def retrieve(
     )
 
 
-def _resolve_scope(store: NoteSearch, user: str, request: RetrieveRequest) -> UsedScope | None:
-    """The notebooks to search, or None when there's nothing to search in."""
+def _scope_ladder(store: NoteSearch, user: str, request: RetrieveRequest) -> list[UsedScope]:
+    """Where to look, closest first (K1, docs/NOTEBOOKS_K.md section 2.3): a node and everything
+    under it, then its whole notebook, then the notebook's course. Empty when there's nothing
+    to search in."""
     scope = request.scope
     if scope.kind == "all":
-        return UsedScope(kind="all")
+        return [UsedScope(kind="all")]
+    tree = store.notebooks(user)
     if scope.kind == "course" and scope.course_id is not None:
-        return _course_scope(store, user, scope.course_id)
+        course = _course_scope(tree, scope.course_id)
+        return [course] if course else []
     if scope.kind == "notebook" and scope.notebook_id is not None:
-        found = store.notebooks(user, ids=[scope.notebook_id])
-        return UsedScope(kind="notebook", notebook_ids=[n.id for n in found]) if found else None
-    latest = store.latest_notebook(user)
-    if latest is None:
-        return None
-    if latest.course_id is not None:
-        return _course_scope(store, user, latest.course_id)
-    return UsedScope(kind="notebook", notebook_ids=[latest.id])
+        start = scope.notebook_id
+    else:
+        latest = store.latest_notebook(user)
+        if latest is None:
+            return []
+        start = latest.id
+    return ladder_from(tree, start)
 
 
-def _course_scope(store: NoteSearch, user: str, course_id: UUID) -> UsedScope | None:
-    notebooks = store.notebooks(user, course=course_id)
-    if not notebooks:
+def ladder_from(tree: Sequence[NotebookInfo], start: UUID) -> list[UsedScope]:
+    by_id = {n.id: n for n in tree}
+    node = by_id.get(start)
+    if node is None:
+        return []
+    root = by_id.get(node.root_id or node.id, node)
+    ladder = [UsedScope(kind="notebook", notebook_ids=_subtree(tree, node.id))]
+    if root.id != node.id:
+        ladder.append(UsedScope(kind="notebook", notebook_ids=_subtree(tree, root.id)))
+    course = _course_scope(tree, root.course_id) if root.course_id else None
+    if course:
+        ladder.append(course)
+    return ladder
+
+
+def _course_scope(tree: Sequence[NotebookInfo], course_id: UUID) -> UsedScope | None:
+    """Every notebook linked to the course, with its chapters and sections (only a notebook
+    carries the link)."""
+    roots = [n.id for n in tree if n.course_id == course_id]
+    ids = [i for root in roots for i in _subtree(tree, root)]
+    if not ids:
         return None
-    return UsedScope(kind="course", course_id=course_id, notebook_ids=[n.id for n in notebooks])
+    return UsedScope(kind="course", course_id=course_id, notebook_ids=list(dict.fromkeys(ids)))
+
+
+def _subtree(tree: Sequence[NotebookInfo], top: UUID) -> list[UUID]:
+    """`top` and every node under it."""
+    ids = [top]
+    for parent in ids:  # grows as children are found (three levels at most)
+        ids.extend(n.id for n in tree if n.parent_id == parent and n.id not in ids)
+    return ids
 
 
 def _nothing(scope: UsedScope) -> RetrieveResponse:

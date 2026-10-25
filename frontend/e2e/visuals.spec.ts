@@ -101,6 +101,7 @@ test("draws a mind map of the causes of WW1 in ink", async ({ page }) => {
     },
   ]);
   await page.goto("/notebook");
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
   await ask(page, "draw a mind map of the causes of WW1");
 
   await expect
@@ -129,6 +130,7 @@ test("graphs y = sin x in ink", async ({ page }) => {
     },
   ]);
   await page.goto("/notebook");
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
   await ask(page, "graph y = sin x");
 
   await expect

@@ -100,12 +100,55 @@ export const Page = z.object({
 });
 export type Page = z.infer<typeof Page>;
 
+/** What a notebook calls its second level ("New unit"); all of them mean "chapter" to voice. */
+export const ChildLabel = z.enum(["Chapters", "Units", "Weeks", "Topics", "Modules"]);
+export type ChildLabel = z.infer<typeof ChildLabel>;
+
+/** A notebook's icon (drawn with the app's icon set; never an emoji or an image). */
+export const NotebookIcon = z.enum([
+  "book",
+  "atom",
+  "flask",
+  "sigma",
+  "dna",
+  "globe",
+  "code",
+  "landmark",
+  "languages",
+  "music",
+  "palette",
+  "leaf",
+  "brain",
+  "calculator",
+]);
+export type NotebookIcon = z.infer<typeof NotebookIcon>;
+
+export const NotebookColor = z.enum(["slate", "teal", "blue", "violet", "rose", "amber", "green"]);
+export type NotebookColor = z.infer<typeof NotebookColor>;
+
+/** A fractional index (`fractional-indexing`, base 62): siblings sort by it. */
+export const Position = z.string().regex(/^[0-9A-Za-z]{1,64}$/);
+
+/**
+ * A node of the notebook tree (K1): a notebook (no parent), a chapter or a section, three levels
+ * at most. Pages hang off any node. Rows stored before the tree existed parse as roots.
+ */
 export const Notebook = z.object({
   id: z.uuid(),
   title: z.string().min(1).max(200),
+  parentId: z.uuid().nullable().default(null),
+  position: Position.default("a0"),
+  childLabel: ChildLabel.default("Chapters"),
+  icon: NotebookIcon.optional(),
+  color: NotebookColor.optional(),
   /** The course this notebook is for (its tutor draws on the course material). */
   courseId: z.uuid().optional(),
+  /** In the trash since (purged after 30 days). */
+  deletedAt: z.number().int().nonnegative().optional(),
+  /** When the student last changed its title, place or settings: the latest edit wins. */
+  editedAt: z.number().int().nonnegative().default(0),
   createdAt: z.number().int().nonnegative(),
+  /** Last used (the recency the app opens and sorts by). */
   updatedAt: z.number().int().nonnegative(),
 });
 export type Notebook = z.infer<typeof Notebook>;

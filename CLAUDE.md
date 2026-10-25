@@ -10,3 +10,6 @@
   specified in [docs/SCREEN_COACH_NOTES_CHECK.md](docs/SCREEN_COACH_NOTES_CHECK.md); its
   **Decisions** section is binding too.
 - Onboarding a new developer: [ONBOARDING.md](ONBOARDING.md).
+- **The K series** (notebook tree, save where I say, PDFs, drawn explanations, Show-then-You,
+  two-key shortcuts, auto-filing, live annotations, handwriting; milestones K1–K11) is specified in
+  [docs/NOTEBOOKS_K.md](docs/NOTEBOOKS_K.md). Its 0.1 and **Decisions** sections are binding.

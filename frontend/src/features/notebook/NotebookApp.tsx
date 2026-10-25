@@ -1,7 +1,9 @@
 "use client";
 
-import type { Notebook, Page } from "@mew/shared";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Page } from "@mew/shared";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+
+import { isDesktop } from "../desktop/bridge";
 
 import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
@@ -28,9 +30,23 @@ import { useNotebookUi } from "./store";
 import { Toolbar } from "./Toolbar";
 import { useAppServices } from "./useAppServices";
 import { useClipImport } from "./useClipImport";
+import { pullTree } from "./tree-api";
 import { useShortcuts } from "./useShortcuts";
+import { Breadcrumb } from "./tree/Breadcrumb";
+import { NodeHome } from "./tree/NodeHome";
+import { TreeDialogs } from "./tree/TreeDialogs";
+import { TreeNav } from "./tree/TreeNav";
+import { type TreeNoticeView, useTreeActions } from "./tree/useTreeActions";
+import { useNotebookTree } from "./tree/useNotebookTree";
+import { useTreeShortcuts } from "./tree/useTreeShortcuts";
 
-type Notice = { text: string; tone: "info" | "error" };
+type Notice = TreeNoticeView;
+
+/** What the main area shows for the open node: its home (cards), or one of its pages. */
+type View = "home" | "page";
+
+/** A node being written in is marked as edited at most this often. */
+const TOUCH_EVERY_MS = 60_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Screen width the quiz card covers on the left (its width plus margins), kept free of ink. */
@@ -39,8 +55,11 @@ const QUIZ_CARD_INSET = 352;
 export function NotebookApp({ userId }: { userId: string }) {
   const db = useMemo(() => new NotebookDb(userId), [userId]);
   const repo = useMemo(() => new NotebookRepository(db), [db]);
-  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+  /** The open node: a notebook, chapter or section (its pages are `pages`). */
   const [notebookId, setNotebookId] = useState<string | null>(null);
+  const [view, setView] = useState<View>("page");
+  /** The page to open once the node's pages are read (a jump, a new page). */
+  const wantedPage = useRef<string | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [pageId, setPageId] = useState<string | null>(null);
   const [engine, setEngine] = useState<PageEngine | null>(null);
@@ -57,6 +76,43 @@ export function NotebookApp({ userId }: { userId: string }) {
     console.error("[notebook]", error);
     setNotice({ text: "Couldn't save your last change. Check available storage.", tone: "error" });
   }, []);
+  const notify = useCallback((next: Notice) => setNotice(next), []);
+  const treeNotice = useCallback((text: string) => setNotice({ text, tone: "info" }), []);
+
+  const { nodes, tree } = useNotebookTree(repo, treeNotice, report);
+  const now = useMinuteClock();
+  // Known only in the browser (the server renders the web app's shortcuts).
+  const desktop = useSyncExternalStore(noSubscription, isDesktop, () => false);
+
+  /**
+   * Opens a node: its home when it has chapters (or sections), else its first page. It becomes
+   * the most recently used, so the app opens it again next time.
+   */
+  const openNode = useCallback(
+    (id: string) => {
+      void repo
+        .touchNotebook(id)
+        .then(() => repo.tree.tree())
+        .then((current) => {
+          setNotebookId(id);
+          setView(current.children(id).length > 0 ? "home" : "page");
+        })
+        .catch(report);
+    },
+    [repo, report],
+  );
+
+  const openPage = useCallback((page: Page) => {
+    wantedPage.current = page.id;
+    setNotebookId(page.notebookId);
+    setView("page");
+    setPages((list) =>
+      list.some((p) => p.id === page.id) || list[0]?.notebookId !== page.notebookId
+        ? list
+        : [...list, page],
+    );
+    setPageId(page.id);
+  }, []);
 
   // Open the most recent notebook (creating one on first use) and ask the browser not to evict it.
   useEffect(() => {
@@ -68,35 +124,53 @@ export function NotebookApp({ userId }: { userId: string }) {
       const course = params.get("course");
       quizRequested.current = params.get("quiz") === "1";
       const title = (params.get("title") ?? "").trim().slice(0, 200) || "Course notes";
+      // A device with no notebooks yet (a new browser, a second computer) takes the account's
+      // first, so it never makes a "My first notebook" of its own beside them.
+      if (navigator.onLine && (await repo.listNotebooks()).length === 0) {
+        const server = await pullTree();
+        if (server) await repo.tree.applyServerTree(server);
+      }
       const latest =
         course && UUID.test(course)
           ? await repo.notebookForCourse(course, title)
           : await repo.openLatestNotebook();
-      const all = await repo.listNotebooks();
-      if (cancelled) return;
-      setNotebooks(all);
-      setNotebookId(latest.id);
+      if (!cancelled) openNode(latest.id);
     })().catch(report);
     return () => {
       cancelled = true;
     };
-  }, [repo, report]);
+  }, [repo, report, openNode]);
 
+  // The open node's pages; a page view always has one (a node from another device may have
+  // none here yet).
   useEffect(() => {
     if (!notebookId) return;
     let cancelled = false;
-    void repo
-      .listPages(notebookId)
-      .then((list) => {
-        if (cancelled) return;
-        setPages(list);
-        setPageId(list[0]?.id ?? null);
-      })
-      .catch(report);
+    void (async () => {
+      if (view === "page") await repo.firstPageOrNew(notebookId);
+      const list = await repo.listPages(notebookId);
+      if (cancelled) return;
+      setPages(list);
+      const wanted = list.find((p) => p.id === wantedPage.current);
+      wantedPage.current = null;
+      setPageId((wanted ?? list[0])?.id ?? null);
+    })().catch(report);
     return () => {
       cancelled = true;
     };
-  }, [repo, notebookId, report]);
+  }, [repo, notebookId, view, report]);
+
+  // The open node went to the trash (here, in another tab, or on another device): open the
+  // nearest node above it that's still there, else the latest notebook.
+  useEffect(() => {
+    if (!nodes || !notebookId) return;
+    const open = tree.get(notebookId);
+    if (!open || tree.isLive(notebookId)) return;
+    const above = tree.path(notebookId).slice(0, -1).reverse();
+    const live = above.find((n) => tree.isLive(n.id));
+    if (live) openNode(live.id);
+    else void repo.openLatestNotebook().then((n) => openNode(n.id), report);
+  }, [nodes, tree, notebookId, openNode, repo, report]);
 
   // Bumped when the open page changed in storage from outside the engine (a follow-up added to
   // a Circle & Ask entry on it): the page is opened again, pictures and all.
@@ -130,8 +204,19 @@ export function NotebookApp({ userId }: { userId: string }) {
   }, [engine]);
 
   useEffect(() => {
+    if (!engine || !notebookId) return;
+    let touched = 0;
+    return engine.subscribe((change) => {
+      if (change === "tutor" || Date.now() - touched < TOUCH_EVERY_MS) return;
+      touched = Date.now();
+      void repo.touchNotebook(notebookId).catch(report);
+    });
+  }, [engine, notebookId, repo, report]);
+
+  useEffect(() => {
     if (!notice) return;
-    const timer = setTimeout(() => setNotice(null), 4000);
+    // A notice with Undo stays long enough to reach for it.
+    const timer = setTimeout(() => setNotice(null), notice.action ? 8000 : 4000);
     return () => clearTimeout(timer);
   }, [notice]);
 
@@ -147,12 +232,15 @@ export function NotebookApp({ userId }: { userId: string }) {
   useShortcuts(actions);
 
   // A clip saved from the screen (Screen Coach) becomes a new page of this notebook.
-  const openClipPage = useCallback((page: Page) => {
-    setPages((list) => (list.some((p) => p.id === page.id) ? list : [...list, page]));
-    setPageId(page.id);
-    setNotice({ text: "Saved from your screen. Work on it right here.", tone: "info" });
-    setCheckPrompt(page.id); // "Check this against your notes?" (never runs on its own)
-  }, []);
+  // Opened through openPage, so a node still loading its pages keeps this one open.
+  const openClipPage = useCallback(
+    (page: Page) => {
+      openPage(page);
+      setNotice({ text: "Saved from your screen. Work on it right here.", tone: "info" });
+      setCheckPrompt(page.id); // "Check this against your notes?" (never runs on its own)
+    },
+    [openPage],
+  );
   // A Circle & Ask explanation is added to today's "From screen" page quietly (or opened).
   const entryAdded = useCallback(
     (page: Page) => {
@@ -171,12 +259,14 @@ export function NotebookApp({ userId }: { userId: string }) {
     onError: clipFailed,
   });
   const clipImage = engine?.images.at(-1);
-  const courseId = notebooks.find((n) => n.id === notebookId)?.courseId ?? null;
+  const node = notebookId ? (tree.get(notebookId) ?? null) : null;
+  // A chapter's course is its notebook's.
+  const courseId = (notebookId && tree.path(notebookId)[0]?.courseId) || null;
   const mew = useMewSession(engine, courseId);
   const { quiz } = mew;
   // Notes Check: every line's text, kept with the page and (if allowed) on the server.
   useNoteIndexing({ db, repo, engine, notebookId, recognition: mew.recognition });
-  const notebook = notebooks.find((n) => n.id === notebookId) ?? null;
+  const notebook = node;
   const marks = usePageMarks(db, engine);
   const focus = useNotesCheck((s) => s.focus);
   const checkResult = useNotesCheck((s) => s.result);
@@ -195,13 +285,12 @@ export function NotebookApp({ userId }: { userId: string }) {
       const target = await pageOfFinding(db, finding);
       const page = target ? await repo.getPage(target) : null;
       if (cancelled || !page) return;
-      setNotebookId(page.notebookId);
-      setPageId(page.id);
+      openPage(page);
     })().catch(report);
     return () => {
       cancelled = true;
     };
-  }, [focus, checkResult, db, repo, report]);
+  }, [focus, checkResult, db, repo, report, openPage]);
   const app = useAppServices({
     ready: engine !== null,
     listen: mew.startListening,
@@ -220,18 +309,21 @@ export function NotebookApp({ userId }: { userId: string }) {
     if (running.active && running.courseId !== courseId) void quiz.stop();
   }, [courseId, quiz]);
 
-  const createNotebook = async () => {
-    const notebook = await repo.createNotebook(`Notebook ${notebooks.length + 1}`);
-    setNotebooks(await repo.listNotebooks());
-    setNotebookId(notebook.id);
-  };
-
-  const addPage = async () => {
-    if (!notebookId) return;
-    const page = await repo.addPage(notebookId);
-    setPages((list) => [...list, page]);
-    setPageId(page.id);
-  };
+  const treeActions = useTreeActions({ repo, tree, notify, report, openNode, openPage });
+  const loadCounts = useCallback((ids: readonly string[]) => repo.countPages(ids), [repo]);
+  /** Where Alt+N adds a chapter: the open notebook (a chapter's own notebook). */
+  const rootId = notebookId ? (tree.path(notebookId)[0]?.id ?? null) : null;
+  useTreeShortcuts(
+    {
+      newNotebook: treeActions.startCreating,
+      newChapter: () => rootId && treeActions.addChild(rootId),
+      newPage: () => notebookId && treeActions.addPage(notebookId),
+      rename: () => notebookId && treeActions.setRenamingId(notebookId),
+      jump: () => treeActions.setPaletteOpen(true),
+      reorder: (step) => notebookId && treeActions.reorder(notebookId, step),
+    },
+    desktop,
+  );
 
   const exportLine = async () => {
     if (!engine) return;
@@ -247,14 +339,46 @@ export function NotebookApp({ userId }: { userId: string }) {
   return (
     <div className="flex h-dvh w-full overflow-hidden">
       <Sidebar
-        notebooks={notebooks}
-        currentId={notebookId}
-        onSelect={setNotebookId}
-        onCreate={() => void createNotebook().catch(report)}
+        notebooks={
+          <TreeNav
+            tree={tree}
+            currentId={notebookId}
+            renamingId={treeActions.renamingId}
+            draft={treeActions.draft}
+            trashCount={tree.trash().length}
+            newNotebookShortcut={desktop ? "Ctrl+N" : "Alt+B"}
+            onOpen={openNode}
+            onCreateNotebook={treeActions.startCreating}
+            onAddChild={treeActions.addChild}
+            onAddPage={treeActions.addPage}
+            onStartRename={treeActions.setRenamingId}
+            onRename={treeActions.rename}
+            onMove={treeActions.move}
+            onReorder={treeActions.reorder}
+            onMoveTo={treeActions.setMovingId}
+            onDelete={treeActions.requestDelete}
+            onOpenTrash={() => treeActions.setTrashOpen(true)}
+          />
+        }
         onQuiz={courseId ? () => void quiz.start(courseId) : null}
       />
       <main className="relative min-w-0 flex-1">
-        {engine && engine.pageId === pageId ? (
+        {view === "home" && node ? (
+          <NodeHome
+            node={node}
+            tree={tree}
+            pages={pages.filter((p) => p.notebookId === node.id)}
+            now={now}
+            loadCounts={loadCounts}
+            onOpen={openNode}
+            onOpenPage={(id) => {
+              const page = pages.find((p) => p.id === id);
+              if (page) openPage(page);
+            }}
+            onAddChild={() => treeActions.addChild(node.id)}
+            onAddPage={() => treeActions.addPage(node.id)}
+          />
+        ) : engine && engine.pageId === pageId ? (
           <NotebookCanvas
             ref={canvas}
             engine={engine}
@@ -265,6 +389,17 @@ export function NotebookApp({ userId }: { userId: string }) {
         ) : (
           <div className="grid h-full place-items-center text-sm text-ink-muted">
             Opening notebook…
+          </div>
+        )}
+
+        {view === "page" && notebookId && !quizActive && (
+          <div className="pointer-events-auto absolute top-[4.25rem] left-4 hidden max-w-[45%] rounded-xl bg-paper-raised/90 px-1 py-1 backdrop-blur md:block">
+            <Breadcrumb
+              tree={tree}
+              nodeId={notebookId}
+              pageNumber={(pages.find((p) => p.id === pageId)?.index ?? 0) + 1}
+              onOpen={openNode}
+            />
           </div>
         )}
 
@@ -327,13 +462,13 @@ export function NotebookApp({ userId }: { userId: string }) {
           <QuizCard session={quiz} />
         </div>
 
-        {pageId && (
+        {view === "page" && pageId && (
           <div className="pointer-events-none absolute bottom-4 left-4">
             <PageNav
               pages={pages}
               currentPageId={pageId}
               onSelect={setPageId}
-              onAdd={() => void addPage().catch(report)}
+              onAdd={() => notebookId && treeActions.addPage(notebookId)}
             />
           </div>
         )}
@@ -358,11 +493,23 @@ export function NotebookApp({ userId }: { userId: string }) {
         >
           {notice && (
             <p
-              className={`rounded-full px-4 py-2 text-sm shadow-lg ${
+              className={`pointer-events-auto flex items-center gap-3 rounded-full px-4 py-2 text-sm shadow-lg ${
                 notice.tone === "error" ? "bg-error text-white" : "bg-ink text-paper"
               }`}
             >
               {notice.text}
+              {notice.action && (
+                <button
+                  type="button"
+                  className="font-semibold underline"
+                  onClick={() => {
+                    notice.action?.run();
+                    setNotice(null);
+                  }}
+                >
+                  {notice.action.label}
+                </button>
+              )}
             </p>
           )}
           {!app.online && !notice && (
@@ -375,9 +522,31 @@ export function NotebookApp({ userId }: { userId: string }) {
           )}
         </div>
       </main>
+      <TreeDialogs
+        actions={treeActions}
+        tree={tree}
+        repo={repo}
+        now={now}
+        openNode={openNode}
+        openPage={openPage}
+      />
       {app.showIntro && (
         <Onboarding onDone={app.closeIntro} onStartListening={mew.startListening} />
       )}
     </div>
   );
+}
+
+function noSubscription(): () => void {
+  return () => undefined;
+}
+
+/** The time now, updated every minute ("edited 5 minutes ago" stays right). */
+function useMinuteClock(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }

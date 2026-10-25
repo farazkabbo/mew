@@ -36,8 +36,19 @@ def _plain(text: str) -> str:
 
 
 PlainText = Annotated[str, AfterValidator(_plain)]
+
+# Trimmed, then 1 to n characters, without control characters. The length constraints come
+# before the plain-text check on purpose: wrapping `PlainText` in them checks the length before
+# trimming, so "   " would pass as an empty string.
 LineText = Annotated[
-    PlainText, StringConstraints(strip_whitespace=True, min_length=1, max_length=TEXT_CHARS)
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=TEXT_CHARS),
+    AfterValidator(_plain),
+]
+NotebookTitle = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
+    AfterValidator(_plain),
 ]
 
 
@@ -49,9 +60,7 @@ class NotebookRef(_Camel):
     """The notebook a page belongs to, mirrored so lines can be scoped to it (and its course)."""
 
     id: UUID
-    title: Annotated[
-        PlainText, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
-    ]
+    title: NotebookTitle
     course_id: UUID | None
 
 

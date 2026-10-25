@@ -66,6 +66,8 @@ def _clip_url(url: str) -> str:
     return url
 
 
+#: Refuses control characters; for types that put their own constraints first.
+plain_text = _plain
 PlainText = Annotated[str, AfterValidator(_plain)]
 AppName = Annotated[str, StringConstraints(max_length=64, pattern=_APP.pattern)]
 HexColor = Annotated[str, StringConstraints(pattern=_HEX.pattern)]

@@ -76,7 +76,7 @@ test("the tutor gets the right pages of the course for a question", async ({ pag
   await page.getByRole("button", { name: /Start studying/ }).click();
   await page.getByRole("link", { name: "Open the course notebook" }).click();
   await expect(page).toHaveURL(/\/notebook\?course=/);
-  await expect(page.getByRole("button", { name: "Forces and motion" })).toHaveAttribute(
+  await expect(page.getByRole("treeitem", { name: "Forces and motion" })).toHaveAttribute(
     "aria-current",
     "page",
   );

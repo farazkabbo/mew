@@ -111,21 +111,29 @@ function syncEnabled(): boolean {
   return loaded && settings.notes_index;
 }
 
+/**
+ * Where a page's lines go on the server: its node. Null until that node (and every node above
+ * it) has reached the server, so a page never creates its notebook in the wrong place
+ * (K1, decision 17); the lines wait and sync on a later pass.
+ */
 async function pageRef(repo: NotebookRepository, pageId: string): Promise<PageRef | null> {
   const page = await repo.getPage(pageId);
   const notebook = page && (await repo.getNotebook(page.notebookId));
-  if (!page || !notebook) return null;
+  if (!page || !notebook || !(await repo.tree.isSynced(notebook.id))) return null;
+  const root = await repo.rootOf(notebook.id);
   return {
-    notebook: { id: notebook.id, title: notebook.title, courseId: notebook.courseId ?? null },
+    notebook: { id: notebook.id, title: notebook.title, courseId: root?.courseId ?? null },
     pageIndex: page.index,
   };
 }
 
-/** The open notebook's pages, then the pages of notebooks that belong to a course. */
+/** The open node's pages, then the pages of every notebook (and chapter) of a course. */
 async function candidatePages(repo: NotebookRepository, openId: string | null): Promise<string[]> {
-  const notebooks = (await repo.listNotebooks()).filter((n) => n.id === openId || n.courseId);
-  notebooks.sort((a, b) => Number(b.id === openId) - Number(a.id === openId));
-  const pages = await Promise.all(notebooks.map((n) => repo.listPages(n.id)));
+  const tree = await repo.tree.tree();
+  const inCourse = (id: string) => tree.path(id)[0]?.courseId !== undefined;
+  const nodes = (await repo.listNotebooks()).filter((n) => n.id === openId || inCourse(n.id));
+  nodes.sort((a, b) => Number(b.id === openId) - Number(a.id === openId));
+  const pages = await Promise.all(nodes.map((n) => repo.listPages(n.id)));
   return pages.flat().map((p) => p.id);
 }
 

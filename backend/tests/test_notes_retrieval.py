@@ -23,8 +23,11 @@ from mew_api.notes.models import (
 from mew_api.notes.retrieval import (
     MAX_LINES,
     Hit,
+    NotebookInfo,
     StoredNoteLine,
     best_pages,
+    ladder_from,
+    prefer_near,
     rank_hits,
     retrieve,
     search_terms,
@@ -406,3 +409,65 @@ def test_supabase_search_is_one_rpc_filtered_on_the_owner() -> None:
             NotePageSync(notebook=BIOLOGY, page_index=0, upsert=[], remove=[]),
             embed_changed_lines([], {}, LexicalEmbedder()),
         )
+
+
+# ─── The notebook tree (K1): the open chapter first, then its notebook, then the course ─────
+
+
+def _tree() -> dict[str, NotebookInfo]:
+    physics = uuid4()
+    forces = uuid4()
+    optics = uuid4()
+    section = uuid4()
+    revision = uuid4()
+    return {
+        "physics": NotebookInfo(physics, "Physics", COURSE, None, physics),
+        "forces": NotebookInfo(forces, "Forces", None, physics, physics),
+        "friction": NotebookInfo(section, "Friction", None, forces, physics),
+        "optics": NotebookInfo(optics, "Optics", None, physics, physics),
+        "revision": NotebookInfo(revision, "Revision", COURSE, None, revision),
+        "diary": NotebookInfo(uuid4(), "Diary", None, None, None),
+    }
+
+
+def test_a_chapter_scope_widens_to_its_notebook_then_the_course() -> None:
+    t = _tree()
+    ladder = ladder_from(list(t.values()), t["forces"].id)
+    assert [s.kind for s in ladder] == ["notebook", "notebook", "course"]
+    assert set(ladder[0].notebook_ids) == {t["forces"].id, t["friction"].id}
+    assert set(ladder[1].notebook_ids) == {
+        t["physics"].id,
+        t["forces"].id,
+        t["friction"].id,
+        t["optics"].id,
+    }
+    # Every notebook linked to the course, with its chapters (only the notebook has the link).
+    assert set(ladder[2].notebook_ids) == set(ladder[1].notebook_ids) | {t["revision"].id}
+    assert t["diary"].id not in ladder[2].notebook_ids
+
+
+def test_a_notebook_without_a_course_has_one_rung() -> None:
+    t = _tree()
+    assert [s.notebook_ids for s in ladder_from(list(t.values()), t["diary"].id)] == [
+        [t["diary"].id]
+    ]
+    assert ladder_from(list(t.values()), uuid4()) == []
+
+
+def test_hits_in_the_open_chapter_rank_first_then_its_notebook() -> None:
+    t = _tree()
+    ladder = ladder_from(list(t.values()), t["forces"].id)
+    page = {name: uuid4() for name in ("forces", "optics", "revision")}
+    hits = [
+        (Hit(uuid4(), page["revision"], 0, 0.9, None), 0.026),
+        (Hit(uuid4(), page["optics"], 0, 0.8, None), 0.024),
+        (Hit(uuid4(), page["forces"], 0, 0.7, None), 0.020),
+    ]
+    notebook_of = {
+        page["forces"]: t["forces"].id,
+        page["optics"]: t["optics"].id,
+        page["revision"]: t["revision"].id,
+    }
+    # Scores 0.020 x 1.5 in the chapter, 0.024 x 1.2 in its notebook, 0.026 elsewhere.
+    order = [hit.page_id for hit, _ in prefer_near(hits, notebook_of, ladder)]
+    assert order == [page["forces"], page["optics"], page["revision"]]

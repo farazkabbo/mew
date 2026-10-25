@@ -1,59 +1,64 @@
-import { type ClipView, ImageBlock, Notebook, Page, Stroke } from "@mew/shared";
+import { type ClipView, ImageBlock, Notebook, NotebookTree, Page, Stroke } from "@mew/shared";
 import Dexie from "dexie";
 import type { z } from "zod";
 
 import { clipToPage, entryFollowUps, entryToPage, nextEntryTop, today } from "./clip-page";
 import type { NotebookDb } from "./db";
+import { newPage } from "./page-factory";
+import { TreeRepository } from "./tree-repository";
 
-/** Data access for notebooks, pages and strokes. Everything read back is schema-validated. */
+/**
+ * Data access for notebooks, pages and strokes. Everything read back is schema-validated. The
+ * notebook tree's structure (making, renaming, moving, trash, sync) is `tree`'s.
+ */
 export class NotebookRepository {
-  constructor(private readonly db: NotebookDb) {}
+  readonly tree: TreeRepository;
+
+  constructor(private readonly db: NotebookDb) {
+    this.tree = new TreeRepository(db);
+  }
 
   /** BroadcastChannel name shared by tabs editing this user's notebooks. */
   get syncChannelName(): string {
     return `${this.db.name}:sync`;
   }
 
-  async listNotebooks(): Promise<Notebook[]> {
-    const rows = await this.db.notebooks.orderBy("updatedAt").reverse().toArray();
-    return validRows(Notebook, rows, "notebook");
+  /**
+   * Notebooks, chapters and sections that aren't in the trash, most recently used first. A
+   * Dexie promise chain, so it's safe inside a transaction (see `TreeRepository.nodes`).
+   */
+  listNotebooks(): Promise<Notebook[]> {
+    return this.tree.nodes().then((nodes) => {
+      const tree = new NotebookTree(nodes);
+      return nodes.filter((n) => tree.isLive(n.id)).sort((a, b) => b.updatedAt - a.updatedAt);
+    });
   }
 
   /**
-   * The most recently used notebook, creating a first one if there are none. Check-and-create
+   * The most recently used node, creating a first notebook if there are none. Check-and-create
    * runs in one read-write transaction, which IndexedDB serialises, so concurrent callers (React
    * StrictMode, two tabs) can never create duplicates.
    */
   async openLatestNotebook(): Promise<Notebook> {
-    return this.db.transaction("rw", this.db.notebooks, this.db.pages, async () => {
+    return this.tree.write(async () => {
       const [latest] = await this.listNotebooks();
-      return latest ?? (await this.createNotebook("My first notebook"));
+      return latest ?? (await this.tree.createNotebook({ title: "My first notebook" }));
     });
-  }
-
-  async createNotebook(title: string, courseId?: string): Promise<Notebook> {
-    const now = Date.now();
-    const notebook = Notebook.parse({
-      id: crypto.randomUUID(),
-      title,
-      ...(courseId && { courseId }),
-      createdAt: now,
-      updatedAt: now,
-    });
-    // Joins the caller's transaction when there is one (see openLatestNotebook).
-    await this.db.transaction("rw", this.db.notebooks, this.db.pages, async () => {
-      await this.db.notebooks.add(notebook);
-      await this.db.pages.add(newPage(notebook.id, 0));
-    });
-    return notebook;
   }
 
   /** The notebook for a course, creating it on first use (in one transaction: no duplicates). */
   async notebookForCourse(courseId: string, title: string): Promise<Notebook> {
-    return this.db.transaction("rw", this.db.notebooks, this.db.pages, async () => {
-      const existing = (await this.listNotebooks()).find((n) => n.courseId === courseId);
-      return existing ?? (await this.createNotebook(title, courseId));
+    return this.tree.write(async () => {
+      const existing = (await this.listNotebooks()).find(
+        (n) => n.courseId === courseId && n.parentId === null,
+      );
+      return existing ?? (await this.tree.createNotebook({ title, courseId }));
     });
+  }
+
+  /** The root a node belongs to (itself for a notebook): its course and label apply below it. */
+  async rootOf(id: string): Promise<Notebook | null> {
+    return (await this.tree.tree()).path(id)[0] ?? null;
   }
 
   async getNotebook(id: string): Promise<Notebook | null> {
@@ -70,12 +75,38 @@ export class NotebookRepository {
     await this.db.notebooks.update(id, { updatedAt: Date.now() });
   }
 
+  /** How many pages each node has. */
+  async countPages(notebookIds: readonly string[]): Promise<Map<string, number>> {
+    const counts = new Map(notebookIds.map((id) => [id, 0]));
+    await this.db.pages
+      .where("notebookId")
+      .anyOf([...notebookIds])
+      .each((page) => counts.set(page.notebookId, (counts.get(page.notebookId) ?? 0) + 1));
+    return counts;
+  }
+
   async listPages(notebookId: string): Promise<Page[]> {
     const rows = await this.db.pages
       .where("[notebookId+index]")
       .between([notebookId, Dexie.minKey], [notebookId, Dexie.maxKey])
       .toArray();
     return validRows(Page, rows, "page");
+  }
+
+  /** Every page of every node (the jump palette lists them). */
+  async listAllPages(): Promise<Page[]> {
+    return validRows(Page, await this.db.pages.toArray(), "page");
+  }
+
+  /**
+   * The node's first page, or a new one when it has none (a chapter made on another device:
+   * pages stay on the device they were written on). In one transaction: never two.
+   */
+  async firstPageOrNew(notebookId: string): Promise<Page> {
+    return this.db.transaction("rw", this.db.pages, async () => {
+      const [first] = await this.listPages(notebookId);
+      return first ?? (await this.addPage(notebookId));
+    });
   }
 
   async addPage(
@@ -178,16 +209,6 @@ export class NotebookRepository {
       },
     );
   }
-}
-
-function newPage(notebookId: string, index: number): Page {
-  return {
-    id: crypto.randomUUID(),
-    notebookId,
-    index,
-    background: "dot_grid",
-    createdAt: Date.now(),
-  };
 }
 
 /** Keeps rows that match the schema; corrupted local data is skipped, never trusted. */

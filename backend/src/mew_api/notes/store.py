@@ -302,7 +302,7 @@ class SupabaseNoteLineStore(SupabaseRest):
     def notebooks(
         self, user: str, *, ids: Sequence[UUID] | None = None, course: UUID | None = None
     ) -> list[NotebookInfo]:
-        params = {"select": "id,title,course_id", "user_id": f"eq.{user}"}
+        params = {"select": "id,title,course_id,parent_id,root_id", "user_id": f"eq.{user}"}
         if ids is not None:
             if not ids:
                 return []
@@ -311,7 +311,11 @@ class SupabaseNoteLineStore(SupabaseRest):
             params["course_id"] = f"eq.{course}"
         return [
             NotebookInfo(
-                UUID(r["id"]), r["title"], UUID(r["course_id"]) if r.get("course_id") else None
+                UUID(r["id"]),
+                r["title"],
+                _uuid(r.get("course_id")),
+                parent_id=_uuid(r.get("parent_id")),
+                root_id=_uuid(r.get("root_id")),
             )
             for r in self._get("notebooks", params)
         ]
@@ -408,6 +412,10 @@ def _line_argument(line: NoteLineUpsert, embeddings: LineEmbeddings) -> dict[str
         "embedding_model": embeddings.model if vector is not None else None,
         "keep_embedding": line.id in embeddings.kept,
     }
+
+
+def _uuid(value: object) -> UUID | None:
+    return UUID(value) if isinstance(value, str) else None
 
 
 def _ids(ids: Iterable[UUID]) -> str:

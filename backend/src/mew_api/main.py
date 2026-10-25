@@ -18,6 +18,7 @@ from .deps import require_internal_caller
 from .devices.store import MemoryDeviceStore
 from .devices.tokens import LinkCodes
 from .mew_events.store import MemoryMewEventStore
+from .notebooks.store import MemoryNotebookTreeStore
 from .notes.checks import MemoryCheckStore
 from .notes.store import MemoryNoteLineStore
 from .profiles.store import MemoryProfileStore
@@ -30,6 +31,7 @@ from .routes import (
     learner,
     me,
     mew_events,
+    notebooks,
     notes,
     walkthroughs,
 )
@@ -87,6 +89,7 @@ def create_app(
     app.state.local_notes = MemoryNoteLineStore()
     app.state.local_checks = MemoryCheckStore(app.state.local_notes.pages_of)
     app.state.local_walkthroughs = MemoryWalkthroughStore()
+    app.state.local_notebooks = MemoryNotebookTreeStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -100,6 +103,7 @@ def create_app(
     v1.include_router(mew_events.router)
     v1.include_router(devices.router)
     v1.include_router(clips.router)
+    v1.include_router(notebooks.router)
     v1.include_router(notes.router)
     v1.include_router(walkthroughs.router)
     app.include_router(health.router)
