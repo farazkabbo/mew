@@ -5,8 +5,9 @@
 
 use super::image::Pixels;
 
-/// The student's ink: graphite blue (brief §2.2), clearly unlike the tutor's violet.
-pub const STUDENT_INK: [u8; 3] = [0x3b, 0x5b, 0x8c];
+/// The student's ink: red (the owner's choice over the brief's graphite blue, which looked like
+/// a text selection), clearly unlike the tutor's violet. Same as `ink::STUDENT_INK`.
+pub const STUDENT_INK: [u8; 3] = [0xe0, 0x24, 0x24];
 
 /// Draws a polyline (`points` in the image's pixels) `width` pixels thick.
 pub fn draw_polyline(image: &mut Pixels, points: &[(f32, f32)], width: f32, rgb: [u8; 3]) {

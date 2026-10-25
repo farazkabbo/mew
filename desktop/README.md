@@ -153,6 +153,10 @@ PowerShell's name.
   - One tracker thread polls the cursor and left Ctrl + left Alt (`win/input.rs`,
     `GetAsyncKeyState`: no hooks, nothing recorded; AltGr never draws), a frame at a time while
     something moves, ten times a second otherwise, not at all while Screen Coach is off or paused.
+  - The mouse is read the same way while draw mode (or "select question") is on: the primary
+    button and the cursor, every 8 ms during a drag (`drag.rs`). The overlay page only draws pen
+    and touch: a never-activated window's webview doesn't reliably get the mouse on Windows. A
+    drag that began before draw mode never becomes a mark.
   - The pointer and the draw overlay are click-through, never focused and excluded from captures;
     the overlay takes the mouse, pen and touch only while drawing, and the keyboard only for
     keyboard drawing (silent mode), then gives the focus back. The card takes the focus only when

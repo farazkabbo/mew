@@ -1,4 +1,13 @@
-import { type DrawView, parseDrawView, type Pt, type Rect, rectPath } from "./draw-view";
+import {
+  type DrawView,
+  MAX_POINTS,
+  parseBox,
+  parseDrawView,
+  parseLive,
+  type Pt,
+  type Rect,
+  rectPath,
+} from "./draw-view";
 import { invoke, on } from "./tauri";
 
 /**
@@ -9,12 +18,17 @@ import { invoke, on } from "./tauri";
  *
  * It never sees the screen: only the marks' paths, in CSS pixels of this window.
  *
+ * The mouse is read by Rust (screen/drag.rs: a never-activated window's webview doesn't reliably
+ * get it), which sends the stroke or box as it's dragged; this page draws pen and touch itself
+ * (they report pressure) and ignores the mouse.
+ *
  * Keyboard drawing (silent mode, §4): Tab and Shift+Tab move between the screen's text blocks
  * (nearest the pointer first), Space marks the highlighted one; Shift+arrows grow a box from the
  * pointer and Enter marks it. Each change is announced (the hint is a live region).
  */
 
-const STUDENT_INK = "#3b5b8c";
+/** Red: stands out from the screen's blue text selection (and from the tutor's ink). */
+const STUDENT_INK = "#e02424";
 const GREY_INK = "#9a9a9a";
 const FADE_MS = 200;
 
@@ -174,6 +188,7 @@ function isEraser(event: PointerEvent): boolean {
 }
 
 window.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "mouse") return; // Rust reads the mouse
   if (isEraser(event)) {
     void invoke("screen_draw_erase").catch(() => undefined);
     return;
@@ -203,7 +218,9 @@ function onMove(event: PointerEvent): void {
   paint();
 }
 
-window.addEventListener("pointerup", () => {
+window.addEventListener("pointerup", (event) => {
+  // The stroke or box on show may be the mouse's, which Rust finishes itself.
+  if (event.pointerType === "mouse") return;
   window.removeEventListener("pointermove", onMove);
   if (box) {
     const [x0, y0] = box.from;
@@ -234,6 +251,7 @@ on("mew:draw-show", (detail) => {
     );
   }
   stroke = null;
+  box = null;
   canvas?.classList.remove("faded");
   if (hint && view.mode !== "keyboard") {
     hint.textContent =
@@ -243,6 +261,23 @@ on("mew:draw-show", (detail) => {
           ? "I can't look at this app."
           : "";
   }
+  paint();
+});
+
+// The mouse stroke being drawn, a point at a time (Rust reads the mouse).
+on("mew:draw-live", (detail) => {
+  const live = parseLive(detail);
+  if (!live) return;
+  if (live.start || !stroke) stroke = [];
+  for (const [x, y] of live.points) if (stroke.length < MAX_POINTS) stroke.push([x, y, 0.5]);
+  paint();
+});
+
+// The question box being dragged with the mouse.
+on("mew:draw-box", (detail) => {
+  const next = parseBox(detail);
+  if (!next) return;
+  box = next;
   paint();
 });
 

@@ -117,9 +117,10 @@ binding): **S0–S3 built** (2026-10-22), **S4 built** (2026-10-23). Desktop cod
     `raster.rs` marks on the focus image). Three new overlay pages: `pointer`, `draw-overlay`
     (mouse, pen, touch, the select-question box, keyboard drawing) and `circle-card` (ask bar,
     captions with Pause · Repeat · Next · Stop, the save toast). The S3 ink overlay draws one step
-    at a time (`step` in its requests). Left Ctrl + left Alt are polled (no hooks); Ctrl+Alt+D
+    at a time (`step` in its requests). Left Ctrl + left Alt, and the mouse while drawing
+    (`drag.rs`), are polled (no hooks); Ctrl+Alt+D
     toggles; Ctrl+Alt+. / Ctrl+Alt+, and Esc are registered only during a session.
-  - **Server:** `/api/screen/circle-ask` (prompt `circle-ask.v1`, two images, steps streamed and
+  - **Server:** `/api/screen/circle-ask` (prompt `circle-ask.v2`, two images, steps streamed and
     checked in code: ink within 120 px of the marks, 25 words, the safety check, abort on an unsafe
     step), `/api/screen/read-question` (`read-question.v1`, handwriting), `/api/screen/entries/
 append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) and

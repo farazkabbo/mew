@@ -27,6 +27,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 use super::circle_answer::{self, Answer};
 use super::circle_protocol::{clean_question, Question};
 use super::coach::{self, ScreenCoach};
+use super::drag::{Drag, DragLook};
 use super::frame::ScreenRect;
 use super::marks::{self, MarkKind, Pt, WordBox, MAX_MARKS};
 use super::overlay::{self, require_surface, Surface};
@@ -39,6 +40,9 @@ use super::win::{input, target};
 /// Draw overlay page events (desktop/overlay-src/draw-overlay.ts).
 const DRAW_SHOW: &str = "mew:draw-show";
 const DRAW_FADE: &str = "mew:draw-fade";
+/// The mouse stroke (or question box) being dragged, read by the tracker (`drag.rs`).
+const DRAW_LIVE: &str = "mew:draw-live";
+const DRAW_BOX: &str = "mew:draw-box";
 /// Pointer page events (desktop/overlay-src/pointer.ts).
 const POINTER_LOOK: &str = "mew:pointer-look";
 /// Card page events (desktop/overlay-src/circle-card.ts).
@@ -51,6 +55,12 @@ const MARKS_KEPT: Duration = Duration::from_secs(60);
 const HIDE_CHECK_EVERY: Duration = Duration::from_millis(500);
 /// A cursor that moved within this time keeps the tracker at a frame per look.
 const MOVING_FOR: Duration = Duration::from_millis(500);
+/// How often the tracker looks while the mouse draws (smooth strokes).
+const DRAG_TICK: Duration = Duration::from_millis(8);
+/// A pen or touch stroke from the page this soon after a mouse drag is the same stroke.
+const SAME_STROKE: Duration = Duration::from_millis(400);
+/// A question box smaller than this (CSS pixels) is a slip.
+const MIN_BOX: f32 = 8.0;
 
 /// One student mark, in screen pixels.
 pub(super) struct Mark {
@@ -111,6 +121,12 @@ pub struct CircleState {
     /// Draw mode is on right now (the keys or the toggle).
     drawing: bool,
     pub(super) session: Option<Session>,
+    /// "Select question on screen": the next drag is a box around the question.
+    selecting: bool,
+    /// The mouse, read by the tracker while draw mode or selecting is on.
+    drag: Drag,
+    /// When the mouse last drew (to tell a pen stroke the page also saw from a new one).
+    dragged_at: Option<Instant>,
     /// What the pointer shows.
     look: Option<PointerLook>,
     tracker_running: bool,
@@ -173,7 +189,8 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
         let now = Instant::now();
         let held = input::draw_keys_held();
         let drawing = state(app).map(|mut s| {
-            let drawing = held || s.draw_toggle;
+            // A stroke keeps draw mode on until it ends (the keys often come up first).
+            let drawing = held || s.draw_toggle || s.drag.active();
             let changed = drawing != s.drawing;
             s.drawing = drawing;
             (drawing, changed)
@@ -191,6 +208,7 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
         }
         let settings = coach::circle_settings(app);
         let cursor = input::cursor();
+        let dragging = track_drag(app, cursor);
         if cursor != last_cursor {
             moved_at = now;
             last_cursor = cursor;
@@ -224,7 +242,11 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
         expire_session(app, now);
 
         let moving = now.duration_since(moved_at) < MOVING_FOR;
-        std::thread::sleep(Duration::from_millis(tick_ms(moving, drawing)));
+        std::thread::sleep(if dragging {
+            DRAG_TICK
+        } else {
+            Duration::from_millis(tick_ms(moving, drawing))
+        });
     }
 
     // Off or paused: nothing shows, nothing is held.
@@ -237,8 +259,88 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
         state.drawing = false;
         state.draw_toggle = false;
         state.keyboard = None;
+        state.selecting = false;
+        state.drag.cancel();
     }
     set_drawing(app, false);
+}
+
+/// One look at the mouse (`drag.rs`) while draw mode or "select question" is on: shows the stroke
+/// or box as it's dragged, and adds the mark (or asks about the box) when the button comes up.
+/// True while a drag is in progress.
+fn track_drag<R: Runtime>(app: &AppHandle<R>, cursor: Option<(i32, i32)>) -> bool {
+    let down = input::primary_button_down();
+    let (look, selecting, from) = {
+        let Some(mut s) = state(app) else {
+            return false;
+        };
+        let listening = (s.drawing && s.keyboard.is_none()) || s.selecting;
+        let (Some((x, y)), true) = (cursor, listening) else {
+            s.drag = Drag::new(down);
+            return false;
+        };
+        let look = s.drag.look(down, (x as f32, y as f32));
+        if look != DragLook::Idle {
+            s.dragged_at = Some(Instant::now());
+        }
+        (look, s.selecting, s.drag.first())
+    };
+    let to_css = |points: &[Pt]| {
+        with_session(app, |s| {
+            let scale = s.scale() as f32;
+            let (left, top) = (s.monitor.left as f32, s.monitor.top as f32);
+            points
+                .iter()
+                .map(|(x, y)| [(x - left) / scale, (y - top) / scale])
+                .collect::<Vec<_>>()
+        })
+    };
+    let started = matches!(look, DragLook::Started(_));
+    match look {
+        DragLook::Idle => {}
+        DragLook::Started(at) | DragLook::Moved(at) if selecting => {
+            if let Some(css) = to_css(&[from.unwrap_or(at), at]) {
+                overlay::dispatch(
+                    app,
+                    Surface::Draw,
+                    DRAW_BOX,
+                    &json!({ "from": css[0], "to": css[1] }),
+                );
+            }
+        }
+        DragLook::Started(at) | DragLook::Moved(at) => {
+            let refused = with_session(app, |s| s.refused.is_some()).unwrap_or(true);
+            if let (false, Some(css)) = (refused, to_css(&[at])) {
+                overlay::dispatch(
+                    app,
+                    Surface::Draw,
+                    DRAW_LIVE,
+                    &json!({ "start": started, "points": css }),
+                );
+            }
+        }
+        DragLook::Finished(points) if selecting => select_dragged(app, &points),
+        DragLook::Finished(points) => {
+            if let Some(points) = with_session(app, |s| on_monitor(s.monitor, points)) {
+                add_mark(app, points);
+            }
+        }
+    }
+    state(app).is_some_and(|s| s.drag.active())
+}
+
+/// A mouse stroke's points, kept on the session's monitor (the cursor can run off its edge).
+fn on_monitor(monitor: ScreenRect, points: Vec<Pt>) -> Vec<Pt> {
+    let (right, bottom) = ((monitor.right - 1) as f32, (monitor.bottom - 1) as f32);
+    points
+        .into_iter()
+        .map(|(x, y)| {
+            (
+                x.clamp(monitor.left as f32, right),
+                y.clamp(monitor.top as f32, bottom),
+            )
+        })
+        .collect()
 }
 
 /// What keeps the pointer hidden whatever the setting (checked twice a second).
@@ -312,9 +414,9 @@ fn start_keyboard_drawing<R: Runtime>(app: &AppHandle<R>) {
         return;
     };
     begin_session_if_needed(app, &window);
-    let _ = window.set_ignore_cursor_events(false);
-    let _ = window.set_focusable(true);
-    let _ = window.set_focus();
+    overlay::set_click_through(&window, false);
+    overlay::set_activatable(&window, true);
+    overlay::focus_quietly(&window);
     let needs_capture = with_session(app, |s| {
         let needs = s.capture.is_none() && !s.capturing && s.refused.is_none();
         if needs {
@@ -335,11 +437,11 @@ fn end_keyboard_drawing<R: Runtime>(app: &AppHandle<R>) {
         return;
     };
     if let Some(window) = app.get_webview_window(Surface::Draw.label()) {
-        let _ = window.set_focusable(false);
+        overlay::set_activatable(&window, false);
     }
     if in_session(app) {
         if let Some(card) = app.get_webview_window(Surface::Card.label()) {
-            let _ = card.set_focus();
+            overlay::focus_quietly(&card);
         }
     } else {
         input::give_focus_back(previous);
@@ -411,7 +513,8 @@ fn set_drawing<R: Runtime>(app: &AppHandle<R>, drawing: bool) {
     if drawing {
         begin_session_if_needed(app, &window);
     }
-    let _ = window.set_ignore_cursor_events(!drawing);
+    eprintln!("[screen] draw mode {}", if drawing { "on" } else { "off" });
+    overlay::set_click_through(&window, !drawing);
     show_marks(app);
 }
 
@@ -455,6 +558,10 @@ fn begin_session_if_needed<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindo
     coach::on_worker(app, move |tools| {
         let privacy = coach::privacy_of(&handle);
         if let Err(refusal) = super::pipeline::may_use_screen_now(tools, &privacy) {
+            eprintln!(
+                "[screen] drawing can't look at this app: {}",
+                refusal.message()
+            );
             with_session(&handle, |s| s.refused = Some(refusal.message()));
             show_marks(&handle);
             circle_answer::show_card_message(&handle, &refusal.message());
@@ -493,6 +600,13 @@ pub fn screen_draw_mark<R: Runtime>(
 ) -> Result<(), String> {
     require_surface(&window, Surface::Draw)?;
     let app = window.app_handle();
+    // A pen can move the mouse too: a stroke the tracker read already is the same one.
+    let mouse_drew = state(app).is_some_and(|s| {
+        s.drag.active() || s.dragged_at.is_some_and(|at| at.elapsed() < SAME_STROKE)
+    });
+    if mouse_drew {
+        return Ok(());
+    }
     let points = to_screen_points(app, &stroke.points).ok_or("Not allowed.")?;
     add_mark(app, points);
     Ok(())
@@ -577,7 +691,13 @@ fn add_mark<R: Runtime>(app: &AppHandle<R>, points: Vec<Pt>) {
             "Up to three marks at a time. Ask about these, or press Esc to start again.",
         ),
         Some(MarkOutcome::Added) => circle_answer::show_ask_bar(app),
-        Some(MarkOutcome::Refused) | None => {}
+        // Say why again: the student may have missed it when drawing began.
+        Some(MarkOutcome::Refused) => {
+            if let Some(reason) = with_session(app, |s| s.refused.clone()).flatten() {
+                circle_answer::show_card_message(app, &reason);
+            }
+        }
+        None => {}
     }
 }
 
@@ -703,7 +823,10 @@ pub(super) fn show_marks<R: Runtime>(app: &AppHandle<R>) {
 
 /// Clears everything: marks, ink, card, and the capture (wiped). Esc, pausing, or the end.
 pub fn end_session<R: Runtime>(app: &AppHandle<R>) {
-    let ended = state(app).and_then(|mut s| s.session.take());
+    let ended = state(app).and_then(|mut s| {
+        s.selecting = false;
+        s.session.take()
+    });
     if ended.is_none() {
         return;
     }
@@ -901,8 +1024,47 @@ fn select_question<R: Runtime>(app: &AppHandle<R>) {
     let Some(window) = app.get_webview_window(Surface::Draw.label()) else {
         return;
     };
-    let _ = window.set_ignore_cursor_events(false);
+    overlay::set_click_through(&window, false);
+    if let Some(mut state) = state(app) {
+        state.selecting = true;
+    }
     overlay::dispatch(app, Surface::Draw, DRAW_SHOW, &json!({ "mode": "select" }));
+}
+
+/// The mouse dragged a box around the question (the tracker read it; screen pixels).
+fn select_dragged<R: Runtime>(app: &AppHandle<R>, points: &[Pt]) {
+    let (Some(&(x0, y0)), Some(&(x1, y1))) = (points.first(), points.last()) else {
+        return;
+    };
+    let area = with_session(app, |s| {
+        let min = MIN_BOX * s.scale() as f32;
+        let big_enough = (x1 - x0).abs() >= min && (y1 - y0).abs() >= min;
+        big_enough.then(|| ScreenRect {
+            left: x0.min(x1) as i32,
+            top: y0.min(y1) as i32,
+            right: x0.max(x1) as i32,
+            bottom: y0.max(y1) as i32,
+        })
+    })
+    .flatten();
+    match area {
+        Some(area) => ask_about_area(app, area),
+        // A slip: the box goes and the next drag tries again.
+        None => overlay::dispatch(app, Surface::Draw, DRAW_SHOW, &json!({ "mode": "select" })),
+    }
+}
+
+/// Selecting is over: the overlay goes back to draw mode, and the question in `area` is read.
+fn ask_about_area<R: Runtime>(app: &AppHandle<R>, area: ScreenRect) {
+    let drawing = state(app).is_some_and(|mut s| {
+        s.selecting = false;
+        s.drawing
+    });
+    if let Some(window) = app.get_webview_window(Surface::Draw.label()) {
+        overlay::set_click_through(&window, !drawing);
+    }
+    show_marks(app);
+    coach::capture_for_question(app, area);
 }
 
 /// The student dragged a box around their question (overlay CSS pixels: x, y, width, height).
@@ -913,13 +1075,10 @@ pub fn screen_draw_select<R: Runtime>(
 ) -> Result<(), String> {
     require_surface(&window, Surface::Draw)?;
     let app = window.app_handle();
-    let drawing = state(app).is_some_and(|s| s.drawing);
-    let _ = window.set_ignore_cursor_events(!drawing);
-    show_marks(app);
     let area = with_session(app, |s| {
         let scale = s.scale() as f32;
         let [x, y, w, h] = rect;
-        let ok = [x, y, w, h].iter().all(|v| v.is_finite()) && w >= 8.0 && h >= 8.0;
+        let ok = [x, y, w, h].iter().all(|v| v.is_finite()) && w >= MIN_BOX && h >= MIN_BOX;
         ok.then(|| ScreenRect {
             left: s.monitor.left + (x * scale) as i32,
             top: s.monitor.top + (y * scale) as i32,
@@ -929,6 +1088,6 @@ pub fn screen_draw_select<R: Runtime>(
     })
     .flatten()
     .ok_or("Drag a box around the question.")?;
-    coach::capture_for_question(app, area);
+    ask_about_area(app, area);
     Ok(())
 }

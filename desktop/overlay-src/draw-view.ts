@@ -20,7 +20,7 @@ export type DrawView = {
 };
 
 const MAX_MARKS = 3;
-const MAX_POINTS = 5_000;
+export const MAX_POINTS = 5_000;
 
 /** The view (fields that are missing keep their old value), or null for anything malformed. */
 export function parseDrawView(detail: unknown): (Partial<DrawView> & { mode: DrawMode }) | null {
@@ -76,6 +76,35 @@ export function parseDrawView(detail: unknown): (Partial<DrawView> & { mode: Dra
     out.pointer = [x, y];
   }
   return out;
+}
+
+/** Points of the mouse stroke being drawn (Rust reads the mouse); `start` begins a new one. */
+export type DrawLive = { start: boolean; points: Pt[] };
+
+export function parseLive(detail: unknown): DrawLive | null {
+  if (typeof detail !== "object" || detail === null) return null;
+  const { start, points } = detail as Record<string, unknown>;
+  if (typeof start !== "boolean" || !Array.isArray(points) || points.length > MAX_POINTS) {
+    return null;
+  }
+  const parsed: Pt[] = [];
+  for (const p of points) {
+    const point = numbers(p, 2);
+    if (!point) return null;
+    const [x = 0, y = 0] = point;
+    parsed.push([x, y]);
+  }
+  return { start, points: parsed };
+}
+
+/** The question box being dragged with the mouse: from where the drag began to the cursor. */
+export function parseBox(detail: unknown): { from: Pt; to: Pt } | null {
+  if (typeof detail !== "object" || detail === null) return null;
+  const { from, to } = detail as Record<string, unknown>;
+  const a = numbers(from, 2);
+  const b = numbers(to, 2);
+  if (!a || !b) return null;
+  return { from: [a[0] ?? 0, a[1] ?? 0], to: [b[0] ?? 0, b[1] ?? 0] };
 }
 
 /** `value` if it's exactly `length` finite numbers. */

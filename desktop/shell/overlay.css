@@ -434,7 +434,7 @@ body.pointer {
 
 .mew-pointer[data-look="drawing"] .pen {
   display: block;
-  fill: #3b5b8c;
+  fill: #e02424;
 }
 
 .mew-pointer[data-look="listening"] .halo {

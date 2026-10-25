@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseDrawView, rectPath } from "./draw-view";
+import { parseBox, parseDrawView, parseLive, rectPath } from "./draw-view";
 
 describe("the draw overlay's view", () => {
   it("accepts what Rust sends", () => {
@@ -52,5 +52,20 @@ describe("the draw overlay's view", () => {
     ]) {
       expect(parseDrawView(bad)).toBeNull();
     }
+  });
+});
+
+describe("the mouse stroke and box Rust reads", () => {
+  it("accepts a stroke's new points and a box", () => {
+    expect(parseLive({ start: true, points: [[1, 2]] })).toEqual({ start: true, points: [[1, 2]] });
+    expect(parseBox({ from: [1, 2], to: [30, 40] })).toEqual({ from: [1, 2], to: [30, 40] });
+  });
+
+  it("refuses anything else", () => {
+    expect(parseLive({ points: [[1, 2]] })).toBeNull();
+    expect(parseLive({ start: false, points: [[1, Number.NaN]] })).toBeNull();
+    expect(parseLive({ start: false, points: [[1, 2, 3]] })).toBeNull();
+    expect(parseBox({ from: [1, 2] })).toBeNull();
+    expect(parseBox(null)).toBeNull();
   });
 });

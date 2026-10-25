@@ -1002,11 +1002,11 @@ fn take_for_saving(session: &mut Session, include_link: bool) -> Option<Saving> 
     })
 }
 
-/// A mark as the student's own ink stroke, in overlay pixels (graphite blue).
+/// A mark as the student's own ink stroke, in overlay pixels (red, like on screen).
 fn student_stroke(mark: &Mark, monitor: ScreenRect, scale: f32) -> InkStroke {
     InkStroke {
         tool: InkTool::Pen,
-        color: "#3b5b8c".to_owned(),
+        color: super::ink::STUDENT_INK.to_owned(),
         width: STUDENT_WIDTH_CSS * scale,
         points: mark
             .points

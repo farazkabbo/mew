@@ -29,10 +29,11 @@ use tauri::{
 };
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongPtrW, SetWindowDisplayAffinity, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    GWL_STYLE, HWND_TOPMOST, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE, WDA_EXCLUDEFROMCAPTURE, WINDOW_STYLE, WS_CAPTION,
-    WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+    GetWindowLongPtrW, SetForegroundWindow, SetWindowDisplayAffinity, SetWindowLongPtrW,
+    SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE, HWND_TOPMOST, SWP_FRAMECHANGED,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE,
+    WDA_EXCLUDEFROMCAPTURE, WINDOW_STYLE, WS_CAPTION, WS_EX_LAYERED, WS_EX_NOACTIVATE,
+    WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
 };
 
 use super::frame::ScreenRect;
@@ -278,6 +279,64 @@ fn strip_frame(hwnd: HWND) {
             );
         }
     }
+}
+
+// ─── Changing a shown overlay ────────────────────────────────────────────────────────────────
+//
+// Overlays are shown with `show_quietly` (tao's own `show` would take the focus), so tao thinks
+// they're hidden. Its setters must not be used on them once shown: `set_ignore_cursor_events`
+// and `set_focusable` write back all of tao's window flags, which hides the window again (the
+// draw overlay vanished as draw mode came on, and the drag went to the app below), and
+// `set_focus` does nothing for a window it thinks is hidden. These change the window directly.
+
+/// Whether an overlay lets the mouse through to the windows below (tao's styles for it).
+pub fn set_click_through<R: Runtime>(window: &WebviewWindow<R>, through: bool) {
+    set_ex_style(window, WS_EX_TRANSPARENT.0 | WS_EX_LAYERED.0, through);
+}
+
+/// Whether an overlay can be activated (keyboard drawing gives it the keyboard).
+pub fn set_activatable<R: Runtime>(window: &WebviewWindow<R>, activatable: bool) {
+    set_ex_style(window, WS_EX_NOACTIVATE.0, !activatable);
+}
+
+/// Gives an overlay the focus. Windows may refuse (focus rules); then the student clicks.
+pub fn focus_quietly<R: Runtime>(window: &WebviewWindow<R>) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let raw = hwnd.0 as isize;
+    let _ = window.run_on_main_thread(move || {
+        // SAFETY: a window of this process; plain value arguments.
+        let _ = unsafe { SetForegroundWindow(HWND(raw as *mut _)) };
+    });
+}
+
+/// Sets (`on`) or clears extended style `bits`, on the window's own thread.
+fn set_ex_style<R: Runtime>(window: &WebviewWindow<R>, bits: u32, on: bool) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let raw = hwnd.0 as isize;
+    let _ = window.run_on_main_thread(move || {
+        let hwnd = HWND(raw as *mut _);
+        // SAFETY: a top-level window of this process, on its own thread; no pointers.
+        unsafe {
+            let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+            let wanted = if on { style | bits } else { style & !bits };
+            if wanted != style {
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, wanted as isize);
+                let _ = SetWindowPos(
+                    hwnd,
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+            }
+        }
+    });
 }
 
 /// Hides an overlay window (shown with `show_quietly`).

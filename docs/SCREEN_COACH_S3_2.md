@@ -55,8 +55,8 @@ where they can keep working on it by hand.
 - **Hold Ctrl + Alt and drag** to draw. Release Ctrl + Alt to stop drawing. (Alternative:
   **Ctrl + Alt + D** toggles draw mode on and off for pen and touch users.)
 - **Pen:** in draw mode, the pen draws; the pen's eraser end removes the last mark.
-- The student's marks appear in their own ink colour (graphite blue by default), clearly different
-  from the tutor's violet.
+- The student's marks appear in their own ink colour (red, the owner's change from graphite
+  blue, which looked like a text selection), clearly different from the tutor's violet.
 - Recognized marks (section 3.3):
   - **Circle / loop** around something → "this region"
   - **Underline** under text → "this line"

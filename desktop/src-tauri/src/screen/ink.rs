@@ -21,6 +21,9 @@ pub const TUTOR_INK: &str = "#8a7bf0";
 pub const TUTOR_HIGHLIGHT: &str = "#8a7bf055";
 /// Notes Check's "look at this again" (amber; shapes, not colour alone, tell the marks apart).
 pub const QUESTION_INK: &str = "#d97706";
+/// The student's own marks in Circle & Ask: red, so they stand out from the screen's blue text
+/// selection and from the tutor's ink (also `STUDENT_INK` in desktop/overlay-src/draw-overlay.ts).
+pub const STUDENT_INK: &str = "#e02424";
 
 /// Caps on what the overlay may report (the planner's own cap is 30,000 points).
 const MAX_STROKES: usize = 400;

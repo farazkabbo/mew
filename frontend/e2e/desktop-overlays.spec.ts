@@ -473,7 +473,7 @@ test("the pointer shows its look", async ({ page }) => {
   expect(shell.violations).toEqual([]);
 });
 
-test("the draw overlay sends a finished mark, a selected question area, and a keyboard mark", async ({
+test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard mark", async ({
   page,
 }) => {
   const shell = await openShellPage(page, "draw-overlay.html");
@@ -481,29 +481,41 @@ test("the draw overlay sends a finished mark, a selected question area, and a ke
   // While drawing, the page isn't fully transparent: Windows would pass the mouse through.
   const tint = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(tint).toMatch(/^rgba\(255, 255, 255, 0\.00\d+\)$/);
+  // The mouse is Rust's (it reads it while drawing): the page sends nothing for it.
   await page.mouse.move(100, 100);
   await page.mouse.down();
-  for (let i = 1; i <= 10; i++) await page.mouse.move(100 + i * 20, 100 + (i % 2) * 30);
+  await page.mouse.move(200, 160);
   await page.mouse.up();
+  // A pen stroke is the page's own.
+  await page.evaluate(() => {
+    const pen = (type: string, x: number, y: number) =>
+      window.dispatchEvent(
+        new PointerEvent(type, { pointerType: "pen", clientX: x, clientY: y, pressure: 0.8 }),
+      );
+    pen("pointerdown", 100, 100);
+    for (let i = 1; i <= 10; i++) pen("pointermove", 100 + i * 20, 100 + (i % 2) * 30);
+    pen("pointerup", 300, 100);
+  });
   await expect.poll(async () => (await shell.calls()).length).toBe(1);
   const [mark] = await shell.calls();
   expect(mark?.cmd).toBe("screen_draw_mark");
   const points = (mark?.args as { stroke: { points: number[][] } }).stroke.points;
   expect(points.length).toBeGreaterThan(5);
-  expect(points[0]).toEqual([100, 100, 0.5]);
+  expect(points[0]?.slice(0, 2)).toEqual([100, 100]);
+  // The mouse stroke Rust reads shows as it's drawn, and bad input is ignored.
+  await shell.dispatch("mew:draw-live", { start: true, points: [[10, 10]] });
+  await shell.dispatch("mew:draw-live", { start: false, points: [[40, 40]] });
+  await shell.dispatch("mew:draw-live", { start: false, points: [["x", 1]] });
 
-  // "Select question on screen": a drag is a box.
+  // "Select question on screen": Rust reads the drag and shows the box; the page asks for nothing.
   await shell.dispatch("mew:draw-show", { mode: "select" });
   await expect(page.getByText("Drag a box around your question.")).toBeVisible();
+  await shell.dispatch("mew:draw-box", { from: [400, 300], to: [600, 360] });
   await page.mouse.move(400, 300);
   await page.mouse.down();
   await page.mouse.move(600, 360);
   await page.mouse.up();
-  await expect.poll(async () => (await shell.calls()).length).toBe(2);
-  expect((await shell.calls())[1]).toEqual({
-    cmd: "screen_draw_select",
-    args: { rect: [400, 300, 200, 60] },
-  });
+  expect(await shell.calls()).toHaveLength(1);
 
   // Keyboard drawing: Tab to a block, Space marks it (a closed path around it).
   await shell.dispatch("mew:draw-show", {
@@ -517,8 +529,8 @@ test("the draw overlay sends a finished mark, a selected question area, and a ke
   await page.keyboard.press("Tab");
   await expect(page.getByText("Text block 1 of 2. Space to mark it.")).toBeVisible();
   await page.keyboard.press("Space");
-  await expect.poll(async () => (await shell.calls()).length).toBe(3);
-  const keyed = (await shell.calls())[2]?.args as { stroke: { points: number[][] } };
+  await expect.poll(async () => (await shell.calls()).length).toBe(2);
+  const keyed = (await shell.calls())[1]?.args as { stroke: { points: number[][] } };
   expect(keyed.stroke.points[0]).toEqual([50, 50, 0.5]);
   expect(keyed.stroke.points.at(-1)).toEqual([50, 50, 0.5]);
   expect(shell.violations).toEqual([]);

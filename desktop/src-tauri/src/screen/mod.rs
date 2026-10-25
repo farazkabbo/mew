@@ -33,6 +33,7 @@ pub mod base64;
 pub mod circle_protocol;
 pub mod circle_steps;
 pub mod config;
+pub mod drag;
 pub mod frame;
 pub mod image;
 pub mod ink;
