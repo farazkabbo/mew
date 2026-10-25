@@ -108,6 +108,15 @@ def _call[T](fn: Callable[[], T]) -> T:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Course storage unavailable") from None
 
 
+def _forget(store: CourseStore, user: str, course_id: UUID) -> None:
+    """Deletes a course whose creation failed halfway (best effort: the error that stopped it is
+    the one reported)."""
+    try:
+        store.delete_course(user, course_id)
+    except Exception:
+        logger.exception("Couldn't remove half-created course %s", course_id)
+
+
 # ─── Routes ──────────────────────────────────────────────────────────────────────────────────
 
 
@@ -137,18 +146,23 @@ async def create_course(
         course = store.create_course(user, title.strip())
         source_id = uuid4()
         path = f"{user}/{source_id}.pdf"
-        store.upload(user, path, pdf)
-        store.add_source(
-            user,
-            Source(
-                id=source_id,
-                course_id=course.id,
-                kind="pdf",
-                title=title.strip(),
-                embedding_model=embedder.model,
-                storage_path=path,
-            ),
-        )
+        try:
+            store.upload(user, path, pdf)
+            store.add_source(
+                user,
+                Source(
+                    id=source_id,
+                    course_id=course.id,
+                    kind="pdf",
+                    title=title.strip(),
+                    embedding_model=embedder.model,
+                    storage_path=path,
+                ),
+            )
+        except Exception:
+            # No job will ever run for it: a course left here would say "processing" forever.
+            _forget(store, user, course.id)
+            raise
         background.add_task(
             run_ingestion,
             IngestJob(user=user, course_id=course.id, source_id=source_id, title=title, pdf=pdf),

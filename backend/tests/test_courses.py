@@ -6,13 +6,20 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from google.genai import errors as genai_errors
 from pydantic import BaseModel
 
 from mew_api.checker.sandbox import CheckerPool
 from mew_api.config import Settings
 from mew_api.courses.chunking import TextChunk, chunk_pages, looks_like_heading
 from mew_api.courses.concepts import ConceptGraph, ExtractedConcept, clean, heuristic_concepts
-from mew_api.courses.embeddings import LexicalEmbedder
+from mew_api.courses.embeddings import (
+    MAX_RATE_LIMIT_WAIT_S,
+    RATE_LIMIT_RETRIES,
+    GeminiEmbedder,
+    LexicalEmbedder,
+    retry_delay,
+)
 from mew_api.courses.ingest import IngestJob, IngestTools, run_ingestion
 from mew_api.courses.llm import GeminiLlm, LlmError, gemini_schema
 from mew_api.courses.models import NewChunk, Source
@@ -131,6 +138,64 @@ def test_lexical_embeddings_find_the_right_passage() -> None:
     scores = [sum(a * b for a, b in zip(doc, query, strict=True)) for doc in docs]
     assert scores[1] > scores[0]
     assert abs(sum(v * v for v in docs[0]) - 1) < 1e-9  # unit length
+
+
+def _rate_limited(delay: str | None) -> genai_errors.ClientError:
+    details = [{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": delay}]
+    error = {"code": 429, "status": "RESOURCE_EXHAUSTED", "message": "quota"}
+    return genai_errors.ClientError(429, {"error": {**error, "details": details if delay else []}})
+
+
+class _FlakyEmbedModels:
+    """Answers each call with the next item: an exception to raise, or a number of vectors."""
+
+    def __init__(self, script: list[Exception | int]) -> None:
+        self.script = script
+        self.calls = 0
+
+    def embed_content(self, **_: Any) -> Any:
+        step = self.script[self.calls]
+        self.calls += 1
+        if isinstance(step, Exception):
+            raise step
+        vector = type("Embedding", (), {"values": [1.0] + [0.0] * 767})
+        return type("Response", (), {"embeddings": [vector] * step})
+
+
+def _gemini_embedder(script: list[Exception | int]) -> tuple[GeminiEmbedder, list[float]]:
+    waits: list[float] = []
+    client: Any = type("Client", (), {"models": _FlakyEmbedModels(script)})
+    return GeminiEmbedder(client, "gemini-embedding-2", sleep=waits.append), waits
+
+
+def test_rate_limited_embeddings_wait_as_long_as_asked_then_go_on() -> None:
+    embedder, waits = _gemini_embedder([_rate_limited("29s"), _rate_limited(None), 2])
+    vectors = embedder.embed_documents([("A", "one"), ("B", "two")])
+    assert len(vectors) == 2
+    assert waits == [30.0, 4.0]  # what Gemini asked (plus a second), then the plain backoff
+
+
+def test_rate_limited_embeddings_give_up_after_the_retries() -> None:
+    embedder, waits = _gemini_embedder([_rate_limited("1s")] * (RATE_LIMIT_RETRIES + 1))
+    with pytest.raises(genai_errors.ClientError):
+        embedder.embed_documents([("A", "one")])
+    assert len(waits) == RATE_LIMIT_RETRIES
+
+
+def test_other_embedding_errors_are_not_retried() -> None:
+    server_error = genai_errors.ServerError(500, {"error": {"code": 500, "message": "boom"}})
+    embedder, waits = _gemini_embedder([server_error])
+    with pytest.raises(genai_errors.ServerError):
+        embedder.embed_documents([("A", "one")])
+    assert waits == []
+
+
+def test_retry_delay_is_capped_and_falls_back() -> None:
+    assert retry_delay({"error": {"details": [{"retryDelay": "600s"}]}}, 3.0) == (
+        MAX_RATE_LIMIT_WAIT_S
+    )
+    assert retry_delay({"error": {"details": [{"retryDelay": "soon"}]}}, 3.0) == 3.0
+    assert retry_delay(None, 3.0) == 3.0
 
 
 # ─── Gemini wrapper ───────────────────────────────────────────────────────────────────────────
@@ -349,6 +414,18 @@ def test_upload_validation(dev_client: TestClient) -> None:
     assert upload(dev_client, b"hello").status_code == 422
     big = b"%PDF-" + b"0" * (15 * 1024 * 1024)
     assert upload(dev_client, big).status_code == 413
+
+
+class _UploadFailsStore(MemoryCourseStore):
+    def upload(self, user: str, path: str, data: bytes) -> None:
+        raise StoreError("storage is down")
+
+
+def test_a_course_whose_upload_fails_is_not_left_processing(dev_client: TestClient) -> None:
+    app: Any = dev_client.app
+    app.state.local_courses = _UploadFailsStore()
+    assert upload(dev_client, make_pdf(CHAPTER)).status_code == 502
+    assert dev_client.get("/v1/courses", headers=LOCAL).json() == []
 
 
 def test_courses_are_private_and_local_mode_is_development_only(
