@@ -25,6 +25,9 @@ export const RATE_RULES = {
   /** Tutor turns (the expensive model). */
   tutor: { limit: 15, windowMs: MINUTE },
   tutorDaily: { limit: 400, windowMs: DAY },
+  /** Show-then-You (K6): a worked solution is up to 3 model calls and 2 checks. */
+  solution: { limit: 6, windowMs: MINUTE },
+  solutionDaily: { limit: 120, windowMs: DAY },
   /** Handwriting recognition of single lines. */
   recognize: { limit: 30, windowMs: MINUTE },
   recognizeDaily: { limit: 1500, windowMs: DAY },

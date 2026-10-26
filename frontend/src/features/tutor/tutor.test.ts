@@ -76,7 +76,7 @@ function controller(player: PcmStreamPlayer) {
   const ink = {
     render: vi.fn((_actions: unknown, opts?: { onStart?: () => void }) => {
       opts?.onStart?.();
-      return Promise.resolve({ strokes: 7, skipped: [], missing: [] });
+      return Promise.resolve({ strokes: 7, skipped: [], missing: [], groupId: "g", bbox: null });
     }),
     pause: vi.fn(),
     finish: vi.fn(),

@@ -236,7 +236,8 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       if (state.showLines !== previous.showLines) schedule({ ink: true });
       if (
         state.showTutorInk !== previous.showTutorInk ||
-        state.replayHidden !== previous.replayHidden
+        state.replayHidden !== previous.replayHidden ||
+        state.foldedGroups !== previous.foldedGroups
       ) {
         schedule({ ink: true, live: true });
       }

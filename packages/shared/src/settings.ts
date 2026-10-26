@@ -32,6 +32,8 @@ export const UserSettings = z.object({
   shortcuts: ShortcutBindings,
   /** The one-time "Shortcuts got simpler" card was read (K2; new students never see it). */
   shortcuts_notice_seen: z.boolean(),
+  /** After a full solution, a similar problem to do alone (K6 §6.5: "give me a Your Turn"). */
+  your_turn_after_solution: z.boolean(),
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   onboarded: false,
   shortcuts: {},
   shortcuts_notice_seen: false,
+  your_turn_after_solution: true,
 };
 
 export const SettingsPatch = UserSettings.partial().strict();

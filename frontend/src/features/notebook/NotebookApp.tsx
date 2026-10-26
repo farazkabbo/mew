@@ -11,6 +11,8 @@ import { useNotesCheck } from "../notes/check-store";
 import { checkClip, pageOfFinding, usePageMarks } from "../notes/notebook-check";
 import { NotesCheckPanel } from "../notes/NotesCheckPanel";
 import { NotesMarks } from "../notes/NotesMarks";
+import { SolutionRecords } from "../solution/record";
+import { SolutionLayer } from "../solution/SolutionLayer";
 import { EntryNotes } from "./EntryNotes";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
@@ -290,6 +292,11 @@ export function NotebookApp({ userId }: { userId: string }) {
     [],
   );
   const mew = useMewSession(engine, courseId, onNotebookVoice);
+  const solutionRecords = useMemo(() => new SolutionRecords(db), [db]);
+  useEffect(() => {
+    mew.setSolutionRecords(solutionRecords);
+    return () => mew.setSolutionRecords(null);
+  }, [mew, solutionRecords]);
   useShortcuts({ ...actions, checkWork: mew.checkWork }, keys.platform, keys.own);
   // Hold left Ctrl + left Alt to talk, let go to ask (K2; circling your writing comes with K6).
   useHoldToTalk({
@@ -515,6 +522,16 @@ export function NotebookApp({ userId }: { userId: string }) {
         </div>
 
         {engine && <EntryNotes canvas={canvas} images={engine.images} />}
+
+        {engine && view === "page" && (
+          <SolutionLayer
+            canvas={canvas}
+            pageId={engine.pageId}
+            flow={mew.showThenYou}
+            records={solutionRecords}
+            checkShortcut={keys.shown("check_work")}
+          />
+        )}
 
         {engine && (
           <NotesMarks

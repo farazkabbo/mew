@@ -1,7 +1,14 @@
 "use client";
 
 import { currentLine, unionBBox } from "@mew/ink";
-import { type MewDecisionResponse, type MewInput, reconcileMarks, TUTOR_LIMITS } from "@mew/shared";
+import {
+  type AttemptSource,
+  type Evidence,
+  type MewDecisionResponse,
+  type MewInput,
+  reconcileMarks,
+  TUTOR_LIMITS,
+} from "@mew/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { coursesApi } from "../courses/api";
@@ -13,6 +20,10 @@ import { PyodideCodeRunner } from "../check/code-runner";
 import { gradeRemote } from "../quiz/grade-client";
 import { QuizSession } from "../quiz/session";
 import { useSettings } from "../settings/store";
+import { checkMathSteps, conceptsOf, requestSolution } from "../solution/api";
+import { ShowThenYou } from "../solution/flow";
+import type { SolutionRecords } from "../solution/record";
+import { buildTutorRequest } from "../tutor/context";
 import { TutorController } from "../tutor/controller";
 import { TutorInk } from "../tutor/ink";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
@@ -26,6 +37,11 @@ import { CascadeMewGate, WorkerClassifier } from "./local-gate";
 import type { MascotState } from "./Mascot";
 import { useMew } from "./store";
 import { browserClock } from "./triggers";
+
+/** How long a solution waits for the problem's lines to be read. */
+const READ_WAIT_MS = 4000;
+/** Lines around the work that a solution request reads first. */
+const PROBLEM_LINES = 6;
 
 /** Recognise the line being written once the pen has rested this long. */
 const RECOGNIZE_AFTER_MS = 1200;
@@ -57,6 +73,7 @@ export type NotebookVoiceHandler = (
 /** The voice → Mew → tutor pipeline, independent of React. */
 function createPipeline() {
   let notebookVoice: NotebookVoiceHandler | null = null;
+  let records: SolutionRecords | null = null;
   let engine: PageEngine | null = null;
   let courseId: string | null = null;
   let mew: MewController | null = null;
@@ -72,6 +89,7 @@ function createPipeline() {
   });
   const checker = new WorkChecker({ recognition, code: new PyodideCodeRunner() });
   let quiz: QuizSession | null = null;
+  let solutions: ShowThenYou | null = null;
   const tutor = new TutorController({
     player: new PcmStreamPlayer(),
     recognition,
@@ -130,6 +148,15 @@ function createPipeline() {
         return;
       }
       const intent = turn.intent;
+      if (intent === "show_full_solution" && !quizSession.active) {
+        void solutions?.run(turn.utterance);
+        return;
+      }
+      // "Is this right?" about the Your Turn is checked against its problem (K6 §6.1 step 6).
+      if (intent === "check_work" && solutions?.owns(engine)) {
+        void solutions.check({ quiet: false });
+        return;
+      }
       if (quizSession.active) {
         // "Is this right?" during a quiz is answered by the grader; asking for help counts.
         if (turn.intent === "check_work") {
@@ -148,12 +175,107 @@ function createPipeline() {
       return phase !== "idle" || recent;
     },
     activeRegionText: (doc) => recognition.currentLineText(doc),
-    quickCheck: (doc) =>
-      useTutor.getState().autoCheck ? checker.quickCheck(doc) : Promise.resolve(null),
+    quickCheck: (doc) => {
+      if (!useTutor.getState().autoCheck) return Promise.resolve(null);
+      // A pen pause in the Your Turn box checks it from its problem (and marks it itself).
+      if (solutions?.owns(engine)) return solutions.check({ quiet: true }).then(() => null);
+      return checker.quickCheck(doc);
+    },
     // A verified-correct line just gets a small tick: no voice, no model call.
     onVerifiedCorrect: (checks) => void ink.render(reconcileMarks([], checks)),
   });
   const gate = mew;
+  const read = (doc: PageEngine["doc"], line: Parameters<RecognitionService["recognize"]>[1]) =>
+    Promise.race([
+      recognition.recognize(doc, line),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), READ_WAIT_MS)),
+    ]);
+  const courseConcepts = async () => {
+    if (!courseId) return [];
+    return conceptsOf(await coursesApi.get(courseId));
+  };
+  const attempt = (conceptIds: readonly string[], evidence: Evidence, source: AttemptSource) => {
+    const course = courseId;
+    if (!course) return;
+    for (const conceptId of conceptIds) {
+      void coursesApi
+        .attempt(course, { conceptId, correct: true, evidence, source })
+        .catch(() => undefined);
+    }
+  };
+  // Show-then-You (K6): "just give me the answer" is worked, verified, folded, then a Your Turn.
+  solutions = new ShowThenYou({
+    engine: () => engine,
+    ink,
+    say: (text) => (text ? tutor.announce(text) : Promise.resolve()),
+    request: async (utterance) => {
+      const doc = engine?.doc ?? null;
+      if (doc) {
+        // The problem's lines are read first: the model needs them as text.
+        const recent = [...studentLines(doc)]
+          .sort((a, b) => b.lastCreatedAt - a.lastCreatedAt)
+          .slice(0, PROBLEM_LINES);
+        await Promise.all(recent.map((line) => read(doc, line)));
+      }
+      const [context, concepts] = await Promise.all([
+        buildTutorRequest({
+          intent: "show_full_solution",
+          utterance,
+          transcript: useVoice.getState().segments.map((s) => s.text),
+          previousSpeech: [],
+          answerStyle: "direct",
+          doc,
+          images: engine?.images ?? [],
+          recognition,
+          courseId,
+          quiz: null,
+        }),
+        courseConcepts().catch(() => []),
+      ]);
+      return {
+        utterance: context.lastUtterance,
+        recognizedLines: context.recognizedLines,
+        pageImage: context.pageImage,
+        clippedText: context.clippedText,
+        courseContext: context.courseContext,
+        concepts,
+        variantOf: null,
+      };
+    },
+    solve: (request) => requestSolution(request),
+    checkMath: checkMathSteps,
+    read: async (doc, line) => {
+      const recognised = await read(doc, line);
+      return recognised ? (recognised.latex ?? recognised.text).trim() || null : null;
+    },
+    hintTurn: (checks) =>
+      void tutor.respond({
+        intent: "check_work",
+        utterance: "Check my work.",
+        triggeredAt: Date.now(),
+        gateMs: 0,
+        checks,
+      }),
+    hintStep: () =>
+      void tutor.respond({
+        intent: "complete_step",
+        utterance: "Give me a hint step.",
+        triggeredAt: Date.now(),
+        gateMs: 0,
+      }),
+    attempt,
+    review: (conceptIds) => {
+      const course = courseId;
+      if (!course) return;
+      for (const id of conceptIds) void coursesApi.explored(course, id).catch(() => undefined);
+    },
+    save: (record) => records?.save(record) ?? Promise.resolve(),
+    courseId: () => courseId,
+    yourTurnWanted: () => useSettings.getState().settings.your_turn_after_solution,
+    newId: () => crypto.randomUUID(),
+    now: () => Date.now(),
+  });
+  const showThenYou = solutions;
   return {
     mew: gate,
     tutor,
@@ -161,6 +283,12 @@ function createPipeline() {
     ink,
     quiz: quizSession,
     classifier,
+    showThenYou,
+    engine: () => engine,
+    /** Where worked solutions are kept on this device (the notebook's database). */
+    setRecords(next: SolutionRecords | null) {
+      records = next;
+    },
     /** The course of the notebook on screen (the tutor draws on its material). */
     setCourse(next: string | null) {
       courseId = next;
@@ -191,7 +319,7 @@ export function useMewSession(
   useEffect(() => {
     pipeline.setNotebookVoice(onNotebookVoice);
   }, [pipeline, onNotebookVoice]);
-  const { mew, tutor, recognition, ink, quiz } = pipeline;
+  const { mew, tutor, recognition, ink, quiz, showThenYou } = pipeline;
   const voice = useRef<VoiceSession | null>(null);
 
   useEffect(() => {
@@ -266,13 +394,17 @@ export function useMewSession(
       void quiz.check();
       return;
     }
+    if (showThenYou.owns(pipeline.engine())) {
+      void showThenYou.check({ quiet: false });
+      return;
+    }
     void tutor.respond({
       intent: "check_work",
       utterance: "Check my work.",
       triggeredAt: Date.now(),
       gateMs: 0,
     });
-  }, [tutor, quiz]);
+  }, [tutor, quiz, showThenYou, pipeline]);
 
   return {
     startListening,
@@ -284,6 +416,8 @@ export function useMewSession(
     ink,
     quiz,
     recognition,
+    showThenYou,
+    setSolutionRecords: pipeline.setRecords,
   };
 }
 

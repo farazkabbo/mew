@@ -56,6 +56,8 @@ class UserSettings(BaseModel):
     shortcuts: dict[str, str] = Field(default_factory=dict)
     #: The one-time "Shortcuts got simpler" card was read (K2).
     shortcuts_notice_seen: bool = False
+    #: After a full solution, a similar problem to do alone (K6). On unless turned off.
+    your_turn_after_solution: bool = True
 
     @field_validator("shortcuts", mode="before")
     @classmethod
@@ -88,3 +90,4 @@ class SettingsPatch(BaseModel):
     onboarded: bool | None = None
     shortcuts: Annotated[dict[ShortcutAction, ShortcutBinding], Field(max_length=15)] | None = None
     shortcuts_notice_seen: bool | None = None
+    your_turn_after_solution: bool | None = None

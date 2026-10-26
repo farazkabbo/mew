@@ -92,6 +92,58 @@ export const markCorrect: ActionRenderer<Of<"mark_correct">> = (action, planner,
   );
 };
 
+/** K6 §6.3: a wavy line under one of the student's lines. */
+export const underlineLine: ActionRenderer<Of<"underline">> = (action, planner, index) => {
+  const line = planner.line(action.targetLineId);
+  if (!line) return "unknown line";
+  const [x, y, w, h] = line.bbox;
+  const rng = seeded(line.bbox);
+  const base = y + h + 0.35 * planner.scale.xHeight;
+  const steps = Math.max(8, Math.min(48, Math.round(w / 6)));
+  const amplitude = 0.08 * planner.scale.xHeight;
+  const path: [number, number][] = Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps;
+    return [x + t * w, base + amplitude * Math.sin(signed(rng) + t * 9)];
+  });
+  return planner.commitPaths([path], planner.input.colors.ink, action.type, index) ?? "too much ink";
+};
+
+/** K6 §6.3: a loop round one of the student's lines. */
+export const circleLine: ActionRenderer<Of<"circle_region">> = (action, planner, index) => {
+  const line = planner.line(action.targetLineId);
+  if (!line) return "unknown line";
+  return (
+    planner.commitPaths([ellipseAround(line.bbox, planner)], planner.input.colors.ink, action.type, index) ??
+    "too much ink"
+  );
+};
+
+/** K6 §6.3: an arrow to one of the student's lines from a short note in the margin. */
+export const pointAtLine: ActionRenderer<Of<"point_at">> = (action, planner, index) => {
+  const line = planner.line(action.targetLineId);
+  if (!line) return "unknown line";
+  const x = planner.scale.xHeight;
+  const note = action.note ? planner.typesetText(action.note, 0.85) : null;
+  const box: Box = note ?? { width: 2, ascent: 1, descent: 0, marks: [] };
+  const rect = planner.place(box, { near: "margin_right" }, line);
+  const [lx, ly, lw, lh] = line.bbox;
+  // From the note's left edge to just right of the line, level with its middle.
+  const from: [number, number] = [rect[0] - 0.3 * x, rect[1] + rect[3] / 2];
+  const to: [number, number] = [lx + lw + 0.4 * x, ly + lh / 2];
+  const angle = Math.atan2(to[1] - from[1], to[0] - from[0]);
+  const head = 0.8 * x;
+  const wing = (side: number): [number, number] => [
+    to[0] - head * Math.cos(angle + side * 0.45),
+    to[1] - head * Math.sin(angle + side * 0.45),
+  ];
+  const paths = [[from, to], [wing(1), to, wing(-1)]];
+  const pieces = note ? [{ box: note, at: planner.origin(note, rect) }] : [];
+  return (
+    planner.commit({ color: planner.input.colors.ink, pieces, paths }, action.type, index) ??
+    "too much ink"
+  );
+};
+
 /** A hand-drawn loop around a line: slightly uneven, overlapping where it closes. */
 function ellipseAround(bbox: BBox, planner: BoardPlanner): [number, number][] {
   const pad = 0.45 * planner.scale.xHeight;
@@ -133,6 +185,9 @@ export const TEXT_RENDERERS = {
   complete_step: completeStep,
   mark_error: markError,
   mark_correct: markCorrect,
+  underline: underlineLine,
+  circle_region: circleLine,
+  point_at: pointAtLine,
 };
 
 /**

@@ -10,7 +10,8 @@ import { z } from "zod";
 export const Evidence = z.enum(["independent", "with_hint", "after_explanation"]);
 export type Evidence = z.infer<typeof Evidence>;
 
-export const AttemptSource = z.enum(["practice", "quiz", "notes_check"]);
+/** Where an answer came from; `your_turn` is Show-then-You's practice problem (K6). */
+export const AttemptSource = z.enum(["practice", "quiz", "notes_check", "your_turn"]);
 export type AttemptSource = z.infer<typeof AttemptSource>;
 
 export const ConceptStatus = z.enum([

@@ -2,6 +2,7 @@ import { type ImageBlock, type Notebook, NotebookTree, type Page, type Stroke } 
 import Dexie, { type EntityTable } from "dexie";
 
 import type { LocalNoteLine } from "../notes/local-lines";
+import type { LocalSolution } from "../solution/record";
 
 /**
  * A notebook-tree change waiting to reach the server (K1): a node to send ("node", its current
@@ -55,6 +56,8 @@ export class NotebookDb extends Dexie {
   /** PDF pages drawn and kept for offline use (K4). */
   pdfPages!: EntityTable<CachedPdfPage, "key">;
   pdfs!: EntityTable<LocalPdf, "pdfId">;
+  /** Worked solutions on pages, folded or not, and their Your Turns (K6). */
+  solutions!: EntityTable<LocalSolution, "id">;
 
   constructor(userId: string) {
     super(databaseName(userId));
@@ -91,6 +94,7 @@ export class NotebookDb extends Dexie {
           .bulkPut(placed.map((n) => ({ id: n.id, kind: "node", failures: 0 })));
       });
     this.version(5).stores({ pdfPages: "key, pdfId, usedAt", pdfs: "pdfId" });
+    this.version(6).stores({ solutions: "id, pageId" });
   }
 }
 

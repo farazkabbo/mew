@@ -96,6 +96,17 @@ export const BoardAction = z.discriminatedUnion("type", [
     anchor: Anchor,
   }),
   DrawShapes.extend({ anchor: Anchor }),
+  /**
+   * K6 §6.3: marks on the student's own lines (by `lineId` from recognizedLines), not on empty
+   * space: underline it, loop round it, or point at it with a short note.
+   */
+  z.object({ type: z.literal("underline"), targetLineId: z.string().max(80) }),
+  z.object({ type: z.literal("circle_region"), targetLineId: z.string().max(80) }),
+  z.object({
+    type: z.literal("point_at"),
+    targetLineId: z.string().max(80),
+    note: z.string().min(1).max(40).optional(),
+  }),
   /** K5: a figure with rules, built by the solver (never coordinates from the model). */
   DrawGeometry.extend({ anchor: Anchor }),
   /** K5: a molecule from SMILES, laid out on the device. */

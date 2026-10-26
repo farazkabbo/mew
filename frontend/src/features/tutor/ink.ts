@@ -1,6 +1,7 @@
 import type { BBox, BoardAction, Stroke } from "@mew/shared";
 import {
   type BoardColors,
+  type BoardInput,
   type BoardPlan,
   currentLine,
   planBoard,
@@ -8,6 +9,7 @@ import {
   relocateAction,
   type SkippedAction,
   ALL_RENDERERS,
+  unionBBox,
 } from "@mew/ink";
 
 import type { PageEngine } from "../notebook/engine";
@@ -47,7 +49,18 @@ export type TutorInkDeps = {
   renderers?: Parameters<typeof planBoard>[2];
 };
 
-export type InkResult = { strokes: number; skipped: SkippedAction[]; missing: string[] };
+export type InkResult = {
+  strokes: number;
+  skipped: SkippedAction[];
+  missing: string[];
+  /** The turn's stroke group (one undo step; Show-then-You folds a solution by it). */
+  groupId: string;
+  /** Everything planned, on the page. */
+  bbox: BBox | null;
+};
+
+/** Plans ink without the model's actions (Show-then-You's boxed answer and Your Turn box). */
+export type CustomPlan = (input: BoardInput) => BoardPlan | Promise<BoardPlan>;
 
 /** Pause between strokes (pen lift) and between actions, in ms of natural writing time. */
 const PEN_LIFT_MS = 60;
@@ -93,6 +106,8 @@ export class TutorInk implements InkLayer {
   private cancelResume: (() => void) | null = null;
   private readonly clock: InkClock;
   private readonly newId: () => string;
+  /** Waiting for the ink being written to be on the page (`written()`). */
+  private waiters: (() => void)[] = [];
 
   constructor(private readonly deps: TutorInkDeps) {
     this.clock = deps.clock ?? browserInkClock;
@@ -114,6 +129,34 @@ export class TutorInk implements InkLayer {
 
   get busy(): boolean {
     return this.animation !== null;
+  }
+
+  /** Resolves once nothing is being written (now, if nothing is). */
+  written(): Promise<void> {
+    if (!this.animation) return Promise.resolve();
+    return new Promise((resolve) => this.waiters.push(resolve));
+  }
+
+  /**
+   * Where the pen is (page coordinates): the end of the stroke being written, or of the last one
+   * written; null when nothing is being written. The notebook's pointer follows it (K6 §6.3).
+   */
+  tip(): [number, number] | null {
+    const a = this.animation;
+    if (!a) return null;
+    let tip: [number, number] | null = null;
+    for (const { stroke, start, end } of a.timeline) {
+      if (a.elapsed <= start) {
+        // Not started yet: the pen waits where the next stroke begins.
+        const first = stroke.points[0];
+        tip ??= first ? [first[0], first[1]] : null;
+        break;
+      }
+      const points = a.elapsed >= end ? stroke.points : partial(stroke, (a.elapsed - start) * a.rate).points;
+      const last = points.at(-1);
+      if (last) tip = [last[0], last[1]];
+    }
+    return tip;
   }
 
   liveStrokes(): readonly Stroke[] {
@@ -140,18 +183,36 @@ export class TutorInk implements InkLayer {
       speech = "",
       onStart,
       nearStrokes,
-    }: { speech?: string; onStart?: () => void; nearStrokes?: readonly string[] } = {},
+      groupId = this.newId(),
+      plan: custom,
+    }: {
+      speech?: string;
+      onStart?: () => void;
+      nearStrokes?: readonly string[];
+      groupId?: string;
+      plan?: CustomPlan;
+    } = {},
   ): Promise<InkResult> {
     this.finish();
     const generation = ++this.generation;
     const engine = this.deps.engine();
-    if (!engine || actions.length === 0) return { strokes: 0, skipped: [], missing: [] };
+    const none = { strokes: 0, skipped: [], missing: [], groupId, bbox: null };
+    if (!engine || (actions.length === 0 && !custom)) return none;
 
-    const input = this.boardInput(engine, this.newId(), nearStrokes);
+    const input = this.boardInput(engine, groupId, nearStrokes);
     // Planning is async (graph layout): a newer turn may start meanwhile.
-    const plan: BoardPlan = await planBoard(actions, input, this.deps.renderers ?? ALL_RENDERERS);
+    const plan: BoardPlan = custom
+      ? await custom(input)
+      : await planBoard(actions, input, this.deps.renderers ?? ALL_RENDERERS);
     const strokes = plan.actions.reduce((n, a) => n + a.strokes.length, 0);
-    const result = { strokes, skipped: plan.skipped, missing: plan.missing };
+    const boxes = plan.actions.map((a) => a.bbox);
+    const result: InkResult = {
+      strokes,
+      skipped: plan.skipped,
+      missing: plan.missing,
+      groupId,
+      bbox: boxes.length > 0 ? boxes.reduce(unionBBox) : null,
+    };
     if (strokes === 0) return result;
     if (generation !== this.generation) {
       // Superseded while planning: the ink still belongs on its page, just without animating.
@@ -199,6 +260,9 @@ export class TutorInk implements InkLayer {
     if (a.paused) this.relocateBlocked(a);
     a.engine.addTutorStrokes(a.timeline.map((t) => t.stroke));
     this.emit();
+    const waiters = this.waiters;
+    this.waiters = [];
+    for (const resolve of waiters) resolve();
   }
 
   /** The session ends: nothing is left half-written. (Listeners unsubscribe themselves.) */

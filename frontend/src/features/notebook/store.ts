@@ -13,6 +13,8 @@ type ToolState = {
   showTutorInk: boolean;
   /** Tutor ink groups hidden while an entry's explanation replays (Circle & Ask, S3.2 §5). */
   replayHidden: ReadonlySet<string>;
+  /** Worked solutions folded into their "Solution · tap to peek" tab (K6 §6.1). */
+  foldedGroups: ReadonlySet<string>;
 };
 
 type ViewState = {
@@ -29,6 +31,7 @@ type Actions = {
   toggleLines(): void;
   toggleTutorInk(): void;
   setReplayHidden(groups: ReadonlySet<string>): void;
+  setFoldedGroups(groups: ReadonlySet<string>): void;
   setView(view: Partial<ViewState>): void;
 };
 
@@ -46,6 +49,7 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   showLines: false,
   showTutorInk: readFlag(TUTOR_INK_KEY, true),
   replayHidden: new Set(),
+  foldedGroups: new Set(),
   zoom: 1,
   canUndo: false,
   canRedo: false,
@@ -63,6 +67,7 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
     set({ showTutorInk });
   },
   setReplayHidden: (replayHidden) => set({ replayHidden }),
+  setFoldedGroups: (foldedGroups) => set({ foldedGroups }),
   setView: (view) => set(view),
 }));
 
