@@ -97,13 +97,49 @@ describe("toGeminiSchema for the tutor's response", () => {
     // model no description of an action at all.
     const items = (schema as { properties: { actions: { items: { anyOf: unknown[] } } } })
       .properties.actions.items;
-    expect(items.anyOf).toHaveLength(8);
-    for (const tag of ["write_math", "mark_error", "draw_plot", "draw_graph", "draw_shapes"]) {
+    expect(items.anyOf).toHaveLength(10);
+    for (const tag of [
+      "write_math",
+      "mark_error",
+      "draw_plot",
+      "draw_graph",
+      "draw_shapes",
+      "draw_geometry",
+      "draw_molecule",
+    ]) {
       expect(text).toContain(`"enum":["${tag}"]`);
     }
     // Gemini rejects array bounds combined with unions or nesting (400, checked against the API).
     expect(text).not.toMatch(/"(minItems|maxItems)"/);
     expect(text).not.toContain("oneOf");
+  });
+});
+
+describe("toGeminiSchema's union variants", () => {
+  it("put each variant's tag first (Gemini writes properties in schema order)", async () => {
+    const { CircleAskModelResponse, ScreenTutorResponse, TutorResponse } =
+      await import("@mew/shared");
+    const { toGeminiSchema } = await import("./gemini");
+    // Regression (K5): draw_molecule listed "smiles" before "type", so once the model had written
+    // "type" it could never pick a molecule (it drew a hexagon for benzene instead).
+    const firsts: string[] = [];
+    const visit = (node: unknown): void => {
+      if (Array.isArray(node)) return node.forEach(visit);
+      if (typeof node !== "object" || node === null) return;
+      const record = node as Record<string, unknown>;
+      if (Array.isArray(record.anyOf)) {
+        for (const variant of record.anyOf as { properties?: Record<string, unknown> }[]) {
+          const keys = Object.keys(variant.properties ?? {});
+          if (keys.some((k) => k === "type" || k === "kind")) firsts.push(keys[0] ?? "");
+        }
+      }
+      Object.values(record).forEach(visit);
+    };
+    for (const schema of [TutorResponse, CircleAskModelResponse, ScreenTutorResponse]) {
+      visit(toGeminiSchema(schema));
+    }
+    expect(firsts.length).toBeGreaterThan(20);
+    expect(firsts.every((key) => key === "type" || key === "kind")).toBe(true);
   });
 });
 

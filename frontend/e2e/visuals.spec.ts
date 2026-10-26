@@ -153,3 +153,62 @@ test("graphs y = sin x in ink", async ({ page }) => {
   expect(curve.bbox[2]).toBeGreaterThan(1.5 * curve.bbox[3]); // wider than tall, like the plot
   if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
 });
+
+/** K5: figures with rules are described by the model and constructed on the device. */
+test("draws a right triangle with its right-angle square and the hypotenuse highlighted", async ({
+  page,
+}) => {
+  await tutorReplies(page, "Here's the triangle: the side opposite the right angle is c.", [
+    {
+      type: "draw_geometry",
+      figure: {
+        kind: "triangle",
+        given: { a: 3, b: 4 },
+        rightAngleAt: "C",
+        labels: { c: "hypotenuse" },
+        highlight: ["c"],
+      },
+      anchor: { near: "free_space" },
+    },
+  ]);
+  await page.goto("/notebook");
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+  await ask(page, "why is this the hypotenuse?");
+
+  await expect
+    .poll(async () => (await tutorStrokes(page)).length, { timeout: 20_000 })
+    .toBeGreaterThan(10);
+  const ink = await tutorStrokes(page);
+  // Legs 3 and 4 standing on the longer one: wider than tall, roughly 4 : 3.
+  const { width, height } = extent(ink);
+  expect(width).toBeGreaterThan(height);
+  // The right-angle square: one small stroke about as wide as it is tall.
+  const square = ink.filter((s) => {
+    const [, , w, h] = s.bbox;
+    return w > 4 && h > 4 && w < width / 6 && Math.abs(w - h) < 0.35 * Math.max(w, h);
+  });
+  expect(square.length).toBeGreaterThan(0);
+  if (process.env.SHOT_TRIANGLE) await page.screenshot({ path: process.env.SHOT_TRIANGLE });
+  // The hypotenuse gone over in the highlighter.
+  expect(ink.some((s) => (s as StoredStroke & { tool: string }).tool === "highlighter")).toBe(true);
+  await expect(page.getByTestId("tutor-turns").locator("li").first()).toContainText(
+    /1 board action · \d+ ink strokes/,
+  );
+});
+
+test("draws benzene from its SMILES, bond by bond", async ({ page }) => {
+  await tutorReplies(page, "Here's benzene: six carbons in a ring.", [
+    { type: "draw_molecule", smiles: "c1ccccc1", anchor: { near: "free_space" } },
+  ]);
+  await page.goto("/notebook");
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+  await ask(page, "draw benzene");
+
+  // Six ring bonds plus three inner double-bond strokes, each its own pen stroke.
+  await expect
+    .poll(async () => (await tutorStrokes(page)).length, { timeout: 20_000 })
+    .toBeGreaterThanOrEqual(9);
+  const { width, height } = extent(await tutorStrokes(page));
+  expect(width / height).toBeGreaterThan(0.6);
+  expect(width / height).toBeLessThan(1.6);
+});

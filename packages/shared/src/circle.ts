@@ -251,6 +251,12 @@ function actionBoxes(action: TutorScreenAction): ScreenBox[] {
     case "margin_note":
     case "write_step":
       return [action.besideBox];
+    case "sketch": {
+      // The card goes in free space outside the marks; what it's beside and points at is checked.
+      if (!action.pointTo) return [action.besideBox];
+      const { x, y } = action.pointTo;
+      return [action.besideBox, { left: x, top: y, right: x, bottom: y }];
+    }
     case "point_at": {
       const { x, y } = action.point;
       return [{ left: x, top: y, right: x, bottom: y }];

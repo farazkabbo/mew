@@ -64,6 +64,9 @@ export function sameInk(
         return [action.text];
       case "write_step":
         return [action.latexOrText];
+      case "sketch":
+        // A moved sketch is the same figure: only where it sits may change.
+        return [JSON.stringify(action.figure)];
       default:
         return [];
     }

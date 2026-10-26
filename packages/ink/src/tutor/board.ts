@@ -1,4 +1,4 @@
-import type { Anchor, BBox, BoardAction, Point, Stroke } from "@mew/shared";
+import type { Anchor, BBox, BoardAction, Point, Stroke, StrokeTool } from "@mew/shared";
 
 import { inflateBBox, unionBBox } from "../geometry";
 import { strokeBBox } from "../hit-test";
@@ -12,7 +12,13 @@ import { typesetLatex } from "./typeset/latex-layout";
 import { typesetText } from "./typeset/text";
 
 /** Ink colours for tutor output (light-theme hex; the app remaps them in dark mode). */
-export type BoardColors = { ink: string; error: string; correct: string };
+export type BoardColors = {
+  ink: string;
+  error: string;
+  correct: string;
+  /** The tutor's translucent highlighter (figures' highlighted sides and atoms, K5). */
+  highlight?: string;
+};
 
 export type BoardInput = {
   pageId: string;
@@ -65,6 +71,9 @@ export type Drawing = {
   color: string;
   pieces: { box: Box; at: [number, number] }[];
   paths?: [number, number][][];
+  /** Highlighter strokes (default: pen) and their width in page units. */
+  tool?: StrokeTool;
+  width?: number;
 };
 
 /** Shared state while planning one turn. */
@@ -171,7 +180,7 @@ export class BoardPlanner {
     this.points += runs.reduce((n, points) => n + points.length, 0);
     if (this.points > MAX_POINTS) return null;
     return this.reserve(
-      runs.map((points) => this.stroke(points, drawing.color)),
+      runs.map((points) => this.stroke(points, drawing.color, drawing.tool, drawing.width)),
       type,
       index,
     );
@@ -227,13 +236,17 @@ export class BoardPlanner {
     return { index, type, strokes, bbox };
   }
 
-  private stroke(points: Point[], color: string): Stroke {
-    const width = this.scale.penWidth;
+  private stroke(
+    points: Point[],
+    color: string,
+    tool: StrokeTool = "pen",
+    width = this.scale.penWidth,
+  ): Stroke {
     return {
       id: this.input.newId(),
       pageId: this.input.pageId,
       author: "tutor",
-      tool: "pen",
+      tool,
       points,
       color,
       width,

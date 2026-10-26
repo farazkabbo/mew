@@ -620,3 +620,47 @@ test("the Circle & Ask card asks, plays steps with their controls, and counts th
   expect(await page.locator("b").count()).toBe(0);
   expect(shell.violations).toEqual([]);
 });
+
+test("the ink overlay draws a sketch card beside the marks: benzene, bond by bond (K5)", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "ink-overlay.html");
+  const marked = { left: 250, top: 300, right: 450, bottom: 450 };
+  await shell.dispatch("mew:ink-draw", {
+    id: 9,
+    seed: "turn-9",
+    actions: [
+      {
+        type: "sketch",
+        besideBox: marked,
+        figure: {
+          type: "draw_molecule",
+          smiles: "c1ccccc1",
+          atomLabels: [{ index: 0, text: "C–H" }],
+        },
+        pointTo: { x: 350, y: 375 },
+      },
+    ],
+    frame: [0, 0, 1280, 800],
+    bounds: [0, 0, 1280, 800],
+    obstacles: lines(320, 960),
+    textHeight: 20,
+    scale: 1,
+    colors: { ink: "#8a7bf0", highlight: "#8a7bf055" },
+    animate: false,
+  });
+
+  await expect.poll(async () => (await shell.calls()).length).toBe(1);
+  const [call] = await shell.calls();
+  const ink = (call?.args as { ink: { strokes: { points: number[][] }[]; cards: number[][] } }).ink;
+  // One card about 320 × 240, off the marked area (320–576 × 240–360 px here).
+  expect(ink.cards).toHaveLength(1);
+  const [x = 0, y = 0, w = 0, h = 0] = ink.cards[0] ?? [];
+  expect([w, h]).toEqual([320, 240]);
+  const overlaps = x < 576 && x + w > 320 && y < 360 && y + h > 240;
+  expect(overlaps).toBe(false);
+  // Six ring bonds, three inner double-bond strokes, the label and the arrow.
+  expect(ink.strokes.length).toBeGreaterThan(12);
+  if (process.env.SHOT_SKETCH) await page.screenshot({ path: process.env.SHOT_SKETCH });
+  expect(shell.violations).toEqual([]);
+});

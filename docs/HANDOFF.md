@@ -204,6 +204,18 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **The `notebook_pdfs` migration is not applied to the hosted project yet.**
   - **To verify by hand:** the K4 acceptance with a real 120-page textbook (split, writing on a
     page, asking about it, the course and "Review topics", pages offline after viewing).
+- **K5 (explaining by drawing)** — NOTEBOOKS_K.md §3, decisions 57–63:
+  - **Shared:** `figures.ts` (GeometrySpec, SMILES, molecule figure); `draw_geometry` and
+    `draw_molecule` board actions; the `sketch` screen action (`SketchFigure`).
+  - **Ink:** `tutor/figures/` (triangle solver, geometry, molecules via smiles-drawer, shapes),
+    `visuals/figures.ts` (notebook renderers), the sketch card in `screen/plan.ts`
+    (`prepareScreenInk` before `planScreenInk`).
+  - **Desktop:** `ScreenAction::Sketch` in `protocol.rs`; the overlay loads molecules first.
+  - **Third-party notice:** smiles-drawer (MIT) and chroma-js are bundled into the overlay and
+    the web app like roughjs; a licences page for bundled packages is still to be made.
+  - **To verify by hand:** on Windows, circle a benzene diagram in a PDF and ask "explain the
+    carbon rings" (a ring drawn in the card before the words); "why is this a right angle?" on a
+    triangle question (the square at the right vertex).
   - **To verify by hand:** the K3 acceptance on a YouTube video in the desktop app ("why is this
     the hypotenuse? save it to my physics notebook chapter 5" → Physics › Chapter 5 › From
     screen with the timestamp; with four chapters, "Create Chapter 5 and save").
@@ -279,6 +291,10 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K5): **1,368 unit tests** (frontend 441, backend 319, ink 164, shared 301,
+database 122, desktop overlays 22), **167 Rust tests** (+5 real-Windows ones) and **71 Playwright
+tests**.
 
 Tests (after K4): **1,332 unit tests** (frontend 439, backend 319, ink 134, shared 296,
 database 122, desktop overlays 22), **166 Rust tests** (+5 real-Windows ones) and **68 Playwright
@@ -468,7 +484,9 @@ Added in M4–M7:
   isolated like RLS. The API accepts the local user only when `APP_ENV=development`.
 - **No model key?** Ingestion still works: heading-based concepts and lexical (hashed)
   embeddings, recorded per source so queries use the same embedder.
-- **Gemini schema rules** (verified against the API, regression-tested on both sides):
+- **Gemini schema rules** (verified against the API, regression-tested on both sides). Every
+  union variant starts with its tag (`type`/`kind`): Gemini writes properties in schema order,
+  so a variant whose tag comes later can never be chosen (K5 decision 63).
   `oneOf` must become `anyOf` (zod's discriminated unions; dropping it had silently stripped
   the board actions from the tutor's schema), and **no `minItems`/`maxItems`** (with unions or
   nested arrays Gemini answers 400 "invalid argument"). zod/Pydantic still enforce the bounds;

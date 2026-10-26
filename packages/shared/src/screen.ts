@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { geometryTexts, moleculeTexts } from "./figures";
+import { DrawGeometry, DrawMolecule, DrawShapes } from "./tutor";
+
 /**
  * Screen Coach (docs/SCREEN_COACH.md): what the desktop app sends when the student asks about
  * their screen, and what the tutor answers.
@@ -74,6 +77,37 @@ const WriteStep = z.object({
 const Clear = z.object({ type: z.literal("clear") });
 
 /**
+ * What a sketch card can hold: the notebook's figures, without a place (K5). Plots and mind maps
+ * stay in the notebook, where there's room for them.
+ */
+export const SketchFigure = z.discriminatedUnion("type", [DrawGeometry, DrawMolecule, DrawShapes]);
+export type SketchFigure = z.infer<typeof SketchFigure>;
+
+/**
+ * A figure on a small paper card beside the box it explains (K5, NOTEBOOKS_K §3.2): figures never
+ * go straight onto a video or PDF, where they'd be unreadable. An arrow may run from the card to
+ * `pointTo`, inside what the student marked.
+ */
+const Sketch = z.object({
+  type: z.literal("sketch"),
+  besideBox: ScreenBox,
+  figure: SketchFigure,
+  pointTo: ScreenPoint.optional(),
+});
+
+/** Every text a sketch writes (its labels), for the safety check. */
+export function sketchTexts(figure: SketchFigure): string[] {
+  switch (figure.type) {
+    case "draw_geometry":
+      return geometryTexts(figure.figure);
+    case "draw_molecule":
+      return moleculeTexts(figure);
+    case "draw_shapes":
+      return figure.shapes.flatMap((s) => (s.label ? [s.label] : []));
+  }
+}
+
+/**
  * The ink the screen tutor's model may ask for (S3, docs/SCREEN_COACH_S3.md §2.1): what's in its
  * response schema. Notes Check's marks (ticks, amber circles) aren't: the desktop app makes those
  * itself from a check's findings, and refuses them in a tutor reply.
@@ -91,6 +125,8 @@ export const TutorScreenAction = z.discriminatedUnion("type", [
   MarginNote,
   /** A hint or first step (LaTeX or plain text) beside a box. */
   WriteStep,
+  /** A figure (triangle, molecule, force diagram, plot) on a card beside a box (K5). */
+  Sketch,
   Clear,
 ]);
 export type TutorScreenAction = z.infer<typeof TutorScreenAction>;
@@ -108,6 +144,7 @@ export const ScreenAction = z.discriminatedUnion("type", [
   PointAt,
   MarginNote,
   WriteStep,
+  Sketch,
   /** Notes Check: a small tick beside text the student's notes already have. */
   z.object({ type: z.literal("check_mark"), box: ScreenBox }),
   Clear,
@@ -136,6 +173,7 @@ const DRAWN_BOX = (action: TutorScreenAction): ScreenBox | null => {
       return action.box;
     case "margin_note":
     case "write_step":
+    case "sketch":
       return action.besideBox;
     case "point_at":
       return {

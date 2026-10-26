@@ -4,6 +4,7 @@ import { inflateBBox, unionBBox } from "../geometry";
 import type { ActionRenderer, BoardPlanner, PlannedAction, RendererMap } from "./board";
 import { signed } from "./random";
 import { type Box, hbox } from "./typeset/box";
+import { drawGeometry, drawMolecule } from "./visuals/figures";
 import { drawGraph } from "./visuals/graph";
 import { drawPlot } from "./visuals/plot";
 import { drawShapes } from "./visuals/shapes";
@@ -134,10 +135,15 @@ export const TEXT_RENDERERS = {
   mark_correct: markCorrect,
 };
 
-/** Every renderer: text and marks (M4) plus plots, mind maps, flowcharts and sketches (M6). */
+/**
+ * Every renderer: text and marks (M4), plots, mind maps, flowcharts and sketches (M6), and
+ * geometry and molecules (K5).
+ */
 export const ALL_RENDERERS: RendererMap = {
   ...TEXT_RENDERERS,
   draw_plot: drawPlot,
   draw_graph: drawGraph,
   draw_shapes: drawShapes,
+  draw_geometry: drawGeometry,
+  draw_molecule: drawMolecule,
 };

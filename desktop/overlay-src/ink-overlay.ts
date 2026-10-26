@@ -1,4 +1,4 @@
-import { planScreenInk, type ScreenStroke, strokePath } from "@mew/ink";
+import { planScreenInk, prepareScreenInk, type ScreenStroke, strokePath } from "@mew/ink";
 import { type BBox, HexColor, ScreenAction } from "@mew/shared";
 import { z } from "zod";
 
@@ -58,7 +58,19 @@ function resize(): void {
   canvas.height = Math.round(window.innerHeight * window.devicePixelRatio);
 }
 
+/**
+ * Requests are drawn in order, each after what it needs has loaded (a sketch's molecule layout,
+ * K5). A clear drops requests still waiting.
+ */
+let queue: Promise<void> = Promise.resolve();
+let generation = 0;
+
 function clear(): void {
+  generation++;
+  wipe();
+}
+
+function wipe(): void {
   cancelAnimationFrame(frame);
   window.clearTimeout(tickTimer);
   kept = nothingKept();
@@ -67,14 +79,25 @@ function clear(): void {
 
 function draw(detail: unknown): void {
   const parsed = InkRequest.safeParse(detail);
-  if (!parsed.success || !canvas || !ctx) return;
+  if (!parsed.success) return;
   const request = parsed.data;
+  const queued = generation;
+  queue = queue
+    .then(() => prepareScreenInk(request.actions))
+    .then(() => {
+      if (queued === generation) paint(request);
+    })
+    .catch(() => undefined);
+}
+
+function paint(request: InkRequest): void {
+  if (!canvas || !ctx) return;
   const appending = (request.step ?? 0) > 0;
   if (appending) {
     // Finish the earlier step's animation at once: it's kept, drawn in full.
     cancelAnimationFrame(frame);
   } else {
-    clear();
+    wipe();
     resize();
   }
   canvas.classList.remove("faded");
@@ -104,7 +127,7 @@ function draw(detail: unknown): void {
 
   const timing = schedule(strokes);
   const started = performance.now();
-  const paint = (now: number) => {
+  const render = (now: number) => {
     const elapsed = request.animate ? now - started : Number.POSITIVE_INFINITY;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const card of [...earlier.cards, ...cards]) paintCard(ctx, card, request.scale);
@@ -121,13 +144,13 @@ function draw(detail: unknown): void {
       ctx.fillStyle = stroke.color;
       ctx.fill(new Path2D(strokePath({ ...stroke, points }, complete)));
     });
-    if (request.animate && now - started < timing.totalMs) frame = requestAnimationFrame(paint);
+    if (request.animate && now - started < timing.totalMs) frame = requestAnimationFrame(render);
   };
-  frame = requestAnimationFrame(paint);
+  frame = requestAnimationFrame(render);
   if (ticks.size > 0) {
     tickTimer = window.setTimeout(() => {
       showTicks = false;
-      frame = requestAnimationFrame(paint);
+      frame = requestAnimationFrame(render);
     }, timing.totalMs + TICK_VISIBLE_MS);
   }
 }

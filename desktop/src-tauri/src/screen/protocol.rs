@@ -206,6 +206,15 @@ pub enum ScreenAction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         side: Option<NoteSide>,
     },
+    /// K5: a figure (triangle, molecule, sketch) on a paper card beside a box. The overlay
+    /// builds it and checks it against the shared schema; here it's carried as JSON, size-capped.
+    Sketch {
+        #[serde(rename = "besideBox")]
+        beside: Box2,
+        figure: serde_json::Value,
+        #[serde(rename = "pointTo", default, skip_serializing_if = "Option::is_none")]
+        point_to: Option<Point>,
+    },
     /// Notes Check: a small tick beside text the student's notes already have.
     CheckMark {
         #[serde(rename = "box")]
@@ -245,6 +254,15 @@ impl ScreenAction {
             ScreenAction::MarginNote { beside, .. } | ScreenAction::WriteStep { beside, .. } => {
                 *beside = map_box(beside)
             }
+            ScreenAction::Sketch {
+                beside, point_to, ..
+            } => {
+                *beside = map_box(beside);
+                if let Some(point) = point_to {
+                    let (x, y) = f(point.x, point.y);
+                    *point = Point { x, y };
+                }
+            }
             ScreenAction::PointAt { point, .. } => {
                 let (x, y) = f(point.x, point.y);
                 *point = Point { x, y };
@@ -262,6 +280,11 @@ impl ScreenAction {
             }
             ScreenAction::MarginNote { text, .. } | ScreenAction::WriteStep { text, .. } => {
                 vec![text.as_str()]
+            }
+            ScreenAction::Sketch { figure, .. } => {
+                let mut texts = Vec::new();
+                figure_texts(figure, false, &mut texts);
+                texts
             }
             _ => Vec::new(),
         }
@@ -359,7 +382,44 @@ fn action_is_valid(action: &ScreenAction) -> bool {
         ScreenAction::CheckMark { .. } => false,
         ScreenAction::MarginNote { text, beside, .. } => within(text, NOTE_CHARS) && box_ok(beside),
         ScreenAction::WriteStep { text, beside, .. } => within(text, STEP_CHARS) && box_ok(beside),
+        ScreenAction::Sketch {
+            beside,
+            figure,
+            point_to,
+        } => box_ok(beside) && point_to.as_ref().is_none_or(point_ok) && figure_ok(figure),
         ScreenAction::Clear => true,
+    }
+}
+
+/// Longest figure accepted, as JSON (a triangle spec is ~300 bytes; 12 shapes ~1 KB).
+pub const FIGURE_CHARS: usize = 3000;
+const FIGURE_TYPES: [&str; 3] = ["draw_geometry", "draw_molecule", "draw_shapes"];
+
+/// A sketch's figure: an object of a known type, not too big. The overlay validates the rest.
+fn figure_ok(figure: &serde_json::Value) -> bool {
+    let known = figure
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|t| FIGURE_TYPES.contains(&t));
+    known && serde_json::to_string(figure).is_ok_and(|json| json.len() <= FIGURE_CHARS)
+}
+
+/// Every text a figure writes: the strings under `label`, `labels` and `text` keys.
+fn figure_texts<'a>(value: &'a serde_json::Value, written: bool, out: &mut Vec<&'a str>) {
+    match value {
+        serde_json::Value::String(text) if written => out.push(text),
+        serde_json::Value::Array(items) => {
+            for item in items {
+                figure_texts(item, written, out);
+            }
+        }
+        serde_json::Value::Object(fields) => {
+            for (key, field) in fields {
+                let writes = written || matches!(key.as_str(), "label" | "labels" | "text");
+                figure_texts(field, writes, out);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -715,6 +775,52 @@ mod tests {
                 message: "Busy.".into()
             })
         );
+    }
+
+    #[test]
+    fn carries_a_sketch_with_its_figure_and_reads_its_labels() {
+        let reply = |action: &str| {
+            format!(
+                r#"{{"type":"response","turnId":"{TURN}","latencyMs":1,"response":{{"speech":"Hi.","mode":"answer","actions":[{action}]}}}}"#
+            )
+        };
+        let triangle = reply(
+            r#"{"type":"sketch","besideBox":{"left":1,"top":1,"right":2,"bottom":2},"pointTo":{"x":5,"y":6},"figure":{"type":"draw_geometry","figure":{"kind":"triangle","given":{"a":3,"b":4},"rightAngleAt":"C","labels":{"c":"hypotenuse"},"show":["side_labels"]}}}"#,
+        );
+        let Some(StreamEvent::Response { response, .. }) = parse_event(&triangle) else {
+            panic!("sketch")
+        };
+        let sketch = &response.actions[0];
+        assert_eq!(sketch.texts(), vec!["hypotenuse"]);
+        let moved = sketch.map_coordinates(|x, y| (x + 10, y + 10));
+        let ScreenAction::Sketch {
+            beside, point_to, ..
+        } = moved
+        else {
+            panic!("moved")
+        };
+        assert_eq!(beside.left, 11);
+        assert_eq!(point_to, Some(Point { x: 15, y: 16 }));
+        let molecule = reply(
+            r#"{"type":"sketch","besideBox":{"left":1,"top":1,"right":2,"bottom":2},"figure":{"type":"draw_molecule","smiles":"c1ccccc1","atomLabels":[{"index":0,"text":"C-H"}]}}"#,
+        );
+        let Some(StreamEvent::Response { response, .. }) = parse_event(&molecule) else {
+            panic!("molecule")
+        };
+        assert_eq!(response.actions[0].texts(), vec!["C-H"]);
+
+        for bad in [
+            // Not a figure type the overlay draws.
+            r#"{"type":"sketch","besideBox":{"left":1,"top":1,"right":2,"bottom":2},"figure":{"type":"draw_plot","expressions":["x"]}}"#.to_owned(),
+            r#"{"type":"sketch","besideBox":{"left":1,"top":1,"right":2,"bottom":2},"figure":"c1ccccc1"}"#.to_owned(),
+            r#"{"type":"sketch","besideBox":{"left":1,"top":1,"right":2,"bottom":2},"pointTo":{"x":1001,"y":0},"figure":{"type":"draw_shapes","shapes":[]}}"#.to_owned(),
+            format!(
+                r#"{{"type":"sketch","besideBox":{{"left":1,"top":1,"right":2,"bottom":2}},"figure":{{"type":"draw_molecule","smiles":"{}"}}}}"#,
+                "C".repeat(FIGURE_CHARS)
+            ),
+        ] {
+            assert_eq!(parse_event(&reply(&bad)), None, "{bad}");
+        }
     }
 
     #[test]

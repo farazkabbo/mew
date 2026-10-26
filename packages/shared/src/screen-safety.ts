@@ -1,5 +1,5 @@
 import type { CoachPlan, CoachVerdict } from "./coach";
-import type { ScreenAction, ScreenTutorResponse } from "./screen";
+import { type ScreenAction, type ScreenTutorResponse, sketchTexts } from "./screen";
 
 /**
  * The rule-based safety check every screen tutor reply passes before anyone hears or sees it
@@ -71,6 +71,7 @@ export function actionTexts(actions: readonly ScreenAction[]): string[] {
     if ("label" in action && action.label) texts.push(action.label);
     if (action.type === "margin_note") texts.push(action.text);
     if (action.type === "write_step") texts.push(action.latexOrText);
+    if (action.type === "sketch") texts.push(...sketchTexts(action.figure));
   }
   return texts;
 }

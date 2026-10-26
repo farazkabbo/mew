@@ -16,7 +16,8 @@
     "@mew/shared": "workspace:*",
     "elkjs": "0.12.0",
     "perfect-freehand": "^1.2.3",
-    "roughjs": "4.6.6"
+    "roughjs": "4.6.6",
+    "smiles-drawer": "2.4.1"
   },
   "devDependencies": {
     "vitest": "^5.0.3"

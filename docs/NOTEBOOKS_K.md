@@ -1093,3 +1093,47 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
     imported PDF's file.
 56. **"Chapters from a PDF…"** in the creation popover makes the notebook with its name and opens
     the import for it (decision 18).
+57. **Figures live in `@mew/ink/tutor/figures`**, shared by the notebook renderers
+    (`draw_geometry`, `draw_molecule`) and the screen's sketch card; the schemas are in
+    `@mew/shared/figures`. A figure is built in pixels (hand-drawn paths, highlighter accents,
+    labels centred on a spot); each surface inks it its own way.
+58. **Triangle solver** (`figures/triangle.ts`): three sides (inequality checked), two sides with
+    the included angle (law of cosines), two sides with an opposite angle (law of sines; when two
+    triangles fit, the acute one), a side with angles, or angles alone. Missing lengths: a 3-4-5
+    triangle when right, an isosceles one about a single given angle, 55-65-60° with nothing
+    given; two sides and nothing else meet at 60°. Over-determined specs must agree (±0.75°, ±2 %),
+    and `rightAngleAt` counts as given. A refused figure is skipped with its reason; the words
+    still explain.
+59. **Drawing a triangle:** a right triangle stands on its longer leg with the right angle bottom
+    left; any other on its longest side. Vertex names always; side lengths when given (letters
+    with `show: side_labels`); the right-angle square whenever `rightAngleAt` is set (it's a real
+    square along the two legs); `angle_arcs` with given angles written; `height` dashed with its
+    own square; `highlight` goes over sides/angles in the tutor's highlighter (new optional
+    `BoardColors.highlight`). Circles, regular polygons, angles and coordinate points (axes
+    through the origin, labels "P(2, 3)") are drawn too. The circle's `labels` are named keys
+    (centre, radius, diameter, chord, tangent) rather than a free record, and `regular` is a
+    plain boolean: Gemini's schema can't take a `true` constant. Polygons are always regular.
+60. **Molecules:** smiles-drawer 2.4.1 (MIT, confirmed in its package; chroma-js BSD/Apache) is
+    imported dynamically on the first molecule. Only `DrawerBase`'s layout runs (no DOM, no SVG
+    or canvas); a fresh drawer per molecule, a layout cached per SMILES. Skeletal formula:
+    carbons as corners, other atoms with their hydrogens (OH or HO by which side the bonds are,
+    H2O alone), ring double bonds inside the ring, aromatic rings as a Kekulé structure
+    (backtracking matching) or circles (`aromaticStyle`, and the fallback). Atoms are indexed in
+    SMILES order. At most 60 atoms; anything unparsable is refused ("draw nothing, say it").
+61. **Sketch card on screen:** a new screen action `sketch` {besideBox, figure, pointTo?} whose
+    figure is a geometry, molecule or shapes figure (plots and mind maps stay in the notebook).
+    The overlay plans it as a 320 × 240 card (CSS px × scale) beside the box, right, left, below
+    or above, on the monitor and off other ink, opaque paper under the strokes, with an arrow to
+    `pointTo`. It isn't resizable yet. Its strokes and card are reported like any ink, so a saved
+    entry keeps them as tutor strokes. The overlay loads molecule layouts before planning
+    (`prepareScreenInk`), drawing requests in order. Rust carries the figure as JSON (known type,
+    ≤ 3,000 characters, labels safety-checked); the overlay validates it fully.
+62. **Prompts:** tutor.v7, circle-ask.v3 and screen-tutor.v4 describe the figures (never
+    coordinates, a molecule is always draw_molecule); Circle & Ask makes a sketch the first step
+    when the question is about a structure or shape, then says what it shows. In the notebook the
+    reply's speech still streams before its ink (moving speech after the figure would delay every
+    answer); the prompt has it describe the figure as it's drawn.
+63. **Gemini writes properties in schema order**: a union variant whose tag isn't its first
+    property can never be chosen (draw_molecule was unreachable and benzene came out as a
+    hexagon). Every variant now starts with its `type`/`kind`, and a test checks it. Verified
+    with the real model (Flash-Lite): a right triangle, benzene, and a circle-ask sketch.

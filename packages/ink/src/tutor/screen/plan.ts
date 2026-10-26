@@ -6,17 +6,23 @@ import type {
   ScreenAction,
   ScreenBox,
   ScreenPoint,
+  SketchFigure,
   StrokeTool,
 } from "@mew/shared";
 
 import { inflateBBox, unionBBox } from "../../geometry";
 import { strokeBBox } from "../../hit-test";
+import type { Figure } from "../figures/figure";
+import { geometryFigure } from "../figures/geometry";
+import { cachedMolecule, loadMolecule, moleculeFigure } from "../figures/molecule";
+import { shapesFigure } from "../figures/shapes";
 import { inkify } from "../inkify";
 import { OccupancyGrid, overlapsAny } from "../placement";
 import { seededRandom, seedFrom, signed } from "../random";
 import type { Box } from "../typeset/box";
 import { typesetLatex } from "../typeset/latex-layout";
 import { typesetText } from "../typeset/text";
+import { RoughPen } from "../visuals/rough";
 
 /**
  * Plans Screen Coach's ink on the student's screen (docs/SCREEN_COACH_S3.md §2): the same
@@ -77,6 +83,20 @@ export type ScreenInkPlan = {
   bbox: BBox | null;
   xHeight: number;
 };
+
+/** A sketch card's size in CSS pixels (K5, NOTEBOOKS_K §3.2: about 320 × 240). */
+export const SKETCH_CARD = { width: 320, height: 240 } as const;
+
+/**
+ * Loads what sketches need before planning (smiles-drawer's layout runs asynchronously, the
+ * planner doesn't): call it with a turn's actions, then `planScreenInk`.
+ */
+export async function prepareScreenInk(actions: readonly ScreenAction[]): Promise<void> {
+  const molecules = actions.flatMap((a) =>
+    a.type === "sketch" && a.figure.type === "draw_molecule" ? [a.figure.smiles] : [],
+  );
+  await Promise.all(molecules.map((smiles) => loadMolecule(smiles)));
+}
 
 /** Widest note before wrapping, in x-heights: wide first, narrower for tight margins. */
 const WRAP_WIDTHS = [26, 16, 10] as const;
@@ -152,6 +172,8 @@ class ScreenPlanner {
   private readonly area: BBox;
   private readonly rng: () => number;
   private points = 0;
+  /** Everything drawn so far (sketch cards may sit outside the captured area, never on ink). */
+  private readonly inked: BBox[] = [];
 
   constructor(private readonly input: ScreenInkInput) {
     this.xHeight = screenXHeight(input.textHeight, input.scale);
@@ -214,6 +236,13 @@ class ScreenPlanner {
         const arrow = this.arrowTo(pointToPixels(action.point, frame), action.label);
         return this.commit(arrow.strokes, action.type, index, arrow.card);
       }
+      case "sketch":
+        return this.sketch(
+          action.figure,
+          boxToPixels(action.besideBox, frame),
+          action.pointTo,
+          index,
+        );
       case "margin_note":
       case "write_step": {
         const beside = boxToPixels(action.besideBox, frame);
@@ -224,6 +253,98 @@ class ScreenPlanner {
         return this.commit(placed.strokes, action.type, index, placed.card);
       }
     }
+  }
+
+  /**
+   * A figure on a paper card beside `target` (K5): right, left, below or above it, on the monitor
+   * and off other ink (the card is opaque, so it may sit over content outside the marks). An
+   * arrow runs from the card to `pointTo` when given.
+   */
+  private sketch(
+    figure: SketchFigure,
+    target: BBox,
+    pointTo: ScreenPoint | undefined,
+    index: number,
+  ): PlannedScreenAction | string {
+    const { bounds, scale, colors, frame } = this.input;
+    const size: [number, number] = [
+      Math.min(SKETCH_CARD.width * scale, bounds[2] - 2 * this.gap),
+      Math.min(SKETCH_CARD.height * scale, bounds[3] - 2 * this.gap),
+    ];
+    const card = this.sketchSpot(size, target);
+    if (!card) return "no room for a sketch";
+    const pad = this.xHeight * 0.8;
+    const drawn = this.figure(figure, {
+      rect: [card[0] + pad, card[1] + pad, card[2] - 2 * pad, card[3] - 2 * pad],
+      unit: this.xHeight,
+      pen: new RoughPen(Math.floor(this.rng() * 2 ** 31), 0.8),
+    });
+    if (typeof drawn === "string") return drawn;
+    const strokes = drawn.paths.map((path) => this.pen(path));
+    for (const label of drawn.labels) {
+      const box = this.typeset(label.text, 30, label.scale, false);
+      if (box.marks.length === 0) continue;
+      const w = box.width * this.xHeight;
+      const h = (box.ascent + box.descent) * this.xHeight;
+      strokes.push(...this.write(box, [label.at[0] - w / 2, label.at[1] - h / 2, w, h]));
+    }
+    for (const accent of drawn.accents) {
+      strokes.push(
+        this.stroke(timed(accent), {
+          tool: "highlighter",
+          color: colors.highlight,
+          width: this.xHeight * 0.9,
+        }),
+      );
+    }
+    if (pointTo) {
+      const tip = pointToPixels(pointTo, frame);
+      strokes.push(...this.arrowLine(nearestPointOn(card, tip), tip));
+    }
+    return this.commit(strokes, "sketch", index, card);
+  }
+
+  private figure(
+    figure: SketchFigure,
+    frame: Parameters<typeof geometryFigure>[1],
+  ): Figure | string {
+    switch (figure.type) {
+      case "draw_geometry":
+        return geometryFigure(figure.figure, frame);
+      case "draw_molecule": {
+        const layout = cachedMolecule(figure.smiles);
+        if (layout === undefined) return "the molecule wasn't loaded";
+        return typeof layout === "string" ? layout : moleculeFigure(layout, figure, frame);
+      }
+      case "draw_shapes":
+        return shapesFigure(figure.shapes, frame);
+    }
+  }
+
+  /** Beside the target on its right, left, below or above, nearest first; null if none fits. */
+  private sketchSpot([w, h]: [number, number], target: BBox): BBox | null {
+    const { bounds } = this.input;
+    const [tx, ty, tw, th] = target;
+    const m = this.gap;
+    const keepOff = inflateBBox(target, m / 2);
+    const level = clamp(ty + th / 2 - h / 2, bounds[1] + m, bounds[1] + bounds[3] - h - m);
+    const across = clamp(tx + tw / 2 - w / 2, bounds[0] + m, bounds[0] + bounds[2] - w - m);
+    const spots: BBox[] = [];
+    for (let out = 0; out <= 8; out++) {
+      const step = out * 2 * m;
+      spots.push(
+        [tx + tw + m + step, level, w, h],
+        [tx - m - w - step, level, w, h],
+        [across, ty + th + m + step, w, h],
+        [across, ty - m - h - step, w, h],
+      );
+    }
+    return (
+      spots.find(
+        (spot) =>
+          contains(bounds, spot) && !overlapsAny(spot, [keepOff]) && !overlapsAny(spot, this.inked),
+      ) ?? null
+    );
   }
 
   /**
@@ -442,6 +563,7 @@ class ScreenPlanner {
     const reserved = inflateBBox(bbox, this.xHeight * 0.3);
     this.grid.mark(reserved);
     this.inkGrid.mark(reserved);
+    this.inked.push(reserved);
     return { index, type, strokes, bbox, ...(card && { card }) };
   }
 }

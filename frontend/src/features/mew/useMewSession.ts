@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { coursesApi } from "../courses/api";
 import type { PageEngine } from "../notebook/engine";
 import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
-import { INK_COLORS, TUTOR_INK } from "../notebook/palette";
+import { INK_COLORS, TUTOR_HIGHLIGHT, TUTOR_INK } from "../notebook/palette";
 import { WorkChecker } from "../check/checker";
 import { PyodideCodeRunner } from "../check/code-runner";
 import { gradeRemote } from "../quiz/grade-client";
@@ -67,6 +67,7 @@ function createPipeline() {
       ink: TUTOR_INK.light,
       error: INK_COLORS[2].light,
       correct: INK_COLORS[3].light,
+      highlight: TUTOR_HIGHLIGHT.light,
     }),
   });
   const checker = new WorkChecker({ recognition, code: new PyodideCodeRunner() });

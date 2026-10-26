@@ -1,5 +1,9 @@
 export * from "./actions";
 export * from "./board";
+export type { Figure, FigureFrame, FigureLabel } from "./figures/figure";
+export { geometryFigure, triangleLayout } from "./figures/geometry";
+export * from "./figures/molecule";
+export * from "./figures/triangle";
 export { FONT_METRICS, glyph, hasGlyph } from "./glyphs/font";
 export * from "./handwriting";
 export * from "./inkify";

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { CHECK_LIMITS, LineCheck } from "./check";
 import { COURSE_LIMITS, CourseExcerpt } from "./course";
+import { GeometrySpec, MoleculeFigure } from "./figures";
 import { MEW_LIMITS, MewLabel } from "./mew";
 import { QuizContext } from "./quiz";
 
@@ -43,6 +44,27 @@ export const Shape = z.object({
 });
 export type Shape = z.infer<typeof Shape>;
 
+/** Figures without a place: the notebook adds an anchor, the screen's sketch card a box. */
+export const DrawPlot = z.object({
+  type: z.literal("draw_plot"),
+  expressions: z.array(z.string().min(1).max(80)).min(1).max(4),
+  xRange: z.tuple([z.number(), z.number()]),
+  yRange: z.tuple([z.number(), z.number()]).optional(),
+});
+export const DrawShapes = z.object({
+  type: z.literal("draw_shapes"),
+  shapes: z.array(Shape).min(1).max(12),
+});
+export const DrawGeometry = z.object({ type: z.literal("draw_geometry"), figure: GeometrySpec });
+/**
+ * `type` first: Gemini writes properties in schema order, so a union variant whose tag isn't its
+ * first property can never be chosen once the model has written `"type"`.
+ */
+export const DrawMolecule = z.object({
+  type: z.literal("draw_molecule"),
+  ...MoleculeFigure.shape,
+});
+
 export const BoardAction = z.discriminatedUnion("type", [
   z.object({ type: z.literal("write_text"), text: BoardText, anchor: Anchor }),
   z.object({ type: z.literal("write_math"), latex: Latex, anchor: Anchor }),
@@ -54,13 +76,7 @@ export const BoardAction = z.discriminatedUnion("type", [
     text: BoardText.optional(),
     anchor: Anchor,
   }),
-  z.object({
-    type: z.literal("draw_plot"),
-    expressions: z.array(z.string().min(1).max(80)).min(1).max(4),
-    xRange: z.tuple([z.number(), z.number()]),
-    yRange: z.tuple([z.number(), z.number()]).optional(),
-    anchor: Anchor,
-  }),
+  DrawPlot.extend({ anchor: Anchor }),
   z.object({
     type: z.literal("draw_graph"),
     kind: z.enum(["mindmap", "flowchart"]),
@@ -79,11 +95,11 @@ export const BoardAction = z.discriminatedUnion("type", [
       .max(TUTOR_LIMITS.graphNodes * 2),
     anchor: Anchor,
   }),
-  z.object({
-    type: z.literal("draw_shapes"),
-    shapes: z.array(Shape).min(1).max(12),
-    anchor: Anchor,
-  }),
+  DrawShapes.extend({ anchor: Anchor }),
+  /** K5: a figure with rules, built by the solver (never coordinates from the model). */
+  DrawGeometry.extend({ anchor: Anchor }),
+  /** K5: a molecule from SMILES, laid out on the device. */
+  DrawMolecule.extend({ anchor: Anchor }),
 ]);
 export type BoardAction = z.infer<typeof BoardAction>;
 
