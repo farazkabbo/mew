@@ -17,6 +17,7 @@ export type TreeShortcutHandlers = {
   newPage(): void;
   rename(): void;
   jump(): void;
+  importPdf(): void;
   reorder(step: -1 | 1): void;
 };
 
@@ -28,6 +29,7 @@ const TREE_ACTIONS: Partial<Record<ShortcutAction, TreeShortcut>> = {
   new_page: "newPage",
   rename: "rename",
   jump: "jump",
+  import_pdf: "importPdf",
   move_up: "up",
   move_down: "down",
 };

@@ -14,6 +14,7 @@ ShortcutAction = Literal[
     "new_page",
     "rename",
     "jump",
+    "import_pdf",
     "check_work",
     "move_up",
     "move_down",
@@ -85,5 +86,5 @@ class SettingsPatch(BaseModel):
     mew_logging_opt_in: bool | None = None
     notes_index: bool | None = None
     onboarded: bool | None = None
-    shortcuts: Annotated[dict[ShortcutAction, ShortcutBinding], Field(max_length=14)] | None = None
+    shortcuts: Annotated[dict[ShortcutAction, ShortcutBinding], Field(max_length=15)] | None = None
     shortcuts_notice_seen: bool | None = None

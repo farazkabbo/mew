@@ -21,6 +21,7 @@ from .mew_events.store import MemoryMewEventStore
 from .notebooks.store import MemoryNotebookTreeStore
 from .notes.checks import MemoryCheckStore
 from .notes.store import MemoryNoteLineStore
+from .pdfs.store import MemoryPdfStore
 from .profiles.store import MemoryProfileStore
 from .routes import (
     check,
@@ -33,6 +34,7 @@ from .routes import (
     mew_events,
     notebooks,
     notes,
+    pdfs,
     walkthroughs,
 )
 from .routes import settings as user_settings
@@ -90,6 +92,7 @@ def create_app(
     app.state.local_checks = MemoryCheckStore(app.state.local_notes.pages_of)
     app.state.local_walkthroughs = MemoryWalkthroughStore()
     app.state.local_notebooks = MemoryNotebookTreeStore()
+    app.state.local_pdfs = MemoryPdfStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -97,6 +100,7 @@ def create_app(
     v1 = APIRouter(prefix="/v1", dependencies=[Depends(require_internal_caller)])
     v1.include_router(me.router)
     v1.include_router(check.router)
+    v1.include_router(pdfs.router)
     v1.include_router(courses.router)
     v1.include_router(learner.router)
     v1.include_router(user_settings.router)

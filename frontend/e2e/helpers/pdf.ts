@@ -1,5 +1,8 @@
-/** A tiny PDF writer for tests (text layer, Helvetica), one list of lines per page. */
-export function makePdf(pages: string[][]): Buffer {
+/**
+ * A tiny PDF writer for tests (text layer, Helvetica), one list of lines per page; `outline`
+ * gives it a table of contents (title, 0-based page) at the top level.
+ */
+export function makePdf(pages: string[][], outline: [string, number][] = []): Buffer {
   const objects: string[] = [];
   const add = (body: string) => objects.push(body);
 
@@ -22,7 +25,25 @@ export function makePdf(pages: string[][]): Buffer {
     );
     kids.push(objects.length);
   }
-  objects[0] = "<< /Type /Catalog /Pages 2 0 R >>";
+  let outlines = "";
+  if (outline.length > 0) {
+    add(""); // the outline's root
+    const root = objects.length;
+    const items = outline.map(() => {
+      add("");
+      return objects.length;
+    });
+    outline.forEach(([title, page], i) => {
+      const prev = i > 0 ? ` /Prev ${items[i - 1]} 0 R` : "";
+      const next = i < items.length - 1 ? ` /Next ${items[i + 1]} 0 R` : "";
+      objects[(items[i] ?? 0) - 1] =
+        `<< /Title (${title}) /Parent ${root} 0 R${prev}${next} /Dest [${kids[page]} 0 R /Fit] >>`;
+    });
+    objects[root - 1] =
+      `<< /Type /Outlines /First ${items[0]} 0 R /Last ${items.at(-1)} 0 R /Count ${items.length} >>`;
+    outlines = ` /Outlines ${root} 0 R`;
+  }
+  objects[0] = `<< /Type /Catalog /Pages 2 0 R${outlines} >>`;
   objects[1] = `<< /Type /Pages /Kids [${kids.map((k) => `${k} 0 R`).join(" ")}] /Count ${kids.length} >>`;
 
   let out = "%PDF-1.4\n";

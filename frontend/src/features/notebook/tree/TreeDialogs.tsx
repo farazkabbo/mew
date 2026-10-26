@@ -4,6 +4,7 @@ import type { Notebook, NotebookTree, Page } from "@mew/shared";
 import { useEffect, useState } from "react";
 
 import type { NotebookRepository } from "../repository";
+import type { NewNotebook } from "../tree-repository";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { CreateNotebookDialog } from "./CreateNotebookDialog";
 import { DestinationPicker } from "./DestinationPicker";
@@ -13,6 +14,8 @@ import type { TreeActions } from "./useTreeActions";
 
 type Props = {
   actions: TreeActions;
+  /** K4: a new notebook started from a PDF. */
+  onFromPdf?(notebook: NewNotebook): void;
   tree: NotebookTree<Notebook>;
   repo: NotebookRepository;
   now: number;
@@ -23,7 +26,7 @@ type Props = {
 const MOVE_REASONS = { depth: "too deep", cycle: "inside itself", missing: "gone" } as const;
 
 /** The notebook tree's dialogs: create, move to…, delete, trash and jump (Ctrl+K). */
-export function TreeDialogs({ actions, tree, repo, now, openNode, openPage }: Props) {
+export function TreeDialogs({ actions, tree, repo, now, openNode, openPage, onFromPdf }: Props) {
   const [pages, setPages] = useState<Page[]>([]);
   const moving = actions.movingId ? tree.get(actions.movingId) : undefined;
 
@@ -43,6 +46,7 @@ export function TreeDialogs({ actions, tree, repo, now, openNode, openPage }: Pr
         open={actions.creating}
         tree={tree}
         onCreate={actions.createNotebook}
+        {...(onFromPdf && { onFromPdf })}
         onCancel={actions.cancelCreating}
         onDraft={actions.setDraft}
       />

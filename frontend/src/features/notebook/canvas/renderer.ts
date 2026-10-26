@@ -9,7 +9,12 @@ export type Layers = { grid: HTMLCanvasElement; ink: HTMLCanvasElement; live: HT
 export type Theme = { dark: boolean; dot: string; tutor: string; accent: string };
 
 /** An image on the page (a clip from the screen), and its picture once it has loaded. */
-export type PagePicture = { box: BBox; bitmap: CanvasImageSource | null };
+export type PagePicture = {
+  box: BBox;
+  bitmap: CanvasImageSource | null;
+  /** Said on the placeholder when it can't be had (a PDF page offline, K4). */
+  missing?: string;
+};
 
 const GRID_SPACING = 24; // page units
 const MIN_DOT_SPACING_PX = 12;
@@ -151,7 +156,7 @@ export class CanvasRenderer {
   private paintPicture(
     ctx: CanvasRenderingContext2D,
     camera: Camera,
-    { box: [x, y, w, h], bitmap }: PagePicture,
+    { box: [x, y, w, h], bitmap, missing }: PagePicture,
   ): void {
     ctx.save();
     if (bitmap) {
@@ -162,6 +167,12 @@ export class CanvasRenderer {
       ctx.globalAlpha = 0.25;
       ctx.fillRect(x, y, w, h);
       ctx.globalAlpha = 1;
+      if (missing) {
+        ctx.fillStyle = this.theme.dark ? "#ece9e2" : "#1d1c1a";
+        ctx.font = "16px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(missing, x + w / 2, y + Math.min(h / 2, 120), w - 32);
+      }
     }
     ctx.lineWidth = 1 / camera.zoom;
     ctx.strokeStyle = this.theme.dot;

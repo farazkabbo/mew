@@ -15,6 +15,11 @@ type Messages = {
   /** Upstream statuses passed on to the browser, with a safe message each. */
   passThrough: ReadonlyMap<number, string>;
   failed: string;
+  /**
+   * Statuses whose explanation the API service wrote for the student (its own fixed texts, e.g.
+   * "Neb can't import password-protected PDFs"): passed on instead of the generic message.
+   */
+  ownDetail?: ReadonlySet<number>;
 };
 
 const GENERIC: Messages = {
@@ -73,6 +78,9 @@ function toHttpError(error: ApiError, messages: Messages): HttpError {
   if (error.status === null) return new HttpError(503, messages.unavailable);
   if (error.status === 503) return new HttpError(503, messages.notConfigured);
   if (error.status === 401) return new HttpError(401, "Unauthorized");
+  if (error.detail && messages.ownDetail?.has(error.status)) {
+    return new HttpError(error.status, error.detail);
+  }
   const message = messages.passThrough.get(error.status);
   return message ? new HttpError(error.status, message) : new HttpError(502, messages.failed);
 }

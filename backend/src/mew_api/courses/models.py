@@ -100,6 +100,8 @@ class NewChunk(_Model):
     heading: str | None
     text: str
     embedding: list[float]
+    #: The notebook chapter (or section) its page went to (K4); None for M7 courses.
+    notebook_node_id: UUID | None = None
 
 
 class NewConcept(_Model):

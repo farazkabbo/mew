@@ -28,6 +28,8 @@ type Props = {
   onMove(id: string, parentId: string | null, index: number): void;
   onReorder(id: string, step: -1 | 1): void;
   onMoveTo(id: string): void;
+  /** K4: download its PDF pages for offline use. */
+  onKeepOffline(id: string): void;
   onDelete(id: string): void;
   onOpenTrash(): void;
 };
@@ -131,6 +133,7 @@ export function TreeNav(props: Props) {
     items.push(
       { label: "New page", shortcut: keys.shown("new_page"), run: () => props.onAddPage(id) },
       { label: "Move to…", run: () => props.onMoveTo(id) },
+      { label: "Make available offline", run: () => props.onKeepOffline(id) },
       { label: "Move up", shortcut: keys.shown("move_up"), run: () => props.onReorder(id, -1) },
       { label: "Move down", shortcut: keys.shown("move_down"), run: () => props.onReorder(id, 1) },
       { label: "Delete", run: () => props.onDelete(id), danger: true },

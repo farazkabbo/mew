@@ -76,7 +76,10 @@ export function planPageLines(input: PageLinesInput): PageLinesPlan {
     };
   });
 
-  for (const image of input.images) next.push(...clipLines(image, pageId, stored, input.newId));
+  // Clips only: a PDF page's text is course material (K4), not the student's notes.
+  for (const image of input.images) {
+    if (image.clipId) next.push(...clipLines(image, pageId, stored, input.newId));
+  }
 
   numberInReadingOrder(next);
 

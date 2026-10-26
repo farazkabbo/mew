@@ -140,9 +140,14 @@ export class TreeRepository {
 
   /**
    * A new chapter (or section) at the end of `parentId`, named "Chapter n" after its label
-   * unless a title is given, with a first page. Null when the parent is a section already.
+   * unless a title is given, with a first page (not when its pages come from a PDF, K4). Null
+   * when the parent is a section already.
    */
-  async addChild(parentId: string, title?: string): Promise<Notebook | null> {
+  async addChild(
+    parentId: string,
+    title?: string,
+    { withPage = true }: { withPage?: boolean } = {},
+  ): Promise<Notebook | null> {
     return this.write(async () => {
       const tree = await this.tree();
       const parent = tree.get(parentId);
@@ -162,9 +167,17 @@ export class TreeRepository {
         updatedAt: now,
       });
       await this.db.notebooks.add(child);
-      await this.db.pages.add(newPage(child.id, 0));
+      if (withPage) await this.db.pages.add(newPage(child.id, 0));
       await this.queue([child.id]);
       return child;
+    });
+  }
+
+  /** Links a notebook to a course (K4: "Use as course material" made one for it). */
+  async setCourse(id: string, courseId: string): Promise<void> {
+    await this.write(async () => {
+      const node = (await this.tree()).get(id);
+      if (node && node.courseId !== courseId) await this.save(node, { courseId });
     });
   }
 

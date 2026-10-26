@@ -105,6 +105,7 @@ class SupabaseCourseStore(SupabaseRest):
                     "heading": c.heading,
                     "text": c.text,
                     "embedding": vector_literal(c.embedding),
+                    **({"notebook_node_id": str(c.notebook_node_id)} if c.notebook_node_id else {}),
                 },
             )
             for c in chunks

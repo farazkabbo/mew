@@ -1,10 +1,11 @@
 "use client";
 
 import { type Notebook, type NotebookTree, type Page, TREE_LIMITS } from "@mew/shared";
-import { FileText, GraduationCap, Plus } from "lucide-react";
+import { FileText, FileUp, GraduationCap, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { coursesApi } from "../../courses/api";
 import { useShortcutKeys } from "../../shortcuts/useShortcutKeys";
 import { Breadcrumb } from "./Breadcrumb";
 import { NodeIcon } from "./node-style";
@@ -22,6 +23,8 @@ type Props = {
   onOpenPage(pageId: string): void;
   onAddChild(): void;
   onAddPage(): void;
+  /** K4: "Import PDF" into this node. */
+  onImportPdf(): void;
 };
 
 /**
@@ -44,6 +47,30 @@ export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Pro
       live = false;
     };
   }, [childIds, loadCounts]);
+  // K4 decision 8: once a PDF's topics are found, a card says so (the import never waits).
+  const [topics, setTopics] = useState<"processing" | "review" | null>(null);
+  const courseId = root.courseId ?? null;
+  useEffect(() => {
+    if (!courseId) return;
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () =>
+      void coursesApi
+        .get(courseId)
+        .then((detail) => {
+          const status = detail.course.status;
+          if (!live) return;
+          setTopics(status === "review" || status === "processing" ? status : null);
+          // Still being read: look again shortly (the card updates on its own).
+          if (status === "processing") timer = setTimeout(check, 4000);
+        })
+        .catch(() => undefined);
+    check();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [courseId]);
   const canAdd = tree.depth(node.id) < TREE_LIMITS.maxDepth;
   const noun = childNoun(tree, node.id);
   const totalPages = children.reduce((sum, c) => sum + (pageCounts.get(c.id) ?? 0), pages.length);
@@ -72,6 +99,27 @@ export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Pro
             )}
           </p>
         </header>
+
+        {courseId && topics && (
+          <aside
+            data-testid="review-topics"
+            className="flex items-center justify-between gap-4 rounded-2xl border border-rule bg-paper-raised p-4"
+          >
+            <span className="text-sm">
+              {topics === "review"
+                ? "Neb found the topics in your PDF. Check them so it can quiz you and track what you know."
+                : "Neb is finding the topics in your PDF. You can write on its pages meanwhile."}
+            </span>
+            {topics === "review" && (
+              <Link
+                href={`/courses/${courseId}`}
+                className="shrink-0 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
+              >
+                Review topics
+              </Link>
+            )}
+          </aside>
+        )}
 
         <section aria-labelledby="chapters-heading" className="flex flex-col gap-3">
           <h2 id="chapters-heading" className="text-xs tracking-wide text-ink-muted uppercase">
@@ -141,6 +189,18 @@ export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Pro
               >
                 <Plus className="size-5" aria-hidden />
                 New page
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={actions.onImportPdf}
+                title={keys.shown("import_pdf")}
+                aria-keyshortcuts={keys.aria("import_pdf")}
+                className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
+              >
+                <FileUp className="size-5" aria-hidden />
+                Import PDF
               </button>
             </li>
           </ul>

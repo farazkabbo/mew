@@ -8,6 +8,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number | null,
+    /** FastAPI's own explanation of a 4xx (its `detail` text, which the service writes). */
+    readonly detail: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -94,7 +96,12 @@ async function send(
   }
 
   if (!response.ok) {
-    throw new ApiError(`API responded with ${response.status}`, response.status);
+    let detail: string | null = null;
+    if (response.status >= 400 && response.status < 500) {
+      const body = (await response.json().catch(() => null)) as { detail?: unknown } | null;
+      if (typeof body?.detail === "string") detail = body.detail.slice(0, 300);
+    }
+    throw new ApiError(`API responded with ${response.status}`, response.status, detail);
   }
   return response;
 }

@@ -98,6 +98,7 @@ class _Chunk:
     heading: str | None
     text: str
     embedding: list[float]
+    notebook_node_id: UUID | None = None
 
 
 @dataclass
@@ -208,6 +209,7 @@ class MemoryCourseStore:
                     chunk.heading,
                     chunk.text,
                     chunk.embedding,
+                    chunk.notebook_node_id,
                 )
                 ids.append(cid)
             return ids

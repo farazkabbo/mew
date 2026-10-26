@@ -15,7 +15,7 @@ from .concepts import extract_concepts
 from .embeddings import Embedder
 from .llm import GeminiLlm, LlmError
 from .models import Edge, NewChunk, NewConcept
-from .pdf import ParsedPage, PdfError, parse_pdf
+from .pdf import MAX_BYTES, MAX_PAGES, ParsedPage, PdfError, parse_pdf
 from .prompts import OCR
 from .store import CourseStore
 
@@ -33,6 +33,11 @@ class IngestJob:
     source_id: UUID
     title: str
     pdf: bytes
+    #: A notebook PDF (K4): the chapter each page went to (1-based pages; others are left out),
+    #: and its larger limits.
+    page_nodes: dict[int, UUID] | None = None
+    max_bytes: int = MAX_BYTES
+    max_pages: int = MAX_PAGES
 
 
 @dataclass(frozen=True)
@@ -52,7 +57,9 @@ def run_ingestion(job: IngestJob, tools: IngestTools) -> None:
     try:
         status.set("processing", "Reading the PDF")
         try:
-            pages: list[ParsedPage] = tools.pool.run(parse_pdf, job.pdf, timeout=PARSE_TIMEOUT_S)
+            pages: list[ParsedPage] = tools.pool.run(
+                parse_pdf, job.pdf, job.max_bytes, job.max_pages, timeout=PARSE_TIMEOUT_S
+            )
         except PdfError as error:
             status.set("failed", f"Couldn't read that PDF: {error}.")
             return
@@ -60,6 +67,8 @@ def run_ingestion(job: IngestJob, tools: IngestTools) -> None:
             status.set("failed", "The PDF took too long to read. Try a smaller file.")
             return
 
+        if job.page_nodes is not None:
+            pages = [p for p in pages if p["number"] in job.page_nodes]
         texts = _page_texts(pages, tools, status)
         chunks = chunk_pages(texts)
         if not chunks:
@@ -73,7 +82,13 @@ def run_ingestion(job: IngestJob, tools: IngestTools) -> None:
             job.course_id,
             job.source_id,
             [
-                NewChunk(page=c.page, heading=c.heading, text=c.text, embedding=v)
+                NewChunk(
+                    page=c.page,
+                    heading=c.heading,
+                    text=c.text,
+                    embedding=v,
+                    notebook_node_id=(job.page_nodes or {}).get(c.page),
+                )
                 for c, v in zip(chunks, vectors, strict=True)
             ],
         )

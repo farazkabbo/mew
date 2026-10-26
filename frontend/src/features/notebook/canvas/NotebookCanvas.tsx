@@ -112,12 +112,23 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
         const lines = useNotebookUi.getState().showLines ? studentLines(engine.doc) : undefined;
         const region = renderer.visible(camera);
         const pictures = engine.images
-          .map((image) => ({
-            box: [image.x, image.y, image.width, image.height] as BBox,
-            clipId: image.clipId,
-          }))
+          .map((image) => ({ box: [image.x, image.y, image.width, image.height] as BBox, image }))
           .filter(({ box }) => bboxesIntersect(box, region))
-          .map(({ box, clipId }) => ({ box, bitmap: clipImages.get(clipId) }));
+          .map(({ box, image }) => {
+            if (!image.pdf)
+              return { box, bitmap: image.clipId ? clipImages.get(image.clipId) : null };
+            const bitmap = clipImages.getPdf(image.pdf);
+            const key = `pdf:${image.pdf.pdfId}:${image.pdf.pageIndex}`;
+            return {
+              box,
+              bitmap,
+              // K4 decision 9: the ink on it is safe; only the picture needs the connection.
+              ...(!bitmap &&
+                clipImages.failed(key) && {
+                  missing: "Connect to load this page — your notes on it are safe.",
+                }),
+            };
+          });
         renderer.drawInk(
           camera,
           selected.size ? visible.filter((s) => !selected.has(s.id)) : visible,
@@ -134,7 +145,16 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     };
     const all = { grid: true, ink: true, live: true };
     // Clips saved from the screen: their pictures load in the background, then redraw.
-    const clipImages = new ClipImages(() => schedule({ ink: true }));
+    const clipImages = new ClipImages(
+      () => schedule({ ink: true }),
+      engine.pdfCache,
+      (pdf, text) => {
+        const image = engine.images.find(
+          (i) => i.pdf?.pdfId === pdf.pdfId && i.pdf.pageIndex === pdf.pageIndex,
+        );
+        if (image) engine.noteImageText(image.id, text);
+      },
+    );
 
     const setCamera = (next: Camera) => {
       camera = next;

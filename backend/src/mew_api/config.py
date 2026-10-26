@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     )
     supabase_secret_key: SecretStr | None = None
 
+    # Notebook PDFs (K4, §5.2): the largest file and the most pages an import may have.
+    pdf_max_mb: int = Field(default=100, ge=1, le=100)
+    pdf_max_pages: int = Field(default=400, ge=1, le=1000)
+
+    @property
+    def pdf_max_bytes(self) -> int:
+        return self.pdf_max_mb * 1024 * 1024
+
     @field_validator("gemini_api_key", "supabase_secret_key", mode="before")
     @classmethod
     def _blank_is_none(cls, value: object) -> object:

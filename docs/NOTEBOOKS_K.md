@@ -1059,3 +1059,37 @@ hold.ts`), with the same guard and cancel rules, left keys only (AltGr arrives a
     Circle & Ask) is still a question; the Mew gate's v2 prompt needs `pnpm eval:mew` with real
     keys; there's no e2e test of the desktop saving to a named place (the Rust and route tests
     cover it).
+48. **pdfium without scripts (K4).** pypdfium2 5.13 (pdfium 153): its build flags are empty, so no
+    V8 and no XFA, and a test keeps it so. Forms are never initialised and pages are drawn with
+    `may_draw_forms=False`; links, actions and attachments are never read. Every read of a file
+    (inspect, draw, text) runs in the sandboxed ingest worker with a time limit.
+49. **Pages are PNGs, not WebP.** WebP needs an imaging library (Pillow), a new dependency the
+    owner hasn't approved; a small RGB PNG encoder does it (2x, at most 2400 px on the long side).
+    Pages are drawn on request and kept in the API's memory per student (4 files, 64 pages);
+    the device keeps what it has seen.
+50. **The file stays the student's.** `POST /api/pdfs` streams it (100 MB cap, checked by its
+    bytes) to FastAPI, which inspects it and stores it in the private `pdfs` bucket with the
+    student's own Clerk token (RLS and the folder policy), with a `notebook_pdfs` row (name, page
+    count, outline). Limits come from `PDF_MAX_MB` and `PDF_MAX_PAGES` (100, 400).
+51. **A PDF page is a notebook page with a locked picture**: an image block with `pdf: {pdfId,
+pageIndex}` (instead of a clip id), as wide as a clip and in the page's proportions, its
+    source line "file · page n". Its text layer, once read, is kept as the block's `ocrText`, so
+    the tutor's context includes the page's text and can cite the page.
+52. **The outline's top level makes the chapters**; pages before the first entry go into the
+    destination itself; an unchecked chapter's pages aren't imported; a section can't be split
+    (three levels).
+53. **"Use as course material"** sends the pages with the node each went to; course passages
+    carry `notebook_node_id`. A notebook without a course gets one, linked to it; one with a
+    course adds the PDF as a source. The notebook home shows "Neb is finding the topics…" and
+    then "Review topics", checking on its own while it's processing. Course progress on chapter
+    cards (decision 24) is still to come.
+54. **Offline pages** live in the notebook's own IndexedDB (Dexie v5 `pdfPages`, about 300 MB,
+    least recently used out first). The first ten pages are kept at import; "Make available
+    offline" is in every node's menu; a page never kept says "Connect to load this page — your
+    notes on it are safe". The desktop app's WebView keeps its IndexedDB in the app's data folder,
+    so the same cache serves it.
+55. **Left for later:** circling part of a PDF page inside Neb (the notebook's own circle, K6),
+    "Recognize text" for scanned pages (they're writable, not searchable), and deleting an
+    imported PDF's file.
+56. **"Chapters from a PDF…"** in the creation popover makes the notebook with its name and opens
+    the import for it (decision 18).

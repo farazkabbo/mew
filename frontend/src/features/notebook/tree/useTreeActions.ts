@@ -120,6 +120,30 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
 
   const reorder = (id: string, step: -1 | 1) => run(repo.tree.reorder(id, step), () => undefined);
 
+  /** "Make available offline" (K4 decision 9): every PDF page under the node, downloaded now. */
+  const keepOffline = (id: string) => {
+    const ids = [id, ...tree.descendants(id).map((n) => n.id)];
+    run(repo.pdfPagesUnder(ids), (byPdf) => {
+      const total = [...byPdf.values()].reduce((n, pages) => n + pages.length, 0);
+      if (total === 0) {
+        notify({ text: "There are no PDF pages here to keep.", tone: "info" });
+        return;
+      }
+      notify({ text: `Downloading ${total} PDF pages for offline use…`, tone: "info" });
+      const jobs = [...byPdf].map(([pdfId, pages]) => repo.pdfCache.keep(pdfId, pages));
+      run(Promise.all(jobs), (kept) => {
+        const done = kept.reduce((n, k) => n + k, 0);
+        notify({
+          text:
+            done === total
+              ? `${total} PDF pages are available offline.`
+              : `${done} of ${total} PDF pages are available offline. Try again with a connection.`,
+          tone: done === total ? "info" : "error",
+        });
+      });
+    });
+  };
+
   /** Moves a page to another node, says where, and offers Undo (K3). */
   const movePage = (pageId: string, nodeId: string) =>
     run(repo.movePage(pageId, nodeId), (result) => {
@@ -212,6 +236,7 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
     move,
     reorder,
     movePage,
+    keepOffline,
     trash,
     requestDelete,
     restore,

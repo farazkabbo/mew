@@ -2,7 +2,13 @@
 An empty page (no lines) looks like a scanned page to the parser."""
 
 
-def make_pdf(pages: list[list[str]]) -> bytes:
+def make_pdf(
+    pages: list[list[str]],
+    outline: list[tuple[str, int]] | None = None,
+    encrypted: bool = False,
+) -> bytes:
+    """`outline`: (title, 0-based page) entries at the top level. `encrypted`: the trailer names an
+    /Encrypt dictionary pdfium can't open without a password (what a protected file looks like)."""
     objects: list[bytes] = []
 
     def add(body: bytes) -> int:
@@ -28,7 +34,30 @@ def make_pdf(pages: list[list[str]]) -> bytes:
                 % (pages_id, font, content)
             )
         )
-    objects[catalog - 1] = b"<< /Type /Catalog /Pages %d 0 R >>" % pages_id
+    outlines = b""
+    if outline:
+        root = add(b"")
+        items = [add(b"") for _ in outline]
+        for i, (title, page) in enumerate(outline):
+            links = b""
+            if i > 0:
+                links += b" /Prev %d 0 R" % items[i - 1]
+            if i < len(items) - 1:
+                links += b" /Next %d 0 R" % items[i + 1]
+            objects[items[i] - 1] = b"<< /Title (%s) /Parent %d 0 R%s /Dest [%d 0 R /Fit] >>" % (
+                title.encode("latin-1"),
+                root,
+                links,
+                kids[page],
+            )
+        objects[root - 1] = b"<< /Type /Outlines /First %d 0 R /Last %d 0 R /Count %d >>" % (
+            items[0],
+            items[-1],
+            len(items),
+        )
+        outlines = b" /Outlines %d 0 R" % root
+    encrypt = add(b"<< /Filter /Standard /V 2 /R 3 /O <00> /U <00> /P -4 >>") if encrypted else 0
+    objects[catalog - 1] = b"<< /Type /Catalog /Pages %d 0 R%s >>" % (pages_id, outlines)
     objects[pages_id - 1] = b"<< /Type /Pages /Kids [%s] /Count %d >>" % (
         b" ".join(b"%d 0 R" % k for k in kids),
         len(kids),
@@ -43,9 +72,11 @@ def make_pdf(pages: list[list[str]]) -> bytes:
     out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
     for offset in offsets:
         out += b"%010d 00000 n \n" % offset
-    out += b"trailer\n<< /Size %d /Root %d 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+    extra = b" /Encrypt %d 0 R /ID [<00> <00>]" % encrypt if encrypt else b""
+    out += b"trailer\n<< /Size %d /Root %d 0 R%s >>\nstartxref\n%d\n%%%%EOF\n" % (
         len(objects) + 1,
         catalog,
+        extra,
         xref,
     )
     return bytes(out)

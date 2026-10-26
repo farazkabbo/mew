@@ -47,6 +47,11 @@ export const RATE_RULES = {
    * the gate model only for descriptions), the picker's places, and moving a saved moment.
    */
   destinations: { limit: 30, windowMs: MINUTE },
+  /** Notebook PDFs (K4): imports are big (up to 100 MB); pages are drawn as they're viewed. */
+  pdfImport: { limit: 6, windowMs: MINUTE },
+  pdfImportDaily: { limit: 40, windowMs: DAY },
+  pdfPage: { limit: 240, windowMs: MINUTE },
+  pdfPageDaily: { limit: 8000, windowMs: DAY },
   destinationsDaily: { limit: 800, windowMs: DAY },
   notebookTreeDaily: { limit: 5000, windowMs: DAY },
   /**

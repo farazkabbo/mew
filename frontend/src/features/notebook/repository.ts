@@ -12,6 +12,8 @@ import type { z } from "zod";
 
 import {
   clipToPage,
+  IMAGE_ORIGIN,
+  MAX_IMAGE_WIDTH,
   dayHeading,
   ENTRIES_PER_PAGE,
   entryFollowUps,
@@ -21,6 +23,7 @@ import {
   startsNewDay,
 } from "./clip-page";
 import type { NotebookDb } from "./db";
+import { PdfPageCache } from "../pdfs/page-cache";
 import { newPage } from "./page-factory";
 import { TreeRepository } from "./tree-repository";
 
@@ -30,9 +33,12 @@ import { TreeRepository } from "./tree-repository";
  */
 export class NotebookRepository {
   readonly tree: TreeRepository;
+  /** PDF pages kept on this device (K4). */
+  readonly pdfCache: PdfPageCache;
 
   constructor(private readonly db: NotebookDb) {
     this.tree = new TreeRepository(db);
+    this.pdfCache = new PdfPageCache(db);
   }
 
   /** BroadcastChannel name shared by tabs editing this user's notebooks. */
@@ -170,6 +176,82 @@ export class NotebookRepository {
     });
   }
 
+  /**
+   * A PDF's pages `first`…`last` (1-based) as new pages at the end of `notebookId` (K4 §5.1):
+   * each with the PDF page as its locked picture, as wide as a clip can be, at the PDF page's
+   * own proportions. In one transaction. Returns the pages, in order.
+   */
+  async addPdfPages(
+    notebookId: string,
+    pdf: {
+      pdfId: string;
+      fileName: string;
+      pageCount: number;
+      sizes: readonly (readonly [number, number])[];
+    },
+    first: number,
+    last: number,
+  ): Promise<Page[]> {
+    const now = Date.now();
+    return this.db.transaction("rw", [this.db.pages, this.db.images, this.db.pdfs], async () => {
+      await this.db.pdfs.put({
+        pdfId: pdf.pdfId,
+        fileName: pdf.fileName,
+        pageCount: pdf.pageCount,
+        offline: (await this.db.pdfs.get(pdf.pdfId))?.offline ?? false,
+      });
+      const there = await this.db.pages.where("notebookId").equals(notebookId).toArray();
+      let index = there.reduce((max, p) => Math.max(max, p.index + 1), 0);
+      const pages: Page[] = [];
+      const images: ImageBlock[] = [];
+      for (let number = first; number <= last; number++) {
+        const page = newPage(notebookId, index++);
+        const [w, h] = pdf.sizes[number - 1] ?? [612, 792];
+        const width = MAX_IMAGE_WIDTH;
+        images.push(
+          ImageBlock.parse({
+            id: crypto.randomUUID(),
+            pageId: page.id,
+            type: "image",
+            pdf: { pdfId: pdf.pdfId, pageIndex: number - 1 },
+            x: IMAGE_ORIGIN[0],
+            y: IMAGE_ORIGIN[1],
+            width,
+            height: Math.min(10_000, (width * h) / Math.max(w, 1)),
+            source: {
+              app: "neb",
+              title: `${pdf.fileName} · page ${number}`.slice(0, 200),
+              capturedAt: new Date(now).toISOString(),
+            },
+            createdAt: now,
+          }),
+        );
+        pages.push(page);
+      }
+      await this.db.pages.bulkAdd(pages);
+      await this.db.images.bulkAdd(images);
+      return pages;
+    });
+  }
+
+  /**
+   * The PDF pages under a node and its chapters (for "Make available offline", K4): each PDF and
+   * the page indexes of it there.
+   */
+  async pdfPagesUnder(nodeIds: readonly string[]): Promise<Map<string, number[]>> {
+    const pages = await this.db.pages
+      .where("notebookId")
+      .anyOf([...nodeIds])
+      .primaryKeys();
+    const images = await this.db.images.where("pageId").anyOf(pages).toArray();
+    const byPdf = new Map<string, number[]>();
+    for (const image of images) {
+      if (!image.pdf) continue;
+      byPdf.set(image.pdf.pdfId, [...(byPdf.get(image.pdf.pdfId) ?? []), image.pdf.pageIndex]);
+    }
+    return byPdf;
+  }
+
   async loadStrokes(pageId: string): Promise<Stroke[]> {
     const rows = await this.db.strokes.where("pageId").equals(pageId).toArray();
     return validRows(Stroke, rows, "stroke").sort((a, b) => a.createdAt - b.createdAt);
@@ -181,6 +263,11 @@ export class NotebookRepository {
 
   async deleteStrokes(ids: readonly string[]): Promise<void> {
     if (ids.length > 0) await this.db.strokes.bulkDelete([...ids]);
+  }
+
+  /** A PDF page's text, kept with its picture block once read (the tutor's context, K4). */
+  async setImageText(imageId: string, text: string): Promise<void> {
+    await this.db.images.update(imageId, { ocrText: text.slice(0, 8_000) });
   }
 
   async loadImages(pageId: string): Promise<ImageBlock[]> {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Page } from "@mew/shared";
+import type { Page, PdfInfo } from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DebugPanel } from "../mew/DebugPanel";
@@ -15,6 +15,10 @@ import { EntryNotes } from "./EntryNotes";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
+import { makeCourseMaterial } from "../pdfs/api";
+import { carryOutImport } from "../pdfs/import";
+import type { ImportChoice } from "../pdfs/import";
+import { ImportPdfDialog } from "../pdfs/ImportPdfDialog";
 import { ShortcutsNotice } from "../shortcuts/ShortcutsNotice";
 import { useHoldToTalk } from "../shortcuts/useHoldToTalk";
 import { useShortcutKeys } from "../shortcuts/useShortcutKeys";
@@ -342,6 +346,53 @@ export function NotebookApp({ userId }: { userId: string }) {
   }, [courseId, quiz]);
 
   const treeActions = useTreeActions({ repo, tree, notify, report, openNode, openPage });
+  // K4: importing a PDF (Ctrl+O, "Import PDF", or a PDF dropped on the sidebar or a page).
+  const [importing, setImporting] = useState<{ nodeId: string | null; file: File | null } | null>(
+    null,
+  );
+  const importPdf = async (info: PdfInfo, choice: ImportChoice) => {
+    const result = await carryOutImport(info, choice, { repo, tree, makeCourseMaterial });
+    setImporting(null);
+    const first = result.firstPageId ? await repo.getPage(result.firstPageId) : null;
+    if (first) openPage(first);
+    else openNode(choice.nodeId);
+    const pages =
+      (choice.plan.loose ? choice.plan.loose.lastPage - choice.plan.loose.firstPage + 1 : 0) +
+      choice.plan.chapters.reduce((n, c) => n + c.lastPage - c.firstPage + 1, 0);
+    setNotice({
+      text: result.courseFailed
+        ? `Imported ${pages} pages. It couldn't become course material just now.`
+        : result.chapters.length > 0
+          ? `Imported ${pages} pages into ${result.chapters.length} chapters.`
+          : `Imported ${pages} pages.`,
+      tone: result.courseFailed ? "error" : "info",
+    });
+  };
+  useEffect(() => {
+    const isPdf = (event: DragEvent) =>
+      [...(event.dataTransfer?.items ?? [])].some(
+        (item) => item.kind === "file" && item.type === "application/pdf",
+      );
+    const over = (event: DragEvent) => {
+      if (isPdf(event)) event.preventDefault();
+    };
+    const drop = (event: DragEvent) => {
+      const file = [...(event.dataTransfer?.files ?? [])].find(
+        (f) => f.type === "application/pdf" || /\.pdf$/i.test(f.name),
+      );
+      if (!file) return;
+      event.preventDefault();
+      // Dropped on a notebook or chapter in the sidebar: there; anywhere else: the open one.
+      const row = (event.target as HTMLElement | null)?.closest?.("[data-node-id]");
+      setImporting({ nodeId: row?.getAttribute("data-node-id") ?? notebookId, file });
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, [notebookId]);
   const notebookVoice = useNotebookVoice({
     repo,
     tree,
@@ -366,6 +417,7 @@ export function NotebookApp({ userId }: { userId: string }) {
       newPage: () => notebookId && treeActions.addPage(notebookId),
       rename: () => notebookId && treeActions.setRenamingId(notebookId),
       jump: () => treeActions.setPaletteOpen(true),
+      importPdf: () => setImporting({ nodeId: notebookId, file: null }),
       reorder: (step) => notebookId && treeActions.reorder(notebookId, step),
     },
     keys.platform,
@@ -403,6 +455,7 @@ export function NotebookApp({ userId }: { userId: string }) {
             onMove={treeActions.move}
             onReorder={treeActions.reorder}
             onMoveTo={treeActions.setMovingId}
+            onKeepOffline={treeActions.keepOffline}
             onDelete={treeActions.requestDelete}
             onOpenTrash={() => treeActions.setTrashOpen(true)}
           />
@@ -424,6 +477,7 @@ export function NotebookApp({ userId }: { userId: string }) {
             }}
             onAddChild={() => treeActions.addChild(node.id)}
             onAddPage={() => treeActions.addPage(node.id)}
+            onImportPdf={() => setImporting({ nodeId: node.id, file: null })}
           />
         ) : engine && engine.pageId === pageId ? (
           <NotebookCanvas
@@ -573,7 +627,27 @@ export function NotebookApp({ userId }: { userId: string }) {
           )}
         </div>
       </main>
+      {importing && (
+        <ImportPdfDialog
+          open
+          tree={tree}
+          nodeId={importing.nodeId}
+          file={importing.file}
+          onImport={importPdf}
+          onClose={() => setImporting(null)}
+        />
+      )}
       <TreeDialogs
+        onFromPdf={(input) => {
+          treeActions.cancelCreating();
+          void repo.tree
+            .createNotebook({ ...input, chapters: [] })
+            .then((made) => {
+              openNode(made.id);
+              setImporting({ nodeId: made.id, file: null });
+            })
+            .catch(report);
+        }}
         actions={treeActions}
         tree={tree}
         repo={repo}

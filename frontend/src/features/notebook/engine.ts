@@ -49,8 +49,8 @@ export class PageEngine {
     private readonly repo: NotebookRepository,
     readonly pageId: string,
     strokes: Stroke[],
-    /** Images on the page (clips saved from the screen), drawn under the ink. */
-    readonly images: readonly ImageBlock[],
+    /** Images on the page (clips saved from the screen, PDF pages), drawn under the ink. */
+    private pictures: readonly ImageBlock[],
     private readonly onError: (error: unknown) => void,
   ) {
     this.doc = new PageDocument(strokes);
@@ -73,6 +73,28 @@ export class PageEngine {
       repo.loadImages(pageId),
     ]);
     return new PageEngine(repo, pageId, strokes, images, onError);
+  }
+
+  /** Images on the page (clips saved from the screen, PDF pages), drawn under the ink. */
+  get images(): readonly ImageBlock[] {
+    return this.pictures;
+  }
+
+  /** PDF pages kept on this device (K4). */
+  get pdfCache() {
+    return this.repo.pdfCache;
+  }
+
+  /**
+   * A PDF page's text layer arrived (K4): kept with its picture, so the tutor (and Circle & Ask)
+   * reads the page's own text, like a clip's.
+   */
+  noteImageText(imageId: string, text: string): void {
+    if (!text) return;
+    this.pictures = this.pictures.map((image) =>
+      image.id === imageId && !image.ocrText ? { ...image, ocrText: text.slice(0, 8_000) } : image,
+    );
+    void this.repo.setImageText(imageId, text).catch(this.onError);
   }
 
   get canUndo(): boolean {

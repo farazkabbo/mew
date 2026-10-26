@@ -27,6 +27,8 @@ type Props = {
   open: boolean;
   tree: NotebookTree<Notebook>;
   onCreate(notebook: NewNotebook): void;
+  /** K4: make it, then import a PDF into it (its outline proposes the chapters). */
+  onFromPdf?(notebook: NewNotebook): void;
   onCancel(): void;
   /** What's typed so far, for the row the sidebar shows meanwhile. */
   onDraft(draft: Pick<Notebook, "title" | "icon" | "color"> | null): void;
@@ -51,7 +53,7 @@ export function CreateNotebookDialog(props: Props) {
   );
 }
 
-function CreateNotebookForm({ tree, onCreate, onCancel, onDraft }: Props) {
+function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Props) {
   const ids = useId();
   const nameField = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("Untitled notebook");
@@ -324,6 +326,21 @@ function CreateNotebookForm({ tree, onCreate, onCancel, onDraft }: Props) {
       </fieldset>
 
       <div className="flex justify-end gap-2 pt-1">
+        {onFromPdf && (
+          <button
+            type="button"
+            onClick={() => {
+              if (!title || taken) {
+                nameField.current?.focus();
+                return;
+              }
+              onFromPdf({ title, ...shown, childLabel: label, ...(courseId && { courseId }) });
+            }}
+            className="mr-auto rounded-lg px-3 py-2 text-sm text-ink-muted underline-offset-2 hover:underline"
+          >
+            Chapters from a PDF…
+          </button>
+        )}
         <button
           type="button"
           onClick={onCancel}

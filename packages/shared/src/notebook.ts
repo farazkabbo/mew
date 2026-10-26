@@ -45,48 +45,56 @@ export const ImageSource = z.object({
 export type ImageSource = z.infer<typeof ImageSource>;
 
 /**
- * An image on a page (a clip saved from the screen), drawn under the ink. Its pixels are fetched
- * from the clip's own route; only the clip id is kept here.
+ * An image on a page, drawn under the ink: a clip saved from the screen, or (K4) a page of an
+ * imported PDF, locked as the page's background. Its pixels are fetched from the clip's or the
+ * PDF's own route (and, for PDF pages, kept on the device for offline use); only the id is here.
  */
-export const ImageBlock = z.object({
-  id: z.uuid(),
-  pageId: z.uuid(),
-  type: z.literal("image"),
-  clipId: z.uuid(),
-  /** Top-left and size, in page units. */
-  x: z.number(),
-  y: z.number(),
-  width: z.number().positive().max(10_000),
-  height: z.number().positive().max(10_000),
-  source: ImageSource.optional(),
-  /** Text read from the image on the device: context for the notebook tutor. */
-  ocrText: z.string().max(8_000).optional(),
-  /** A Circle & Ask entry (S3.2): the explanation shown under the picture. */
-  entry: z
-    .object({
-      sessionId: z.uuid(),
-      turns: z
-        .array(
-          z.object({
-            question: z.string().max(500),
-            steps: z.array(z.string().max(220)).max(5),
-            summary: z.string().max(320),
-            followUpQuestion: z.string().max(220).optional(),
-          }),
-        )
-        .max(12),
-      /** The tutor strokes' group for each turn's each step (Replay draws them in order). */
-      stepGroups: z.array(z.array(z.uuid()).max(5)).max(12),
-      /** How many of the clip's tutor strokes are already on the page (follow-ups add more). */
-      strokeCount: z.number().int().nonnegative(),
-      /** "Tue 25 Oct": shown above the first entry of each day on a "From screen" page (K3). */
-      heading: z.string().min(1).max(40).optional(),
-      /** The entry's strokes on the page (so it can move to another page whole, K3). */
-      strokeIds: z.array(z.uuid()).max(5_000).optional(),
-    })
-    .optional(),
-  createdAt: z.number().int().nonnegative(),
-});
+export const ImageBlock = z
+  .object({
+    id: z.uuid(),
+    pageId: z.uuid(),
+    type: z.literal("image"),
+    /** A clip saved from the screen; absent for a PDF page. */
+    clipId: z.uuid().optional(),
+    /** A page of an imported PDF (K4): 0-based page of that PDF. */
+    pdf: z.object({ pdfId: z.uuid(), pageIndex: z.number().int().min(0).max(999) }).optional(),
+    /** Top-left and size, in page units. */
+    x: z.number(),
+    y: z.number(),
+    width: z.number().positive().max(10_000),
+    height: z.number().positive().max(10_000),
+    source: ImageSource.optional(),
+    /** Text read from the image on the device: context for the notebook tutor. */
+    ocrText: z.string().max(8_000).optional(),
+    /** A Circle & Ask entry (S3.2): the explanation shown under the picture. */
+    entry: z
+      .object({
+        sessionId: z.uuid(),
+        turns: z
+          .array(
+            z.object({
+              question: z.string().max(500),
+              steps: z.array(z.string().max(220)).max(5),
+              summary: z.string().max(320),
+              followUpQuestion: z.string().max(220).optional(),
+            }),
+          )
+          .max(12),
+        /** The tutor strokes' group for each turn's each step (Replay draws them in order). */
+        stepGroups: z.array(z.array(z.uuid()).max(5)).max(12),
+        /** How many of the clip's tutor strokes are already on the page (follow-ups add more). */
+        strokeCount: z.number().int().nonnegative(),
+        /** "Tue 25 Oct": shown above the first entry of each day on a "From screen" page (K3). */
+        heading: z.string().min(1).max(40).optional(),
+        /** The entry's strokes on the page (so it can move to another page whole, K3). */
+        strokeIds: z.array(z.uuid()).max(5_000).optional(),
+      })
+      .optional(),
+    createdAt: z.number().int().nonnegative(),
+  })
+  .refine((image) => (image.clipId === undefined) !== (image.pdf === undefined), {
+    message: "an image is a clip or a PDF page",
+  });
 export type ImageBlock = z.infer<typeof ImageBlock>;
 export type ImageEntry = NonNullable<ImageBlock["entry"]>;
 

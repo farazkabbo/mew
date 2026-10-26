@@ -35,8 +35,12 @@ class ParsedPage(TypedDict):
     image: bytes | None
 
 
-def parse_pdf(data: bytes) -> list[ParsedPage]:
-    if len(data) > MAX_BYTES:
+def parse_pdf(
+    data: bytes, max_bytes: int = MAX_BYTES, max_pages: int = MAX_PAGES
+) -> list[ParsedPage]:
+    """Text per page (an image for scanned ones). Notebook PDFs (K4) pass their own, larger
+    limits."""
+    if len(data) > max_bytes:
         raise PdfError("file too large")
     if not data.startswith(b"%PDF-"):
         raise PdfError("not a PDF")
@@ -48,8 +52,8 @@ def parse_pdf(data: bytes) -> list[ParsedPage]:
         count = len(document)
         if count == 0:
             raise PdfError("no pages")
-        if count > MAX_PAGES:
-            raise PdfError(f"too many pages ({count} > {MAX_PAGES})")
+        if count > max_pages:
+            raise PdfError(f"too many pages ({count} > {max_pages})")
         pages: list[ParsedPage] = []
         ocr = 0
         for index in range(count):

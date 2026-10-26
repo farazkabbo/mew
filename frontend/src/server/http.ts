@@ -107,6 +107,36 @@ export async function readForm(request: Request, maxBytes: number): Promise<Form
   }
 }
 
+/**
+ * Reads a raw body (an uploaded file), refusing more than `maxBytes` while streaming, and only
+ * with the expected content type.
+ */
+export async function readBytes(
+  request: Request,
+  contentType: string,
+  maxBytes: number,
+): Promise<ArrayBuffer> {
+  const type = (request.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+  if (type !== contentType) throw new HttpError(415, `Expected ${contentType}`);
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > maxBytes) throw new HttpError(413, "Request body too large");
+  if (!request.body) throw new HttpError(400, "Empty upload");
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  const reader = request.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      reader.releaseLock();
+      throw new HttpError(413, "Request body too large");
+    }
+    parts.push(value);
+  }
+  return new Blob(parts as BlobPart[]).arrayBuffer();
+}
+
 /** Wraps a route handler: HttpErrors become JSON responses; anything else is a logged 500. */
 export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response>) {
   return async (...args: A): Promise<Response> => {

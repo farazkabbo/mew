@@ -193,6 +193,17 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **Notebook:** entries go to their node's "From screen" page (date headings, a new page after
     30), made on the device after "Create it and save", moved (never copied) when changed.
   - **The `clip_destinations` migration is not applied to the hosted project yet.**
+- **K4 (PDFs into chapters)** — NOTEBOOKS_K.md §5, decisions 48–56:
+  - **API:** `mew_api/pdfs/` (sandboxed `reader.py`: inspect, draw a page as PNG, words with
+    boxes; `store.py`; `routes/pdfs.py`: import, page image, page text, course material).
+    Migration `notebook_pdfs` (table, private `pdfs` bucket, `chunks.notebook_node_id`).
+    Ingestion takes a page → chapter map.
+  - **Web:** `/api/pdfs/**`; `features/pdfs/` (upload, import plan, `carryOutImport`, the import
+    dialog, the offline page cache); Ctrl+O, "Import PDF", PDFs dropped on the sidebar or a page,
+    "Chapters from a PDF…", "Make available offline", "Review topics".
+  - **The `notebook_pdfs` migration is not applied to the hosted project yet.**
+  - **To verify by hand:** the K4 acceptance with a real 120-page textbook (split, writing on a
+    page, asking about it, the course and "Review topics", pages offline after viewing).
   - **To verify by hand:** the K3 acceptance on a YouTube video in the desktop app ("why is this
     the hypotenuse? save it to my physics notebook chapter 5" → Physics › Chapter 5 › From
     screen with the timestamp; with four chapters, "Create Chapter 5 and save").
@@ -268,6 +279,10 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K4): **1,332 unit tests** (frontend 439, backend 319, ink 134, shared 296,
+database 122, desktop overlays 22), **166 Rust tests** (+5 real-Windows ones) and **68 Playwright
+tests**.
 
 Tests (after K3): **1,300 unit tests** (frontend 433, backend 303, ink 134, shared 291,
 database 117, desktop overlays 22), **166 Rust tests** (+5 real-Windows ones; clippy clean) and
