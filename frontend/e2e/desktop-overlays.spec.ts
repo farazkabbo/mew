@@ -180,11 +180,14 @@ test("the clip preview shows the picture from mewclip:// and saves only the crop
         link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=754",
         includeLink: true,
       },
+      // "Save this to Physics chapter 5" (K3, decision 126): the preview names the place.
+      place: "Physics › Chapter 5",
       expiresInMs: 60_000,
     },
   });
   await shell.dispatch("mew:clip-open", {});
 
+  await expect(page.locator("#heading")).toHaveText("Save to Physics › Chapter 5");
   await expect(page.locator("#source")).toHaveText("msedge · Lecture 5");
   await expect(page.locator("#link")).toHaveText(
     "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=754",
@@ -215,6 +218,7 @@ test("the clip preview refuses an image from anywhere but mewclip://", async ({ 
       strokes: [],
       cards: [],
       source: { app: "x.exe", title: null, link: null, includeLink: false },
+      place: null,
       expiresInMs: 1000,
     },
   });

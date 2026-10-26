@@ -76,7 +76,7 @@ const request = (doc: PageDocument, service: ReturnType<typeof recognition>, cir
     answerStyle: "hints_first",
     doc,
     recognition: service as unknown as RecognitionService,
-    circled: circled ?? null,
+    circled: circled ? { lines: circled, printed: null } : null,
   });
 
 describe("what the tutor sees (K6 §6.3: circling your own writing)", () => {
@@ -109,6 +109,24 @@ describe("what the tutor sees (K6 §6.3: circling your own writing)", () => {
     expect(service.recognize).toHaveBeenCalledTimes(3);
   });
 
+  it("passes printed text circled on a PDF page as what the turn is about (K4 §5.2)", async () => {
+    const { doc, lines } = page();
+    const service = recognition(lines);
+    const printed = { source: "chem.pdf · page 4", text: "Benzene is aromatic." };
+    const result = await buildTutorRequest({
+      intent: "answer_question",
+      utterance: "what does this mean?",
+      transcript: [],
+      previousSpeech: [],
+      answerStyle: "hints_first",
+      doc,
+      recognition: service as unknown as RecognitionService,
+      circled: { lines: [], printed },
+    });
+    expect(result.circledText).toEqual(printed);
+    expect(result.circled).toBe(false); // no lines of the student's own were circled
+  });
+
   it("says which lines live annotations already marked (K9)", async () => {
     const { doc, lines } = page();
     const service = recognition(lines);
@@ -122,7 +140,7 @@ describe("what the tutor sees (K6 §6.3: circling your own writing)", () => {
       answerStyle: "hints_first",
       doc,
       recognition: service as unknown as RecognitionService,
-      circled: [first, third],
+      circled: { lines: [first, third], printed: null },
       markOf: (line) => (line.id === third.id ? { kind: "error", note: "sign?" } : null),
     });
     expect(result.recognizedLines).toEqual([

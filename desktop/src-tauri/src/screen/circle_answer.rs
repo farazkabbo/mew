@@ -1513,18 +1513,7 @@ pub fn save_to<R: Runtime>(app: &AppHandle<R>, phrase: String) {
     let _ = std::thread::Builder::new()
         .name("mew-circle-place".into())
         .spawn(move || {
-            let body = serde_json::to_vec(&json!({ "phrase": phrase })).unwrap_or_default();
-            let mut reply = Vec::new();
-            let status = post_capped(
-                &handle,
-                "api/screen/destinations/resolve",
-                &body,
-                &mut reply,
-            );
-            let resolution = match status {
-                Ok(200) => parse_resolve_reply(&reply),
-                _ => None,
-            };
+            let resolution = resolve_phrase(&handle, &phrase);
             resume_after_words(&handle);
             let Some(resolution) = resolution else {
                 return show_card_message(&handle, "I couldn't reach your notebooks just now.");
@@ -1546,6 +1535,17 @@ pub fn save_to<R: Runtime>(app: &AppHandle<R>, phrase: String) {
                 show_again(&handle);
             }
         });
+}
+
+/// What the server makes of a place in words ("physics chapter 5"); None when it couldn't be
+/// asked or its reply was malformed. Blocks: call it off the UI thread.
+pub fn resolve_phrase<R: Runtime>(app: &AppHandle<R>, phrase: &str) -> Option<Resolution> {
+    let body = serde_json::to_vec(&json!({ "phrase": phrase })).unwrap_or_default();
+    let mut reply = Vec::new();
+    match post_capped(app, "api/screen/destinations/resolve", &body, &mut reply) {
+        Ok(200) => parse_resolve_reply(&reply),
+        _ => None,
+    }
 }
 
 /// The session has its place now: a saved entry moves there, marks waiting to be saved are saved

@@ -4,6 +4,7 @@ import {
   type Notebook,
   NotebookTree,
   type Page,
+  type PdfWord,
   type Stroke,
 } from "@mew/shared";
 import Dexie, { type EntityTable } from "dexie";
@@ -35,6 +36,8 @@ export type CachedPdfPage = {
   pageIndex: number;
   image: Blob;
   text: string;
+  /** The text layer's words and boxes (absent on pages kept before they were). */
+  words?: PdfWord[];
   bytes: number;
   usedAt: number;
 };

@@ -147,6 +147,8 @@ class SavedYourTurn(_Camel):
     latex: SolutionLatex
     answer_key: SavedWritten
     skill: Annotated[PlainText, StringConstraints(min_length=1, max_length=80)]
+    # A program to write: its reference program, run on the device to check the key (K6).
+    program: Annotated[PlainText, StringConstraints(max_length=600)] | None = None
 
 
 Subject = Literal[

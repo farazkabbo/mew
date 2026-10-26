@@ -12,7 +12,14 @@ from fastapi import APIRouter, Query, Request, status
 
 from ..courses.store import CourseNotFoundError
 from ..deps import CurrentCaller, SettingsDep
-from ..learner.models import MAX_DUE, AttemptWrite, DueCards, ExploredWrite, LearnerData
+from ..learner.models import (
+    MAX_DUE,
+    AttemptWrite,
+    ConceptNodes,
+    DueCards,
+    ExploredWrite,
+    LearnerData,
+)
 from .courses import _call, _require, _user_store
 
 router = APIRouter(tags=["learner"])
@@ -28,6 +35,20 @@ def learner_data(
     def get() -> LearnerData:
         _require(store, caller.user_id, course_id)
         return store.learner_data(caller.user_id, course_id)
+
+    return _call(get)
+
+
+@router.get("/courses/{course_id}/concept-nodes")
+def concept_nodes(
+    course_id: UUID, request: Request, caller: CurrentCaller, settings: SettingsDep
+) -> ConceptNodes:
+    """Which notebook chapters each concept belongs to (K1 §2.2: progress on chapter cards)."""
+    store = _user_store(request, caller, settings)
+
+    def get() -> ConceptNodes:
+        _require(store, caller.user_id, course_id)
+        return ConceptNodes(nodes=store.concept_nodes(caller.user_id, course_id))
 
     return _call(get)
 

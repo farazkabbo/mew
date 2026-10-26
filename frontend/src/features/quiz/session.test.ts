@@ -104,6 +104,7 @@ function fake({ friction = "revisit" as ConceptProgress["status"], lesson = LESS
               lastAttemptAt: null,
             },
           ],
+          conceptNodes: [],
         }),
       lesson: (_, conceptId) =>
         conceptId === FRICTION ? Promise.resolve(lesson) : Promise.reject(new Error("offline")),

@@ -20,7 +20,7 @@ import type { AnnotationRecords } from "../annotate/records";
 import type { AnnotationSync } from "../annotate/sync";
 import { coursesApi } from "../courses/api";
 import { useMomentChecks } from "../moments/store";
-import { circledLines } from "../notebook/circle";
+import { type Circled, circledLines, circledPrinted, joinPrinted } from "../notebook/circle";
 import type { PageEngine } from "../notebook/engine";
 import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
 import { INK_COLORS, TUTOR_HIGHLIGHT, TUTOR_INK } from "../notebook/palette";
@@ -90,14 +90,21 @@ function createPipeline() {
   let engine: PageEngine | null = null;
   let courseId: string | null = null;
   let mew: MewController | null = null;
-  /** Lines circled while holding Ctrl+Alt (K6 §6.3), until the turn about them takes them. */
-  let circled: { lines: Line[]; at: number } | null = null;
+  /**
+   * What was circled while holding Ctrl+Alt (K6 §6.3): the student's lines, and printed text on a
+   * PDF page (K4 §5.2), until the turn about it takes it.
+   */
+  let circled: (Circled & { at: number }) | null = null;
+  /** The printed text under the hold's loops, being read from the PDF pages' text layers. */
+  let reading: Promise<void> = Promise.resolve();
+  /** Bumped when a hold starts again or is cancelled: a slow read then keeps nothing. */
+  let holds = 0;
   /** K9: a line's open live mark, for the tutor's context (set once the annotator exists). */
   let markOf: (line: Line) => { kind: LiveMarkKind; note: string | null } | null = () => null;
-  const takeCircled = (): Line[] | null => {
+  const takeCircled = (): Circled | null => {
     const taken = circled;
     circled = null;
-    return taken && Date.now() - taken.at <= CIRCLED_FRESH_MS ? taken.lines : null;
+    return taken && Date.now() - taken.at <= CIRCLED_FRESH_MS ? taken : null;
   };
   const recognition = new RecognitionService();
   const ink = new TutorInk({
@@ -111,7 +118,8 @@ function createPipeline() {
     // The notebook's pointer glides to where the ink starts before it's written (K6 §6.3).
     leadInMs: pointerLeadIn,
   });
-  const checker = new WorkChecker({ recognition, code: new PyodideCodeRunner() });
+  const code = new PyodideCodeRunner();
+  const checker = new WorkChecker({ recognition, code });
   let quiz: QuizSession | null = null;
   let solutions: ShowThenYou | null = null;
   const tutor = new TutorController({
@@ -291,6 +299,8 @@ function createPipeline() {
         attempt(ids, evidence, "live_annotation");
       })().catch(() => undefined);
     },
+    // Two wrong tries in a row: Show-then-You offers the answer (K6 §6).
+    onTry: (pageId, correct) => solutions?.tried(pageId, correct),
     onChanged: () => liveSync?.soon(),
   });
   markOf = (line) => live.markFor(line);
@@ -302,7 +312,9 @@ function createPipeline() {
     request: async (utterance) => {
       const doc = engine?.doc ?? null;
       // The problem is what the student circled (§6.1 step 1), or the lines around their work.
-      const problem = takeCircled();
+      await reading;
+      const taken = takeCircled();
+      const problem = taken?.lines.length ? taken.lines : null;
       if (doc) {
         // The problem's lines are read first: the model needs them as text.
         const lines =
@@ -324,7 +336,7 @@ function createPipeline() {
           recognition,
           courseId,
           quiz: null,
-          circled: problem,
+          circled: taken,
         }),
         courseConcepts().catch(() => []),
       ]);
@@ -332,7 +344,11 @@ function createPipeline() {
         utterance: context.lastUtterance,
         recognizedLines: context.recognizedLines,
         pageImage: context.pageImage,
-        clippedText: context.clippedText,
+        // A problem circled on a PDF page comes first (K4 §5.2).
+        clippedText: [...(taken?.printed ? [taken.printed] : []), ...context.clippedText].slice(
+          0,
+          TUTOR_LIMITS.clippedTexts,
+        ),
         courseContext: context.courseContext,
         concepts,
         variantOf: null,
@@ -340,6 +356,7 @@ function createPipeline() {
     },
     solve: (request) => requestSolution(request),
     checkMath: checkMathSteps,
+    runCode: (source) => code.run(source),
     read: async (doc, line) => {
       const recognised = await read(doc, line);
       return recognised ? (recognised.latex ?? recognised.text).trim() || null : null;
@@ -412,7 +429,7 @@ function createPipeline() {
         .filter((c) => c.shared > 0)
         .sort((a, b) => b.shared - a.shared)[0]?.l;
       if (!line) return;
-      circled = { lines: [line], at: Date.now() };
+      circled = { lines: [line], printed: null, at: Date.now() };
       act({
         intent: "answer_question",
         trigger: "summon",
@@ -425,19 +442,42 @@ function createPipeline() {
     setQuizSaved(handler: ((filter: SavedQuizFilter) => void) | null) {
       quizSaved = handler;
     },
-    /** A loop drawn while holding Ctrl+Alt: the lines in it join what the next ask is about. */
+    /**
+     * A loop drawn while holding Ctrl+Alt: the lines in it, and printed text it takes in on a PDF
+     * page (from the page's text layer, kept on the device), join what the next ask is about.
+     */
     circle(loop: readonly Vec[]) {
-      if (!engine) return;
-      const lines = circledLines(engine.doc, loop);
-      if (lines.length === 0) return;
-      const known = new Set(circled?.lines.map((l) => l.id));
-      circled = {
-        lines: [...(circled?.lines ?? []), ...lines.filter((l) => !known.has(l.id))],
-        at: Date.now(),
-      };
+      const page = engine;
+      if (!page) return;
+      const lines = circledLines(page.doc, loop);
+      if (lines.length > 0) {
+        const known = new Set(circled?.lines.map((l) => l.id));
+        circled = {
+          lines: [...(circled?.lines ?? []), ...lines.filter((l) => !known.has(l.id))],
+          printed: circled?.printed ?? null,
+          at: Date.now(),
+        };
+      }
+      const hold = holds;
+      reading = reading
+        .then(async () => {
+          for (const image of page.images) {
+            if (!image.pdf) continue;
+            const kept = await page.pdfCache.get(image.pdf.pdfId, image.pdf.pageIndex);
+            const printed = circledPrinted(image, kept?.words ?? [], loop);
+            if (!printed || hold !== holds) continue;
+            circled = {
+              lines: circled?.lines ?? [],
+              printed: joinPrinted(circled?.printed ?? null, printed),
+              at: Date.now(),
+            };
+          }
+        })
+        .catch(() => undefined);
     },
     /** The hold started again or was cancelled: nothing circled is kept. */
     clearCircled() {
+      holds++;
       circled = null;
     },
     /**
@@ -448,17 +488,20 @@ function createPipeline() {
     releaseHold(heldAt: number) {
       const { partial, segments } = useVoice.getState();
       const said = partial.trim() !== "" || segments.some((s) => s.at >= heldAt);
-      if (said || !circled) {
-        gate.summon();
-        return;
-      }
-      // Through the same path as a spoken question, so a quiz counts it as help.
-      act({
-        intent: "answer_question",
-        trigger: "summon",
-        utterance: "Explain this.",
-        triggeredAt: Date.now(),
-        gateMs: 0,
+      // What the loops took in on a PDF page is known first (it's read from the device).
+      void reading.then(() => {
+        if (said || !circled) {
+          gate.summon();
+          return;
+        }
+        // Through the same path as a spoken question, so a quiz counts it as help.
+        act({
+          intent: "answer_question",
+          trigger: "summon",
+          utterance: "Explain this.",
+          triggeredAt: Date.now(),
+          gateMs: 0,
+        });
       });
     },
     /** Follows the page on screen. */

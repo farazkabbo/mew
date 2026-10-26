@@ -40,7 +40,7 @@ import { EntryNotes } from "./EntryNotes";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
-import { makeCourseMaterial } from "../pdfs/api";
+import { makeCourseMaterial, recognizePdfPage } from "../pdfs/api";
 import { carryOutImport } from "../pdfs/import";
 import type { ImportChoice } from "../pdfs/import";
 import { ImportPdfDialog } from "../pdfs/ImportPdfDialog";
@@ -59,6 +59,7 @@ import { HoldCircle } from "./HoldCircle";
 import { PageNav } from "./PageNav";
 import { NotebookRepository } from "./repository";
 import { Sidebar } from "./Sidebar";
+import { SourceHighlight } from "./SourceHighlight";
 import { replayPage } from "./page-replay";
 import { useNotebookUi } from "./store";
 import { Toolbar } from "./Toolbar";
@@ -427,13 +428,15 @@ export function NotebookApp({ userId }: { userId: string }) {
       if (!pdfId) return;
       const words = circledWords(moment.image);
       void repo
-        .pdfPageWith(pdfId, words)
-        .then((page) => {
-          if (!page) {
+        .pdfPageWith(pdfId, moment.image)
+        .then((found) => {
+          if (!found) {
             setNotice({ text: "That PDF's pages aren't on this device yet.", tone: "info" });
             return;
           }
-          openPage(page);
+          openPage(found.page);
+          // The circled words, highlighted once the page is open (when they were found on it).
+          useNotebookUi.getState().highlightSource({ imageId: found.imageId, boxes: found.boxes });
           setNotice({
             text: words ? `From your moment: “${words}…”` : "From your moment.",
             tone: "info",
@@ -516,6 +519,29 @@ export function NotebookApp({ userId }: { userId: string }) {
   const focus = useNotesCheck((s) => s.focus);
   const checkResult = useNotesCheck((s) => s.result);
   const checking = useNotesCheck((s) => s.running);
+  // K4 §5.2: a scanned page's text, read when the student asks ("Recognize text").
+  const scannedPages = useNotebookUi((s) => s.scannedPages);
+  const [readingPage, setReadingPage] = useState<string | null>(null);
+  const recognizePage = (image: NonNullable<typeof clipImage>) => {
+    const pdf = image.pdf;
+    const page = engine;
+    if (!pdf || !page) return;
+    setReadingPage(image.id);
+    void recognizePdfPage(pdf.pdfId, pdf.pageIndex)
+      .then(async (text) => {
+        if (!text) {
+          setNotice({ text: "Neb couldn't find any text on this page.", tone: "info" });
+          return;
+        }
+        page.noteImageText(image.id, text);
+        useNotebookUi.getState().markScanned(image.id, false);
+        await page.pdfCache.setText(pdf.pdfId, pdf.pageIndex, text);
+        setNotice({ text: "Neb read this page: the tutor can use its text now.", tone: "info" });
+      })
+      .catch(report)
+      .finally(() => setReadingPage(null));
+  };
+
   const checkAgainstNotes = (image: NonNullable<typeof clipImage>) => {
     setCheckPrompt(null);
     if (notebook) void checkClip(image, notebook);
@@ -796,6 +822,8 @@ export function NotebookApp({ userId }: { userId: string }) {
 
         {engine && <EntryNotes canvas={canvas} images={engine.images} />}
 
+        {engine && view === "page" && <SourceHighlight canvas={canvas} images={engine.images} />}
+
         {engine && view === "page" && <NotebookPointer canvas={canvas} ink={mew.ink} />}
 
         {engine && view === "page" && (
@@ -836,6 +864,10 @@ export function NotebookApp({ userId }: { userId: string }) {
               image={clipImage}
               {...(clipImage.ocrText &&
                 !checking && { onCheck: () => checkAgainstNotes(clipImage) })}
+              {...(scannedPages.has(clipImage.id) && {
+                onRecognize: () => recognizePage(clipImage),
+                reading: readingPage === clipImage.id,
+              })}
             />
             {checkPrompt === pageId && clipImage.ocrText && (
               <div

@@ -66,6 +66,11 @@ export type AnnotatorDeps = {
   }): Promise<string | null>;
   /** A checker-verified line is right: what it counts as (§7.4), and the working it ends. */
   onEvidence?(evidence: Evidence, working: { pageId: string; lines: string[] }): void;
+  /**
+   * A verifier settled a line the student finished (a try at the problem): right, or wrong and
+   * read with confidence. Show-then-You offers the answer after two wrong tries (§6).
+   */
+  onTry?(pageId: string, correct: boolean): void;
   /** A mark changed (the device's copy should reach the server). */
   onChanged?(): void;
   now?: () => number;
@@ -382,6 +387,11 @@ export class LiveAnnotator {
     if (evidence) {
       const lines = [...this.previousLines(engine, line), text].filter(Boolean).slice(-4);
       this.deps.onEvidence?.(evidence, { pageId: engine.pageId, lines });
+    }
+    // A wrong verdict on a doubtful reading isn't a try: it may be neb's mistake.
+    const confident = (recognition?.confidence ?? 1) >= ANNOTATION_LIMITS.confidence;
+    if (checker && (verdict === "correct" || (verdict === "incorrect" && confident))) {
+      this.deps.onTry?.(engine.pageId, verdict === "correct");
     }
     if (verdict === "correct" && level === "coach") this.watchForStuck(engine, line);
     const definite = verdict === "correct" || verdict === "incorrect";

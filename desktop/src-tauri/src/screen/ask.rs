@@ -7,7 +7,7 @@
 //! ink goes to the overlay (S3, `annotate.rs`).
 //!
 //! Short commands said while holding the keys aren't questions (decisions 9 and 10): "save this"
-//! clips, "show that again" re-places the last ink, "check my notes" compares the screen with
+//! clips ("save this to Physics chapter 5": to that place, K3), "show that again" re-places the last ink, "check my notes" compares the screen with
 //! the notes (Notes Check), "Neb, pause" pauses Screen Coach (K2), and coach mode's words ("teach me how to…", "done", "I'm stuck",
 //! "stop"…) go to the walkthrough (`coach_mode.rs`), without asking the tutor anything. A
 //! question asked during a walkthrough is answered in its context.
@@ -22,6 +22,7 @@ use super::annotate::{self, ShowInk, TurnState};
 use super::clip;
 use super::coach::{self, ScreenCoach};
 use super::coach_mode;
+use super::destination::save_to_phrase;
 use super::frame::{CapturedFrame, FrameDetail, FrameMeta};
 use super::intent::{intent_of, Intent};
 use super::notes_check;
@@ -112,18 +113,28 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     } = frame;
 
     let intent = intent_of(transcript, coach_mode::is_coaching(app));
-    let command = match intent {
-        Intent::Clip
-        | Intent::NotesCheck { .. }
-        | Intent::CoachStart
-        | Intent::CoachResume
-        | Intent::Coach(_) => true,
-        Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
-        Intent::Ask | Intent::Pause => false,
+    // "Save this to Physics chapter 5" (K3 §4.2): a clip for that place, not a question.
+    let save_to = match intent {
+        Intent::Ask => save_to_phrase(transcript),
+        _ => None,
     };
+    let command = save_to.is_some()
+        || match intent {
+            Intent::Clip
+            | Intent::NotesCheck { .. }
+            | Intent::CoachStart
+            | Intent::CoachResume
+            | Intent::Coach(_) => true,
+            Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
+            Intent::Ask | Intent::Pause => false,
+        };
     if command {
         let detail = detail.ok_or("I didn't catch your screen that time. Try again.")?;
         let captured = Captured { jpeg, meta, detail };
+        if let Some(phrase) = save_to {
+            clip::from_voice_to(app, captured, phrase);
+            return Ok(());
+        }
         match intent {
             Intent::Clip => clip::from_voice(app, captured),
             Intent::NotesCheck { all } => notes_check::start(app, captured, all),

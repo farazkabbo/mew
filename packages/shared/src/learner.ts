@@ -84,6 +84,12 @@ export const LearnerData = z.object({
 });
 export type LearnerData = z.infer<typeof LearnerData>;
 
+/** Which notebook chapters each concept's passages were imported into (K1 §2.2, the API's). */
+export const ConceptNodes = z.object({
+  nodes: z.array(z.object({ concept_id: z.uuid(), notebook_node_id: z.uuid() })).max(20_000),
+});
+export type ConceptNodes = z.infer<typeof ConceptNodes>;
+
 export const DueCard = z.object({
   course_id: z.uuid(),
   course_title: z.string(),
@@ -119,9 +125,37 @@ export const ConceptProgress = z.object({
 });
 export type ConceptProgress = z.infer<typeof ConceptProgress>;
 
-/** Progress on the concepts the student has started (the others are "not started"). */
-export const CourseProgress = z.object({ concepts: z.array(ConceptProgress) });
+/** A concept and a notebook chapter (or section) it belongs to. */
+export const ConceptNode = z.object({ conceptId: z.uuid(), nodeId: z.uuid() });
+export type ConceptNode = z.infer<typeof ConceptNode>;
+
+/**
+ * Progress on the concepts the student has started (the others are "not started"), and which
+ * notebook chapters the course's concepts belong to (K1 §2.2: progress on chapter cards).
+ */
+export const CourseProgress = z.object({
+  concepts: z.array(ConceptProgress),
+  conceptNodes: z.array(ConceptNode).default([]),
+});
 export type CourseProgress = z.infer<typeof CourseProgress>;
+
+/**
+ * A chapter's course progress (K1 §2.2): of the concepts belonging to it (or to its sections:
+ * `nodeIds` is its subtree), how many are checked. Null when no concept belongs to it.
+ */
+export function chapterProgress(
+  nodeIds: ReadonlySet<string>,
+  progress: CourseProgress,
+): { checked: number; total: number } | null {
+  const concepts = new Set(
+    progress.conceptNodes.filter((n) => nodeIds.has(n.nodeId)).map((n) => n.conceptId),
+  );
+  if (concepts.size === 0) return null;
+  const checked = progress.concepts.filter(
+    (c) => concepts.has(c.conceptId) && c.status === "checked",
+  ).length;
+  return { checked, total: concepts.size };
+}
 
 export const ReviewItem = z.object({
   courseId: z.uuid(),

@@ -1,18 +1,22 @@
 import "fake-indexeddb/auto";
 
-import { ClipView } from "@mew/shared";
+import { strokeBBox } from "@mew/ink";
+import { type BBox, ClipView, type Point, type Stroke } from "@mew/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { entrySolutionId, type LocalSolution } from "../solution/record";
 import { NotebookDb } from "./db";
 import { NotebookRepository } from "./repository";
 
 /** K3: an entry goes where the student said, once, and moves when they change it. */
 
+let db: NotebookDb;
 let repo: NotebookRepository;
 let n = 0;
 
 beforeEach(() => {
-  repo = new NotebookRepository(new NotebookDb(`entries_${++n}`));
+  db = new NotebookDb(`entries_${++n}`);
+  repo = new NotebookRepository(db);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -179,5 +183,107 @@ describe("filing a moment from the notebook, offline too (K8)", () => {
     // Moving it where it already is changes nothing.
     expect((await repo.relocateEntry(image.id, ch2.id))?.id).toBe(moved.id);
     expect(await repo.relocateEntry(crypto.randomUUID(), ch2.id)).toBeNull();
+  });
+});
+
+describe("an entry's worked solution moves with it (K7)", () => {
+  const SOLUTION_GROUP = "44444444-4444-4444-8444-000000000001";
+  const TURN_GROUP = "44444444-4444-4444-8444-000000000002";
+  const BOX: BBox = [80, 900, 600, 300];
+
+  const stroke = (pageId: string, x: number, y: number, extra: Partial<Stroke> = {}): Stroke => {
+    const points: Point[] = [
+      [x, y, 0.5, 0],
+      [x + 20, y + 20, 0.5, 10],
+    ];
+    return {
+      id: crypto.randomUUID(),
+      pageId,
+      author: "student",
+      tool: "pen",
+      points,
+      color: "#1d1c1a",
+      width: 3,
+      bbox: strokeBBox(points, 3),
+      createdAt: 1,
+      ...extra,
+    };
+  };
+
+  /** An entry on Chapter 1 with its solution written: ink, Your Turn box, an attempt in it. */
+  async function solvedEntry() {
+    const { notebook, ch1, ch2 } = await physics();
+    const clip = entry({ nodeId: ch1.id, page: { kind: "from_screen" } });
+    const { page } = await importIt(clip, notebook.id);
+    const [image] = await repo.loadImages(page.id);
+    if (!image) throw new Error("no entry");
+    const tutor = { author: "tutor" as const };
+    const solution = [
+      stroke(page.id, 100, 700, { ...tutor, groupId: SOLUTION_GROUP }),
+      stroke(page.id, 100, 910, { ...tutor, groupId: TURN_GROUP }),
+      stroke(page.id, 120, 1000), // the student's attempt, in the box
+    ];
+    const elsewhere = stroke(page.id, 900, 2000);
+    await repo.putStrokes([...solution, elsewhere]);
+    const record: LocalSolution = {
+      id: entrySolutionId(image.id),
+      pageId: page.id,
+      createdAt: 1,
+      groupId: SOLUTION_GROUP,
+      bbox: [80, 680, 400, 100],
+      folded: true,
+      problem: "3x + 7 = 19",
+      courseId: null,
+      conceptIds: [],
+      yourTurn: {
+        problem: "5x − 4 = 21",
+        latex: "5x - 4 = 21",
+        answerKey: { text: "x = 5", latex: "x = 5" },
+        skill: "two-step equations",
+        groupId: TURN_GROUP,
+        region: BOX,
+        peeked: false,
+        hinted: false,
+        misses: {},
+        ticked: [],
+        status: "open",
+      },
+    };
+    await db.solutions.put(record);
+    return { notebook, ch2, clip, page, image, solution, elsewhere };
+  }
+
+  it("goes with an entry filed in the notebook: its ink, its box and the attempt in it", async () => {
+    const { ch2, page, image, solution, elsewhere } = await solvedEntry();
+    const moved = await repo.relocateEntry(image.id, ch2.id);
+    if (!moved) throw new Error("not moved");
+
+    expect((await repo.loadStrokes(page.id)).map((s) => s.id)).toEqual([elsewhere.id]);
+    const there = await repo.loadStrokes(moved.id);
+    expect(solution.every((s) => there.some((t) => t.id === s.id))).toBe(true);
+    const [placed] = await repo.loadImages(moved.id);
+    const dy = (placed?.y ?? 0) - image.y;
+    const record = await db.solutions.get(entrySolutionId(image.id));
+    expect(record?.pageId).toBe(moved.id);
+    expect(record?.yourTurn?.region).toEqual([BOX[0], BOX[1] + dy, BOX[2], BOX[3]]);
+    expect(await db.solutions.where("pageId").equals(page.id).count()).toBe(0);
+  });
+
+  it("goes with an entry moved by a new place from the screen, under its new image", async () => {
+    const { notebook, ch2, clip, page, solution } = await solvedEntry();
+    const moved = await importIt(
+      { ...clip, destination: { nodeId: ch2.id, page: { kind: "from_screen" } } },
+      notebook.id,
+    );
+    const [placed] = await repo.loadImages(moved.page.id);
+    if (!placed) throw new Error("not moved");
+    expect(await repo.loadStrokes(page.id)).toHaveLength(1); // only what wasn't the entry's
+    const there = (await repo.loadStrokes(moved.page.id)).map((s) => s.id);
+    expect(solution.every((s) => there.includes(s.id))).toBe(true);
+    // Its record now belongs to the new image, so it isn't written a second time there.
+    const records = await db.solutions.toArray();
+    expect(records.map((r) => [r.id, r.pageId])).toEqual([
+      [entrySolutionId(placed.id), moved.page.id],
+    ]);
   });
 });

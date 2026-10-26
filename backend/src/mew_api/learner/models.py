@@ -66,6 +66,17 @@ class CardRecord(_Model):
     due_at: datetime
 
 
+class ConceptNode(_Model):
+    """A concept and a notebook chapter its passages were imported into (K1 §2.2)."""
+
+    concept_id: UUID
+    notebook_node_id: UUID
+
+
+class ConceptNodes(_Model):
+    nodes: list[ConceptNode]
+
+
 class LearnerData(_Model):
     #: Oldest first (the most recent MAX_ATTEMPTS of the course).
     attempts: list[AttemptRecord]

@@ -1,3 +1,5 @@
+import { PdfPageText, type PdfWord } from "@mew/shared";
+
 import type { CachedPdfPage, NotebookDb } from "../notebook/db";
 
 /**
@@ -9,7 +11,8 @@ import type { CachedPdfPage, NotebookDb } from "../notebook/db";
 
 export const CACHE_BYTES = 300 * 1024 * 1024;
 
-export type PdfPageData = { image: Blob; text: string };
+/** A page's picture and text layer: its text, and its words with their boxes (K8: highlights). */
+export type PdfPageData = { image: Blob; text: string; words: PdfWord[] };
 
 type Fetcher = (url: string) => Promise<Response>;
 
@@ -27,11 +30,20 @@ export class PdfPageCache {
     const cached = await this.db.pdfPages.get(key);
     if (cached) {
       await this.db.pdfPages.update(key, { usedAt: this.now() });
-      return { image: cached.image, text: cached.text };
+      return { image: cached.image, text: cached.text, words: cached.words ?? [] };
     }
     const fetched = await this.download(pdfId, pageIndex);
     if (fetched) await this.put(pdfId, pageIndex, fetched);
     return fetched;
+  }
+
+  /** A scanned page's text, read when the student asked ("Recognize text"), kept with it. */
+  async setText(pdfId: string, pageIndex: number, text: string): Promise<void> {
+    const key = `${pdfId}:${pageIndex}`;
+    const cached = await this.db.pdfPages.get(key);
+    if (!cached) return;
+    const bytes = cached.bytes + (text.length - cached.text.length) * 2;
+    await this.db.pdfPages.update(key, { text: text.slice(0, 20_000), bytes });
   }
 
   /** Whether the page is on this device. */
@@ -80,13 +92,10 @@ export class PdfPageCache {
       const image = await imageResponse.blob();
       if (!imageResponse.ok || image.type !== "image/png") return null;
       const body: unknown = textResponse.ok ? await textResponse.json() : null;
-      const text =
-        typeof body === "object" &&
-        body !== null &&
-        typeof (body as { text?: unknown }).text === "string"
-          ? (body as { text: string }).text.slice(0, 20_000)
-          : "";
-      return { image, text };
+      const layer = PdfPageText.safeParse(body);
+      return layer.success
+        ? { image, text: layer.data.text, words: layer.data.words }
+        : { image, text: "", words: [] };
     } catch {
       return null; // offline: the page shows that it needs a connection
     }
@@ -99,7 +108,8 @@ export class PdfPageCache {
       pageIndex,
       image: data.image,
       text: data.text,
-      bytes: data.image.size + data.text.length * 2,
+      words: data.words,
+      bytes: data.image.size + (data.text.length + JSON.stringify(data.words).length) * 2,
       usedAt: this.now(),
     };
     await this.db.pdfPages.put(row);

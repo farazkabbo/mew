@@ -1,7 +1,6 @@
-import type { CodeRunner } from "./checker";
+import type { CodeRun, CodeRunner } from "./checker";
 
-type RunResult = { ok: boolean; output: string; error?: string | undefined };
-type Reply = RunResult & { id: number };
+type Reply = CodeRun & { id: number };
 
 /** First run includes loading Python (~10 MB, cached by the browser afterwards). */
 const FIRST_RUN_TIMEOUT_MS = 30_000;
@@ -18,12 +17,12 @@ export class PyodideCodeRunner implements CodeRunner {
 
   constructor(private readonly createWorker: () => Worker = defaultWorker) {}
 
-  run(code: string): Promise<RunResult> {
+  run(code: string): Promise<CodeRun> {
     const worker = (this.worker ??= this.createWorker());
     const id = this.nextId++;
     const timeoutMs = this.warm ? RUN_TIMEOUT_MS : FIRST_RUN_TIMEOUT_MS;
-    return new Promise<RunResult>((resolve) => {
-      const done = (result: RunResult) => {
+    return new Promise<CodeRun>((resolve) => {
+      const done = (result: CodeRun) => {
         clearTimeout(timer);
         worker.removeEventListener("message", onMessage);
         worker.removeEventListener("error", onError);
@@ -32,7 +31,8 @@ export class PyodideCodeRunner implements CodeRunner {
       const onMessage = (event: MessageEvent<Reply>) => {
         if (event.data.id !== id) return;
         this.warm = true;
-        done({ ok: event.data.ok, output: event.data.output, error: event.data.error });
+        const { ok, output, error, line } = event.data;
+        done({ ok, output, error, line });
       };
       const onError = () => {
         this.reset(worker);

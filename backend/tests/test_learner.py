@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from mew_api.config import Settings
-from mew_api.courses.models import NewConcept
+from mew_api.courses.models import NewChunk, NewConcept, Source
 from mew_api.courses.store import MemoryCourseStore
 from mew_api.courses.supabase_store import SupabaseCourseStore
 from mew_api.learner.models import AttemptWrite, FsrsCard
@@ -245,3 +245,46 @@ def test_supabase_due_cards_resolve_titles_within_the_user() -> None:
     ]
     assert seen[0].url.params["due_at"] == "lte.2026-10-18T12:00:00Z"
     assert all(r.url.params["user_id"] == "eq.user_1" for r in seen)
+
+
+def test_concepts_belong_to_the_chapters_their_passages_went_to(client: TestClient) -> None:
+    """K1 §2.2: a chapter card shows its course progress (decision 53)."""
+    store: MemoryCourseStore = client.app.state.local_courses  # type: ignore[attr-defined]
+    course = store.create_course("local", "Chemistry").id
+    source = uuid4()
+    store.add_source(
+        "local",
+        Source(id=source, course_id=course, kind="pdf", title="chem.pdf", embedding_model="m"),
+    )
+    chapter_1, chapter_2 = uuid4(), uuid4()
+    first, second, loose = store.add_chunks(
+        "local",
+        course,
+        source,
+        [
+            NewChunk(page=1, heading=None, text="a", embedding=[1.0], notebook_node_id=chapter_1),
+            NewChunk(page=9, heading=None, text="b", embedding=[1.0], notebook_node_id=chapter_2),
+            NewChunk(page=12, heading=None, text="c", embedding=[1.0]),
+        ],
+    )
+    atoms, bonds, wide = store.add_concepts(
+        "local",
+        course,
+        [
+            NewConcept(title=t, summary="", order_index=i, source_pages=[])
+            for i, t in enumerate("abc")
+        ],
+    )
+    store.add_concept_sources(
+        "local", [(atoms, first), (bonds, first), (bonds, second), (wide, loose)]
+    )
+
+    response = client.get(f"/v1/courses/{course}/concept-nodes", headers=LOCAL)
+    assert response.status_code == 200
+    pairs = {(n["concept_id"], n["notebook_node_id"]) for n in response.json()["nodes"]}
+    assert pairs == {
+        (str(atoms), str(chapter_1)),
+        (str(bonds), str(chapter_1)),
+        (str(bonds), str(chapter_2)),
+    }
+    assert client.get(f"/v1/courses/{uuid4()}/concept-nodes", headers=LOCAL).status_code == 404

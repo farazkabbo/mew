@@ -18,6 +18,7 @@ from ..learner.models import (
     AttemptRecord,
     AttemptWrite,
     CardRecord,
+    ConceptNode,
     DueCard,
     FsrsCard,
     LearnerData,
@@ -71,6 +72,7 @@ class CourseStore(Protocol):
     def list_edges(self, user: str, course_id: UUID) -> list[Edge]: ...
     def set_edges(self, user: str, course_id: UUID, edges: Sequence[Edge]) -> None: ...
     def add_concept_sources(self, user: str, links: Sequence[tuple[UUID, UUID]]) -> None: ...
+    def concept_nodes(self, user: str, course_id: UUID) -> list[ConceptNode]: ...
 
     # Learner model (M8)
     def has_concept(self, user: str, course_id: UUID, concept_id: UUID) -> bool: ...
@@ -323,6 +325,19 @@ class MemoryCourseStore:
     def add_concept_sources(self, user: str, links: Sequence[tuple[UUID, UUID]]) -> None:
         with self._lock:
             self._data(user).concept_sources.update(links)
+
+    def concept_nodes(self, user: str, course_id: UUID) -> list[ConceptNode]:
+        """The chapters each concept's passages were imported into (K1 §2.2)."""
+        with self._lock:
+            data = self._data(user)
+            pairs = {
+                (concept, chunk.notebook_node_id)
+                for concept, chunk_id in data.concept_sources
+                if (chunk := data.chunks.get(chunk_id)) is not None
+                and chunk.course_id == course_id
+                and chunk.notebook_node_id is not None
+            }
+            return [ConceptNode(concept_id=c, notebook_node_id=n) for c, n in sorted(pairs)]
 
     # ─── learner model ──────────────────────────────────────────────────────────────────────
 

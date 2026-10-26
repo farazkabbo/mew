@@ -79,6 +79,7 @@ function setup(options: { level?: MarkLevel; hide?: boolean } = {}) {
   const readingOf = (l: Line) => readings.get(Math.round(l.bbox[1] / 10) * 10);
   const saved: Annotation[] = [];
   const evidence: Evidence[] = [];
+  const tries: boolean[] = [];
   const check = vi.fn(async (_: PageEngine, l: Line): Promise<LineCheck[]> => {
     const reading = readingOf(l);
     if (!reading?.verdict) return [];
@@ -125,6 +126,7 @@ function setup(options: { level?: MarkLevel; hide?: boolean } = {}) {
     colors: () => ({ ink: "#8a7bf0", error: "#c8432b", correct: "#2f7d55" }),
     viewport: () => [0, 0, 1200, 900],
     onEvidence: (e) => evidence.push(e),
+    onTry: (_, correct) => tries.push(correct),
     now: () => now,
     timeout: (run, ms) => {
       const timer = { at: now + ms, run, live: true };
@@ -166,7 +168,20 @@ function setup(options: { level?: MarkLevel; hide?: boolean } = {}) {
     for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0));
   };
   const marks = () => doc.all().filter((s) => s.markKind !== undefined);
-  return { live, doc, readings, write, erase, wait, marks, saved, evidence, check, history };
+  return {
+    live,
+    doc,
+    readings,
+    write,
+    erase,
+    wait,
+    marks,
+    saved,
+    evidence,
+    tries,
+    check,
+    history,
+  };
 }
 
 beforeEach(() => {
@@ -225,6 +240,19 @@ describe("live annotations (K9 §7)", () => {
     expect(t.marks().every((s) => s.markKind === "tick")).toBe(true);
     expect(t.saved.some((a) => a.markKind === "error" && a.resolvedAt !== null)).toBe(true);
     expect(t.evidence).toEqual(["with_hint"]);
+  });
+
+  it("reports each verified try, but not a wrong verdict on a doubtful reading", async () => {
+    const t = setup();
+    t.readings.set(100, { text: "3x + 7 = 19" });
+    t.readings.set(170, { text: "3x = 26", verdict: "incorrect" });
+    t.readings.set(240, { text: "3x = 2b", verdict: "incorrect", confidence: 0.5 });
+    t.readings.set(310, { text: "3x = 12", verdict: "correct" });
+    for (const [i, y] of [100, 170, 240, 310].entries()) {
+      t.write(line(y, 4, i * 100));
+      await t.wait(1300);
+    }
+    expect(t.tries).toEqual([false, true]);
   });
 
   it("gives a line it couldn't read a ? and never an error mark", async () => {

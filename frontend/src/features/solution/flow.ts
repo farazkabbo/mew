@@ -28,12 +28,14 @@ import {
   type YourTurn,
 } from "@mew/shared";
 
+import type { CodeRun } from "../check/checker";
 import { solutionRegion } from "../notebook/clip-page";
 import type { PageEngine } from "../notebook/engine";
 import { studentLines } from "../notebook/export-line";
 import { useNotebookUi } from "../notebook/store";
 import type { InkResult } from "../tutor/ink";
-import type { LocalSolution, LocalYourTurn } from "./record";
+import { programFrom, sameOutput } from "./code";
+import { entrySolutionId, type LocalSolution, type LocalYourTurn } from "./record";
 import { useShowThenYou } from "./store";
 
 /** What the flow needs from the notebook, the tutor and the services (injected for tests). */
@@ -57,6 +59,8 @@ export type ShowThenYouDeps = {
   request(utterance: string): Promise<SolutionRequest>;
   solve(request: SolutionRequest): Promise<SolutionResponse>;
   checkMath(steps: string[]): Promise<MathCheckResponse["results"] | null>;
+  /** Runs a program (Pyodide in a worker); null when there's no runner. */
+  runCode(source: string): Promise<CodeRun | null>;
   /** A line's recognised LaTeX (or text); null when it can't be read. */
   read(doc: PageEngine["doc"], line: Line): Promise<string | null>;
   /** A tutor turn about verified checks: circles the wrong line and gives the smallest hint. */
@@ -79,10 +83,14 @@ export type ShowThenYouDeps = {
 };
 
 /** A Your Turn's problem and answer key: from a solution just made, or one saved (K7). */
-type TurnProblem = Pick<YourTurn, "problem" | "latex" | "answerKey" | "skill">;
+type TurnProblem = Pick<YourTurn, "problem" | "latex" | "answerKey" | "skill"> & {
+  program?: string | null | undefined;
+};
 
 /** Lines of the student's working that SymPy checks at once (with the problem: 8). */
 const MAX_LINES = 7;
+/** Wrong tries in a row at the student's own working before the full solution is offered (§6). */
+const OFFER_AFTER = 2;
 
 /**
  * Show-then-You in the notebook (K6, NOTEBOOKS_K §6.1): solve and verify (on the server), write
@@ -91,6 +99,9 @@ const MAX_LINES = 7;
  * hint step counts as `independent`.
  */
 export class ShowThenYou {
+  /** Wrong tries in a row at each page's working (reset by a right line or an answer). */
+  private readonly misses = new Map<string, number>();
+
   constructor(private readonly deps: ShowThenYouDeps) {}
 
   get busy(): boolean {
@@ -104,7 +115,8 @@ export class ShowThenYou {
     const engine = this.deps.engine();
     if (!engine) return;
     const store = useShowThenYou.getState();
-    store.set({ phase: "solving", finished: null, offerHint: false });
+    store.set({ phase: "solving", finished: null, offerHint: false, offerSolution: false });
+    this.misses.delete(engine.pageId);
     let response: SolutionResponse;
     try {
       const request = await this.deps.request(utterance);
@@ -196,6 +208,11 @@ export class ShowThenYou {
     yourTurn: TurnProblem,
     within?: (input: BoardInput) => BoardInput,
   ): Promise<LocalYourTurn | null> {
+    // A program's answer key is proved by running its reference program first (§6.1 step 2).
+    if (yourTurn.program && !(await this.prints(yourTurn.program, yourTurn.answerKey.text))) {
+      useShowThenYou.getState().set({ phase: "idle" });
+      return null;
+    }
     const groupId = this.deps.newId();
     let region: BBox | null = null;
     // A word problem is written as its words; its LaTeX is only for checking (it gives the
@@ -227,6 +244,7 @@ export class ShowThenYou {
       latex: yourTurn.latex,
       answerKey: yourTurn.answerKey,
       skill: yourTurn.skill,
+      program: yourTurn.program ?? null,
       groupId,
       region,
       peeked: false,
@@ -248,7 +266,7 @@ export class ShowThenYou {
     const known = new Set(useShowThenYou.getState().solutions.map((s) => s.id));
     for (const image of engine.images) {
       const saved = image.entry?.solution;
-      const id = `entry:${image.id}`;
+      const id = entrySolutionId(image.id);
       if (!saved || known.has(id)) continue;
       await this.adopt(engine, id, saved, solutionRegion(image));
     }
@@ -312,11 +330,42 @@ export class ShowThenYou {
     );
   }
 
+  /**
+   * A verifier settled a line of the student's own working (live annotations): after two wrong
+   * tries in a row, the full solution is offered (§6, the second way in). Hints stay first: it's
+   * only shown, never started, until the student accepts.
+   */
+  tried(pageId: string, correct: boolean): void {
+    if (correct) {
+      this.misses.delete(pageId);
+      return;
+    }
+    const misses = (this.misses.get(pageId) ?? 0) + 1;
+    this.misses.set(pageId, misses);
+    const store = useShowThenYou.getState();
+    if (misses >= OFFER_AFTER && store.phase === "idle" && this.deps.engine()?.pageId === pageId) {
+      store.set({ offerSolution: true });
+    }
+  }
+
+  /** "Show me": the offer accepted, the same flow as asking for the answer. */
+  async acceptOffer(): Promise<void> {
+    useShowThenYou.getState().set({ offerSolution: false });
+    await this.run("Show me the full solution.");
+  }
+
+  /** "Not now": the offer goes, and two more wrong tries bring it back. */
+  declineOffer(): void {
+    const pageId = this.deps.engine()?.pageId;
+    if (pageId) this.misses.delete(pageId);
+    useShowThenYou.getState().set({ offerSolution: false });
+  }
+
   /** Whether a check (Alt+C, "check", a pen pause) is about the Your Turn: it has lines in it. */
   owns(engine: PageEngine | null): boolean {
-    const record = this.open();
-    if (!engine || !record?.yourTurn?.latex) return false;
-    return linesIn(engine, record.yourTurn.region).length > 0;
+    const turn = this.open()?.yourTurn;
+    if (!engine || !turn || !(turn.latex || turn.program)) return false;
+    return linesIn(engine, turn.region).length > 0;
   }
 
   /**
@@ -329,7 +378,9 @@ export class ShowThenYou {
     const engine = this.deps.engine();
     const record = this.open();
     const turn = record?.yourTurn;
-    if (!engine || !record || !turn?.latex) return false;
+    if (!engine || !record || !turn) return false;
+    if (turn.program) return this.checkCode(engine, record, quiet);
+    if (!turn.latex) return false;
     const lines = linesIn(engine, turn.region).slice(0, MAX_LINES);
     if (lines.length === 0) {
       if (!quiet) await this.deps.say("Write your answer in the box, then ask me to check it.");
@@ -386,11 +437,7 @@ export class ShowThenYou {
 
     const wrong = checks.find((c) => c.verdict === "incorrect");
     if (wrong) {
-      const misses = (turn.misses[wrong.lineId] ?? 0) + 1;
-      turn.misses = { ...turn.misses, [wrong.lineId]: misses };
-      // Unlimited tries; after two on the same line, a hint step is offered.
-      if (misses >= 2) useShowThenYou.getState().set({ offerHint: true });
-      await this.persist(record);
+      await this.missed(record, wrong.lineId);
       // The wrong line is what the turn is about: it gets the circle (verifiers outrank the model).
       this.deps.hintTurn(checks.map((c) => ({ ...c, target: c.lineId === wrong.lineId })));
       return true;
@@ -429,13 +476,9 @@ export class ShowThenYou {
     key: string,
     quiet: boolean,
   ): Promise<boolean> {
-    const turn = record.yourTurn;
-    if (!turn) return false;
     const balance = checkBalance(text);
     if (balance.verdict === "incorrect" && sameReaction(text, key)) {
-      turn.misses = { ...turn.misses, [line.id]: (turn.misses[line.id] ?? 0) + 1 };
-      if ((turn.misses[line.id] ?? 0) >= 2) useShowThenYou.getState().set({ offerHint: true });
-      await this.persist(record);
+      await this.missed(record, line.id);
       this.deps.hintTurn([
         {
           lineId: line.id,
@@ -463,6 +506,85 @@ export class ShowThenYou {
     await this.persist(record);
     if (!quiet) await this.deps.say("Balance the reaction in the box, then ask me again.");
     return true;
+  }
+
+  /**
+   * A code Your Turn: the lines in the box are the program (indentation from where each line
+   * starts), run in Pyodide; printing the answer key is done. A pen pause only ever finishes it
+   * (a program still being written often fails), so a mark comes only when the student asks
+   * ("check", Alt+C): on the line that failed, or the last one when it prints something else.
+   */
+  private async checkCode(
+    engine: PageEngine,
+    record: LocalSolution,
+    quiet: boolean,
+  ): Promise<boolean> {
+    const turn = record.yourTurn;
+    if (!turn) return false;
+    const lines = linesIn(engine, turn.region);
+    const last = lines.at(-1);
+    if (!last) {
+      if (!quiet) await this.deps.say("Write your program in the box, then ask me to check it.");
+      return !quiet;
+    }
+    const texts = await Promise.all(lines.map((line) => this.deps.read(engine.doc, line)));
+    const unread = texts.findIndex((t) => !t);
+    if (unread !== -1) {
+      if (!quiet)
+        await this.deps.say(`I can't read line ${unread + 1} yet — try writing it larger.`);
+      return true;
+    }
+    const program = programFrom(
+      lines.map((line, i) => ({ text: texts[i] ?? "", bbox: line.bbox })),
+    );
+    const run = await this.deps.runCode(program).catch(() => null);
+    if (!run) {
+      if (!quiet) await this.deps.say("I can't run code right now — try again in a moment.");
+      return true;
+    }
+    if (run.ok && sameOutput(run.output, turn.answerKey.text)) {
+      const check: LineCheck = {
+        lineId: last.id,
+        checker: "code",
+        verdict: "correct",
+        reason: "output_matches",
+        target: true,
+      };
+      await this.deps.ink.render(reconcileMarks([], [check]));
+      await this.finish(record);
+      return true;
+    }
+    if (quiet) return true;
+    const failed = (run.line !== undefined && lines[run.line - 1]) || last;
+    await this.missed(record, failed.id);
+    const printed = run.output.trim().slice(0, 200);
+    this.deps.hintTurn([
+      {
+        lineId: failed.id,
+        checker: "code",
+        verdict: "incorrect",
+        reason: run.ok ? "wrong_output" : "error",
+        detail: run.ok ? `It printed: ${printed || "nothing"}` : (run.error ?? null),
+        target: true,
+      },
+    ]);
+    return true;
+  }
+
+  /** The program runs and prints `expected`. */
+  private async prints(program: string, expected: string): Promise<boolean> {
+    const run = await this.deps.runCode(program).catch(() => null);
+    return run?.ok === true && sameOutput(run.output, expected);
+  }
+
+  /** A wrong check on a line: unlimited tries, and after two on the same line a hint step. */
+  private async missed(record: LocalSolution, lineId: string): Promise<void> {
+    const turn = record.yourTurn;
+    if (!turn) return;
+    const misses = (turn.misses[lineId] ?? 0) + 1;
+    turn.misses = { ...turn.misses, [lineId]: misses };
+    if (misses >= 2) useShowThenYou.getState().set({ offerHint: true });
+    await this.persist(record);
   }
 
   /**
@@ -570,6 +692,10 @@ export class ShowThenYou {
       yourTurn: null,
     };
     record.yourTurn = await this.writeYourTurn(response.yourTurn);
+    if (!record.yourTurn) {
+      await this.deps.say("I couldn't make another one I'm sure of. Try the review.");
+      return;
+    }
     await this.persist(record);
   }
 
@@ -586,6 +712,7 @@ export class ShowThenYou {
       solutions: [...records],
       peeking: new Set(),
       offerHint: false,
+      offerSolution: false,
       finished: null,
       phase: this.busy ? store.phase : open ? "your_turn" : "idle",
     });

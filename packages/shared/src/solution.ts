@@ -20,6 +20,8 @@ export const SOLUTION_LIMITS = {
   whyChars: 200,
   problemChars: 500,
   skillChars: 80,
+  /** A programming Your Turn's reference program (never shown). */
+  programChars: 600,
   concepts: 40,
   conceptIds: 3,
 } as const;
@@ -50,6 +52,11 @@ export const YourTurn = z.object({
   skill: Text(SOLUTION_LIMITS.skillChars),
   /** Course concepts it practises: ids from the request's list only (checked). */
   conceptIds: z.array(z.string().max(40)).max(SOLUTION_LIMITS.conceptIds),
+  /**
+   * Programming only: a correct Python program for it, never shown. The device runs it (Pyodide)
+   * and shows the Your Turn only when it prints the answer key (§6.1 step 2, "code").
+   */
+  program: z.string().trim().max(SOLUTION_LIMITS.programChars).nullable(),
 });
 export type YourTurn = z.infer<typeof YourTurn>;
 
@@ -261,6 +268,7 @@ export function toSavedSolution(solution: VerifiedSolution): SavedSolution {
           latex: solution.yourTurn.latex,
           answerKey: solution.yourTurn.answerKey,
           skill: solution.yourTurn.skill,
+          program: solution.yourTurn.program,
         }
       : null,
   };

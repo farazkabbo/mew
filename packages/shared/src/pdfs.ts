@@ -43,12 +43,17 @@ export const PdfWord = z.object({
   /** [left, top, right, bottom], 0-1 of the page, from its top left. */
   box: z.tuple([z.number(), z.number(), z.number(), z.number()]),
 });
+export type PdfWord = z.infer<typeof PdfWord>;
 
 export const PdfPageText = z.object({
   text: z.string().max(20_000),
   words: z.array(PdfWord).max(5_000),
 });
 export type PdfPageText = z.infer<typeof PdfPageText>;
+
+/** "Recognize text" on a scanned page (K4 §5.2): what the model read (no word boxes). */
+export const PdfPageOcr = z.object({ text: z.string().max(20_000) });
+export type PdfPageOcr = z.infer<typeof PdfPageOcr>;
 
 /** Pages (1-based, inclusive) that went to one notebook node. */
 export const PdfSection = z

@@ -1,4 +1,4 @@
-import { PdfCourseStarted, type PdfCourseRequest, PdfInfo } from "@mew/shared";
+import { PdfCourseStarted, type PdfCourseRequest, PdfInfo, PdfPageOcr } from "@mew/shared";
 
 /** Calls to the app's PDF routes (K4), with the student's own session. */
 
@@ -29,6 +29,16 @@ export async function uploadPdf(file: File): Promise<PdfInfo> {
   );
   if (!response.ok) throw await failure(response, "Couldn't import that PDF. Try again.");
   return PdfInfo.parse(await response.json());
+}
+
+/** "Recognize text" on a scanned page (K4 §5.2): what the model read on it ("" for nothing). */
+export async function recognizePdfPage(pdfId: string, pageIndex: number): Promise<string> {
+  const response = await fetch(`/api/pdfs/${pdfId}/pages/${pageIndex}/recognize`, {
+    method: "POST",
+    cache: "no-store",
+  });
+  if (!response.ok) throw await failure(response, "Couldn't read that page. Try again.");
+  return PdfPageOcr.parse(await response.json()).text;
 }
 
 /** "Use as course material": the course it went into (a new one when `courseId` is null). */

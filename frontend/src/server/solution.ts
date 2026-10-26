@@ -171,7 +171,8 @@ export function methodFor(solution: FullSolution): VerificationMethod {
     return "chem_balance";
   }
   if (solution.subject === "math" || solution.subject === "physics") return "sympy";
-  // Code would run in the student's browser (Pyodide); here it gets the rubric check.
+  // Code runs only in the student's browser (Pyodide): the worked solution gets the rubric check
+  // here, and a programming Your Turn is proved there by its reference program.
   return "rubric";
 }
 
@@ -260,13 +261,20 @@ function chemistry(solution: FullSolution): Check {
 
 /** The answer key is the problem's only solution: each follows from the other. */
 async function verifyYourTurn(yourTurn: YourTurn, deps: SolutionDeps): Promise<Check> {
+  // A program's key is proved on the device, which runs the reference program (Pyodide) and
+  // shows the Your Turn only if it prints the key; there's no Python runner here.
+  if (yourTurn.program) return { passed: true };
   const key = yourTurn.answerKey.latex;
   if (looksLikeReaction(key ?? yourTurn.answerKey.text)) {
     const ok = checkBalance(key ?? yourTurn.answerKey.text).verdict === "correct";
     return { passed: ok, feedback: "The practice equation's answer isn't balanced." };
   }
   if (!yourTurn.latex || !key) {
-    return { passed: false, feedback: "Give the practice problem and its answer as LaTeX." };
+    return {
+      passed: false,
+      feedback:
+        "Give the practice problem and its answer as LaTeX (a programming one: its reference program).",
+    };
   }
   // The student finishes by writing the answer in this form, so it must be a final answer.
   if (key.includes("=") && !solvedFor(key)) {

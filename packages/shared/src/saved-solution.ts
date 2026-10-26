@@ -13,6 +13,7 @@ export const SAVED_SOLUTION_LIMITS = {
   latexChars: 200,
   whyChars: 200,
   skillChars: 80,
+  programChars: 600,
 } as const;
 
 const L = SAVED_SOLUTION_LIMITS;
@@ -39,6 +40,8 @@ export const SavedSolution = z.object({
       latex: Latex,
       answerKey: Written,
       skill: z.string().min(1).max(L.skillChars),
+      /** A program to write: its reference program, run on the device to check the key (K6). */
+      program: z.string().max(L.programChars).nullable().optional(),
     })
     .nullable(),
 });

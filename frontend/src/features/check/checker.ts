@@ -17,9 +17,17 @@ const RECOGNITION_WAIT_MS = 4000;
 const MATH_RETRY_MS = 30_000;
 const MATH_SUBJECTS = new Set<Recognition["subject"]>(["math", "physics"]);
 
+/** A snippet's run: its output, and on failure the error and the line it failed on (1-based). */
+export type CodeRun = {
+  ok: boolean;
+  output: string;
+  error?: string | undefined;
+  line?: number | undefined;
+};
+
 /** Runs code and reports whether it failed (Pyodide in a worker; optional). */
 export type CodeRunner = {
-  run(code: string): Promise<{ ok: boolean; output: string; error?: string | undefined }>;
+  run(code: string): Promise<CodeRun>;
 };
 
 export type CheckDeps = {

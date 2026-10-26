@@ -130,6 +130,7 @@ describe("toSavedSolution", () => {
       answerKey: { text: "x = 5", latex: "x = 5" },
       skill: "two-step equations",
       conceptIds: ["c1"],
+      program: null,
     },
     verification: { method: "sympy", passed: true },
     yourTurnVerified: true,
@@ -141,6 +142,12 @@ describe("toSavedSolution", () => {
     expect(saved.steps).toEqual([{ work: "3x = 12", latex: "3x = 12", why: "Subtract 7." }]);
     expect(saved.yourTurn?.answerKey.latex).toBe("x = 5");
     expect(toSavedSolution({ ...solution, yourTurnVerified: false }).yourTurn).toBeNull();
+  });
+
+  it("keeps a programming Your Turn's reference program, so the notebook can prove its key", () => {
+    const program = { ...solution.yourTurn, latex: null, program: "print(4 + 5)" };
+    const saved = toSavedSolution({ ...solution, subject: "programming", yourTurn: program });
+    expect(SavedSolution.parse(saved).yourTurn?.program).toBe("print(4 + 5)");
   });
 });
 

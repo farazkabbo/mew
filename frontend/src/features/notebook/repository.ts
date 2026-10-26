@@ -27,7 +27,13 @@ import {
   nextEntryTop,
   startsNewDay,
 } from "./clip-page";
-import { pageHasWords } from "../moments/moments";
+import { circledBoxes, circledWords, type PageBox, pageHasWords } from "../moments/moments";
+import {
+  entrySolutionId,
+  type LocalSolution,
+  movedSolution,
+  solutionStrokeIds,
+} from "../solution/record";
 import type { NotebookDb } from "./db";
 import { PdfPageCache } from "../pdfs/page-cache";
 import { newPage } from "./page-factory";
@@ -130,25 +136,32 @@ export class NotebookRepository {
   }
 
   /**
-   * The notebook page of an imported PDF that holds these words (its pages' text, as kept on this
-   * device once viewed), else its first page. Null when the PDF has no page here.
+   * The notebook page of an imported PDF that holds a moment's circled words (its pages' text, as
+   * kept on this device once viewed), with where they are on it (K8 §4.7); else its first page,
+   * with nothing to highlight. Null when the PDF has no page here.
    */
-  async pdfPageWith(pdfId: string, words: string | null): Promise<Page | null> {
-    let pageIndex = 0;
-    if (words) {
-      const wanted = words;
-      const found = await this.db.pdfPages
-        .where("pdfId")
-        .equals(pdfId)
-        .filter((page) => pageHasWords(page.text, wanted))
-        .first();
-      if (found) pageIndex = found.pageIndex;
-    }
+  async pdfPageWith(
+    pdfId: string,
+    moment: ImageBlock,
+  ): Promise<{ page: Page; imageId: string; boxes: PageBox[] } | null> {
+    const words = circledWords(moment);
+    const found = words
+      ? await this.db.pdfPages
+          .where("pdfId")
+          .equals(pdfId)
+          .filter((page) => pageHasWords(page.text, words))
+          .first()
+      : undefined;
+    const pageIndex = found?.pageIndex ?? 0;
     const images = await this.db.images
       .filter((image) => image.pdf?.pdfId === pdfId && image.pdf.pageIndex <= pageIndex)
       .toArray();
     const best = images.sort((a, b) => (b.pdf?.pageIndex ?? 0) - (a.pdf?.pageIndex ?? 0))[0];
-    return best ? this.getPage(best.pageId) : null;
+    const page = best && (await this.getPage(best.pageId));
+    if (!best || !page) return null;
+    const exact = found && best.pdf?.pageIndex === found.pageIndex;
+    const boxes = exact ? circledBoxes(found.words ?? [], moment.ocrText ?? "") : [];
+    return { page, imageId: best.id, boxes };
   }
 
   /** Every saved screen entry and the pages they're on (K8: Moments, Ctrl+K, Quick check). */
@@ -410,7 +423,7 @@ export class NotebookRepository {
     const ids = { now: Date.now(), newId: () => crypto.randomUUID() };
     return this.db.transaction(
       "rw",
-      [this.db.pages, this.db.images, this.db.strokes, this.db.notebooks],
+      [this.db.pages, this.db.images, this.db.strokes, this.db.notebooks, this.db.solutions],
       async () => {
         const existing = await this.db.images.where("clipId").equals(clip.id).first();
         const existingPage = existing && (await this.db.pages.get(existing.pageId));
@@ -423,14 +436,18 @@ export class NotebookRepository {
           }
           return Page.parse(existingPage);
         }
-        if (existing) {
-          // Moved: off the old page, whole, before it's laid out on the new one.
-          const block = ImageBlock.parse(existing);
-          const onPage = await this.db.strokes.where("pageId").equals(block.pageId).toArray();
-          await this.db.strokes.bulkDelete(
-            entryStrokeIds(block, validRows(Stroke, onPage, "stroke")),
-          );
-          await this.db.images.delete(block.id);
+        // Moved: off the old page, whole, before it's laid out on the new one.
+        const moved = existing && ImageBlock.parse(existing);
+        const left = moved
+          ? validRows(
+              Stroke,
+              await this.db.strokes.where("pageId").equals(moved.pageId).toArray(),
+              "stroke",
+            )
+          : [];
+        if (moved) {
+          await this.db.strokes.bulkDelete(entryStrokeIds(moved, left));
+          await this.db.images.delete(moved.id);
         }
 
         const page = await this.entryPage(notebookId, target);
@@ -441,6 +458,14 @@ export class NotebookRepository {
         const { image, strokes } = entryToPage(clip, page.id, nextEntryTop(placed), ids, heading);
         await this.db.images.add(ImageBlock.parse(image));
         await this.db.strokes.bulkAdd(strokes.map((s) => Stroke.parse(s)));
+        if (moved) {
+          await this.carrySolution(moved, left, {
+            pageId: page.id,
+            imageId: image.id,
+            dx: image.x - moved.x,
+            dy: image.y - moved.y,
+          });
+        }
         await this.touchNotebook(notebookId);
         return Page.parse(page);
       },
@@ -455,7 +480,7 @@ export class NotebookRepository {
   async relocateEntry(imageId: string, notebookId: string): Promise<Page | null> {
     return this.db.transaction(
       "rw",
-      [this.db.pages, this.db.images, this.db.strokes, this.db.notebooks],
+      [this.db.pages, this.db.images, this.db.strokes, this.db.notebooks, this.db.solutions],
       async () => {
         const row = ImageBlock.safeParse(await this.db.images.get(imageId));
         if (!row.success || !row.data.entry) return null;
@@ -496,10 +521,37 @@ export class NotebookRepository {
             entry: { ...rest, ...(heading && { heading }) },
           }),
         );
+        await this.carrySolution(
+          block,
+          onPage.filter((s) => !ids.has(s.id)),
+          { pageId: page.id, imageId: block.id, dx, dy },
+        );
         await this.touchNotebook(notebookId);
         return Page.parse(page);
       },
     );
+  }
+
+  /**
+   * An entry's worked solution (K7) goes where the entry went: its ink, its Your Turn box and the
+   * student's work in it, moved by the entry's own offset, and its record with them. `onPage` is
+   * what's left on the old page. Runs inside the move's transaction.
+   */
+  private async carrySolution(
+    from: ImageBlock,
+    onPage: readonly Stroke[],
+    to: { pageId: string; imageId: string; dx: number; dy: number },
+  ): Promise<void> {
+    const record: LocalSolution | undefined = await this.db.solutions.get(entrySolutionId(from.id));
+    if (!record) return;
+    const ids = new Set(solutionStrokeIds(record, onPage));
+    const moved = onPage
+      .filter((s) => ids.has(s.id))
+      .map((s) => ({ ...translateStroke(s, to.dx, to.dy), pageId: to.pageId }));
+    await this.db.strokes.bulkDelete([...ids]);
+    await this.db.strokes.bulkPut(moved.map((s) => Stroke.parse(s)));
+    await this.db.solutions.delete(record.id);
+    await this.db.solutions.put(movedSolution(record, to));
   }
 
   /**

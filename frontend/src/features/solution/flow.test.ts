@@ -12,6 +12,7 @@ import type {
 } from "@mew/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { CodeRun } from "../check/checker";
 import type { PageEngine } from "../notebook/engine";
 import { useNotebookUi } from "../notebook/store";
 import { type InkClock, TutorInk } from "../tutor/ink";
@@ -76,10 +77,26 @@ const SOLUTION: VerifiedSolution = {
     answerKey: { text: "x = 5", latex: "x = 5" },
     skill: "two-step linear equations",
     conceptIds: [CONCEPT],
+    program: null,
   },
   verification: { method: "sympy", passed: true },
   yourTurnVerified: true,
 };
+
+/** Python, faked: what each program (as rebuilt from the lines) gives when run. */
+const PROGRAMS: Record<string, CodeRun> = {
+  "print(sum([1, 2, 3]))": { ok: true, output: "6\n" },
+  "total = 1 + 2 + 3\nprint(total)": { ok: true, output: "6\n" },
+  "total = 1 + 2\nprint(total)": { ok: true, output: "3\n" },
+  "total = 1 + 2 + 3\nprint(totl)": {
+    ok: false,
+    output: "",
+    error: "NameError: name 'totl' is not defined",
+    line: 2,
+  },
+};
+const runCode = (source: string): Promise<CodeRun> =>
+  Promise.resolve(PROGRAMS[source] ?? { ok: false, output: "", error: "SyntaxError", line: 1 });
 
 /** A clock that's always far ahead: every bit of ink is written on its first frame. */
 const instantClock: InkClock = (() => {
@@ -166,6 +183,7 @@ function setup({
       }),
     solve: vi.fn(() => Promise.resolve(response)),
     checkMath,
+    runCode: vi.fn(runCode),
     read: (_doc, line) => Promise.resolve(readings.get(line.id) ?? null),
     hintTurn: (checks) => hints.push(checks),
     hintStep: vi.fn(),
@@ -205,6 +223,7 @@ beforeEach(() => {
     solutions: [],
     peeking: new Set(),
     offerHint: false,
+    offerSolution: false,
     finished: null,
   });
   useNotebookUi.getState().setFoldedGroups(new Set());
@@ -361,6 +380,46 @@ describe("Show-then-You in the notebook (K6)", () => {
   });
 });
 
+describe("offering the answer after two wrong tries (K6 §6)", () => {
+  it("offers it after two wrong lines in a row, and a right line starts the count again", () => {
+    const { flow } = setup();
+    flow.tried(PAGE, false);
+    flow.tried(PAGE, true);
+    flow.tried(PAGE, false);
+    expect(useShowThenYou.getState().offerSolution).toBe(false);
+    flow.tried(PAGE, false);
+    expect(useShowThenYou.getState().offerSolution).toBe(true);
+  });
+
+  it("never offers it for another page, or while a Your Turn is open", async () => {
+    const { flow } = setup();
+    flow.tried("another-page", false);
+    flow.tried("another-page", false);
+    expect(useShowThenYou.getState().offerSolution).toBe(false);
+
+    await flow.run("just give me the answer");
+    flow.tried(PAGE, false);
+    flow.tried(PAGE, false);
+    expect(useShowThenYou.getState().offerSolution).toBe(false);
+  });
+
+  it("runs Show-then-You when accepted; declining waits for two more wrong tries", async () => {
+    const { flow, deps } = setup();
+    flow.tried(PAGE, false);
+    flow.tried(PAGE, false);
+    flow.declineOffer();
+    expect(useShowThenYou.getState().offerSolution).toBe(false);
+    flow.tried(PAGE, false);
+    expect(useShowThenYou.getState().offerSolution).toBe(false);
+    flow.tried(PAGE, false);
+    expect(useShowThenYou.getState().offerSolution).toBe(true);
+
+    await flow.acceptOffer();
+    expect(deps.solve).toHaveBeenCalledOnce();
+    expect(useShowThenYou.getState()).toMatchObject({ offerSolution: false, phase: "your_turn" });
+  });
+});
+
 describe("linesIn", () => {
   it("takes the lines whose middle is in the box, top to bottom", () => {
     const doc = new PageDocument([
@@ -446,6 +505,7 @@ describe("a physics Your Turn (K7)", () => {
       answerKey: { text: "24 m", latex: tex`s = 24 \text{ m}` },
       skill: "distance under constant acceleration",
       conceptIds: [CONCEPT],
+      program: null,
     },
   };
 
@@ -482,6 +542,7 @@ describe("a chemistry Your Turn", () => {
       answerKey: { text: "2Mg + O2 → 2MgO", latex: String.raw`2Mg + O_2 \to 2MgO` },
       skill: "balancing equations",
       conceptIds: [CONCEPT],
+      program: null,
     },
   };
 
@@ -513,6 +574,74 @@ describe("a chemistry Your Turn", () => {
     answer("2Na + Cl2 -> 2NaCl");
     await flow.check({ quiet: true });
     expect(hints).toEqual([]);
+    expect(useShowThenYou.getState().phase).toBe("your_turn");
+  });
+});
+
+describe("a code Your Turn", () => {
+  const code: VerifiedSolution = {
+    ...SOLUTION,
+    subject: "programming",
+    yourTurn: {
+      problem: "Write a program that adds 1, 2 and 3 and prints the total.",
+      latex: null,
+      answerKey: { text: "6", latex: null },
+      skill: "adding numbers in Python",
+      conceptIds: [CONCEPT],
+      program: "print(sum([1, 2, 3]))",
+    },
+  };
+  const solved = { type: "solution", solution: code } as const;
+
+  it("runs the reference program first, and shows no Your Turn when it doesn't print the key", async () => {
+    const wrongKey = {
+      ...code,
+      yourTurn: { ...code.yourTurn, answerKey: { text: "7", latex: null } },
+    };
+    const { flow, deps, said } = setup({ response: { type: "solution", solution: wrongKey } });
+    await flow.run("just give me the answer");
+
+    expect(deps.runCode).toHaveBeenCalledWith("print(sum([1, 2, 3]))");
+    expect(useShowThenYou.getState().solutions.at(-1)?.yourTurn).toBeNull();
+    expect(said).not.toContain("Your turn: try this one on your own.");
+  });
+
+  it("is done when the student's program prints the key, solved alone", async () => {
+    const { flow, attempts, answer } = setup({ response: solved });
+    await flow.run("just give me the answer");
+    answer("total = 1 + 2 + 3", "print(total)");
+
+    await flow.check({ quiet: true }); // a pen pause can finish it
+    expect(useShowThenYou.getState().phase).toBe("done");
+    expect(attempts.at(-1)).toEqual({
+      conceptIds: [CONCEPT],
+      evidence: "independent",
+      source: "your_turn",
+    });
+  });
+
+  it("marks only when asked: the failing line, or the last one when it prints something else", async () => {
+    const { flow, hints, answer, doc } = setup({ response: solved });
+    await flow.run("just give me the answer");
+    const lines = answer("total = 1 + 2 + 3", "print(totl)");
+
+    await flow.check({ quiet: true });
+    expect(hints).toEqual([]); // a program being written isn't circled on a pause
+    await flow.check({ quiet: false });
+    expect(hints.at(-1)).toEqual([
+      expect.objectContaining({ lineId: lines[1]?.id, checker: "code", reason: "error" }),
+    ]);
+
+    doc.remove(lines.flatMap((l) => l.strokeIds));
+    const again = answer("total = 1 + 2", "print(total)");
+    await flow.check({ quiet: false });
+    expect(hints.at(-1)).toEqual([
+      expect.objectContaining({
+        lineId: again[1]?.id,
+        reason: "wrong_output",
+        detail: "It printed: 3",
+      }),
+    ]);
     expect(useShowThenYou.getState().phase).toBe("your_turn");
   });
 });

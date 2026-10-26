@@ -20,6 +20,7 @@ const request: TutorRequest = {
   quiz: null,
   clippedText: [],
   circled: false,
+  circledText: null,
 };
 
 const RESPONSE: TutorResponse = {

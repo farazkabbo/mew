@@ -1,4 +1,4 @@
-import type { BBox, YourTurn } from "@mew/shared";
+import type { BBox, Stroke, YourTurn } from "@mew/shared";
 
 import type { NotebookDb } from "../notebook/db";
 
@@ -24,6 +24,11 @@ export type LocalSolution = {
 export type YourTurnStatus = "open" | "done" | "skipped";
 
 export type LocalYourTurn = Pick<YourTurn, "problem" | "latex" | "answerKey" | "skill"> & {
+  /**
+   * A program to write (absent on older records): the answer key is what it prints, and this
+   * reference program, run before the Your Turn was shown, printed it.
+   */
+  program?: string | null;
   groupId: string;
   /** Where the student writes the answer: inside the box, under the problem. */
   region: BBox;
@@ -36,6 +41,45 @@ export type LocalYourTurn = Pick<YourTurn, "problem" | "latex" | "answerKey" | "
   ticked: string[];
   status: YourTurnStatus;
 };
+
+/** The solution written for a Circle & Ask entry (K7), by its image block's id. */
+export function entrySolutionId(imageId: string): string {
+  return `entry:${imageId}`;
+}
+
+/**
+ * A worked solution's strokes on its page, to move it with its entry: its ink (folded or not), its
+ * Your Turn box, and what's inside the box (the student's attempt and the marks on it).
+ */
+export function solutionStrokeIds(record: LocalSolution, strokes: readonly Stroke[]): string[] {
+  const groups = new Set([record.groupId, record.yourTurn?.groupId].filter(Boolean));
+  const box = record.yourTurn?.region;
+  const inBox = ({ bbox: [x, y, w, h] }: Stroke) => {
+    if (!box) return false;
+    const [bx, by, bw, bh] = box;
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    return cx >= bx && cx <= bx + bw && cy >= by && cy <= by + bh;
+  };
+  return strokes
+    .filter((s) => (s.groupId !== undefined && groups.has(s.groupId)) || inBox(s))
+    .map((s) => s.id);
+}
+
+/** The record once its strokes moved by (dx, dy) to another page, as the solution of `imageId`. */
+export function movedSolution(
+  record: LocalSolution,
+  to: { pageId: string; imageId: string; dx: number; dy: number },
+): LocalSolution {
+  const shift = ([x, y, w, h]: BBox): BBox => [x + to.dx, y + to.dy, w, h];
+  return {
+    ...record,
+    id: entrySolutionId(to.imageId),
+    pageId: to.pageId,
+    bbox: shift(record.bbox),
+    yourTurn: record.yourTurn && { ...record.yourTurn, region: shift(record.yourTurn.region) },
+  };
+}
 
 export class SolutionRecords {
   constructor(private readonly db: NotebookDb) {}

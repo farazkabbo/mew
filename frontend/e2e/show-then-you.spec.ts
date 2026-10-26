@@ -48,6 +48,7 @@ const SOLUTION: VerifiedSolution = {
     answerKey: { text: "x = 5", latex: "x = 5" },
     skill: "two-step linear equations",
     conceptIds: [],
+    program: null,
   },
   verification: { method: "sympy", passed: true },
   yourTurnVerified: true,

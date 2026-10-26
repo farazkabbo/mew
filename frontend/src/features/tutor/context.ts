@@ -13,6 +13,7 @@ import {
   type TutorRequest,
 } from "@mew/shared";
 
+import type { Circled } from "../notebook/circle";
 import { sourceLabel } from "../notebook/clip-page";
 import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
 import type { RecognitionService } from "./recognition";
@@ -36,8 +37,11 @@ type ContextInput = {
   courseId?: string | null;
   /** The quiz question being answered, if a quiz is running. */
   quiz?: QuizContext | null;
-  /** Lines the student circled (K6 §6.3): the turn is about them, not the latest lines. */
-  circled?: readonly Line[] | null;
+  /**
+   * What the student circled (K6 §6.3): the turn is about those lines, not the latest ones, and
+   * about printed PDF text taken in (K4 §5.2).
+   */
+  circled?: Circled | null;
   /** K9: a line's open live annotation (the tutor sees what's already marked). */
   markOf?: ((line: Line) => RecognizedLine["mark"] | null) | undefined;
   fetchImpl?: typeof fetch;
@@ -56,7 +60,7 @@ export async function buildTutorRequest(input: ContextInput): Promise<TutorReque
   // Course passages are fetched while the handwriting is rendered.
   const courseContext = courseExcerpts(input);
   const { doc, recognition } = input;
-  const circled = doc && input.circled?.length ? input.circled : null;
+  const circled = doc && input.circled?.lines.length ? input.circled.lines : null;
   // Top to bottom: circled lines as they sit on the page, recent ones in writing order.
   const lines = circled
     ? [...circled].sort((a, b) => a.bbox[1] - b.bbox[1]).slice(0, TUTOR_LIMITS.recognizedLines)
@@ -114,6 +118,7 @@ export async function buildTutorRequest(input: ContextInput): Promise<TutorReque
     quiz: input.quiz ?? null,
     clippedText: clippedText(input.images ?? []),
     circled: circled !== null,
+    circledText: input.circled?.printed ?? null,
   };
 }
 

@@ -32,6 +32,8 @@ const PreviewInfo = z.object({
     link: z.string().nullable(),
     includeLink: z.boolean(),
   }),
+  /** Where it goes, when the student said ("Physics › Chapter 5", K3). */
+  place: z.string().max(400).nullable(),
   expiresInMs: z.number().nonnegative(),
 });
 type PreviewInfo = z.infer<typeof PreviewInfo>;
@@ -45,6 +47,7 @@ const saveButton = document.querySelector<HTMLButtonElement>("#save");
 const cancelButton = document.querySelector<HTMLButtonElement>("#cancel");
 const hint = document.querySelector<HTMLElement>("#hint");
 const status = document.querySelector<HTMLElement>("#status");
+const heading = document.querySelector<HTMLElement>("#heading");
 const sourceLine = document.querySelector<HTMLElement>("#source");
 const linkLine = document.querySelector<HTMLElement>("#link");
 const timer = document.querySelector<HTMLElement>("#timer");
@@ -80,11 +83,13 @@ function reset(): void {
   if (image) image.removeAttribute("src");
   svg?.replaceChildren();
   if (status) status.textContent = "";
+  if (heading) heading.textContent = "Save to notebook";
   if (sourceLine) sourceLine.textContent = "";
   if (linkLine) linkLine.textContent = "";
 }
 
-function showSource({ source }: PreviewInfo): void {
+function showSource({ source, place }: PreviewInfo): void {
+  if (heading && place) heading.textContent = `Save to ${place}`;
   if (sourceLine) {
     sourceLine.textContent = [source.app.replace(/\.exe$/, ""), source.title]
       .filter(Boolean)

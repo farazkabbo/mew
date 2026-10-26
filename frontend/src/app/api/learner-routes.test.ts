@@ -113,9 +113,13 @@ describe("POST /api/courses/[id]/attempts", () => {
 });
 
 describe("GET /api/courses/[id]/progress", () => {
+  const CHAPTER = "44444444-4444-4444-8444-444444444444";
+
   it("derives status and next review from the stored attempts and cards", async () => {
     const due = "2030-01-01T00:00:00.000Z";
     api({
+      [`GET /v1/courses/${COURSE}/concept-nodes`]: () =>
+        Response.json({ nodes: [{ concept_id: CONCEPT, notebook_node_id: CHAPTER }] }),
       [`GET /v1/courses/${COURSE}/learner`]: () =>
         Response.json({
           attempts: [
@@ -162,11 +166,16 @@ describe("GET /api/courses/[id]/progress", () => {
           lastAttemptAt: "2026-10-18T10:00:00+00:00",
         },
       ],
+      // K1 §2.2: which chapter each concept belongs to, for the chapter cards.
+      conceptNodes: [{ conceptId: CONCEPT, nodeId: CHAPTER }],
     });
   });
 
   it("refuses cross-site reads and rejects a malformed reply from the service", async () => {
-    api({ [`GET /v1/courses/${COURSE}/learner`]: () => Response.json({ attempts: "nope" }) });
+    api({
+      [`GET /v1/courses/${COURSE}/learner`]: () => Response.json({ attempts: "nope" }),
+      [`GET /v1/courses/${COURSE}/concept-nodes`]: () => Response.json({ nodes: [] }),
+    });
     const { GET } = await import("./courses/[id]/progress/route");
     const crossSite = new Request(`${ORIGIN}/api/courses/${COURSE}/progress`, {
       headers: { "sec-fetch-site": "cross-site" },

@@ -80,6 +80,9 @@ export const RATE_RULES = {
   pdfImportDaily: { limit: 40, windowMs: DAY },
   pdfPage: { limit: 240, windowMs: MINUTE },
   pdfPageDaily: { limit: 8000, windowMs: DAY },
+  /** "Recognize text" on a scanned page (a model call per page, only when asked). */
+  pdfRecognize: { limit: 10, windowMs: MINUTE },
+  pdfRecognizeDaily: { limit: 100, windowMs: DAY },
   destinationsDaily: { limit: 800, windowMs: DAY },
   notebookTreeDaily: { limit: 5000, windowMs: DAY },
   /**

@@ -22,6 +22,7 @@ const YOUR_TURN: YourTurn = {
   answerKey: { text: "x = 5", latex: "x = 5" },
   skill: "two-step linear equations",
   conceptIds: ["11111111-1111-4111-8111-111111111111", "not-in-the-course"],
+  program: null,
 };
 
 const SOLUTION: FullSolution = {
@@ -166,5 +167,30 @@ describe("solve", () => {
       },
     );
     expect(result.type).toBe("your_turn");
+  });
+
+  it("leaves a programming One more's key to the device, which runs its reference program", async () => {
+    const checkMath = checker();
+    const program = {
+      problem: "Print the sum of 4 and 5.",
+      latex: null,
+      answerKey: { text: "9", latex: null },
+      skill: "printing a sum",
+      conceptIds: [],
+    };
+    const result = await solve(
+      { ...REQUEST, variantOf: { problem: "Print the sum of 1 and 2.", skill: "printing a sum" } },
+      undefined,
+      {
+        // Without a reference program it's asked again; with one it's accepted.
+        generate: generator({ ...program, program: null }, { ...program, program: "print(4 + 5)" }),
+        checkMath,
+      },
+    );
+    expect(result).toEqual({
+      type: "your_turn",
+      yourTurn: { ...program, program: "print(4 + 5)" },
+    });
+    expect(checkMath.calls).toEqual([]);
   });
 });

@@ -56,11 +56,15 @@ self.onmessage = async (event) => {
     const message = String(error?.message ?? error);
     // Python tracebacks end with the useful line ("NameError: name 'x' is not defined").
     const last = message.trim().split("\n").filter(Boolean).at(-1) ?? message;
+    // The snippet's own line that failed: its last frame in the traceback ("<exec>").
+    const frames = [...message.matchAll(/File "<exec>", line (\d+)/g)];
+    const line = Number(frames.at(-1)?.[1]) || undefined;
     self.postMessage({
       id,
       ok: false,
       output: output.slice(0, MAX_OUTPUT),
       error: last.slice(0, 300),
+      line,
     });
   }
 };

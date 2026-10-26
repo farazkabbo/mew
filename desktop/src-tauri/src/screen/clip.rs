@@ -23,9 +23,10 @@ use tauri::{AppHandle, Manager, Runtime, UriSchemeContext, Url, WebviewWindow};
 
 use super::account::{forget_revoked_token, wipe_string};
 use super::annotate::{self, InkTurn, TurnState};
+use super::circle_answer;
 use super::coach::{self, ScreenCoach};
 use super::config::CaptureScope;
-use super::destination::{DestinationOut, Place};
+use super::destination::{DestinationOut, Place, Resolution};
 use super::frame::{FrameDetail, FrameMeta};
 use super::image::{crop, downscale_bgra_to_bgr, looks_blank};
 use super::ink::{
@@ -48,6 +49,8 @@ use super::win::{credential, crypto, http, target};
 pub const SCHEME: &str = "mewclip";
 /// A preview nobody answers is discarded after this (brief §3.2).
 const DECISION_TIME: Duration = Duration::from_secs(60);
+/// A place said with "save this to …" waits this long for its clip's preview.
+const PLACE_WAIT: Duration = Duration::from_secs(15);
 /// Longest side of a saved clip (brief §3.2).
 const CLIP_LONG_SIDE: u32 = 2400;
 /// Longest side of the image the preview shows.
@@ -123,6 +126,8 @@ pub struct PreviewInfo {
     strokes: Vec<PreviewStroke>,
     cards: Vec<Rect>,
     source: PreviewSource,
+    /// Where it'll go when the student said ("Physics › Chapter 5", K3); else auto-filing's.
+    place: Option<String>,
     expires_in_ms: u64,
 }
 
@@ -172,6 +177,52 @@ pub fn from_ink<R: Runtime>(app: &AppHandle<R>) {
         TurnState::Stale => coach::capture_for_clip(app, CaptureScope::Window, Purpose::Reannotate),
         TurnState::None => coach::capture_for_clip(app, CaptureScope::Monitor, Purpose::Select),
     }
+}
+
+/// A place said with "save this to …" (K3 §4.2), waiting for the clip it was said with.
+pub struct ClipPlace {
+    place: Place,
+    said: Instant,
+}
+
+/// "Save this to Physics chapter 5" said while holding Ctrl+Alt with nothing circled (K3 §4.2):
+/// the place is looked up first, then it's a clip like "save this", whose preview says where it
+/// goes. A place that isn't clear (two that match, a chapter that isn't there yet) is never
+/// guessed: the student is told why, and the clip goes where clips usually go.
+pub fn from_voice_to<R: Runtime>(app: &AppHandle<R>, captured: Captured, phrase: String) {
+    let handle = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("mew-clip-place".into())
+        .spawn(move || {
+            match circle_answer::resolve_phrase(&handle, &phrase) {
+                Some(Resolution::Resolved { place, .. }) => {
+                    if let Some(coach) = handle.try_state::<ScreenCoach>() {
+                        *coach.clip_place() = Some(ClipPlace {
+                            place,
+                            said: Instant::now(),
+                        });
+                    }
+                }
+                other => coach::notify(&handle, &unplaced(other.as_ref())),
+            }
+            from_voice(&handle, captured);
+        });
+}
+
+/// Why a clip goes where clips usually go instead of the place the student said.
+fn unplaced(resolution: Option<&Resolution>) -> String {
+    let why = match resolution {
+        Some(Resolution::Choose(places)) => {
+            let labels: Vec<String> = places.iter().map(Place::label).collect();
+            format!("I wasn't sure which you meant: {}.", labels.join(" or "))
+        }
+        Some(Resolution::Missing { parent, title }) => {
+            format!("There's no {title} in {} yet.", parent.label())
+        }
+        Some(_) => "I couldn't find that place in your notebooks.".to_owned(),
+        None => "I couldn't reach your notebooks just now.".to_owned(),
+    };
+    format!("{why} This clip goes where clips usually go; you can move it from the notebook.")
 }
 
 /// "Save this" said while holding Ctrl+Alt: its capture is either not needed (live ink),
@@ -407,6 +458,13 @@ fn open<R: Runtime>(app: &AppHandle<R>, mut draft: ClipDraft) {
     let Some(coach) = app.try_state::<ScreenCoach>() else {
         return;
     };
+    // A place said with it ("save this to Physics chapter 5"), if it was said just now.
+    let said = coach.clip_place().take();
+    if draft.destination.is_none() {
+        draft.destination = said
+            .filter(|p| p.said.elapsed() < PLACE_WAIT)
+            .map(|p| p.place);
+    }
     let Some(window) = overlay::ensure(app, Surface::Clip) else {
         coach::notify(app, "I couldn't open the clip preview.");
         return;
@@ -544,6 +602,7 @@ pub fn screen_clip_ready<R: Runtime>(window: WebviewWindow<R>) -> Result<Preview
             include_link: link.is_some(),
             link,
         },
+        place: draft.destination.as_ref().map(Place::label),
         expires_in_ms: DECISION_TIME
             .saturating_sub(draft.created.elapsed())
             .as_millis() as u64,
@@ -838,7 +897,35 @@ pub fn rfc3339(time: SystemTime) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::screen::destination::Page;
     use crate::screen::image::fit_within;
+
+    fn place(path: &[&str]) -> Place {
+        Place {
+            node_id: "11111111-1111-4111-8111-111111111111".into(),
+            path: path.iter().map(|t| (*t).to_owned()).collect(),
+            page: Page::FromScreen,
+            create: None,
+            root: false,
+        }
+    }
+
+    #[test]
+    fn says_why_a_clip_goes_where_clips_usually_go() {
+        let two = Resolution::Choose(vec![
+            place(&["Physics", "Chapter 5"]),
+            place(&["Physics II", "Chapter 5"]),
+        ]);
+        assert!(unplaced(Some(&two))
+            .starts_with("I wasn't sure which you meant: Physics › Chapter 5 or Physics II ›"));
+        let missing = Resolution::Missing {
+            parent: place(&["Physics"]),
+            title: "Chapter 5".into(),
+        };
+        assert!(unplaced(Some(&missing)).starts_with("There's no Chapter 5 in Physics yet."));
+        assert!(unplaced(Some(&Resolution::None)).starts_with("I couldn't find that place"));
+        assert!(unplaced(None).ends_with("you can move it from the notebook."));
+    }
 
     #[test]
     fn writes_utc_timestamps() {

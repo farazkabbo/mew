@@ -12,6 +12,8 @@ type State = {
   peeking: ReadonlySet<string>;
   /** Two misses on one line: the Your Turn offers a hint step. */
   offerHint: boolean;
+  /** Two wrong tries at the student's own working: the full solution is offered (§6). */
+  offerSolution: boolean;
   /** "You got it on your own." / "You got it." once the Your Turn is done. */
   finished: string | null;
 };
@@ -27,6 +29,7 @@ export const useShowThenYou = create<State & Actions>()((set) => ({
   solutions: [],
   peeking: new Set(),
   offerHint: false,
+  offerSolution: false,
   finished: null,
   set: (state) => set(state),
   upsert: (record) =>

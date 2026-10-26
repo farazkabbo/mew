@@ -166,7 +166,10 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
         const image = engine.images.find(
           (i) => i.pdf?.pdfId === pdf.pdfId && i.pdf.pageIndex === pdf.pageIndex,
         );
-        if (image) engine.noteImageText(image.id, text);
+        if (!image) return;
+        engine.noteImageText(image.id, text);
+        // No text layer: a scanned page, which can be read when the student asks (K4 §5.2).
+        useNotebookUi.getState().markScanned(image.id, !text.trim() && !image.ocrText);
       },
     );
 

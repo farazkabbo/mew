@@ -78,7 +78,9 @@ function YourTurnPanel({ flow, checkShortcut }: Pick<Props, "flow" | "checkShort
   const phase = useShowThenYou((s) => s.phase);
   const offerHint = useShowThenYou((s) => s.offerHint);
   const finished = useShowThenYou((s) => s.finished);
-  if (phase === "idle" || phase === "showing") return null;
+  const offerSolution = useShowThenYou((s) => s.offerSolution);
+  const offering = phase === "idle" && offerSolution;
+  if ((phase === "idle" && !offering) || phase === "showing") return null;
   const button =
     "rounded-full px-3 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2";
   return (
@@ -89,6 +91,26 @@ function YourTurnPanel({ flow, checkShortcut }: Pick<Props, "flow" | "checkShort
         data-testid="your-turn-panel"
         className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-2xl bg-ink px-4 py-2 text-sm text-paper shadow-lg"
       >
+        {offering && (
+          <>
+            <span>Stuck on this one? I can show you every step, then give you one to try.</span>
+            <button
+              type="button"
+              data-testid="offer-solution"
+              className={`${button} bg-paper text-ink`}
+              onClick={() => void flow.acceptOffer()}
+            >
+              Show me
+            </button>
+            <button
+              type="button"
+              className={`${button} opacity-80`}
+              onClick={() => flow.declineOffer()}
+            >
+              Not now
+            </button>
+          </>
+        )}
         {phase === "solving" && <span>Working it out and checking it…</span>}
         {phase === "your_turn" && (
           <>

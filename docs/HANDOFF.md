@@ -305,10 +305,9 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     (`tutor.v9`) and Notes Check (`notes-compare.v4`, `RetrievedLine.mark`); concepts for live
     evidence (`/api/annotate/concept`, `live-concept.v1`); resolved circles fade; leaving a page
     finishes its line.
-  - **Hosted database (checked 2026-10-26):** `note_lines` through `clip_entries` and
-    `notes_resolution` are applied but not recorded in the migration history. `notebook_tree`
-    onwards (8 migrations, `check_reminders` included) are not applied. The Supabase MCP
-    connection is read-only, so they need the SQL editor or `supabase db push`.
+  - **Hosted database:** every migration through `concept_nodes` is applied (the owner ran the
+    last 9, `notebook_tree` onwards, in the SQL editor on 2026-10-26). Those run in the editor
+    aren't recorded in the migration history, so `supabase db push` would try them again.
   - **To verify by hand:**
     - the K9 acceptance with real handwriting and Gemini recognition (`3x + 7 = 19`, `3x = 26`,
       then fixed);
@@ -329,6 +328,24 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     words), the toast (Undo leaves nothing; Open shows the entry), "Select question on screen"
     on handwriting, and silent mode with only the keyboard. Not done (left for S5, decision 11):
     course context in the answer, and evidence from the follow-up question.
+- **K1–K9 left-for-later, built** (2026-10-26) — NOTEBOOKS_K.md decisions 120–130:
+  - **Show-then-You:** the offer after two wrong tries (`ShowThenYou.tried`, fed by the live
+    annotator's `onTry`); a code Your Turn (reference `program` proved in Pyodide before it's
+    shown, the student's lines run as a program: `solution/code.ts`; prompts `full-solution.v3`,
+    `your-turn-variant.v3`, `solution-rubric.v2`); an entry's solution moves with the entry
+    (`carrySolution` in the repository).
+  - **PDFs in neb:** Open in neb highlights the circled words (`circledBoxes`,
+    `SourceHighlight`; word boxes now kept in the page cache); circling printed text on a PDF page
+    (`circledPrinted`, `circledText`, prompt `tutor.v10`); "Recognize text" on scanned pages
+    (`/api/pdfs/[id]/pages/[index]/recognize`, prompt `pdf-page-ocr.v1`).
+  - **Chapter cards** show course progress (migration `concept_nodes`, FastAPI
+    `/v1/courses/{id}/concept-nodes`, `chapterProgress`).
+  - **Desktop:** "save this to Physics chapter 5" with nothing circled clips to that place
+    (`clip::from_voice_to`; the preview's heading names it).
+  - **The `concept_nodes` migration is applied** (2026-10-26, with the 8 before it).
+  - **To verify by hand:** "save this to Physics chapter 5" on a plain hold in the desktop app;
+    Open in neb on a moment from an imported PDF (the highlight); "Recognize text" on a scanned
+    page with a real key; the code Your Turn with real handwriting; two wrong lines → the offer.
 - **Next:** S5 (learner integration: skills from walkthroughs, evidence, FSRS re-checks).
   Notes Check (S3.5) N1–N5 are built; see below.
 
@@ -391,6 +408,10 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K1–K9's left-for-later, 2026-10-26): **1,653 unit tests** (frontend 552, backend 367,
+ink 169, shared 395, database 147, desktop overlays 23), **171 Rust tests** (+5 real-Windows ones;
+clippy clean) and **80 Playwright tests**, all passing.
 
 Tests (after the K8/K9 follow-ups): **1,621 unit tests** (frontend 529, backend 364, ink 169,
 shared 392, database 144, desktop overlays 23), **170 Rust tests** (+5 real-Windows ones) and

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   addDays,
+  chapterProgress,
   type ConceptProgress,
   type ConceptStatus,
   conceptStatus,
@@ -65,6 +66,41 @@ function progress(entries: Record<string, [ConceptStatus, string | null]>) {
   }));
   return progressFor(IDS, known);
 }
+
+describe("chapterProgress (K1 §2.2: progress on chapter cards)", () => {
+  const ids = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+  const started = (n: number, status: ConceptStatus): ConceptProgress => ({
+    conceptId: ids(n),
+    status,
+    due: null,
+    attempts: 1,
+    independent: status === "checked" ? 1 : 0,
+    lastAttemptAt: null,
+  });
+  const progress = {
+    concepts: [started(1, "checked"), started(2, "explored"), started(3, "checked")],
+    conceptNodes: [
+      { conceptId: ids(1), nodeId: "chapter-1" },
+      { conceptId: ids(2), nodeId: "chapter-1" },
+      { conceptId: ids(2), nodeId: "section-1.1" },
+      { conceptId: ids(3), nodeId: "chapter-2" },
+      { conceptId: ids(4), nodeId: "chapter-2" },
+    ],
+  };
+
+  it("counts each of the chapter's topics once, its sections' too, and the checked ones", () => {
+    expect(chapterProgress(new Set(["chapter-1", "section-1.1"]), progress)).toEqual({
+      checked: 1,
+      total: 2,
+    });
+    // A topic never started counts as not checked.
+    expect(chapterProgress(new Set(["chapter-2"]), progress)).toEqual({ checked: 1, total: 2 });
+  });
+
+  it("is null for a chapter with no topics of its own", () => {
+    expect(chapterProgress(new Set(["chapter-3"]), progress)).toBeNull();
+  });
+});
 
 describe("progressFor", () => {
   it("fills in concepts never started", () => {

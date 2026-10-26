@@ -24,7 +24,7 @@ use super::account::PendingLink;
 use super::annotate::{self, InkState};
 use super::ask;
 use super::circle;
-use super::clip::{self, ClipDraft, Purpose};
+use super::clip::{self, ClipDraft, ClipPlace, Purpose};
 use super::coach_mode::{self, CoachCapture, CoachState};
 use super::config::{self, CaptureScope, Loaded, Privacy, ScreenConfig, CONSENT_VERSION};
 use super::frame::{CapturedFrame, FrameMeta, FrameSlot, Timings, FRAME_TTL};
@@ -63,6 +63,8 @@ pub struct ScreenCoach {
     ink: Mutex<InkState>,
     /// A clip waiting in its preview (S3).
     clip: Mutex<Option<ClipDraft>>,
+    /// Where the next clip goes, said with it ("save this to Physics chapter 5", K3).
+    clip_place: Mutex<Option<ClipPlace>>,
     /// The walkthrough in progress, as far as the desktop knows it (S4).
     coaching: Mutex<CoachState>,
     /// Circle & Ask: draw mode and the session (S3.2).
@@ -184,6 +186,12 @@ impl ScreenCoach {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    pub fn clip_place(&self) -> std::sync::MutexGuard<'_, Option<ClipPlace>> {
+        self.clip_place
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     pub fn coaching(&self) -> std::sync::MutexGuard<'_, CoachState> {
         self.coaching
             .lock()
@@ -267,6 +275,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         pending_link: Mutex::new(None),
         ink: Mutex::new(InkState::default()),
         clip: Mutex::new(None),
+        clip_place: Mutex::new(None),
         coaching: Mutex::new(CoachState::default()),
         circle: Mutex::new(circle::CircleState::default()),
     };

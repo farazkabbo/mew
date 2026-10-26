@@ -1,6 +1,7 @@
 import type { Stroke } from "@mew/shared";
 import { create } from "zustand";
 
+import type { PageBox } from "../moments/moments";
 import { HIGHLIGHTER_COLORS, INK_COLORS, type PenSize, type Tool } from "./palette";
 
 type ToolState = {
@@ -21,6 +22,13 @@ type ToolState = {
    * check), and replay with its voice when asked.
    */
   momentRequest: { imageId: string; replay: boolean } | null;
+  /**
+   * A moment's circled words on its PDF page in neb (K8 §4.7: "Open in neb"), highlighted for a
+   * moment once that page is open: boxes are 0-1 of the page's picture.
+   */
+  sourceHighlight: { imageId: string; boxes: readonly PageBox[] } | null;
+  /** K4: PDF pages (their image blocks) whose text layer came back empty: scanned pages. */
+  scannedPages: ReadonlySet<string>;
   /** K9: pages whose marks layer is hidden (the eye), remembered on this device. */
   marksHiddenOn: ReadonlySet<string>;
   /** K9: marks held back by "Hide marks until I'm done" (their stroke groups). */
@@ -47,6 +55,8 @@ type Actions = {
   setReplayHidden(groups: ReadonlySet<string>): void;
   setFoldedGroups(groups: ReadonlySet<string>): void;
   requestMoment(request: { imageId: string; replay: boolean } | null): void;
+  highlightSource(highlight: { imageId: string; boxes: readonly PageBox[] } | null): void;
+  markScanned(imageId: string, scanned: boolean): void;
   toggleMarksOn(pageId: string): void;
   setUnrevealedMarks(groups: ReadonlySet<string>): void;
   fadeMarks(strokes: readonly Stroke[]): void;
@@ -71,6 +81,8 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   replayHidden: new Set(),
   foldedGroups: new Set(),
   momentRequest: null,
+  sourceHighlight: null,
+  scannedPages: new Set(),
   marksHiddenOn: new Set(readList(MARKS_HIDDEN_KEY)),
   unrevealedMarks: new Set(),
   fadingMarks: null,
@@ -94,6 +106,14 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   setReplayHidden: (replayHidden) => set({ replayHidden }),
   setFoldedGroups: (foldedGroups) => set({ foldedGroups }),
   requestMoment: (momentRequest) => set({ momentRequest }),
+  highlightSource: (sourceHighlight) => set({ sourceHighlight }),
+  markScanned: (imageId, scanned) => {
+    if (get().scannedPages.has(imageId) === scanned) return;
+    const scannedPages = new Set(get().scannedPages);
+    if (scanned) scannedPages.add(imageId);
+    else scannedPages.delete(imageId);
+    set({ scannedPages });
+  },
   toggleMarksOn: (pageId) => {
     const next = new Set(get().marksHiddenOn);
     if (!next.delete(pageId)) next.add(pageId);

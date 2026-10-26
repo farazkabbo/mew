@@ -207,6 +207,21 @@ def test_an_entry_keeps_its_worked_solution(client: TestClient) -> None:  # noqa
     assert read_entry(client, clip_id)["solution"] == SOLUTION
 
 
+def test_an_entry_keeps_a_programming_your_turns_reference_program(client: TestClient) -> None:  # noqa: F811
+    """K6: a code Your Turn's key is proved by running its program in the notebook."""
+    token = link_device(client)
+    program = {
+        "problem": "Print the sum of 4 and 5.",
+        "latex": None,
+        "answerKey": {"text": "9", "latex": None},
+        "skill": "printing a sum",
+        "program": "a = 4\nprint(a + 5)",
+    }
+    solution = {**SOLUTION, "yourTurn": program}
+    clip_id = save(client, token, entry_body(solution=solution)).json()["clipId"]
+    assert read_entry(client, clip_id)["solution"]["yourTurn"]["program"] == "a = 4\nprint(a + 5)"
+
+
 def test_a_follow_up_can_bring_the_entry_its_solution(client: TestClient) -> None:  # noqa: F811
     token = link_device(client)
     clip_id = save(client, token, entry_body()).json()["clipId"]
@@ -224,6 +239,7 @@ def test_a_follow_up_can_bring_the_entry_its_solution(client: TestClient) -> Non
         {**SOLUTION, "steps": SOLUTION["steps"] * 4},
         {**SOLUTION, "finalAnswer": {"text": "x\u0007", "latex": None}},
         {**SOLUTION, "yourTurn": {**SOLUTION["yourTurn"], "skill": "s" * 81}},
+        {**SOLUTION, "yourTurn": {**SOLUTION["yourTurn"], "program": "p" * 601}},
         {**SOLUTION, "extra": True},
     ],
 )

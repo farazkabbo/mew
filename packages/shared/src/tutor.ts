@@ -175,6 +175,11 @@ export const TutorRequest = z.object({
    * are exactly what was circled, so "this" means them.
    */
   circled: z.boolean().default(false),
+  /**
+   * Printed text the student circled on a PDF page in neb (K4 §5.2: from its text layer, not
+   * read off a picture), with its file and page: "this" means it.
+   */
+  circledText: ClippedText.nullable().default(null),
 });
 export type TutorRequest = z.infer<typeof TutorRequest>;
 

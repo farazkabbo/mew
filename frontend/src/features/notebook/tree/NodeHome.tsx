@@ -1,13 +1,21 @@
 "use client";
 
-import { type Notebook, type NotebookTree, type Page, Subject, TREE_LIMITS } from "@mew/shared";
+import {
+  chapterProgress,
+  type CourseProgress,
+  type Notebook,
+  type NotebookTree,
+  type Page,
+  Subject,
+  TREE_LIMITS,
+} from "@mew/shared";
 import { FileText, FileUp, GraduationCap, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { coursesApi } from "../../courses/api";
 import { FileThese } from "../../moments/FileThese";
-import type { Moment } from "../../moments/moments";
+import { type Moment, subtreeIds } from "../../moments/moments";
 import { MomentsList } from "../../moments/MomentsList";
 import { useShortcutKeys } from "../../shortcuts/useShortcutKeys";
 import { Breadcrumb } from "./Breadcrumb";
@@ -62,7 +70,8 @@ type Tab = "contents" | "moments";
 
 /**
  * A notebook's (or chapter's) home (K1, docs/NOTEBOOKS_K.md §2.2): a card per chapter with its
- * page count and when it was last edited, its own "Loose pages", and a card to add a chapter.
+ * page count, when it was last edited and its course progress (when the notebook has a course),
+ * its own "Loose pages", and a card to add a chapter.
  */
 export function NodeHome({
   node,
@@ -116,6 +125,21 @@ export function NodeHome({
       clearTimeout(timer);
     };
   }, [courseId]);
+  // K1 §2.2: each chapter card shows its course progress (the topics in it that are checked).
+  const [progress, setProgress] = useState<CourseProgress | null>(null);
+  useEffect(() => {
+    if (!courseId) return;
+    let live = true;
+    void coursesApi
+      .progress(courseId)
+      .then((read) => live && setProgress(read))
+      .catch(() => undefined); // offline: the cards show without it
+    return () => {
+      live = false;
+    };
+  }, [courseId]);
+  const progressOf = (id: string) =>
+    courseId && progress ? chapterProgress(subtreeIds(tree, id), progress) : null;
   const canAdd = tree.depth(node.id) < TREE_LIMITS.maxDepth;
   const noun = childNoun(tree, node.id);
   const totalPages = children.reduce((sum, c) => sum + (pageCounts.get(c.id) ?? 0), pages.length);
@@ -249,35 +273,54 @@ export function NodeHome({
                 {root.childLabel}
               </h2>
               <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {children.map((child, index) => (
-                  <li key={child.id}>
-                    <button
-                      type="button"
-                      onClick={() => actions.onOpen(child.id)}
-                      data-testid="chapter-card"
-                      className="flex h-full w-full flex-col gap-2 rounded-2xl border border-rule bg-paper-raised p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 motion-reduce:transition-none"
-                    >
-                      <span className="flex items-center justify-between gap-2 text-xs text-ink-muted tabular-nums">
-                        {index + 1}
-                        {(dueCounts.get(child.id) ?? 0) > 0 && (
-                          <span
-                            data-testid="checks-due-badge"
-                            className="rounded-full bg-tutor/15 px-2 py-0.5 font-medium text-ink"
-                          >
-                            {plural(dueCounts.get(child.id) ?? 0, "check")} due
+                {children.map((child, index) => {
+                  const done = progressOf(child.id);
+                  return (
+                    <li key={child.id}>
+                      <button
+                        type="button"
+                        onClick={() => actions.onOpen(child.id)}
+                        data-testid="chapter-card"
+                        className="flex h-full w-full flex-col gap-2 rounded-2xl border border-rule bg-paper-raised p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 motion-reduce:transition-none"
+                      >
+                        <span className="flex items-center justify-between gap-2 text-xs text-ink-muted tabular-nums">
+                          {index + 1}
+                          {(dueCounts.get(child.id) ?? 0) > 0 && (
+                            <span
+                              data-testid="checks-due-badge"
+                              className="rounded-full bg-tutor/15 px-2 py-0.5 font-medium text-ink"
+                            >
+                              {plural(dueCounts.get(child.id) ?? 0, "check")} due
+                            </span>
+                          )}
+                        </span>
+                        <span className="font-serif text-xl leading-tight">{child.title}</span>
+                        {done && (
+                          <span data-testid="chapter-progress" className="flex flex-col gap-1">
+                            <span className="text-xs text-ink-muted tabular-nums">
+                              {done.checked} of {plural(done.total, "topic")} checked
+                            </span>
+                            <span
+                              className="h-1.5 overflow-hidden rounded-full bg-rule"
+                              aria-hidden
+                            >
+                              <span
+                                className="block h-full rounded-full bg-tutor"
+                                style={{ width: `${(100 * done.checked) / done.total}%` }}
+                              />
+                            </span>
                           </span>
                         )}
-                      </span>
-                      <span className="font-serif text-xl leading-tight">{child.title}</span>
-                      <span className="mt-auto text-xs text-ink-muted">
-                        {plural(pageCounts.get(child.id) ?? 0, "page")}
-                        {tree.children(child.id).length > 0 &&
-                          ` · ${plural(tree.children(child.id).length, "section")}`}{" "}
-                        · edited {ago(child.updatedAt, now)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                        <span className="mt-auto text-xs text-ink-muted">
+                          {plural(pageCounts.get(child.id) ?? 0, "page")}
+                          {tree.children(child.id).length > 0 &&
+                            ` · ${plural(tree.children(child.id).length, "section")}`}{" "}
+                          · edited {ago(child.updatedAt, now)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
                 {canAdd && (
                   <li>
                     <button

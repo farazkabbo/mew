@@ -48,6 +48,7 @@ function request(question: string): TutorRequest {
     quiz: null,
     clippedText: [],
     circled: false,
+    circledText: null,
   };
 }
 

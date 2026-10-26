@@ -28,6 +28,7 @@ export * from "./prompts/annotations";
 export * from "./prompts/coach";
 export * from "./prompts/destination";
 export * from "./prompts/notes";
+export * from "./prompts/pdf";
 export * from "./prompts/checker";
 export * from "./prompts/circle";
 export * from "./prompts/mew";

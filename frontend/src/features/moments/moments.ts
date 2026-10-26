@@ -5,6 +5,7 @@ import type {
   Notebook,
   NotebookTree,
   Page,
+  PdfWord,
 } from "@mew/shared";
 
 import { safeLink } from "../notebook/clip-page";
@@ -173,20 +174,84 @@ function safeDecode(text: string): string {
   }
 }
 
-/** A few words of the circled text to find on a PDF's pages (normalised for matching). */
-export function circledWords(image: ImageBlock): string | null {
-  const words = (image.ocrText ?? "")
+/** Words for matching: lower case, letters and digits only. */
+function tokens(text: string): string[] {
+  return text
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .toLowerCase()
     .split(" ")
-    .filter(Boolean)
-    .slice(0, 6);
+    .filter(Boolean);
+}
+
+/** How many of the circled words find their place on a PDF page (at least 3). */
+const ANCHOR_WORDS = 6;
+/** Misread words in a row let through while following the circled text along the page. */
+const MISREADS = 2;
+
+/** A few words of the circled text to find on a PDF's pages (normalised for matching). */
+export function circledWords(image: ImageBlock): string | null {
+  const words = tokens(image.ocrText ?? "").slice(0, ANCHOR_WORDS);
   return words.length >= 3 ? words.join(" ") : null;
+}
+
+/** [left, top, right, bottom], 0-1 of a PDF page from its top left (its words' boxes). */
+export type PageBox = PdfWord["box"];
+
+/**
+ * Where a moment's circled text is on a PDF page in neb (K8 §4.7: "that page, with the circled
+ * area highlighted"): its first words found among the page's words, then followed along the page
+ * for as long as the rest keeps matching (a word or two the screen's OCR misread are let
+ * through). One box per line of the page; none when the words aren't there.
+ */
+export function circledBoxes(words: readonly PdfWord[], ocrText: string): PageBox[] {
+  const circled = tokens(ocrText);
+  const anchor = circled.slice(0, ANCHOR_WORDS);
+  if (anchor.length < 3) return [];
+  // The page as tokens, each knowing its word ("ball," is "ball"; "x-ray" is "x" "ray").
+  const page = words.flatMap((word, index) => tokens(word.text).map((token) => ({ token, index })));
+  const start = page.findIndex((_, i) => anchor.every((token, k) => page[i + k]?.token === token));
+  if (start === -1) return [];
+
+  let end = start + anchor.length - 1;
+  let p = end + 1;
+  let misread = 0;
+  for (let c = anchor.length; c < circled.length && p < page.length && misread <= MISREADS;) {
+    if (page[p]?.token === circled[c]) {
+      end = p;
+      misread = 0;
+      c++;
+    } else {
+      misread++;
+      // A word missing on one side, or one misread on both.
+      if (page[p + 1]?.token === circled[c]) p++;
+      else if (page[p]?.token === circled[c + 1]) {
+        c++;
+        continue;
+      } else c++;
+    }
+    p++;
+  }
+
+  const lines: PageBox[] = [];
+  const first = page[start]?.index ?? 0;
+  const last = page[end]?.index ?? first;
+  for (const { box } of words.slice(first, last + 1)) {
+    const line = lines.at(-1);
+    const height = box[3] - box[1];
+    if (line && Math.abs(box[1] - line[1]) < height / 2) {
+      lines[lines.length - 1] = [
+        Math.min(line[0], box[0]),
+        Math.min(line[1], box[1]),
+        Math.max(line[2], box[2]),
+        Math.max(line[3], box[3]),
+      ];
+    } else lines.push([...box]);
+  }
+  return lines;
 }
 
 /** Whether a PDF page's text has these words in order (spacing and punctuation aside). */
 export function pageHasWords(pageText: string, words: string): boolean {
-  const text = pageText.replace(/[^\p{L}\p{N}]+/gu, " ").toLowerCase();
-  return text.includes(words);
+  return ` ${tokens(pageText).join(" ")} `.includes(` ${words} `);
 }

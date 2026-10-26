@@ -1490,3 +1490,72 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
       - K6's "the tutor offers the answer after two unsuccessful tries" and the Your Turn check for
         code;
       - K7's solution left behind when an entry moves, and "One more" on screen.
+120.  **Everything K1–K9 left for later, built (decisions 47, 53, 55, 72, 81, 119).** Each is
+      below; what's still left is listed last (decision 130).
+121.  **The offer after two wrong tries (K6 §6, the second way in).** Live annotations report each
+      verified try (`onTry`: a right line, or a wrong one read with confidence). Two wrong in a row
+      on a page show "Stuck on this one? I can show you every step, then give you one to try."
+      with **Show me** (Show-then-You, as if asked) and **Not now** (two more wrong tries bring it
+      back). Never during a Your Turn or a quiz, never for another page; hints stay first, since
+      nothing starts without the tap.
+122.  **A code Your Turn (K6 §6.1, "code").** A programming Your Turn carries a reference
+      `program`, never shown (prompts `full-solution.v3`, `your-turn-variant.v3`,
+      `solution-rubric.v2`); its answer key is exactly what the program prints.
+      - The device runs the reference program in Pyodide before writing the Your Turn, and writes
+        it only if it prints the key. The server has no Python runner, so it leaves that check to
+        the device.
+      - The student's lines in the box are the program, indented by where each line starts
+        (`programFrom`), run in Pyodide. Printing the key finishes it (a tick on the last line,
+        evidence as usual).
+      - A pen pause only ever finishes it, never marks: a program being written usually fails.
+        "Check" or Alt+C circles the line the error names (the worker now reports the
+        traceback's line), or the last line with "It printed: …".
+      - Saved screen entries keep the program (`SavedSolution.yourTurn.program`, Pydantic too).
+123.  **An entry's solution moves with it (K7, decision 81).** Both moves (`importEntry`, when the
+      place changes from the desktop; `relocateEntry`, filing in the notebook) carry the entry's
+      worked solution: its ink, its Your Turn box and what's written in the box
+      (`solutionStrokeIds`), shifted by the entry's own offset, and its record, re-keyed to the
+      entry's new image (`entry:<image id>`), so it isn't written a second time there.
+124.  **"One more" stays in the notebook (K7, decision 81).** §6.2 step 4 puts checking a screen
+      Your Turn in the notebook, where One more is offered once it's done; the desktop card
+      doesn't add it.
+125.  **Open in neb highlights the circled words (K8 §4.7).** The offline page cache now keeps each
+      PDF page's word boxes with its text (`CachedPdfPage.words`). The page is found as before;
+      `circledBoxes` finds the circled words among its words (the first six, then followed for as
+      long as the rest matches, two misread words let through) and the page shows them
+      highlighted for 8 s, scrolled into view (`SourceHighlight`). Pages kept before this have no
+      boxes, so they open without a highlight.
+126.  **"Save this to Physics chapter 5" with nothing circled (decision 47).** On a plain hold it's
+      a clip for that place, not a question: the place is resolved first
+      (`circle_answer::resolve_phrase`, shared with Circle & Ask), kept for the clip it was said
+      with (15 s), and the preview's heading says "Save to Physics › Chapter 5". It's never
+      guessed: two matches, a chapter that isn't there yet, or no match is said in a
+      notification, and the clip goes where clips usually go (auto-filing; it can be moved from
+      the notebook).
+127.  **Circling printed text on a PDF page in neb (K4 §5.2, decision 55).** The hold's loop also
+      takes the PDF words whose middle is inside it, from the page's text layer kept on the device
+      (no screenshot, no OCR). They're the tutor's `circledText` (prompt `tutor.v10`: "this" means
+      them, cited by file and page) and come first in Show-then-You's `clippedText`. Circling only
+      printed text, with no words said, explains it, as for circled lines.
+128.  **Course progress on chapter cards (K1 §2.2, decision 53).** A concept belongs to the
+      chapters its passages were imported into (`concept_sources` → `chunks.notebook_node_id`):
+      migration `concept_nodes` (a SECURITY INVOKER function, so RLS applies), FastAPI
+      `GET /v1/courses/{id}/concept-nodes`, added to `/api/courses/[id]/progress` as
+      `conceptNodes`. A chapter card shows "3 of 8 topics checked" with a bar (`chapterProgress`,
+      its sections' topics included); a chapter none of the course's topics belong to shows none.
+129.  **"Recognize text" on a scanned page (K4 §5.2, decision 55).** A PDF page whose text layer
+      comes back empty offers "Recognize text" in its source line.
+      `POST /api/pdfs/[id]/pages/[index]/recognize` reads the page's picture (drawn by the API
+      service from the student's own file) with the fast model (prompt `pdf-page-ocr.v1`). There's
+      no credits system, so its limits are the cost: `pdfRecognize`, 10 a minute and 100 a day.
+      The text is kept with the page on the device (the block's text and the offline cache), so
+      the tutor, Circle & Ask and Open in neb use it. Course material already read scanned pages
+      at ingestion.
+130.  **Still left:**
+      - deleting an imported PDF's file (not in the brief; it needs a server-side rule for when no
+        page uses it any more);
+      - an offline reload in the e2e test (the dev server can't serve one; it needs the production
+        build);
+      - the real-model runs: `pnpm eval:mew` (gate v2) and `pnpm eval:solution` (now including the
+        code Your Turn) need the keys;
+      - a licences page for the bundled packages (K5).

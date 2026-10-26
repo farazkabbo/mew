@@ -11,6 +11,7 @@ import {
 import type { RecognizedLine } from "@mew/shared";
 
 import type { WorkChecker } from "../check/checker";
+import type { Circled } from "../notebook/circle";
 import { useVoice } from "../voice/store";
 import { buildTutorRequest } from "./context";
 import { isLikelyEcho, newWords } from "./echo";
@@ -44,8 +45,8 @@ export type TutorDeps = {
   doc(): PageDocument | null;
   /** Images on that page (clips saved from the screen). */
   images?: () => readonly ImageBlock[];
-  /** Lines the student just circled (K6 §6.3), taken by the turn about them; null if none. */
-  takeCircled?: () => readonly Line[] | null;
+  /** What the student just circled (K6 §6.3), taken by the turn about it; null if nothing. */
+  takeCircled?: () => Circled | null;
   /** K9: a line's open live annotation, for the tutor's context. */
   markOf?: (line: Line) => RecognizedLine["mark"] | null;
   /** Called when a turn ends, however it ends (starts Mew's cooldown). */

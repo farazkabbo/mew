@@ -1,8 +1,8 @@
 import { PageDocument, strokeBBox, type Vec } from "@mew/ink";
-import type { Point, Stroke } from "@mew/shared";
+import type { ImageBlock, PdfWord, Point, Stroke } from "@mew/shared";
 import { describe, expect, it } from "vitest";
 
-import { circledLines, toPage } from "./circle";
+import { circledLines, circledPrinted, joinPrinted, toPage } from "./circle";
 
 let n = 0;
 function stroke(x: number, y: number, author: Stroke["author"] = "student"): Stroke {
@@ -64,6 +64,63 @@ describe("circledLines", () => {
     const doc = new PageDocument([stroke(100, 100, "tutor"), stroke(120, 100, "tutor")]);
     expect(circledLines(doc, loop(80, 80, 200, 60))).toEqual([]);
     expect(circledLines(doc, [[0, 0]])).toEqual([]);
+  });
+});
+
+describe("circledPrinted (K4 §5.2: circling a PDF page in neb)", () => {
+  // A 600 × 800 page drawn at (40, 100): a word's middle at (0.5, 0.25) is at (340, 300).
+  const page = {
+    id: "33333333-3333-4333-8333-000000000001",
+    pageId: "00000000-0000-4000-8000-0000000000aa",
+    type: "image",
+    pdf: { pdfId: "77777777-7777-4777-8777-777777777777", pageIndex: 3 },
+    x: 40,
+    y: 100,
+    width: 600,
+    height: 800,
+    source: { app: "neb", title: "chem.pdf · page 4", capturedAt: "x" },
+    createdAt: 1,
+  } as ImageBlock;
+  const word = (text: string, left: number, top: number): PdfWord => ({
+    text,
+    box: [left, top, left + 0.1, top + 0.02],
+  });
+  const words = [
+    word("Benzene", 0.1, 0.24),
+    word("is", 0.25, 0.24),
+    word("aromatic.", 0.4, 0.24),
+    word("Footnote", 0.1, 0.9),
+  ];
+  const around = (x0: number, y0: number, x1: number, y1: number): Vec[] => [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ];
+
+  it("takes the words whose middle is in the loop, with the file and page", () => {
+    expect(circledPrinted(page, words, around(80, 280, 420, 320))).toEqual({
+      source: "chem.pdf · page 4",
+      text: "Benzene is aromatic.",
+    });
+  });
+
+  it("takes nothing outside the loop, or on a page that isn't a PDF's", () => {
+    expect(circledPrinted(page, words, around(0, 0, 30, 30))).toBeNull();
+    expect(
+      circledPrinted({ ...page, pdf: undefined }, words, around(80, 280, 420, 320)),
+    ).toBeNull();
+  });
+
+  it("joins two loops on one page, and keeps the newer page's", () => {
+    const a = { source: "chem.pdf · page 4", text: "Benzene" };
+    const b = { source: "chem.pdf · page 4", text: "aromatic." };
+    expect(joinPrinted(a, b)?.text).toBe("Benzene … aromatic.");
+    expect(joinPrinted(a, { ...b, source: "chem.pdf · page 5" })).toEqual({
+      ...b,
+      source: "chem.pdf · page 5",
+    });
+    expect(joinPrinted(null, b)).toBe(b);
   });
 });
 

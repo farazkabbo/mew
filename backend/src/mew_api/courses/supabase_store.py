@@ -16,6 +16,7 @@ from ..learner.models import (
     AttemptRecord,
     AttemptWrite,
     CardRecord,
+    ConceptNode,
     DueCard,
     FsrsCard,
     LearnerData,
@@ -210,6 +211,13 @@ class SupabaseCourseStore(SupabaseRest):
         rows = [self._owned(user, {"concept_id": str(c), "chunk_id": str(k)}) for c, k in links]
         for start in range(0, len(rows), _INSERT_BATCH):
             self._insert("concept_sources", rows[start : start + _INSERT_BATCH], returning=False)
+
+    def concept_nodes(self, user: str, course_id: UUID) -> list[ConceptNode]:
+        # SECURITY INVOKER: RLS scopes it to the caller (migration concept_nodes).
+        rows = self._request(
+            "POST", "/rest/v1/rpc/concept_nodes", json={"course": str(course_id)}
+        ).json()
+        return [ConceptNode.model_validate(r) for r in rows]
 
     # ─── learner model ─────────────────────────────────────────────────────────────────────
 
