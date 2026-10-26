@@ -6,19 +6,25 @@ The student's browser keeps the tree (local-first) and syncs it here with its Cl
   edit is kept) or rejected (too deep, a loop, not theirs), with the server's copy, so the device
   can show a rename and undo a refused move.
 Only titles and places are synced, never page content.
+
+The desktop app may read the tree too (K3: where "save it to Physics chapter 5" goes, and its
+destination picker), with its device token: read only, with the secret key, filtered to the
+token's owner. It never writes the tree; the student's own device makes any new chapter.
 """
 
 import logging
 from collections import Counter
 from collections.abc import Callable
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Header, HTTPException, Request, status
 
 from ..config import Settings
 from ..deps import Caller, CurrentCaller, SettingsDep
 from ..notebooks.models import NotebookTreeSync, NotebookTreeSyncResult, NotebookTreeView
 from ..notebooks.store import NotebookTreeStore, SupabaseNotebookTreeStore
 from ..supabase_rest import StoreError
+from .devices import screen_device
 
 logger = logging.getLogger(__name__)
 
@@ -70,3 +76,25 @@ def sync_tree(
         len(body.removed),
     )
     return NotebookTreeSyncResult(results=results)
+
+
+@router.get("/device-tree")
+def device_tree(
+    request: Request,
+    settings: SettingsDep,
+    x_mew_device_token: Annotated[str | None, Header()] = None,
+) -> NotebookTreeView:
+    """The device owner's tree (titles and places only), for Screen Coach's destinations."""
+    device = screen_device(x_mew_device_token, request, settings)
+    if device.local:
+        local: NotebookTreeStore = request.app.state.local_notebooks
+        store = local
+    else:
+        if not settings.supabase_url or settings.supabase_secret_key is None:
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Notebooks aren't configured")
+        store = SupabaseNotebookTreeStore(
+            settings.supabase_url,
+            api_key=settings.supabase_secret_key.get_secret_value(),
+            user_token=None,
+        )
+    return NotebookTreeView(nodes=_call(lambda: store.tree(device.user_id)))

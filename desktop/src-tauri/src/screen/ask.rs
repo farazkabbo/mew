@@ -1,14 +1,14 @@
-//! Asking about the screen (S2): the frame captured on the hotkey (or tray), plus what the
-//! student said, goes to the web app's server with the device token; the reply streams back
-//! and is passed to the page, which speaks it.
+//! Asking about the screen (S2): the frame captured when the hold gesture ends (or from the
+//! tray), plus what the student said, goes to the web app's server with the device token; the
+//! reply streams back and is passed to the page, which speaks it.
 //!
 //! The page sends only the words (`screen_coach_ask`); the screenshot never enters a WebView
 //! (decision 2). The reply is checked (`protocol::parse_event`) before the page sees it, and its
 //! ink goes to the overlay (S3, `annotate.rs`).
 //!
-//! Short commands said over the hotkey aren't questions (decisions 9 and 10): "save this"
+//! Short commands said while holding the keys aren't questions (decisions 9 and 10): "save this"
 //! clips, "show that again" re-places the last ink, "check my notes" compares the screen with
-//! the notes (Notes Check), and coach mode's words ("teach me how to…", "done", "I'm stuck",
+//! the notes (Notes Check), "Neb, pause" pauses Screen Coach (K2), and coach mode's words ("teach me how to…", "done", "I'm stuck",
 //! "stop"…) go to the walkthrough (`coach_mode.rs`), without asking the tutor anything. A
 //! question asked during a walkthrough is answered in its context.
 
@@ -30,10 +30,10 @@ use super::pipeline::Captured;
 use super::protocol::{ask_body, clean_transcript, parse_event, LineSplitter, StreamEvent};
 use super::win::{credential, http};
 
-/// A question asked right after the hotkey comes up may beat the capture: wait this long for it.
+/// A question asked right after the keys come up may beat the capture: wait this long for it.
 const FRAME_WAIT: Duration = Duration::from_secs(3);
 
-/// The page sends what the student said once the hotkey is released.
+/// The page sends what the student said once the hold is released.
 #[tauri::command]
 pub fn screen_coach_ask<R: Runtime>(
     window: WebviewWindow<R>,
@@ -42,8 +42,32 @@ pub fn screen_coach_ask<R: Runtime>(
     let app = window.app_handle();
     let coach = coach::coach_of(app)?;
     require_app_page(&window, coach.app_url())?;
-    ask_in_background(app, clean_transcript(&transcript));
+    let transcript = clean_transcript(&transcript);
+    // Held without a word or a mark: nothing to ask (K2 §11.1). Its capture is wiped unused.
+    // (During a walkthrough, the bare gesture means "done": coach mode's own rule.)
+    let nothing = transcript.trim().is_empty()
+        && !super::circle::takes_words(app)
+        && !coach_mode::is_coaching(app);
+    if nothing {
+        discard_in_background(app);
+    } else {
+        ask_in_background(app, transcript);
+    }
     Ok(())
+}
+
+/// Waits for the hold's capture (if one is still running) and wipes it.
+fn discard_in_background<R: Runtime>(app: &AppHandle<R>) {
+    let handle = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("mew-screen-discard".into())
+        .spawn(move || {
+            if let Some(coach) = handle.try_state::<ScreenCoach>() {
+                drop(wait_for_frame(&coach));
+            }
+            coach::take_hold_refused(&handle);
+            coach::settle(&handle);
+        });
 }
 
 /// Asks about the held frame on a worker thread (the network call can take seconds).
@@ -66,13 +90,23 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     let coach = app
         .try_state::<ScreenCoach>()
         .ok_or("Screen Coach isn't ready.")?;
+    // "Neb, pause" (K2: it was Ctrl+Alt+P): everything held is wiped by pausing.
+    if intent_of(transcript, coach_mode::is_coaching(app)) == Intent::Pause {
+        coach::pause(app);
+        return Ok(());
+    }
     // During Circle & Ask, the words are about the marks (their capture is already taken).
     if super::circle::takes_words(app) {
         super::circle::on_words(app, transcript);
         return Ok(());
     }
-    let frame = wait_for_frame(&coach)
-        .ok_or("I didn't catch your screen that time. Hold the shortcut and ask again.")?;
+    let Some(frame) = wait_for_frame(&coach) else {
+        // A refused capture has said why already.
+        if coach::take_hold_refused(app) {
+            return Ok(());
+        }
+        return Err("I didn't catch your screen that time. Hold Ctrl+Alt and ask again.".into());
+    };
     let CapturedFrame {
         jpeg, meta, detail, ..
     } = frame;
@@ -85,7 +119,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         | Intent::CoachResume
         | Intent::Coach(_) => true,
         Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
-        Intent::Ask => false,
+        Intent::Ask | Intent::Pause => false,
     };
     if command {
         let detail = detail.ok_or("I didn't catch your screen that time. Try again.")?;

@@ -25,7 +25,16 @@
 //!   it's saved to the notebook (`circle.rs`, `circle_answer.rs`; pure: `marks.rs`, `pointer.rs`,
 //!   `circle_steps.rs`, `circle_protocol.rs`, `raster.rs`).
 //!
-//! Where to start reading: `coach.rs` (what happens when a hotkey is pressed), then
+//! - K3, save where I say (docs/NOTEBOOKS_K.md §4): the server resolves "save it to Physics chapter
+//!   5" against the student's own notebooks; the card shows where an entry goes, offers chips, a
+//!   picker and "Create it and save", and a saved entry moves when it's changed (`destination.rs`,
+//!   pure; `circle_answer.rs`).
+//! - K2, two-key shortcuts (docs/NOTEBOOKS_K.md §11): one global gesture, holding left Ctrl + left
+//!   Alt to circle and talk (or double-tapping them for draw mode), read by polling (`keys.rs`,
+//!   pure: `hold.rs`). Screen Coach registers no other global hotkey (Esc only while it shows
+//!   something).
+//!
+//! Where to start reading: `coach.rs` (`on_hold`: what the gesture does), then
 //! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
 //! `annotate.rs` and `clip.rs`.
 
@@ -33,8 +42,10 @@ pub mod base64;
 pub mod circle_protocol;
 pub mod circle_steps;
 pub mod config;
+pub mod destination;
 pub mod drag;
 pub mod frame;
+pub mod hold;
 pub mod image;
 pub mod ink;
 pub mod intent;
@@ -67,6 +78,8 @@ pub mod clip;
 pub mod coach;
 #[cfg(windows)]
 pub mod coach_mode;
+#[cfg(windows)]
+pub mod keys;
 #[cfg(windows)]
 pub mod notes_check;
 #[cfg(windows)]

@@ -61,6 +61,8 @@ const INTENT_HINT: Record<TutorRequest["intent"], string> = {
   give_hint: "The student is stuck and needs a hint.",
   complete_step: "The student asked what the next step is.",
   draw_visual: "The student asked you to draw or show something visually.",
+  show_full_solution:
+    "The student asked for the answer itself: show every step, each with its reason (why, not just what).",
 };
 
 /** Text part of the tutor input; the page image (if any) is attached separately. */

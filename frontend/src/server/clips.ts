@@ -6,7 +6,9 @@ import {
   ClipCreated,
   clipPointCount,
   type EntryAppendRequest,
+  type SavedDestination,
 } from "@mew/shared";
+import { z } from "zod";
 
 import { ApiError, apiFetch } from "./api-client";
 import { HttpError } from "./http-error";
@@ -100,5 +102,32 @@ export async function appendToEntry(
       throw new HttpError(503, "Saving isn't available right now");
     }
     throw new HttpError(502, "Couldn't add to the entry");
+  }
+}
+
+/**
+ * Moves a saved clip or entry to another place in the notebook (K3). The API checks the device
+ * token again and changes only that device owner's clip; 404 if there's no such clip.
+ */
+export async function moveClip(
+  deviceToken: string,
+  clipId: string,
+  destination: SavedDestination,
+): Promise<void> {
+  try {
+    await apiFetch("/v1/clips/destination", z.undefined(), {
+      method: "POST",
+      body: { clipId, destination },
+      headers: { "X-Mew-Device-Token": deviceToken },
+      timeoutMs: 10_000,
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+    if (error.status === 401) throw new HttpError(401, "Unauthorized");
+    if (error.status === 404) throw new HttpError(404, "Not found");
+    if (error.status === null || error.status === 503) {
+      throw new HttpError(503, "Saving isn't available right now");
+    }
+    throw new HttpError(502, "Couldn't move it");
   }
 }

@@ -6,7 +6,7 @@ fn main() {
         "screen_coach_status",
         "screen_coach_set_enabled",
         "screen_coach_set_paused",
-        "screen_coach_set_hotkey",
+        "screen_coach_shortcuts_seen",
         "screen_coach_set_privacy",
         "screen_coach_open_mic_settings",
         "screen_coach_link_start",

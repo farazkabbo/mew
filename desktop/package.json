@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Neb for Windows: a Tauri v2 shell around the web app, with a summon hotkey, review reminders and Screen Coach.",
+  "description": "Neb for Windows: a Tauri v2 shell around the web app, with a summon gesture (hold Ctrl+Alt), review reminders and Screen Coach.",
   "scripts": {
     "app": "tauri dev",
     "bundle": "tauri build",

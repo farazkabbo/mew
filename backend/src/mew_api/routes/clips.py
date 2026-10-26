@@ -15,7 +15,14 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
-from ..clips.models import ClipCreate, ClipCreated, ClipPatch, ClipView, EntryAppend
+from ..clips.models import (
+    ClipCreate,
+    ClipCreated,
+    ClipDestination,
+    ClipPatch,
+    ClipView,
+    EntryAppend,
+)
 from ..clips.store import (
     ClipReader,
     ClipWriter,
@@ -131,10 +138,29 @@ def append_to_entry(
     return ClipCreated(clip_id=clip_id)
 
 
+@router.post("/destination", status_code=status.HTTP_204_NO_CONTENT)
+def move_clip(
+    body: ClipDestination,
+    request: Request,
+    settings: SettingsDep,
+    x_mew_device_token: Annotated[str | None, Header()] = None,
+) -> None:
+    """A saved clip or entry goes somewhere else in the notebook (K3): "Change" in the toast, or
+    "save it to …" said after it was saved. The notebook moves it when it reads the clip again."""
+    device = screen_device(x_mew_device_token, request, settings)
+    writer = _writer(request, settings, device.local)
+    if not _call(lambda: writer.set_destination(device.user_id, body.clip_id, body.destination)):
+        raise _not_found()
+    # Ids only: never the place's title.
+    logger.info("Moved a clip (%s)", body.clip_id)
+
+
 # ─── The owner ───────────────────────────────────────────────────────────────────────────────
+# Responses leave out empty fields (None): the web app's schemas treat a missing title, link or
+# follow-up question as absent, and refuse a null one.
 
 
-@router.get("/{clip_id}")
+@router.get("/{clip_id}", response_model_exclude_none=True)
 def get_clip(
     clip_id: UUID, request: Request, caller: CurrentCaller, settings: SettingsDep
 ) -> ClipView:
@@ -145,7 +171,7 @@ def get_clip(
     return clip
 
 
-@router.patch("/{clip_id}")
+@router.patch("/{clip_id}", response_model_exclude_none=True)
 def note_page(
     clip_id: UUID,
     body: ClipPatch,

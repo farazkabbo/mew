@@ -23,9 +23,9 @@
         <h2 id="how">When Neb sees your screen</h2>
         <ul class="facts">
           <li>
-            <strong>Only when you ask.</strong> Hold
-            <kbd data-hotkey="talk">Ctrl+Alt+Space</kbd> and ask, or choose
-            <em>Look at my screen</em> in the tray. Never in the background.
+            <strong>Only when you ask.</strong> Hold <kbd>Ctrl+Alt</kbd> and ask (one picture is
+            taken when you let go), or choose <em>Look at my screen</em> in the tray. Never in the
+            background.
           </li>
           <li>
             <strong>One picture of the window you're working in.</strong> Step-by-step coaching sees
@@ -47,24 +47,24 @@
             the page moves.
           </li>
           <li>
-            <strong>Saving to your notebook is up to you.</strong> Say “save this” or press
-            <kbd data-hotkey="clip">Ctrl+Alt+C</kbd>: you see exactly what will be saved, with the
-            page's title and link, and nothing is kept unless you press Save. Saved clips are stored
-            privately in your account, like your notes, until you delete them.
+            <strong>Saving to your notebook is up to you.</strong> Say “save this”, or circle it and
+            press <kbd>Ctrl+S</kbd>: you see exactly what will be saved, with the page's title and
+            link, and nothing is kept unless you press Save. Saved clips are stored privately in
+            your account, like your notes, until you delete them.
           </li>
           <li>
-            <strong>Checking your notes is up to you too.</strong> Say “check my notes” or press
-            <kbd data-hotkey="notes">Ctrl+Alt+N</kbd>: Neb reads the text on your screen (after
-            hiding private details, never the picture itself), compares it with your notes, and
-            marks what matches, what differs and what's missing. Only short quotes are kept, with
-            what Neb found, in your account; Neb never changes your notes.
+            <strong>Checking your notes is up to you too.</strong> Hold <kbd>Ctrl+Alt</kbd> and say
+            “check my notes”: Neb reads the text on your screen (after hiding private details, never
+            the picture itself), compares it with your notes, and marks what matches, what differs
+            and what's missing. Only short quotes are kept, with what Neb found, in your account;
+            Neb never changes your notes.
           </li>
           <li>
             <strong>Draw on your screen to ask about something.</strong> Neb's small pointer rides
             beside your cursor (it only knows where the cursor is, nothing you click or type). Hold
-            left Ctrl and left Alt, or press <kbd data-hotkey="draw">Ctrl+Alt+D</kbd>, and draw
-            around what's confusing: Neb takes one picture of that screen when you finish your first
-            mark, and explains it step by step with ink.
+            left Ctrl and left Alt (or double-tap them, for a pen) and draw around what's confusing:
+            Neb takes one picture of that screen when you finish your first mark, and explains it
+            step by step with ink.
           </li>
           <li>
             <strong>Explanations go to your notebook after a few seconds</strong> (the picture, your
@@ -73,8 +73,8 @@
           </li>
           <li><strong>Neb never clicks or types for you.</strong> It points the way; you do it.</li>
           <li>
-            <strong>Pause any time</strong> from the tray or with
-            <kbd data-hotkey="pause">Ctrl+Alt+P</kbd>.
+            <strong>Pause any time</strong> from the tray, or hold <kbd>Ctrl+Alt</kbd> and say “Neb,
+            pause”.
           </li>
         </ul>
       </section>
@@ -112,49 +112,93 @@
 
       <section aria-labelledby="keys" id="keys-section">
         <h2 id="keys">Shortcuts</h2>
-        <form class="hotkey" data-which="talk">
-          <label for="hotkey-talk">Hold to ask about your screen</label>
-          <div class="row">
-            <input id="hotkey-talk" name="accelerator" autocomplete="off" spellcheck="false" />
-            <button type="submit">Change</button>
+        <div id="shortcuts-notice" role="status" hidden>
+          <h3>Shortcuts got simpler</h3>
+          <p>Every Neb shortcut is two keys at most now. What changed:</p>
+          <ul>
+            <li>
+              Ask about your screen: hold <kbd>Ctrl+Alt</kbd> and talk (was
+              <kbd>Ctrl+Alt+Space</kbd>). Draw around something while you hold them to ask about it.
+            </li>
+            <li>
+              Draw mode for pen and touch: double-tap <kbd>Ctrl+Alt</kbd> (was
+              <kbd>Ctrl+Alt+D</kbd>).
+            </li>
+            <li>
+              Save to notebook: circle it, then <kbd>Ctrl+S</kbd> in the ask bar, or say “save this”
+              (was <kbd>Ctrl+Alt+C</kbd>).
+            </li>
+            <li>
+              Check my notes: hold <kbd>Ctrl+Alt</kbd> and say “check my notes” (was
+              <kbd>Ctrl+Alt+N</kbd>).
+            </li>
+            <li>
+              Pause: the tray, or hold <kbd>Ctrl+Alt</kbd> and say “Neb, pause” (was
+              <kbd>Ctrl+Alt+P</kbd>).
+            </li>
+            <li>
+              Next step and repeat: <kbd>→</kbd> and <kbd>←</kbd> in the caption card (were
+              <kbd>Ctrl+Alt+.</kbd> and <kbd>Ctrl+Alt+,</kbd>).
+            </li>
+            <li>
+              Summon Neb: hold <kbd>Ctrl+Alt</kbd> while Screen Coach is off (was
+              <kbd>Ctrl+Shift+M</kbd>).
+            </li>
+          </ul>
+          <div class="row buttons">
+            <button type="button" id="shortcuts-seen" class="primary">Got it</button>
           </div>
-          <p class="problem" id="problem-talk" role="alert" hidden></p>
-        </form>
-        <form class="hotkey" data-which="pause">
-          <label for="hotkey-pause">Pause or resume</label>
-          <div class="row">
-            <input id="hotkey-pause" name="accelerator" autocomplete="off" spellcheck="false" />
-            <button type="submit">Change</button>
-          </div>
-          <p class="problem" id="problem-pause" role="alert" hidden></p>
-        </form>
-        <form class="hotkey" data-which="clip">
-          <label for="hotkey-clip">Save to notebook</label>
-          <div class="row">
-            <input id="hotkey-clip" name="accelerator" autocomplete="off" spellcheck="false" />
-            <button type="submit">Change</button>
-          </div>
-          <p class="problem" id="problem-clip" role="alert" hidden></p>
-        </form>
-        <form class="hotkey" data-which="notes">
-          <label for="hotkey-notes">Check my notes</label>
-          <div class="row">
-            <input id="hotkey-notes" name="accelerator" autocomplete="off" spellcheck="false" />
-            <button type="submit">Change</button>
-          </div>
-          <p class="problem" id="problem-notes" role="alert" hidden></p>
-        </form>
-        <form class="hotkey" data-which="draw">
-          <label for="hotkey-draw">Draw on the screen (on and off)</label>
-          <div class="row">
-            <input id="hotkey-draw" name="accelerator" autocomplete="off" spellcheck="false" />
-            <button type="submit">Change</button>
-          </div>
-          <p class="problem" id="problem-draw" role="alert" hidden></p>
-        </form>
+        </div>
+        <table class="keys">
+          <caption>
+            Anywhere on your PC
+          </caption>
+          <tbody>
+            <tr>
+              <th scope="row"><kbd>Ctrl+Alt</kbd> held</th>
+              <td>
+                Circle with the mouse, pen or finger and talk at the same time; let go to ask. Talk
+                without circling to ask about the window you're in; circle without talking to type a
+                question.
+              </td>
+            </tr>
+            <tr>
+              <th scope="row"><kbd>Ctrl+Alt</kbd> twice</th>
+              <td>Draw mode on or off (for pen and touch). The pen's barrel button works too.</td>
+            </tr>
+            <tr>
+              <th scope="row"><kbd>Esc</kbd></th>
+              <td>Stop, or clear what Neb drew (only while Neb is showing something).</td>
+            </tr>
+          </tbody>
+        </table>
+        <table class="keys">
+          <caption>
+            In the ask bar and caption card
+          </caption>
+          <tbody>
+            <tr>
+              <th scope="row"><kbd>Enter</kbd></th>
+              <td>Ask (or “explain this”, with nothing typed)</td>
+            </tr>
+            <tr>
+              <th scope="row"><kbd>Ctrl+S</kbd></th>
+              <td>Save to your notebook without an explanation</td>
+            </tr>
+            <tr>
+              <th scope="row"><kbd>→</kbd> <kbd>←</kbd></th>
+              <td>Next step, repeat this step</td>
+            </tr>
+            <tr>
+              <th scope="row"><kbd>Space</kbd></th>
+              <td>Pause or resume</td>
+            </tr>
+          </tbody>
+        </table>
         <p class="hint">
-          Use Ctrl or Alt with a key, for example Ctrl+Alt+Space. Shortcuts work only while Screen
-          Coach is on.
+          Only left Ctrl and left Alt count, and only after a moment with no other key pressed, so
+          typing with AltGr (@, €, {) never starts Neb. Neb reads whether the two keys are down,
+          never what you type.
         </p>
       </section>
 

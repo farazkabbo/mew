@@ -580,6 +580,40 @@ body.card {
   text-align: left;
 }
 
+/* The picker's places scroll inside the card (K3). */
+.circle-card[data-mode="place"] #card-chips {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Where it's saved (K3): a small line and its chips. */
+.card-place {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-place-line {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.card-place-line:empty {
+  display: none;
+}
+
+.card-place .card-chips button {
+  min-height: 36px;
+  padding: 4px 10px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+}
+
 .card-ask input {
   width: 100%;
   min-height: 44px;

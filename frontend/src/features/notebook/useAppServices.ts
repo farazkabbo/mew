@@ -44,7 +44,8 @@ export function useAppServices({
     return startLatencyReporting();
   }, []);
 
-  // The desktop app's Ctrl+Shift+M (here, or from another page: /notebook?summon=1).
+  // The desktop app's summon (holding Ctrl+Alt while Screen Coach is off; here, or from another
+  // page: /notebook?summon=1).
   useEffect(() => {
     if (!ready) return;
     const params = new URLSearchParams(window.location.search);
@@ -69,7 +70,8 @@ export function useAppServices({
     showIntro: loaded && !onboarded && !introClosed,
     closeIntro: () => {
       setIntroClosed(true);
-      void useSettings.getState().update({ onboarded: true });
+      // A new student learns today's shortcuts: "Shortcuts got simpler" isn't for them.
+      void useSettings.getState().update({ onboarded: true, shortcuts_notice_seen: true });
     },
   };
 }

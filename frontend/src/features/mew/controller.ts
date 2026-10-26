@@ -34,6 +34,8 @@ export type MewHooks = {
     gateMs: number;
     /** Verified verdicts that prompted the turn, if a checker found something. */
     checks?: LineCheck[];
+    /** Where the student said to save something ("chem ch 2"), if they did (K3). */
+    destinationPhrase?: string;
   }): void;
   /** Whether the tutor is talking or just finished. */
   tutorSpokeRecently?(): boolean;
@@ -137,7 +139,7 @@ export class MewController {
       roundTripMs: gateMs,
       acted,
     });
-    const { label } = decision.output;
+    const { label, destinationPhrase } = decision.output;
     if (acted && label !== "ignore") {
       this.hooks.onRespond?.({
         intent: label,
@@ -145,6 +147,7 @@ export class MewController {
         utterance: input.lastUtterance,
         triggeredAt: started,
         gateMs,
+        ...(destinationPhrase && { destinationPhrase }),
       });
     }
   }

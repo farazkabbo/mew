@@ -64,6 +64,20 @@ export function TreeDialogs({ actions, tree, repo, now, openNode, openPage }: Pr
         onClose={() => actions.setMovingId(null)}
       />
 
+      <DestinationPicker
+        open={actions.movingPageId !== null}
+        title="Move this page to…"
+        tree={tree}
+        topLevel={false}
+        refuse={() => null}
+        onPick={(destination) => {
+          if (actions.movingPageId && destination) {
+            actions.movePage(actions.movingPageId, destination);
+          }
+        }}
+        onClose={() => actions.setMovingPageId(null)}
+      />
+
       <ConfirmDialog
         open={actions.deleting !== null}
         title={actions.deleting?.title ?? ""}

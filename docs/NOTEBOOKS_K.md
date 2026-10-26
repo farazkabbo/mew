@@ -970,3 +970,92 @@ settled while building and are recorded so later milestones don't reopen them.
 25. **A full page reload with no network needs a service worker**, which the app doesn't have
     yet (true before K1). The tree itself is on the device: it opens with the server
     unreachable, edits work offline and sync when the connection is back.
+26. **One gesture, one always-on reader (K2).** `desktop/.../screen/keys.rs` polls left Ctrl and
+    left Alt for as long as the app runs (every 40 ms, 15 ms while they're down) and feeds the
+    pure `hold.rs`. While both are down it also asks whether any other key is down or was pressed
+    since the last read (mouse buttons excluded), yes or no only; the first read after the keys
+    go down just clears what earlier typing left. The hold starts after 300 ms with no other key;
+    any other key, before or after it started, cancels it silently. A double tap is two presses
+    shorter than the guard, the second starting within 400 ms of the first ending.
+27. **What the hold does (K2).** When it starts: draw mode on and, with voice on and the account
+    connected, listening (the pointer shows "listening"). When it ends: words said over marks are
+    the question; marks without words open the ask bar; words without marks are asked about **one
+    capture of the window taken as the keys come up** (S2 captured as the hotkey went down; now
+    holding just to draw takes no picture); neither words nor marks asks nothing (a capture still
+    running is wiped). During a walkthrough the bare gesture still means "done".
+28. **With Screen Coach off or paused, the hold summons Neb's window** (it replaces
+    Ctrl+Shift+M). While Neb's own window is in front, the notebook page handles the hold itself
+    and the desktop reader stands aside, so the two never both act.
+29. **No other global hotkeys (K2).** Talk, pause, clip, notes, draw, the step controls
+    (Ctrl+Alt+. and Ctrl+Alt+,) and summon are gone; Esc stays, registered only while something is
+    on screen. An older `screen-coach.json` loads with its `hotkeys` dropped (whatever they were)
+    and `shortcutsNotice` set: a notification at start-up and a "Shortcuts got simpler" card on
+    the settings page until "Got it". Nothing global is rebindable now (the gesture is fixed), so
+    the desktop's hotkey recorder and its `RegisterHotKey` checks went too; rebinding is the
+    notebook's, in the web app's Settings → Shortcuts.
+30. **Words replace the removed hotkeys (K2).** "Neb, pause" (also "pause", "pause Screen Coach",
+    "stop looking at my screen") pauses Screen Coach outside a walkthrough; "pause" inside one
+    still pauses the walkthrough. "Check my notes" and "save this" were already words.
+31. **The card's keys (K2 §11.2).** Ctrl+S in the ask bar saves the marks as a clip without an
+    explanation (S3's preview, cropped around the marks, the marks as the student's ink; K3 adds
+    the destination); in the toast it saves now. → and ← (next step, repeat) and Space (pause)
+    work when the follow-up box is empty. Ctrl+D (change destination) comes with K3. The card has
+    the keyboard only once it's clicked (it never takes the focus itself).
+32. **Esc in Circle & Ask works again.** It was the same global shortcut as the ink overlay's Esc,
+    whose handler always ran first; Esc now goes to Circle & Ask while it has a session
+    (`circle::takes_escape`), and neither side unregisters it while the other still needs it.
+33. **One registry for the web shortcuts (K2).** `packages/shared/src/shortcuts.ts`: the actions,
+    their defaults per platform (Ctrl+N and Alt+B for a new notebook in the desktop app, Alt+B in a
+    browser), the two-key rule (Ctrl or Alt with a key, or a key alone; never Shift, Win or Ctrl
+    with Alt; Cmd counts as Ctrl), keys the browser, Windows or an input method keep (Alt+←/→,
+    Ctrl+Space, Ctrl+W, F5, Alt+D…), the notebook's fixed single keys (T, +, −, 0), clashes and a
+    free suggestion. Redo is Ctrl+Y only (Ctrl+Shift+Z is three keys). The student's own bindings
+    are the `shortcuts` setting (only the actions they changed; Reset sends `{}`), checked by zod,
+    Pydantic and the `shortcut_settings` migration; FastAPI drops stored bindings it doesn't know
+    when reading, so another app version can't break the settings.
+34. **The hold on the notebook page (K2).** Event-driven (`frontend/src/features/shortcuts/
+hold.ts`), with the same guard and cancel rules, left keys only (AltGr arrives as left Ctrl +
+    right Alt): it starts listening if the microphone is off, and letting go asks Neb (like
+    tapping the mascot). Circling your own writing while holding comes with K6.
+35. **"Shortcuts got simpler" in the web app** shows once to students who finished the
+    introduction before K2 (`onboarded` and not `shortcuts_notice_seen`); finishing the
+    introduction marks it read, so new students never see it.
+36. **Ctrl+O (import a PDF) is bound with K4**, when there is something to import.
+37. **The resolver's scale (K3).** Every word of a title → 1; some words of a longer title → about
+    0.8, so "physics" picks Physics over Physics II by a clear margin; the start of a one-word
+    title ("phys", "chem", "bio") → 0.95; a near spelling only when Jaro–Winkler ≥ 0.9 ("cells"
+    never looks like "calculus"). A name only one node has ("cells") resolves from 0.78. Each
+    "of / in / under" is tried both as a split and as part of a title ("history of science"), and a
+    two-word name as two levels ("math calculus"). When Physics and Physics II both have a Chapter
+    1, "physics chapter 1" gets chips (the brief's own example), never a guess.
+38. **The place comes out of the question on the server** (`circleDestination`): only when the
+    resolver finds something of the student's, or the words look like a place on their face ("my
+    …", a level word). "How do I save this to PDF?" stays a question.
+39. **Sticky places and recent destinations live in the web server's memory** (one instance, like
+    the rate limiter; 2 h per source), set on every save and move. K8 makes source memory
+    persistent ("Change teaches").
+40. **The desktop reads the tree, never writes it.** `GET /v1/notebooks/device-tree` (device token,
+    secret key, filtered to the token's owner, titles and places only). "Create it and save" is
+    stored with the clip (`destination.create`); the student's own device makes the chapter when
+    it imports the entry (local-first, decision 6), reusing one with that title if it's there.
+41. **The picker is a POST** (`/api/screen/destinations`): the desktop's HTTP client only posts. At
+    most 200 places, titles cut to 80 characters, so the reply fits one line.
+42. **Holding Ctrl+Alt during an explanation pauses it.** Words that are only "save it to …" set
+    the place and it goes on; a question stops it and is asked; no words, or a cancelled hold, let
+    it go on.
+43. **No countdown while a place is still to choose** (chips or "Create it and save"): the toast
+    waits for the tap or Save.
+44. **In the notebook, `save_to_notebook` moves the page on screen** there (Undo); a missing chapter
+    is offered ("Create it and move"), unclear places open the picker. `notebook_command` creates,
+    renames and moves with Undo; "delete" is refused. A `destinationPhrase` on a tutor turn in the
+    notebook does nothing (the answer is already on the page).
+45. **"From screen" is per node** (`Page.fromScreen` = 1, 2, …). Pages made before K3
+    (`fromScreenDay`) stay as they are. Entries record their strokes (`strokeIds`) so they move
+    whole; older ones move with their tutor ink.
+46. **Clip reads leave out empty fields.** FastAPI sent `null` for a missing title, link or
+    follow-up question and the web app's schema refused it (a real clip without a window title
+    would have failed with 502; the e2e tests mock that route, so it never showed).
+47. **Left for later:** "save this to Physics chapter 5" said over a plain screen question (not
+    Circle & Ask) is still a question; the Mew gate's v2 prompt needs `pnpm eval:mew` with real
+    keys; there's no e2e test of the desktop saving to a named place (the Rust and route tests
+    cover it).

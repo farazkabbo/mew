@@ -541,11 +541,20 @@ test("the Circle & Ask card asks, plays steps with their controls, and counts th
 }) => {
   const shell = await openShellPage(page, "circle-card.html");
   await shell.dispatch("mew:card-show", { mode: "ask", silent: false });
-  await expect(page.getByText("Hold Ctrl+Alt+Space to ask out loud")).toBeVisible();
-  await page.getByLabel("Your question").fill("why does this go up?");
-  await page.keyboard.press("Enter");
+  await expect(page.getByText("Hold Ctrl+Alt to ask out loud")).toBeVisible();
+  // Ctrl+S: save the marks without an explanation (K2: two keys at most).
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.press("Control+KeyS");
   await expect.poll(async () => (await shell.calls()).length).toBe(1);
   expect((await shell.calls())[0]).toEqual({
+    cmd: "screen_circle_card",
+    args: { action: "save_only" },
+  });
+  await shell.dispatch("mew:card-show", { mode: "ask", silent: false });
+  await page.getByLabel("Your question").fill("why does this go up?");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await shell.calls()).length).toBe(2);
+  expect((await shell.calls())[1]).toEqual({
     cmd: "screen_circle_card",
     args: { action: "ask", text: "why does this go up?" },
   });
@@ -564,6 +573,25 @@ test("the Circle & Ask card asks, plays steps with their controls, and counts th
     cmd: "screen_circle_card",
     args: { action: "next" },
   });
+  // ← repeats the step, → goes on, Space pauses (while the follow-up box is empty).
+  await page.getByLabel("Your question").focus();
+  for (const [key, action] of [
+    ["ArrowLeft", "repeat"],
+    ["ArrowRight", "next"],
+    ["Space", "pause"],
+  ] as const) {
+    await shell.dispatch("mew:card-show", {
+      mode: "explain",
+      step: 2,
+      total: 3,
+      say: "Then it slows down.",
+      paused: false,
+    });
+    await page.keyboard.press(key);
+    await expect
+      .poll(async () => (await shell.calls()).at(-1))
+      .toEqual({ cmd: "screen_circle_card", args: { action } });
+  }
 
   await shell.dispatch("mew:card-show", {
     mode: "toast",

@@ -160,6 +160,46 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     course scope is every notebook linked to it with its chapters. The widest scope is searched
     and the open chapter's lines rank first (×1.5), then its notebook's (×1.2).
   - **The `notebook_tree` migration is not applied to the hosted project yet.**
+- **K2 (two-key shortcuts)** — NOTEBOOKS_K.md §11, decisions 26–36:
+  - **Desktop:** one global gesture. `screen/keys.rs` polls left Ctrl + left Alt (no hook) into the
+    pure `hold.rs` (300 ms AltGr guard, any other key cancels, double tap); `coach::on_hold`
+    draws and listens while held, then asks about the marks, opens the ask bar, or asks about one
+    capture taken at release. Screen Coach off or paused → the hold summons Neb (Ctrl+Shift+M is
+    gone). Every registered three-key hotkey is gone (talk, pause, clip, notes, draw, the step
+    keys); Esc stays while something is shown. "Neb, pause" is a voice command. The card: Ctrl+S
+    saves the marks as a clip, → ← Space step through. Old settings files load with their hotkeys
+    dropped and a one-time "Shortcuts got simpler" (notification + settings page card).
+  - **Web:** `packages/shared/src/shortcuts.ts` (actions, defaults per platform, the two-key
+    rule, reserved keys, clashes, suggestions) drives `useTreeShortcuts`, `useShortcuts` (adds
+    Alt+C check my work; redo is Ctrl+Y only), tooltips and Settings → Shortcuts (recorder, Reset).
+    Settings `shortcuts` and `shortcuts_notice_seen` (migration `shortcut_settings`). Holding
+    Ctrl+Alt on the notebook page talks to Neb (`features/shortcuts/hold.ts`).
+  - **The `shortcut_settings` migration is not applied to the hosted project yet.**
+- **K3 (save where I say)** — NOTEBOOKS_K.md §4, decisions 37–47:
+  - **Resolver** `packages/shared/src/destinations.ts` (normalise, split by level words and of/in,
+    score, decide: a place, chips, "Create it and save", or none; `splitDestination`;
+    `parseNotebookCommand`; `sourceKey`), 79 fixtures. Model fallback (`destination-fallback.v1`)
+    for descriptions only, choosing from the student's own ids.
+  - **Mew:** labels `save_to_notebook`, `notebook_command`, `show_full_solution` and
+    `destinationPhrase` (prompt `mew-gate.v2`, 11 new eval cases; not run against the model yet).
+    The notebook carries them out (`tree/voice-plan.ts`, `useNotebookVoice`).
+  - **Server:** circle-ask takes the place out of the question and streams a `destination` event
+    first; sticky place per source (2 h); routes `/api/screen/destinations` (picker),
+    `/destinations/resolve`, `/entries/destination` (move). FastAPI: clip `destination`
+    (migration `clip_destinations`), `/v1/clips/destination`, `/v1/notebooks/device-tree`.
+  - **Desktop:** `destination.rs` (pure); the card's "Saving to: …" row, chips, picker (Ctrl+D,
+    Change), Create it and save; a saved entry moves; "save it to …" while the hold is down
+    pauses, never stops, the explanation.
+  - **Notebook:** entries go to their node's "From screen" page (date headings, a new page after
+    30), made on the device after "Create it and save", moved (never copied) when changed.
+  - **The `clip_destinations` migration is not applied to the hosted project yet.**
+  - **To verify by hand:** the K3 acceptance on a YouTube video in the desktop app ("why is this
+    the hypotenuse? save it to my physics notebook chapter 5" → Physics › Chapter 5 › From
+    screen with the timestamp; with four chapters, "Create Chapter 5 and save").
+  - **To verify by hand (Windows):** hold Ctrl+Alt, circle a paragraph and ask out loud (an
+    answer); AltGr+Q on a German layout types "@" and Neb stays still; Ctrl+Alt+E ("€") likewise;
+    a double tap toggles draw mode; holding with Screen Coach off brings Neb forward; the
+    one-time notification and settings card after upgrading.
   - **To verify by hand:** the pointer at 150 % on two monitors, drawing with mouse and pen, normal
     clicks while the keys aren't held, the overlays absent from a Teams share, AltGr typing never
     drawing, scrolling fading the marks, a v–t graph on YouTube (Enter → steps with ink before
@@ -228,6 +268,14 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K3): **1,300 unit tests** (frontend 433, backend 303, ink 134, shared 291,
+database 117, desktop overlays 22), **166 Rust tests** (+5 real-Windows ones; clippy clean) and
+**66 Playwright tests**.
+
+Tests (after K2): **1,193 unit tests** (frontend 417, backend 300, ink 134, shared 212,
+database 110, desktop overlays 20), **162 Rust tests** (+5 real-Windows ones; clippy clean) and
+**66 Playwright tests**.
 
 Tests (after K1): **1,160 unit tests** (frontend 412, backend 293, ink 134, shared 201,
 database 101, desktop overlays 19), **157 Rust tests** (+5 real-Windows ones; clippy clean) and

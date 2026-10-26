@@ -593,7 +593,8 @@ don't ask them again. Where a decision changes the brief above, the decision win
     - **Shortcuts are two keys at most.** This replaces every three-key shortcut above
       (Ctrl+Alt+Space, +P, +C, +N, +D): one held Ctrl + Alt circles and talks, a double tap
       toggles draw mode, and the rest move to the ask bar, the tray or voice (K2). Holding is
-      detected by polling the key state, never with a keyboard hook.
+      detected by polling the key state, never with a keyboard hook. Ctrl+Shift+M (summon) goes
+      too: with Screen Coach off or paused, the same hold summons Neb's window.
     - **Saved items go where the student says** ("save it to my Physics notebook, chapter 5"),
       or, unsaid, where what they're studying belongs (auto-filing), not only to today's "From
       screen" page (K3, K8). The "From screen" page is one per notebook node, with date headings.

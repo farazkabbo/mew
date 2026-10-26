@@ -27,6 +27,9 @@ use super::circle_steps::{Cue, Playback, Voice};
 use super::clip::{self, EntryCapture, EntryDraft};
 use super::coach::{self, ScreenCoach};
 use super::config::SaveMode;
+use super::destination::{
+    parse_places, parse_resolution, parse_resolve_reply, DestinationOut, Place, Resolution,
+};
 use super::frame::{FrameMeta, ScreenRect};
 use super::image::{crop, downscale_bgra_to_bgr, looks_blank, Pixels};
 use super::ink::{self, check_drawn, clip_strokes_kept, DrawnInk, InkStroke, InkTool, Rect};
@@ -101,13 +104,15 @@ enum Work {
     /// A step failed the safety check: take back the ink, say this instead.
     Abort(String),
     Message(String),
+    /// Where it's saved changed (K3): the card shows it.
+    Place,
 }
 
 fn plays(cues: Vec<Cue>) -> Vec<Work> {
     cues.into_iter().map(Work::Play).collect()
 }
 
-/// What a step control does (the card's buttons and Ctrl+Alt+. / Ctrl+Alt+,).
+/// What a step control does (the card's buttons, and its keys: → ← Space).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Control {
     Pause,
@@ -550,6 +555,12 @@ fn on_event<R: Runtime>(app: &AppHandle<R>, session_id: &str, event: CircleEvent
         if s.id != session_id {
             return Vec::new();
         }
+        if let CircleEvent::Destination { resolution, .. } = &event {
+            if let Some(resolution) = parse_resolution(resolution.clone()) {
+                apply_resolution(s, resolution);
+            }
+            return vec![Work::Place];
+        }
         let Some(answer) = s.answer.as_mut() else {
             return Vec::new();
         };
@@ -591,7 +602,7 @@ fn on_event<R: Runtime>(app: &AppHandle<R>, session_id: &str, event: CircleEvent
                 work
             }
             CircleEvent::Error { message } => vec![Work::Message(message)],
-            CircleEvent::Step { .. } => Vec::new(),
+            CircleEvent::Step { .. } | CircleEvent::Destination { .. } => Vec::new(),
         }
     })
     .unwrap_or_default();
@@ -629,6 +640,7 @@ fn run<R: Runtime>(app: &AppHandle<R>, work: Vec<Work>) {
                 with_session(app, |s| s.stage = Stage::Answered);
             }
             Work::Message(message) => show_card_message(app, &message),
+            Work::Place => show_again(app),
         }
     }
 }
@@ -819,7 +831,11 @@ fn finished<R: Runtime>(app: &AppHandle<R>) {
             .as_ref()
             .and_then(|c| crop_screen(&c.detail.pixels, c.meta.bounds, answer.focus))
             .is_some_and(|p| looks_blank(&p));
-        let auto = settings.save == SaveMode::Auto && !masked && !blank;
+        let choosing = matches!(
+            s.place_offer,
+            Some(PlaceOffer::Choose(_) | PlaceOffer::Create { .. })
+        );
+        let auto = settings.save == SaveMode::Auto && !masked && !blank && !choosing;
         if auto {
             answer.toast_until = Some(Instant::now() + TOAST_FOR);
         }
@@ -996,6 +1012,7 @@ fn take_for_saving(session: &mut Session, include_link: bool) -> Option<Saving> 
                 turn,
                 stroke_steps,
                 concept_hints,
+                destination: session.place.clone(),
             },
         }),
         include_link: include_link && link_default,
@@ -1074,6 +1091,52 @@ fn append<R: Runtime>(
         }
         _ => Err("I couldn't add that to your notebook just now.".to_owned()),
     }
+}
+
+/// Ctrl+S in the ask bar: the marks saved as a clip without asking anything (K2 §11.2), through
+/// S3's preview (the crop is around the marks, which come with it as the student's ink). The
+/// session ends: the preview has the capture now.
+pub fn save_marks<R: Runtime>(app: &AppHandle<R>) {
+    let taken = with_session(app, |s| {
+        if s.marks.is_empty() || s.refused.is_some() || s.answer.is_some() {
+            return Err(());
+        }
+        let monitor = s.monitor;
+        let scale = s.scale() as f32;
+        let views: Vec<MarkView> = s.marks.iter().map(MarkView::of).collect();
+        let strokes: Vec<InkStroke> = s
+            .marks
+            .iter()
+            .map(|mark| student_stroke(mark, monitor, scale))
+            .collect();
+        let place = s.place.clone();
+        Ok(s.capture
+            .take()
+            .map(|captured| (captured, views, strokes, place)))
+    });
+    let (captured, views, strokes, place) = match taken {
+        Some(Ok(Some(taken))) => taken,
+        Some(Ok(None)) => {
+            return show_card_message(app, "One moment: I'm still looking at what you marked.")
+        }
+        Some(Err(())) | None => return,
+    };
+    let meta = &captured.meta;
+    let scale = meta.dpi.max(96) as f32 / 96.0;
+    let Some(focus) = focus_rect(&views, meta.bounds, scale) else {
+        return show_card_message(app, "I couldn't prepare that clip. Try again.");
+    };
+    let crop = [
+        (focus.left - meta.bounds.left) as f32,
+        (focus.top - meta.bounds.top) as f32,
+        focus.width() as f32,
+        focus.height() as f32,
+    ];
+    let handle = app.clone();
+    coach::on_worker(app, move |tools| {
+        clip::open_marks(&handle, tools, captured, strokes, crop, place)
+    });
+    circle::end_session(app);
 }
 
 /// "Edit crop": the explanation in S3's preview (the session ends: the preview has it now).
@@ -1209,8 +1272,18 @@ fn show_caption_paused<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// Shows the card beside the marks with `view` (its page renders it).
-fn show_card<R: Runtime>(app: &AppHandle<R>, view: serde_json::Value) {
+/// Shows the card beside the marks with `view` (its page renders it), with where it's saved
+/// (K3); the last view is kept to go back to after the picker.
+fn show_card<R: Runtime>(app: &AppHandle<R>, mut view: serde_json::Value) {
+    let picker = view["mode"] == "place";
+    if !picker {
+        if let Some(place) = with_session(app, |s| {
+            s.last_view = Some(view.clone());
+            place_view(s)
+        }) {
+            view["place"] = place;
+        }
+    }
     let spot = with_session(app, |s| {
         let marks = super::screen_text::union(
             s.marks
@@ -1323,6 +1396,277 @@ fn post_whole<R: Runtime>(
 ) -> Result<u16, ()> {
     post(app, path, body, |line| {
         if reply.len() + line.len() <= 16 * 1024 {
+            reply.extend_from_slice(line.as_bytes());
+        }
+    })
+}
+
+// ─── Where it's saved (K3) ───────────────────────────────────────────────────────────────────
+
+/// What the card offers to choose (K3 §4.3–4.4).
+pub(super) enum PlaceOffer {
+    /// Close candidates (never a guess).
+    Choose(Vec<Place>),
+    /// "There's no Chapter 5 in Physics yet": made only on the tap.
+    Create { parent: Place, title: String },
+    /// The picker: every notebook, chapter and section.
+    Picker(Vec<Place>),
+}
+
+/// What a resolution does to the session. True when the student should be told it found nothing.
+fn apply_resolution(session: &mut Session, resolution: Resolution) -> bool {
+    match resolution {
+        Resolution::Resolved { place, sticky } => {
+            // A sticky place never replaces one the student chose this session.
+            if !(sticky && session.place.is_some()) {
+                session.place = Some(place);
+            }
+            session.place_offer = None;
+            false
+        }
+        Resolution::Choose(choices) => {
+            session.place_offer = Some(PlaceOffer::Choose(choices));
+            false
+        }
+        Resolution::Missing { parent, title } => {
+            session.place_offer = Some(PlaceOffer::Create { parent, title });
+            false
+        }
+        Resolution::None => true,
+    }
+}
+
+/// The card's "place" part: where it goes, and what's offered (titles only, as text).
+fn place_view(session: &Session) -> serde_json::Value {
+    let (choices, create) = match &session.place_offer {
+        Some(PlaceOffer::Choose(choices)) => (choices.iter().map(Place::label).collect(), None),
+        Some(PlaceOffer::Create { parent, title }) => {
+            (Vec::new(), Some(format!("{} › {title}", parent.label())))
+        }
+        _ => (Vec::new(), None),
+    };
+    json!({
+        "label": session.place.as_ref().map(Place::label),
+        "choices": choices,
+        "create": create,
+    })
+}
+
+/// Shows the card's last view again (after the picker, or with a new place).
+fn show_again<R: Runtime>(app: &AppHandle<R>) {
+    let view = with_session(app, |s| s.last_view.clone())
+        .flatten()
+        .unwrap_or_else(|| json!({ "mode": "ask" }));
+    show_card(app, view);
+}
+
+/// "Save it to Physics chapter 5" (K3 §4.2): said or typed with marks, during the explanation
+/// (it goes on), after it (a saved entry moves), or without one (the marks are saved there).
+pub fn save_to<R: Runtime>(app: &AppHandle<R>, phrase: String) {
+    let no_answer = with_session(app, |s| s.answer.is_none()).unwrap_or(false);
+    if no_answer {
+        with_session(app, |s| s.save_only_pending = true);
+    }
+    let handle = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("mew-circle-place".into())
+        .spawn(move || {
+            let body = serde_json::to_vec(&json!({ "phrase": phrase })).unwrap_or_default();
+            let mut reply = Vec::new();
+            let status = post_capped(
+                &handle,
+                "api/screen/destinations/resolve",
+                &body,
+                &mut reply,
+            );
+            let resolution = match status {
+                Ok(200) => parse_resolve_reply(&reply),
+                _ => None,
+            };
+            resume_after_words(&handle);
+            let Some(resolution) = resolution else {
+                return show_card_message(&handle, "I couldn't reach your notebooks just now.");
+            };
+            let resolved = matches!(resolution, Resolution::Resolved { .. });
+            let found_nothing =
+                with_session(&handle, |s| apply_resolution(s, resolution)).unwrap_or(false);
+            if found_nothing {
+                with_session(&handle, |s| s.save_only_pending = false);
+                show_card_message(
+                    &handle,
+                    "I couldn't find that place in your notebooks. Press Ctrl+D to choose one.",
+                );
+                return;
+            }
+            if resolved {
+                placed(&handle);
+            } else {
+                show_again(&handle);
+            }
+        });
+}
+
+/// The session has its place now: a saved entry moves there, marks waiting to be saved are saved
+/// there, and the card shows it.
+fn placed<R: Runtime>(app: &AppHandle<R>) {
+    let (save_only, moving) = with_session(app, |s| {
+        let save_only = std::mem::take(&mut s.save_only_pending) && s.answer.is_none();
+        let moving = s
+            .entry
+            .as_ref()
+            .zip(s.place.as_ref())
+            .map(|(entry, place)| {
+                (
+                    entry.clip_id.clone(),
+                    DestinationOut::from(place),
+                    entry.meta.app.clone(),
+                )
+            });
+        (save_only, moving)
+    })
+    .unwrap_or((false, None));
+    if save_only {
+        return save_marks(app);
+    }
+    if let Some((clip_id, destination, source_app)) = moving {
+        let handle = app.clone();
+        let _ = std::thread::Builder::new()
+            .name("mew-circle-move".into())
+            .spawn(move || move_entry(&handle, &clip_id, &destination, source_app));
+    }
+    show_again(app);
+}
+
+/// A saved entry goes to its new place: the server keeps it, the notebook moves it (never a copy).
+fn move_entry<R: Runtime>(
+    app: &AppHandle<R>,
+    clip_id: &str,
+    destination: &DestinationOut,
+    source_app: Option<String>,
+) {
+    let body = serde_json::to_vec(&json!({
+        "clipId": clip_id,
+        "destination": destination,
+        "source": { "app": source_app },
+    }))
+    .unwrap_or_default();
+    let mut reply = Vec::new();
+    match post_capped(app, "api/screen/entries/destination", &body, &mut reply) {
+        Ok(200 | 204) => {
+            page::dispatch(
+                app,
+                page::ENTRY_SAVED,
+                json!({ "clipId": clip_id, "open": false }),
+            );
+        }
+        Ok(401) => forget_revoked_token(app),
+        _ => show_card_message(app, "I couldn't move it just now. Try again."),
+    }
+}
+
+/// "Change", the chip's ▾ or Ctrl+D: the picker, with every notebook, chapter and section.
+pub fn change_place<R: Runtime>(app: &AppHandle<R>) {
+    let handle = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("mew-circle-places".into())
+        .spawn(move || {
+            let mut reply = Vec::new();
+            let places = match post_capped(&handle, "api/screen/destinations", b"{}", &mut reply) {
+                Ok(200) => parse_places(&reply),
+                _ => None,
+            };
+            let Some(places) = places else {
+                return show_card_message(&handle, "I couldn't reach your notebooks just now.");
+            };
+            let labels: Vec<String> = places.iter().map(Place::label).collect();
+            with_session(&handle, |s| {
+                s.place_offer = Some(PlaceOffer::Picker(places))
+            });
+            show_card(&handle, json!({ "mode": "place", "places": labels }));
+        });
+}
+
+/// One of the offered places (a chip, or the picker's list), by its index.
+pub fn pick_place<R: Runtime>(app: &AppHandle<R>, index: usize) {
+    let picked = with_session(app, |s| {
+        let place = match &s.place_offer {
+            Some(PlaceOffer::Choose(list) | PlaceOffer::Picker(list)) => list.get(index).cloned(),
+            _ => None,
+        }?;
+        s.place = Some(place);
+        s.place_offer = None;
+        Some(())
+    })
+    .flatten();
+    if picked.is_some() {
+        placed(app);
+    }
+}
+
+/// "Create it and save": the chapter is made by the student's notebook when the entry arrives.
+pub fn create_place<R: Runtime>(app: &AppHandle<R>) {
+    let created = with_session(app, |s| {
+        let Some(PlaceOffer::Create { parent, title }) = s.place_offer.take() else {
+            return false;
+        };
+        s.place = Some(Place {
+            create: Some(title),
+            ..parent
+        });
+        true
+    })
+    .unwrap_or(false);
+    if created {
+        placed(app);
+    }
+}
+
+pub fn cancel_place<R: Runtime>(app: &AppHandle<R>) {
+    with_session(app, |s| {
+        if matches!(s.place_offer, Some(PlaceOffer::Picker(_))) {
+            s.place_offer = None;
+        }
+        s.save_only_pending = false;
+    });
+    show_again(app);
+}
+
+/// The hold went down while an explanation plays: it pauses for the words (K3).
+pub fn pause_for_words<R: Runtime>(app: &AppHandle<R>) {
+    let playing = with_session(app, |s| {
+        let playing = s
+            .answer
+            .as_ref()
+            .is_some_and(|a| !a.playback.is_over() && !a.playback.is_paused());
+        if playing {
+            s.paused_for_words = true;
+        }
+        playing
+    })
+    .unwrap_or(false);
+    if playing {
+        control(app, Control::Pause);
+    }
+}
+
+/// An explanation paused for words that weren't a question goes on. True if one did.
+pub fn resume_after_words<R: Runtime>(app: &AppHandle<R>) -> bool {
+    let paused = with_session(app, |s| std::mem::take(&mut s.paused_for_words)).unwrap_or(false);
+    if paused {
+        control(app, Control::Resume);
+    }
+    paused
+}
+
+/// POSTs `body` and keeps the whole reply, up to one stream line (the picker's places).
+fn post_capped<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &str,
+    body: &[u8],
+    reply: &mut Vec<u8>,
+) -> Result<u16, ()> {
+    post(app, path, body, |line| {
+        if reply.len() + line.len() <= MAX_REPLY_LINE_BYTES {
             reply.extend_from_slice(line.as_bytes());
         }
     })

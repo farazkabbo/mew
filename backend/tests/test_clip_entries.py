@@ -79,7 +79,7 @@ def test_an_ordinary_clip_has_no_entry(client: TestClient) -> None:  # noqa: F81
     view = client.get(
         f"/v1/clips/{clip_id}", headers={**internal_headers(), "X-Mew-Local-User": "local"}
     )
-    assert view.json()["entry"] is None
+    assert view.json().get("entry") is None  # left out: the web app reads it as null
 
 
 def test_a_follow_up_is_added_to_the_same_entry(client: TestClient) -> None:  # noqa: F811

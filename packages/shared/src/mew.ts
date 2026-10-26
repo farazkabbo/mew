@@ -6,6 +6,8 @@ export const MEW_LIMITS = {
   transcriptSegments: 6,
   regionTextChars: 500,
   reasonChars: 200,
+  /** "Physics chapter 5": where the student said to save something (K3). */
+  destinationChars: 160,
 } as const;
 
 export const MewLabel = z.enum([
@@ -15,6 +17,12 @@ export const MewLabel = z.enum([
   "give_hint",
   "complete_step",
   "draw_visual",
+  /** "Save it to my Physics notebook, chapter 5" (K3): not a tutor turn. */
+  "save_to_notebook",
+  /** Create, rename or move a notebook or chapter by voice (K3; never delete). */
+  "notebook_command",
+  /** "Just give me the answer" (K6: every step with its reason, then a Your Turn). */
+  "show_full_solution",
 ]);
 export type MewLabel = z.infer<typeof MewLabel>;
 
@@ -47,6 +55,11 @@ export const MewOutput = z.object({
   label: MewLabel,
   confidence: z.number().min(0).max(1),
   reason: z.string().max(MEW_LIMITS.reasonChars),
+  /**
+   * Where the student said to save something, as they said it ("chem ch 2"), with or without a
+   * question in the same breath (K3 §4.5): one call, never a second one to split them.
+   */
+  destinationPhrase: z.string().trim().min(1).max(MEW_LIMITS.destinationChars).optional(),
 });
 export type MewOutput = z.infer<typeof MewOutput>;
 

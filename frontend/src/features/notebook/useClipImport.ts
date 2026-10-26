@@ -21,9 +21,12 @@ type Pending = { clipId: string; open: boolean };
  * the notebook is already open. The clip is read with the student's own session, turned into a
  * local page (once per clip), and the server notes which page it became.
  *
- * A Circle & Ask entry (S3.2) arrives the same way (`?entry=`, or its own event) and goes on the
- * day's "From screen" page instead; it's shown only when the student asked (Open). A follow-up
- * saved to the same entry later brings it up to date.
+ * A Circle & Ask entry (S3.2) arrives the same way (`?entry=`, or its own event) and goes on a
+ * "From screen" page instead; it's shown only when the student asked (Open). A follow-up saved to
+ * the same entry later brings it up to date.
+ *
+ * K3: a clip goes where the student said (`clip.destination`: a node, made first after "Create it
+ * and save"), else into the node open here. Saved again after "Change", an entry moves there.
  */
 export function useClipImport({
   repo,
@@ -35,8 +38,9 @@ export function useClipImport({
   repo: NotebookRepository;
   notebookId: string | null;
   onOpened: (page: Page) => void;
-  /** An entry was added (or updated) without being shown. */
-  onAdded: (page: Page) => void;
+  /** An entry was added (or updated) without being shown; `missing`: its named place wasn't on
+   * this device, so it went into the open node. */
+  onAdded: (page: Page, missing: boolean) => void;
   onError: (message: string) => void;
 }): void {
   const [queue, setQueue] = useState<Pending[]>([]);
@@ -80,10 +84,10 @@ export function useClipImport({
     if (!next || !notebookId) return;
     let cancelled = false;
     void importClip(repo, notebookId, next.clipId)
-      .then((page) => {
+      .then(({ page, missing }) => {
         if (cancelled) return;
         if (next.open) onOpened(page);
-        else onAdded(page);
+        else onAdded(page, missing);
       })
       .catch(() => {
         if (!cancelled) onError("Couldn't open what you saved. Try again from Screen Coach.");
@@ -102,13 +106,14 @@ async function importClip(
   notebookId: string,
   clipId: string,
   fetchImpl: typeof fetch = (...args) => fetch(...args),
-): Promise<Page> {
+): Promise<{ page: Page; missing: boolean }> {
   const response = await fetchImpl(`/api/clips/${clipId}`, { cache: "no-store" });
   if (!response.ok) throw new Error(`clip ${response.status}`);
   const clip = ClipView.parse(await response.json());
+  const target = await repo.destinationOf(clip, notebookId);
   const page = clip.entry
-    ? await repo.importEntry(notebookId, clip)
-    : await repo.importClip(notebookId, clip);
+    ? await repo.importEntry(target.nodeId, clip, target.page)
+    : await repo.importClip(target.nodeId, clip);
   // Best effort: lets another device or tab know this clip already has a page.
   void fetchImpl(`/api/clips/${clipId}`, {
     method: "PATCH",
@@ -116,5 +121,5 @@ async function importClip(
     body: JSON.stringify({ notebookPageId: page.id }),
     keepalive: true,
   }).catch(() => undefined);
-  return page;
+  return { page, missing: target.missing };
 }

@@ -1,6 +1,6 @@
-//! What the student meant by what they said while holding the hotkey (decisions 9 and 10): fixed
-//! rules, no model. "Save this", "show that again" and "check my notes" (Notes Check) are short
-//! commands; "teach me how to…" starts a walkthrough (coach mode, S4) and "continue where we left
+//! What the student meant by what they said while holding the keys (decisions 9 and 10): fixed
+//! rules, no model. "Save this", "show that again", "check my notes" (Notes Check) and "Neb,
+//! pause" (K2: pausing had a hotkey before) are short commands; "teach me how to…" starts a walkthrough (coach mode, S4) and "continue where we left
 //! off" resumes one; during a walkthrough, "done", "I'm stuck", "yes", "no", "pause" and "stop"
 //! steer it. Anything else is a question for the tutor.
 //!
@@ -24,6 +24,8 @@ pub enum Intent {
     CoachResume,
     /// A word for the walkthrough in progress.
     Coach(CoachWord),
+    /// Pause Screen Coach ("Neb, pause"; during a walkthrough, "pause" pauses the walkthrough).
+    Pause,
 }
 
 /// What the student can say to a walkthrough in progress.
@@ -72,7 +74,9 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
         .map(String::as_str)
         .filter(|w| !FILLER.contains(w))
         .collect();
-    if is_clip(&core) {
+    if is_pause(&core) {
+        Intent::Pause
+    } else if is_clip(&core) {
         Intent::Clip
     } else if let Some(all) = notes_check(&core) {
         Intent::NotesCheck { all }
@@ -81,6 +85,25 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     } else {
         Intent::Ask
     }
+}
+
+/// "pause", "pause screen coach", "stop looking", "stop watching my screen" ("Neb, pause": the
+/// name is filler).
+fn is_pause(words: &[&str]) -> bool {
+    matches!(
+        words.join(" ").as_str(),
+        "pause"
+            | "pause yourself"
+            | "pause screen coach"
+            | "pause the screen coach"
+            | "pause neb"
+            | "stop looking"
+            | "stop watching"
+            | "stop looking at my screen"
+            | "stop watching my screen"
+            | "dont look at my screen"
+            | "don't look at my screen"
+    )
 }
 
 /// "save this", "clip that", "save this to my notebook", "put this in my notes", "add it to
@@ -350,6 +373,30 @@ mod tests {
     }
 
     #[test]
+    fn recognises_pausing_screen_coach() {
+        for said in [
+            "Neb, pause.",
+            "pause",
+            "Hey Neb, pause please",
+            "pause Screen Coach",
+            "stop looking at my screen",
+            "Stop watching.",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::Pause, "{said}");
+        }
+        // In a walkthrough "pause" pauses the walkthrough; naming Screen Coach still pauses it.
+        assert_eq!(intent_of("pause", true), Intent::Coach(CoachWord::Pause));
+        assert_eq!(intent_of("pause screen coach", true), Intent::Pause);
+        for said in [
+            "pause this video",
+            "how do I pause the music",
+            "why did it pause",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
+        }
+    }
+
+    #[test]
     fn recognises_show_again() {
         for said in [
             "show that again",
@@ -524,8 +571,8 @@ mod tests {
         ] {
             assert_eq!(coach(said), Intent::Ask, "{said}");
         }
-        // Coach words mean nothing outside a walkthrough.
-        for said in ["done", "I'm stuck", "yes", "stop", "pause"] {
+        // Coach words mean nothing outside a walkthrough ("pause" pauses Screen Coach instead).
+        for said in ["done", "I'm stuck", "yes", "stop"] {
             assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
         }
     }

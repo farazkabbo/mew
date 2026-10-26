@@ -1,8 +1,25 @@
-import { type ClipView, ImageBlock, Notebook, NotebookTree, Page, Stroke } from "@mew/shared";
+import {
+  type ClipView,
+  type DestinationPage,
+  ImageBlock,
+  Notebook,
+  NotebookTree,
+  Page,
+  Stroke,
+} from "@mew/shared";
 import Dexie from "dexie";
 import type { z } from "zod";
 
-import { clipToPage, entryFollowUps, entryToPage, nextEntryTop, today } from "./clip-page";
+import {
+  clipToPage,
+  dayHeading,
+  ENTRIES_PER_PAGE,
+  entryFollowUps,
+  entryStrokeIds,
+  entryToPage,
+  nextEntryTop,
+  startsNewDay,
+} from "./clip-page";
 import type { NotebookDb } from "./db";
 import { newPage } from "./page-factory";
 import { TreeRepository } from "./tree-repository";
@@ -109,10 +126,7 @@ export class NotebookRepository {
     });
   }
 
-  async addPage(
-    notebookId: string,
-    extra: Partial<Pick<Page, "fromScreenDay">> = {},
-  ): Promise<Page> {
+  async addPage(notebookId: string, extra: Partial<Pick<Page, "fromScreen">> = {}): Promise<Page> {
     return this.db.transaction("rw", this.db.pages, async () => {
       const pages = await this.db.pages.where("notebookId").equals(notebookId).toArray();
       const page: Page = {
@@ -124,6 +138,35 @@ export class NotebookRepository {
       };
       await this.db.pages.add(page);
       return page;
+    });
+  }
+
+  /**
+   * Moves a page to another node (K3: "save it to Physics chapter 5", or the page picker), last
+   * there unless `index` says where. It's an ordinary page there (no longer a "From screen" one).
+   * Returns where it was, for Undo; null when there's no such page.
+   */
+  async movePage(
+    pageId: string,
+    notebookId: string,
+    index?: number,
+  ): Promise<{ page: Page; from: { notebookId: string; index: number } } | null> {
+    return this.db.transaction("rw", this.db.pages, async () => {
+      const row = await this.db.pages.get(pageId);
+      const page = row ? Page.safeParse(row).data : undefined;
+      if (!page) return null;
+      const there = await this.db.pages.where("notebookId").equals(notebookId).toArray();
+      const end = there.reduce((max, p) => Math.max(max, p.index + 1), 0);
+      const free = index !== undefined && !there.some((p) => p.index === index);
+      const moved: Page = {
+        id: page.id,
+        notebookId,
+        index: free ? index : end,
+        background: page.background,
+        createdAt: page.createdAt,
+      };
+      await this.db.pages.put(moved);
+      return { page: moved, from: { notebookId: page.notebookId, index: page.index } };
     });
   }
 
@@ -146,7 +189,35 @@ export class NotebookRepository {
   }
 
   /**
-   * A new page for a clip saved from the screen, at the end of the notebook: the image and the
+   * Where a clip saved from the screen goes (K3): the node the student named (made first, after
+   * "Create it and save", unless one with that title is already there), or `fallback` (the node
+   * open in the notebook) when they named none or it isn't on this device. `missing` says the
+   * named one wasn't found.
+   */
+  async destinationOf(
+    clip: ClipView,
+    fallback: string,
+  ): Promise<{ nodeId: string; page: DestinationPage; missing: boolean }> {
+    const destination = clip.destination;
+    const fromScreen: DestinationPage = { kind: "from_screen" };
+    if (!destination) return { nodeId: fallback, page: fromScreen, missing: false };
+    const tree = await this.tree.tree();
+    const live = (id: string) => tree.get(id) !== undefined && tree.isLive(id);
+    if (!live(destination.nodeId)) return { nodeId: fallback, page: fromScreen, missing: true };
+    const create = destination.create;
+    if (!create) return { nodeId: destination.nodeId, page: destination.page, missing: false };
+    const title = create.title.toLowerCase();
+    const there = tree
+      .children(destination.nodeId)
+      .find((child) => child.title.toLowerCase() === title);
+    const child = there ?? (await this.tree.addChild(destination.nodeId, create.title));
+    return child
+      ? { nodeId: child.id, page: destination.page, missing: false }
+      : { nodeId: destination.nodeId, page: destination.page, missing: false };
+  }
+
+  /**
+   * A new page for a clip saved from the screen, at the end of its node: the image and the
    * tutor's annotations as ink. In one transaction, and only once per clip (a second tab or a
    * repeated event gets the page already made).
    */
@@ -173,11 +244,17 @@ export class NotebookRepository {
   }
 
   /**
-   * Adds a Circle & Ask entry (S3.2 §2.5) to the notebook's "From screen" page for today (made
-   * when there's none), below the entries already there. An entry already on a page is brought
-   * up to date instead: a follow-up's turns and strokes are added to it. Returns its page.
+   * Adds a Circle & Ask entry (S3.2 §2.5) to a page of `notebookId` (K3: its "From screen" page,
+   * a new page, or its nth page), below the entries already there, under a date heading when the
+   * day changed. An entry already on a page of that node is brought up to date instead (a
+   * follow-up's turns and strokes are added); one on another node's page moves here whole (the
+   * student changed where it goes: never two copies). Returns its page.
    */
-  async importEntry(notebookId: string, clip: ClipView): Promise<Page> {
+  async importEntry(
+    notebookId: string,
+    clip: ClipView,
+    target: DestinationPage = { kind: "from_screen" },
+  ): Promise<Page> {
     const ids = { now: Date.now(), newId: () => crypto.randomUUID() };
     return this.db.transaction(
       "rw",
@@ -185,7 +262,7 @@ export class NotebookRepository {
       async () => {
         const existing = await this.db.images.where("clipId").equals(clip.id).first();
         const existingPage = existing && (await this.db.pages.get(existing.pageId));
-        if (existing && existingPage) {
+        if (existing && existingPage && existingPage.notebookId === notebookId) {
           const followUps = entryFollowUps(clip, ImageBlock.parse(existing), ids);
           if (followUps) {
             await this.db.images.put(ImageBlock.parse(followUps.image));
@@ -194,20 +271,55 @@ export class NotebookRepository {
           }
           return Page.parse(existingPage);
         }
+        if (existing) {
+          // Moved: off the old page, whole, before it's laid out on the new one.
+          const block = ImageBlock.parse(existing);
+          const onPage = await this.db.strokes.where("pageId").equals(block.pageId).toArray();
+          await this.db.strokes.bulkDelete(
+            entryStrokeIds(block, validRows(Stroke, onPage, "stroke")),
+          );
+          await this.db.images.delete(block.id);
+        }
 
-        const day = today();
-        const pages = await this.db.pages.where("notebookId").equals(notebookId).toArray();
-        const page =
-          pages.find((p) => p.fromScreenDay === day) ??
-          (await this.addPage(notebookId, { fromScreenDay: day }));
+        const page = await this.entryPage(notebookId, target);
         const above = await this.db.images.where("pageId").equals(page.id).toArray();
-        const { image, strokes } = entryToPage(clip, page.id, nextEntryTop(above), ids);
+        const placed = validRows(ImageBlock, above, "image");
+        const now = new Date(ids.now);
+        const heading = startsNewDay(placed, now) ? dayHeading(now) : undefined;
+        const { image, strokes } = entryToPage(clip, page.id, nextEntryTop(placed), ids, heading);
         await this.db.images.add(ImageBlock.parse(image));
         await this.db.strokes.bulkAdd(strokes.map((s) => Stroke.parse(s)));
         await this.touchNotebook(notebookId);
         return Page.parse(page);
       },
     );
+  }
+
+  /**
+   * The page an entry goes on: the node's "From screen" page (one per node; after about 30
+   * entries the next one starts, decision 7), a new page, or its nth page (a new one when it has
+   * fewer). Runs inside `importEntry`'s transaction.
+   */
+  private async entryPage(notebookId: string, target: DestinationPage): Promise<Page> {
+    if (target.kind === "new") return this.addPage(notebookId);
+    const pages = validRows(
+      Page,
+      await this.db.pages.where("notebookId").equals(notebookId).toArray(),
+      "page",
+    ).sort((a, b) => a.index - b.index);
+    if (target.kind === "number") return pages[target.number - 1] ?? this.addPage(notebookId);
+    const latest = pages
+      .filter((p) => p.fromScreen !== undefined)
+      .sort((a, b) => (b.fromScreen ?? 0) - (a.fromScreen ?? 0))[0];
+    if (latest) {
+      const entries = await this.db.images
+        .where("pageId")
+        .equals(latest.id)
+        .filter((image) => image.entry !== undefined)
+        .count();
+      if (entries < ENTRIES_PER_PAGE) return latest;
+    }
+    return this.addPage(notebookId, { fromScreen: (latest?.fromScreen ?? 0) + 1 });
   }
 }
 

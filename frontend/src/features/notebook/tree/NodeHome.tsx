@@ -5,6 +5,7 @@ import { FileText, GraduationCap, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { useShortcutKeys } from "../../shortcuts/useShortcutKeys";
 import { Breadcrumb } from "./Breadcrumb";
 import { NodeIcon } from "./node-style";
 import { childNoun, plural } from "./tree-labels";
@@ -28,6 +29,7 @@ type Props = {
  * page count and when it was last edited, its own "Loose pages", and a card to add a chapter.
  */
 export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Props) {
+  const keys = useShortcutKeys();
   const root = tree.path(node.id)[0] ?? node;
   const children = tree.children(node.id);
   const childIds = children.map((c) => c.id).join(",");
@@ -100,7 +102,8 @@ export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Pro
                 <button
                   type="button"
                   onClick={actions.onAddChild}
-                  title="Alt+N"
+                  title={keys.shown("new_chapter")}
+                  aria-keyshortcuts={keys.aria("new_chapter")}
                   className="flex h-full min-h-28 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-rule p-4 text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
                 >
                   <Plus className="size-4" aria-hidden />
@@ -132,7 +135,8 @@ export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Pro
               <button
                 type="button"
                 onClick={actions.onAddPage}
-                title="Alt+P"
+                title={keys.shown("new_page")}
+                aria-keyshortcuts={keys.aria("new_page")}
                 className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
               >
                 <Plus className="size-5" aria-hidden />

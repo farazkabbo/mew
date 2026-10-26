@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { DestinationSource, SavedDestination } from "./destinations";
 import { HexColor, Point, StrokeTool } from "./notebook";
 import { AppName } from "./screen";
 
@@ -166,6 +167,8 @@ export const ClipCreateRequest = z.object({
   ocrText: PlainText(CLIP_LIMITS.ocrChars),
   /** Circle & Ask: the explanation that makes this clip a notebook entry. */
   entry: EntryPart.optional(),
+  /** Where the student said to save it (K3); without one, the notebook decides. */
+  destination: SavedDestination.optional(),
 });
 export type ClipCreateRequest = z.infer<typeof ClipCreateRequest>;
 
@@ -182,12 +185,26 @@ export const ClipView = z.object({
   source: ClipSource,
   ocrText: z.string(),
   /** The notebook page built from it (on the device that built it), once there is one. */
-  notebookPageId: z.uuid().nullable(),
+  notebookPageId: z.uuid().nullable().default(null),
   createdAt: z.iso.datetime({ offset: true }),
   /** A Circle & Ask entry's explanation; null for an ordinary clip. */
   entry: EntryView.nullable().default(null),
+  /** Where it goes in the notebook (K3); null: wherever the notebook is open. */
+  destination: SavedDestination.nullable().default(null),
 });
 export type ClipView = z.infer<typeof ClipView>;
+
+/**
+ * `POST /api/screen/entries/destination` (device token): a saved clip or entry goes somewhere
+ * else ("Change", or "save it to …" said after it was saved). It moves; it's never copied.
+ */
+export const ClipDestinationRequest = z.object({
+  clipId: z.uuid(),
+  destination: SavedDestination,
+  /** Where the moment came from: its new place becomes this source's sticky one. */
+  source: DestinationSource.optional(),
+});
+export type ClipDestinationRequest = z.infer<typeof ClipDestinationRequest>;
 
 export const ClipPatch = z.object({ notebookPageId: z.uuid() });
 export type ClipPatch = z.infer<typeof ClipPatch>;

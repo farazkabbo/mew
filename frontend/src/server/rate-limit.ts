@@ -42,6 +42,12 @@ export const RATE_RULES = {
    * after edits and on focus. Room for a student reorganising a lot at once.
    */
   notebookTree: { limit: 120, windowMs: MINUTE },
+  /**
+   * Screen Coach's destinations (K3): resolving "save it to Physics chapter 5" (a database read;
+   * the gate model only for descriptions), the picker's places, and moving a saved moment.
+   */
+  destinations: { limit: 30, windowMs: MINUTE },
+  destinationsDaily: { limit: 800, windowMs: DAY },
   notebookTreeDaily: { limit: 5000, windowMs: DAY },
   /**
    * Notes checks: one comparison call and up to five verifier calls each (brief §11), so the

@@ -3,14 +3,18 @@
 A [Tauri v2](https://v2.tauri.app) shell around the Mew web app. The window shows the web app
 (the same pages, in Edge WebView2), and adds what a web page can't do:
 
-- **Ctrl+Shift+M from any app:** Mew comes forward and listens, as if its mascot was tapped.
+- **Hold Ctrl+Alt in any app** (left Ctrl and left Alt, K2): with Screen Coach off, Mew comes
+  forward and listens, as if its mascot was tapped.
 - **Tray icon:** closing the window keeps Mew in the tray (Open, Ask Mew, Quit).
 - **Review reminders:** a Windows notification when concepts are due for review (at most one
   every 30 minutes; the web app checks `/api/review` and asks the shell to notify).
 - **Screen Coach** (in progress, [docs/SCREEN_COACH.md](../docs/SCREEN_COACH.md)): off until the
-  user turns it on in **tray → Screen Coach settings…** (a bundled local page). Once on, holding
-  **Ctrl+Alt+Space** (or tray → _Look at my screen_) captures one frame of the foreground
-  window in memory, with a violet glow at the screen edges; **Ctrl+Alt+P** pauses. Before
+  user turns it on in **tray → Screen Coach settings…** (a bundled local page). Once on,
+  holding **Ctrl+Alt** and talking (or tray → _Look at my screen_) captures one frame of the
+  foreground window in memory when you let go, with a violet glow at the screen edges; drawing
+  around something while holding them asks about that (Circle & Ask), and a double tap toggles
+  draw mode. Pause from the tray, or by saying "Neb, pause". Every shortcut is two keys at most
+  (docs/NOTEBOOKS_K.md §11); the hold is read by polling the two keys, never a keyboard hook. Before
   capturing, the privacy layer (S1) refuses blocked apps, password fields, private browsing
   windows, calls and recordings, and a microphone that's switched off. After capturing, it
   covers card numbers, keys and codes it finds with on-device OCR. When the key comes up, the
@@ -55,12 +59,13 @@ PowerShell's name.
   created at start-up for exactly the app's origin (`src/lib.rs`), allows one command:
   `notify_due(count, first)`. Rust treats its arguments as untrusted (control characters
   dropped, length capped) and rate-limits it.
-- The hotkey, tray and window are handled in Rust; the hotkey reaches the page as a
-  `mew:summon` DOM event, so the page needs no permission for it.
+- The hold gesture, tray and window are handled in Rust; a summon reaches the page as a
+  `mew:summon` DOM event, so the page needs no permission for it. While Neb's own window is in
+  front, the page handles the hold itself.
 - Navigation is limited to the app's origin and Clerk's sign-in pages (`src/origin.rs`).
 - Crates are pinned to releases at least 14 days old when added; `Cargo.lock` is committed.
 - **Screen Coach** (`src/screen/`):
-  - Captures start only in Rust, from the hotkey and tray handlers. No command a page can call
+  - Captures start only in Rust, from the hold gesture and tray handlers. No command a page can call
     starts a capture or returns pixels; screenshots never enter a WebView.
   - Its settings live in `%APPDATA%\app.mew.desktop\screen-coach.json`, are enforced in Rust,
     and can be changed only by the bundled page `shell/screen-coach.html`. Its capability is
@@ -128,7 +133,7 @@ PowerShell's name.
   - While ink is visible, one thread watches: WinEvents (app switch, move, resize, minimise,
     standard scrolling), a low-level mouse hook (wheel and left-button drags only; nothing is
     recorded) and `GetLastInputInfo` (a key press, without a keyboard hook; Ctrl/Alt chords such
-    as our hotkeys don't count). The first change fades the ink, wipes the screenshot and stops
+    as the hold gesture don't count). The first change fades the ink, wipes the screenshot and stops
     the thread. Esc is a global hotkey only while ink is visible.
   - The preview is the only WebView that sees screen pixels, and only after the student asked to
     save. Its image comes from `mewclip://` (served from memory, to the preview window only, at a
@@ -176,7 +181,7 @@ PowerShell's name.
     token). The desktop keeps its id, step and phase, and checks every reply in Rust
     (`walkthrough::parse_coach_reply`): only a focus region and an arrow may be drawn, and
     speech, title and step numbers are bounded.
-  - Captures happen only on the student's action: the hotkey ("done", "I'm stuck"…), or the
+  - Captures happen only on the student's action: the hold ("done", "I'm stuck"…), or the
     progress pill's Done, Hint, No and Resume. During a walkthrough they're of the monitor under
     the cursor (decision 6; blocked apps blacked out as usual), and the first walkthrough shows a
     one-time notice saying so.
@@ -207,7 +212,7 @@ Screen Coach's "nothing on disk" check (threat checklist item 1), from the repo 
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\check-no-screenshots.ps1 -Start
-# …use Screen Coach: hold Ctrl+Alt+Space a few times, tray → Look at my screen…
+# …use Screen Coach: hold Ctrl+Alt and ask a few times, tray → Look at my screen…
 powershell -ExecutionPolicy Bypass -File scripts\check-no-screenshots.ps1 -Check
 ```
 

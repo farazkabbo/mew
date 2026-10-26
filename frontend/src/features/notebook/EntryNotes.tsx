@@ -1,9 +1,10 @@
 "use client";
 
 import type { ImageBlock } from "@mew/shared";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { Fragment, type RefObject, useEffect, useRef, useState } from "react";
 
 import type { CanvasHandle } from "./canvas/NotebookCanvas";
+import { HEADING_SPACE } from "./clip-page";
 import { replayEntry, type ReplayStep } from "./entry-replay";
 import { useNotebookUi } from "./store";
 
@@ -58,43 +59,56 @@ export function EntryNotes({ canvas, images }: Props) {
           if (!entry) return null;
           const current = replaying?.imageId === image.id ? replaying.step : null;
           return (
-            <section
-              key={image.id}
-              data-testid="entry-note"
-              aria-label="Explanation from your screen"
-              className="pointer-events-auto absolute rounded-xl bg-paper/95 px-4 py-3 text-sm leading-snug text-ink shadow-sm ring-1 ring-ink/10"
-              style={{ left: image.x, top: image.y + image.height + 8, width: image.width }}
-            >
-              {entry.turns.map((turn, t) => (
-                <div key={t} className={t > 0 ? "mt-3 border-t border-ink/10 pt-3" : undefined}>
-                  <p className="font-semibold">{turn.question}</p>
-                  <ol className="mt-1 list-decimal pl-5">
-                    {turn.steps.map((step, s) => (
-                      <li
-                        key={s}
-                        data-current={(current?.turn === t && current.step === s) || undefined}
-                        className="rounded px-1 data-[current]:bg-[var(--tutor,#8a7bf0)]/20"
-                      >
-                        {step}
-                      </li>
-                    ))}
-                  </ol>
-                  <p className="mt-1 text-ink-muted">{turn.summary}</p>
-                  {turn.followUpQuestion && (
-                    <p className="mt-1">
-                      <span className="font-medium">To check:</span> {turn.followUpQuestion}
-                    </p>
-                  )}
-                </div>
-              ))}
-              <button
-                type="button"
-                className="mt-2 font-medium underline underline-offset-2"
-                onClick={() => (replaying?.imageId === image.id ? stop.current?.() : replay(image))}
+            <Fragment key={image.id}>
+              {entry.heading && (
+                // A day's first entry on a "From screen" page (K3).
+                <h3
+                  data-testid="entry-day"
+                  className="absolute font-serif text-lg text-ink-muted"
+                  style={{ left: image.x, top: image.y - HEADING_SPACE + 4 }}
+                >
+                  {entry.heading}
+                </h3>
+              )}
+              <section
+                data-testid="entry-note"
+                aria-label="Explanation from your screen"
+                className="pointer-events-auto absolute rounded-xl bg-paper/95 px-4 py-3 text-sm leading-snug text-ink shadow-sm ring-1 ring-ink/10"
+                style={{ left: image.x, top: image.y + image.height + 8, width: image.width }}
               >
-                {replaying?.imageId === image.id ? "Stop replay" : "Replay"}
-              </button>
-            </section>
+                {entry.turns.map((turn, t) => (
+                  <div key={t} className={t > 0 ? "mt-3 border-t border-ink/10 pt-3" : undefined}>
+                    <p className="font-semibold">{turn.question}</p>
+                    <ol className="mt-1 list-decimal pl-5">
+                      {turn.steps.map((step, s) => (
+                        <li
+                          key={s}
+                          data-current={(current?.turn === t && current.step === s) || undefined}
+                          className="rounded px-1 data-[current]:bg-[var(--tutor,#8a7bf0)]/20"
+                        >
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                    <p className="mt-1 text-ink-muted">{turn.summary}</p>
+                    {turn.followUpQuestion && (
+                      <p className="mt-1">
+                        <span className="font-medium">To check:</span> {turn.followUpQuestion}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="mt-2 font-medium underline underline-offset-2"
+                  onClick={() =>
+                    replaying?.imageId === image.id ? stop.current?.() : replay(image)
+                  }
+                >
+                  {replaying?.imageId === image.id ? "Stop replay" : "Replay"}
+                </button>
+              </section>
+            </Fragment>
           );
         })}
       </div>

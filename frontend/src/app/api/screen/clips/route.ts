@@ -2,6 +2,7 @@ import { ClipCreateRequest } from "@mew/shared";
 import { NextResponse } from "next/server";
 
 import { assertClip, createClip, MAX_CLIP_BODY_BYTES } from "@/server/clips";
+import { rememberDestination } from "@/server/destinations";
 import { deviceToken, requireDevice } from "@/server/device-auth";
 import { handle, readJson } from "@/server/http";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
@@ -18,5 +19,7 @@ export const POST = handle(async (request: Request) => {
   const clip = await readJson(request, ClipCreateRequest, MAX_CLIP_BODY_BYTES);
   assertClip(clip);
   const created = await createClip(deviceToken(request), clip);
+  // Its place becomes this source's sticky one (and a recent one) for the next save (K3).
+  if (clip.destination) rememberDestination(device.userId, clip.destination, clip.source);
   return NextResponse.json(created, { status: 201, headers: { "Cache-Control": "no-store" } });
 });

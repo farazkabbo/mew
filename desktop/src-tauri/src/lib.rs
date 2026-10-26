@@ -1,12 +1,12 @@
 //! Mew for Windows: a window onto the Mew web app, plus what a web page can't do on its own:
-//! a global hotkey to summon Mew from any app, a tray icon, review reminders, and Screen Coach
+//! summoning Mew from any app (hold Ctrl+Alt), a tray icon, review reminders, and Screen Coach
 //! (docs/SCREEN_COACH.md).
 //!
 //! Security: the window shows a remote origin (the web app). That origin may call three
 //! commands, each checked in Rust: `notify_due`, and Screen Coach's `screen_coach_ask` (the
 //! words of a question; never pixels), `screen_coach_spoken` (a spoken line ended: Circle & Ask's
 //! timing) and `screen_coach_link_finish` (a one-time sign-in code).
-//! Everything else (hotkeys, tray, windows, screen capture) happens in Rust. Screen Coach's
+//! Everything else (the hold gesture, tray, windows, screen capture) happens in Rust. Screen Coach's
 //! settings commands are granted to its bundled local page only, and its overlay commands to
 //! its overlay pages only (each window its own). Links the web page opens in a new window go to
 //! the default browser (https only), never into a window of ours.
@@ -21,7 +21,6 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
-use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
 
 use reminders::Reminders;
 
@@ -34,15 +33,6 @@ pub(crate) const BROWSER_ARGS: &str =
     "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
 /// Tells the page to summon Mew (it listens for this event; see the web app's desktop bridge).
 const SUMMON_SCRIPT: &str = "window.dispatchEvent(new CustomEvent('mew:summon'))";
-
-/// Ctrl+Shift+M from any app: Mew comes forward and listens.
-fn summon_hotkey() -> Shortcut {
-    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyM)
-}
-
-pub fn is_summon_hotkey(shortcut: &Shortcut) -> bool {
-    shortcut == &summon_hotkey()
-}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -63,6 +53,9 @@ pub fn run() {
             hotkeys(app.handle())?;
             #[cfg(windows)]
             screen::coach::setup(app.handle(), app_url.clone())?;
+            // The hold gesture summons Neb (or, with Screen Coach on, circles and talks): K2.
+            #[cfg(windows)]
+            screen::keys::start(app.handle());
             let _ = window.set_focus();
             Ok(())
         })
@@ -84,7 +77,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
         screen_coach_open_mic_settings, screen_coach_set_circle, screen_coach_set_enabled,
-        screen_coach_set_hotkey, screen_coach_set_paused, screen_coach_set_privacy,
+        screen_coach_set_paused, screen_coach_set_privacy, screen_coach_shortcuts_seen,
         screen_coach_status,
     };
     use screen::coach_mode::screen_coach_pill;
@@ -94,7 +87,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_coach_status,
         screen_coach_set_enabled,
         screen_coach_set_paused,
-        screen_coach_set_hotkey,
+        screen_coach_shortcuts_seen,
         screen_coach_set_privacy,
         screen_coach_open_mic_settings,
         screen_coach_link_start,
@@ -168,7 +161,7 @@ fn main_window(app: &AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
 }
 
 /// Brings the window back (from the tray, minimised or behind other apps).
-fn show(app: &AppHandle) -> Option<WebviewWindow> {
+fn show<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
     let window = app.get_webview_window(MAIN)?;
     let _ = window.show();
     let _ = window.unminimize();
@@ -176,8 +169,9 @@ fn show(app: &AppHandle) -> Option<WebviewWindow> {
     Some(window)
 }
 
-/// Shows the window and asks Mew to listen, as if the mascot was tapped.
-fn summon(app: &AppHandle) {
+/// Shows the window and asks Mew to listen, as if the mascot was tapped (the hold gesture while
+/// Screen Coach is off, or "Ask Neb" in the tray).
+pub(crate) fn summon<R: tauri::Runtime>(app: &AppHandle<R>) {
     if let Some(window) = show(app) {
         let _ = window.eval(SUMMON_SCRIPT);
     }
@@ -185,7 +179,13 @@ fn summon(app: &AppHandle) {
 
 fn tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open Neb", true, None::<&str>)?;
-    let ask = MenuItem::with_id(app, "summon", "Ask Neb  (Ctrl+Shift+M)", true, None::<&str>)?;
+    let ask = MenuItem::with_id(
+        app,
+        "summon",
+        "Ask Neb  (hold Ctrl+Alt)",
+        true,
+        None::<&str>,
+    )?;
     // Screen Coach: enabled and checked by `screen::coach::refresh` as its state changes.
     let look = MenuItem::with_id(app, "screen-look", "Look at my screen", false, None::<&str>)?;
     let pause = CheckMenuItem::with_id(
@@ -270,28 +270,19 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Global hotkeys: Ctrl+Shift+M summons Mew; Screen Coach registers its own when it's on.
+/// Global hotkeys: none of Mew's own (K2: two keys at most, and the summon gesture is polled, in
+/// `screen::keys`). Screen Coach registers Esc while it shows something.
 #[cfg(desktop)]
 fn hotkeys(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-
     app.plugin(
         tauri_plugin_global_shortcut::Builder::new()
             .with_handler(move |app, shortcut, event| {
-                if is_summon_hotkey(shortcut) {
-                    if event.state() == ShortcutState::Pressed {
-                        summon(app);
-                    }
-                    return;
-                }
                 #[cfg(windows)]
                 screen::coach::on_shortcut(app, shortcut, event.state());
+                #[cfg(not(windows))]
+                let _ = (app, shortcut, event);
             })
             .build(),
     )?;
-    // Another app may own the shortcut already; Mew still works without it.
-    if let Err(error) = app.global_shortcut().register(summon_hotkey()) {
-        eprintln!("Mew: couldn't register Ctrl+Shift+M ({error})");
-    }
     Ok(())
 }

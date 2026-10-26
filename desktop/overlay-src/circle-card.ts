@@ -1,4 +1,4 @@
-import { type CardAction, type CardLayout, cardLayout } from "./card-view";
+import { type CardAction, type CardLayout, cardKey, cardLayout, filterPlaces } from "./card-view";
 import { invoke, on } from "./tauri";
 
 /**
@@ -8,13 +8,17 @@ import { invoke, on } from "./tauri";
  * nodes only and sends the buttons back.
  *
  * The window doesn't take the focus when it appears; clicking it gives it the keyboard (to type).
- * Keys: Enter asks (or explains, with nothing typed), Space pauses or resumes, Esc stops.
+ * Keys (two at most, K2): Enter asks (or explains, with nothing typed), Ctrl+S saves without an
+ * explanation, Ctrl+D changes where it's saved (K3), → and ← go to the next step or repeat this
+ * one and Space pauses or resumes (when not typing), Esc stops.
  */
 
 const card = document.getElementById("card");
 const top = document.getElementById("card-top");
 const text = document.getElementById("card-text");
 const chips = document.getElementById("card-chips");
+const placeLine = document.getElementById("card-place-line");
+const placeChips = document.getElementById("card-place-chips");
 const form = document.getElementById("card-ask") as HTMLFormElement | null;
 const input = document.getElementById("card-input") as HTMLInputElement | null;
 const buttons = document.getElementById("card-buttons");
@@ -29,24 +33,53 @@ function act(action: CardAction, words?: string): void {
   );
 }
 
+function chip(label: string, onClick: () => void): HTMLLIElement {
+  const item = document.createElement("li");
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.addEventListener("click", onClick);
+  item.append(button);
+  return item;
+}
+
+/** The picker's places (K3), filtered by what's typed: picked by their index in the full list. */
+function showPlaces(query: string): void {
+  if (!chips || layout?.mode !== "place") return;
+  const all = layout.chips;
+  chips.replaceChildren(
+    ...filterPlaces(all, query).map((index) =>
+      chip(all[index] ?? "", () => {
+        act("pick_place", String(index));
+      }),
+    ),
+  );
+}
+
 function render(next: CardLayout): void {
   if (!card || !top || !text || !chips || !form || !input || !buttons) return;
+  if (!placeLine || !placeChips) return;
   layout = next;
   card.dataset.mode = next.mode;
   top.textContent = next.top;
   text.textContent = next.text;
-  chips.replaceChildren(
-    ...next.chips.map((question) => {
-      const item = document.createElement("li");
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.textContent = question;
-      chip.addEventListener("click", () => {
-        act("confirm", question);
-      });
-      item.append(chip);
-      return item;
-    }),
+  if (next.mode === "place") showPlaces("");
+  else
+    chips.replaceChildren(
+      ...next.chips.map((q) =>
+        chip(q, () => {
+          act("confirm", q);
+        }),
+      ),
+    );
+  // Where it's saved (K3): the line, then the offered places and "Change ▾".
+  placeLine.textContent = next.place?.line ?? "";
+  placeChips.replaceChildren(
+    ...(next.place?.chips ?? []).map((place) =>
+      chip(place.label, () => {
+        act(place.action, place.index === undefined ? undefined : String(place.index));
+      }),
+    ),
   );
   form.hidden = next.input === null;
   if (next.input) {
@@ -67,8 +100,13 @@ function render(next: CardLayout): void {
       return button;
     }),
   );
+  if (next.mode === "place") input.focus();
   startCountdown(next.countdown);
 }
+
+input?.addEventListener("input", () => {
+  showPlaces(input.value);
+});
 
 /** The toast's seconds, counted down on the card (Rust saves when its own timer ends). */
 function startCountdown(seconds: number | null): void {
@@ -87,18 +125,22 @@ function startCountdown(seconds: number | null): void {
 form?.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!layout?.input || !input) return;
+  // In the picker, Enter takes the first place that matches.
+  if (layout.mode === "place") {
+    const [first] = filterPlaces(layout.chips, input.value);
+    if (first !== undefined) act("pick_place", String(first));
+    return;
+  }
   act(layout.input.action, input.value);
   input.value = "";
 });
 
 window.addEventListener("keydown", (event) => {
   const typing = document.activeElement === input && (input?.value ?? "") !== "";
-  if (event.key === "Escape") {
-    act(layout?.mode === "explain" ? "stop" : "close");
-  } else if (event.key === " " && layout?.mode === "explain" && !typing) {
-    event.preventDefault();
-    act(layout.buttons.some((b) => b.action === "resume") ? "resume" : "pause");
-  }
+  const action = cardKey(event, layout, typing);
+  if (!action) return;
+  if (action !== "stop" && action !== "close") event.preventDefault();
+  act(action);
 });
 
 on("mew:card-show", (detail) => {

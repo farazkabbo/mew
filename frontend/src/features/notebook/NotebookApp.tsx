@@ -1,14 +1,12 @@
 "use client";
 
 import type { Page } from "@mew/shared";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-
-import { isDesktop } from "../desktop/bridge";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
-import { useMewSession } from "../mew/useMewSession";
+import { type NotebookVoiceHandler, useMewSession } from "../mew/useMewSession";
 import { useNotesCheck } from "../notes/check-store";
 import { checkClip, pageOfFinding, usePageMarks } from "../notes/notebook-check";
 import { NotesCheckPanel } from "../notes/NotesCheckPanel";
@@ -17,6 +15,10 @@ import { EntryNotes } from "./EntryNotes";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
+import { ShortcutsNotice } from "../shortcuts/ShortcutsNotice";
+import { useHoldToTalk } from "../shortcuts/useHoldToTalk";
+import { useShortcutKeys } from "../shortcuts/useShortcutKeys";
+import { useVoice } from "../voice/store";
 import { useQuiz } from "../quiz/store";
 import { type CanvasHandle, NotebookCanvas } from "./canvas/NotebookCanvas";
 import { ClipSource } from "./ClipSource";
@@ -38,6 +40,7 @@ import { TreeDialogs } from "./tree/TreeDialogs";
 import { TreeNav } from "./tree/TreeNav";
 import { type TreeNoticeView, useTreeActions } from "./tree/useTreeActions";
 import { useNotebookTree } from "./tree/useNotebookTree";
+import { useNotebookVoice } from "./tree/useNotebookVoice";
 import { useTreeShortcuts } from "./tree/useTreeShortcuts";
 
 type Notice = TreeNoticeView;
@@ -82,7 +85,7 @@ export function NotebookApp({ userId }: { userId: string }) {
   const { nodes, tree } = useNotebookTree(repo, treeNotice, report);
   const now = useMinuteClock();
   // Known only in the browser (the server renders the web app's shortcuts).
-  const desktop = useSyncExternalStore(noSubscription, isDesktop, () => false);
+  const keys = useShortcutKeys();
 
   /**
    * Opens a node: its home when it has chapters (or sections), else its first page. It becomes
@@ -229,7 +232,6 @@ export function NotebookApp({ userId }: { userId: string }) {
     }),
     [engine],
   );
-  useShortcuts(actions);
 
   // A clip saved from the screen (Screen Coach) becomes a new page of this notebook.
   // Opened through openPage, so a node still loading its pages keeps this one open.
@@ -241,14 +243,29 @@ export function NotebookApp({ userId }: { userId: string }) {
     },
     [openPage],
   );
-  // A Circle & Ask explanation is added to today's "From screen" page quietly (or opened).
+  // A Circle & Ask explanation is added to its node's "From screen" page quietly (or opened);
+  // the notice says where (K3).
   const entryAdded = useCallback(
-    (page: Page) => {
-      setPages((list) => (list.some((p) => p.id === page.id) ? list : [...list, page]));
+    (page: Page, missing: boolean) => {
+      setPages((list) =>
+        list.some((p) => p.id === page.id) || list[0]?.notebookId !== page.notebookId
+          ? list
+          : [...list, page],
+      );
       if (page.id === pageId) setPageVersion((v) => v + 1);
-      setNotice({ text: "Saved to your From screen page.", tone: "info" });
+      const where = tree
+        .path(page.notebookId)
+        .map((n) => n.title)
+        .join(" › ");
+      setNotice({
+        text: missing
+          ? `That place isn't on this device, so it's saved in ${where}.`
+          : `Saved to ${where || "your notebook"} · From screen.`,
+        tone: "info",
+        ...(page.id !== pageId && { action: { label: "Open", run: () => openPage(page) } }),
+      });
     },
-    [pageId],
+    [pageId, tree, openPage],
   );
   const clipFailed = useCallback((text: string) => setNotice({ text, tone: "error" }), []);
   useClipImport({
@@ -262,7 +279,22 @@ export function NotebookApp({ userId }: { userId: string }) {
   const node = notebookId ? (tree.get(notebookId) ?? null) : null;
   // A chapter's course is its notebook's.
   const courseId = (notebookId && tree.path(notebookId)[0]?.courseId) || null;
-  const mew = useMewSession(engine, courseId);
+  // Mew's notebook labels (K3) go to `useNotebookVoice`, made below with the tree's actions.
+  const voice = useRef<NotebookVoiceHandler | null>(null);
+  const onNotebookVoice = useCallback<NotebookVoiceHandler>(
+    (...args) => voice.current?.(...args),
+    [],
+  );
+  const mew = useMewSession(engine, courseId, onNotebookVoice);
+  useShortcuts({ ...actions, checkWork: mew.checkWork }, keys.platform, keys.own);
+  // Hold left Ctrl + left Alt to talk, let go to ask (K2; circling your writing comes with K6).
+  useHoldToTalk({
+    start: () => {
+      const { status } = useVoice.getState();
+      if (status === "off" || status === "error") mew.startListening();
+    },
+    release: mew.summon,
+  });
   const { quiz } = mew;
   // Notes Check: every line's text, kept with the page and (if allowed) on the server.
   useNoteIndexing({ db, repo, engine, notebookId, recognition: mew.recognition });
@@ -310,6 +342,20 @@ export function NotebookApp({ userId }: { userId: string }) {
   }, [courseId, quiz]);
 
   const treeActions = useTreeActions({ repo, tree, notify, report, openNode, openPage });
+  const notebookVoice = useNotebookVoice({
+    repo,
+    tree,
+    nodes: nodes ?? [],
+    notebookId,
+    pageId: view === "page" ? pageId : null,
+    actions: treeActions,
+    notify,
+    report,
+    openNode,
+  });
+  useEffect(() => {
+    voice.current = notebookVoice;
+  });
   const loadCounts = useCallback((ids: readonly string[]) => repo.countPages(ids), [repo]);
   /** Where Alt+N adds a chapter: the open notebook (a chapter's own notebook). */
   const rootId = notebookId ? (tree.path(notebookId)[0]?.id ?? null) : null;
@@ -322,7 +368,8 @@ export function NotebookApp({ userId }: { userId: string }) {
       jump: () => treeActions.setPaletteOpen(true),
       reorder: (step) => notebookId && treeActions.reorder(notebookId, step),
     },
-    desktop,
+    keys.platform,
+    keys.own,
   );
 
   const exportLine = async () => {
@@ -346,7 +393,7 @@ export function NotebookApp({ userId }: { userId: string }) {
             renamingId={treeActions.renamingId}
             draft={treeActions.draft}
             trashCount={tree.trash().length}
-            newNotebookShortcut={desktop ? "Ctrl+N" : "Alt+B"}
+            newNotebookShortcut={keys.shown("new_notebook")}
             onOpen={openNode}
             onCreateNotebook={treeActions.startCreating}
             onAddChild={treeActions.addChild}
@@ -473,6 +520,10 @@ export function NotebookApp({ userId }: { userId: string }) {
           </div>
         )}
 
+        <div className="pointer-events-none absolute right-4 bottom-24">
+          <ShortcutsNotice hidden={app.showIntro || quizActive} />
+        </div>
+
         <div className="pointer-events-none absolute right-4 bottom-4">
           <MewDock
             onSummon={mew.summon}
@@ -535,10 +586,6 @@ export function NotebookApp({ userId }: { userId: string }) {
       )}
     </div>
   );
-}
-
-function noSubscription(): () => void {
-  return () => undefined;
 }
 
 /** The time now, updated every minute ("edited 5 minutes ago" stays right). */

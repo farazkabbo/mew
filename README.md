@@ -17,7 +17,7 @@ backend/supabase/    Postgres migrations (RLS, pgvector) and their tests (PGlite
 packages/shared/     Shared zod schemas, prompts and types (mirrored by Pydantic models in backend/)
 packages/ink/        Framework-free ink logic: geometry, line segmentation, undo/redo, and the
                      tutor's handwriting (glyphs, LaTeX, placement, plots and diagrams)
-desktop/             Mew for Windows: a Tauri v2 shell (summon hotkey, tray, review reminders)
+desktop/             Mew for Windows: a Tauri v2 shell (hold Ctrl+Alt, tray, review reminders)
 ml/                  Mew v2: dataset → fine-tuning → the in-browser gate model
 scripts/             Dev tooling (`pnpm health`, glyph table builder)
 ```
@@ -114,7 +114,7 @@ Open [/notebook](http://localhost:3000/notebook). Strokes are vectors stored loc
 | Action                     | How                                                                                     |
 | -------------------------- | --------------------------------------------------------------------------------------- |
 | Pen / highlighter / eraser | `P` / `H` / `E`, or the toolbar                                                         |
-| Undo / redo                | `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`)                                                 |
+| Undo / redo                | `Ctrl+Z` / `Ctrl+Y` (two keys at most, K2; Settings → Shortcuts rebinds them)           |
 | Zoom                       | `Ctrl`+wheel, trackpad pinch, two-finger pinch, `+` / `-`, `0` to reset                 |
 | Pan                        | Wheel / two-finger scroll, `Space`+drag, middle mouse, or one finger once a pen is used |
 | Show detected lines        | Toolbar (debug overlay for line segmentation)                                           |
@@ -264,7 +264,7 @@ app (web manifest).
 ## Desktop app (Windows)
 
 `desktop/` wraps the web app in a native window (Tauri v2, Edge WebView2) and adds what a web page
-can't: **Ctrl+Shift+M** summons Mew from any app, a **tray icon** keeps it running, and Windows
+can't: **holding Ctrl+Alt** summons Mew from any app, a **tray icon** keeps it running, and Windows
 **notifications** remind the student when concepts are due for review. See
 [desktop/README.md](desktop/README.md):
 

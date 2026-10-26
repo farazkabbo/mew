@@ -1,4 +1,12 @@
-import type { ClipStroke, ClipView, ImageBlock, ImageEntry, Point, Stroke } from "@mew/shared";
+import {
+  type ClipStroke,
+  type ClipView,
+  DESTINATION_LIMITS,
+  type ImageBlock,
+  type ImageEntry,
+  type Point,
+  type Stroke,
+} from "@mew/shared";
 import { strokeBBox } from "@mew/ink";
 
 /**
@@ -7,9 +15,10 @@ import { strokeBBox } from "@mew/ink";
  * annotations over it as ordinary tutor ink — editable, erasable and hideable like any other.
  * The rest of the page stays free to work on.
  *
- * A Circle & Ask entry (S3.2 §5) is laid out the same way, one below the other on the day's
- * "From screen" page, with the student's marks as their own ink, the tutor's ink in one group
- * per explanation step (for Replay), and the explanation shown under the picture.
+ * A Circle & Ask entry (S3.2 §5) is laid out the same way, one below the other on its node's
+ * "From screen" page (K3: one per node, a date heading whenever the day changes), with the
+ * student's marks as their own ink, the tutor's ink in one group per explanation step (for
+ * Replay), and the explanation shown under the picture.
  */
 
 /** Widest an image is placed, in page units (CSS pixels at 100 % zoom). */
@@ -153,15 +162,26 @@ export function nextEntryTop(images: readonly ImageBlock[]): number {
   }, IMAGE_ORIGIN[1]);
 }
 
+/** Room above an entry for its date heading (K3), in page units. */
+export const HEADING_SPACE = 40;
+
 /**
  * An entry laid out at `top`: the picture, the student's marks (their own strokes), and the
- * tutor's ink in a group per explanation step.
+ * tutor's ink in a group per explanation step. With a `heading` ("Tue 25 Oct"), the picture goes
+ * a little lower, under it.
  */
-export function entryToPage(clip: ClipView, pageId: string, top: number, ids: Ids): ClipPage {
-  const page = laidOut(clip, pageId, [IMAGE_ORIGIN[0], top], ids);
+export function entryToPage(
+  clip: ClipView,
+  pageId: string,
+  top: number,
+  ids: Ids,
+  heading?: string,
+): ClipPage {
+  const y = heading ? top + HEADING_SPACE : top;
+  const page = laidOut(clip, pageId, [IMAGE_ORIGIN[0], y], ids);
   const entry = clip.entry;
   if (!entry) return page;
-  const place = placement(clip, [IMAGE_ORIGIN[0], top]);
+  const place = placement(clip, [IMAGE_ORIGIN[0], y]);
   const stepGroups = entry.turns.map((turn) => turn.steps.map(() => ids.newId()));
   const tutor = page.strokes.map((stroke, i) => {
     const [turn, step] = entry.strokeSteps[i] ?? [0, 0];
@@ -176,6 +196,7 @@ export function entryToPage(clip: ClipView, pageId: string, top: number, ids: Id
       ids.newId,
     ),
   );
+  const strokes = [...student, ...tutor];
   const image: ImageBlock = {
     ...page.image,
     entry: {
@@ -183,10 +204,45 @@ export function entryToPage(clip: ClipView, pageId: string, top: number, ids: Id
       turns: entry.turns,
       stepGroups,
       strokeCount: clip.strokes.length,
+      ...(heading && { heading }),
+      strokeIds: strokes.map((s) => s.id),
     },
   };
-  return { image, strokes: [...student, ...tutor] };
+  return { image, strokes };
 }
+
+/** The strokes of an entry already on a page (to move it whole): its own, or, for entries made
+ * before K3 kept them, its tutor ink by step group. */
+export function entryStrokeIds(image: ImageBlock, pageStrokes: readonly Stroke[]): string[] {
+  const entry = image.entry;
+  if (!entry) return [];
+  if (entry.strokeIds) return entry.strokeIds;
+  const groups = new Set(entry.stepGroups.flat());
+  return pageStrokes
+    .filter((s) => s.groupId !== undefined && groups.has(s.groupId))
+    .map((s) => s.id);
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Tue 25 Oct": the heading over a day's first entry on a "From screen" page. */
+export function dayHeading(at: Date): string {
+  return `${WEEKDAYS[at.getDay()]} ${at.getDate()} ${MONTHS[at.getMonth()]}`;
+}
+
+/**
+ * Whether the next entry on a page starts a new day there (decision 7: a date heading whenever
+ * the day changes): the first entry does, and so does one on another day than the last.
+ */
+export function startsNewDay(images: readonly ImageBlock[], now: Date): boolean {
+  const entries = images.filter((image) => image.entry);
+  const last = entries.reduce<ImageBlock | null>((a, b) => (!a || b.y > a.y ? b : a), null);
+  return !last || today(new Date(last.createdAt)) !== today(now);
+}
+
+/** How many entries a "From screen" page holds before the next one starts (decision 7). */
+export const ENTRIES_PER_PAGE = DESTINATION_LIMITS.entriesPerFromScreenPage;
 
 /**
  * A follow-up added to an entry already on the page: the new turns' tutor strokes (in their
@@ -224,7 +280,13 @@ export function entryFollowUps(
     strokes,
     image: {
       ...image,
-      entry: { ...known, turns: entry.turns, stepGroups, strokeCount: clip.strokes.length },
+      entry: {
+        ...known,
+        turns: entry.turns,
+        stepGroups,
+        strokeCount: clip.strokes.length,
+        ...(known.strokeIds && { strokeIds: [...known.strokeIds, ...strokes.map((s) => s.id)] }),
+      },
     },
   };
 }

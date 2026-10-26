@@ -9,7 +9,8 @@ import { ReviewQueue } from "@mew/shared";
  * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code;
  * - `screen_coach_spoken`: a line Screen Coach asked to be said has been said (Circle & Ask plays
  *   its steps to that timing).
- * The desktop app's Ctrl+Shift+M hotkey arrives as a `mew:summon` event.
+ * The desktop app's summon (holding Ctrl+Alt while Screen Coach is off) arrives as a
+ * `mew:summon` event.
  */
 
 type TauriGlobal = { core?: { invoke?: (cmd: string, args?: object) => Promise<unknown> } };

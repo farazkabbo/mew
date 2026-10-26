@@ -88,7 +88,7 @@ def test_a_device_saves_a_clip_and_its_owner_reads_it_back(client: TestClient) -
     assert clip["width"] == 1200 and clip["pixelRatio"] == 1.5
     assert clip["strokes"][0]["points"][1] == [20, 12, 0.5, 16]
     assert clip["source"]["url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=754"
-    assert clip["notebookPageId"] is None
+    assert clip.get("notebookPageId") is None  # left out while there is none
 
     image = client.get(f"/v1/clips/{clip_id}/image", headers=LOCAL)
     assert image.headers["content-type"] == "image/jpeg"
@@ -307,3 +307,80 @@ def test_reads_the_image_with_the_owners_token() -> None:
     assert lookup.url.params["user_id"] == "eq.user_1"
     assert download.url.path == f"/storage/v1/object/authenticated/clips/user_1/{clip_id}.jpg"
     assert download.headers["authorization"] == "Bearer jwt"
+
+
+# ─── Where it goes (K3) ──────────────────────────────────────────────────────────────────────
+
+NODE = "0f1e2d3c-4b5a-4968-8776-655443322110"
+OTHER = "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d"
+
+
+def move(client: TestClient, token: str, clip_id: str, destination: dict[str, Any]) -> int:
+    response: httpx.Response = client.post(
+        "/v1/clips/destination",
+        json={"clipId": clip_id, "destination": destination},
+        headers={**internal_headers(), "X-Mew-Device-Token": token},
+    )
+    return response.status_code
+
+
+def test_a_clip_keeps_where_the_student_said_and_can_move(client: TestClient) -> None:
+    token = link_device(client)
+    destination = {"nodeId": NODE, "page": {"kind": "from_screen"}}
+    clip_id = save(client, token, clip_body(destination=destination)).json()["clipId"]
+    assert client.get(f"/v1/clips/{clip_id}", headers=LOCAL).json()["destination"] == destination
+
+    # "Change": it moves (one clip, a new place), with a chapter to make first.
+    later = {"nodeId": OTHER, "page": {"kind": "number", "number": 3}, "create": {"title": "Ch 5"}}
+    assert move(client, token, clip_id, later) == 204
+    assert client.get(f"/v1/clips/{clip_id}", headers=LOCAL).json()["destination"] == later
+
+    # Only the device's own clips, and only real places.
+    assert move(client, token, str(uuid.uuid4()), destination) == 404
+    for bad in [
+        {"nodeId": "physics", "page": {"kind": "from_screen"}},
+        {"nodeId": NODE, "page": {"kind": "number", "number": 0}},
+        {"nodeId": NODE, "page": {"kind": "elsewhere"}},
+        {"nodeId": NODE, "page": {"kind": "new"}, "create": {"title": ""}},
+    ]:
+        assert move(client, token, clip_id, bad) == 422, bad
+        assert save(client, token, clip_body(destination=bad)).status_code == 422, bad
+    assert move(client, "mewdt_" + "x" * 43, clip_id, destination) == 401
+
+
+def test_a_clip_without_a_destination_or_title_reads_without_nulls(client: TestClient) -> None:
+    token = link_device(client)
+    body = clip_body()
+    body["source"] = {"app": "notepad.exe", "capturedAt": "2026-10-22T10:00:00Z"}
+    clip_id = save(client, token, body).json()["clipId"]
+    clip = client.get(f"/v1/clips/{clip_id}", headers=LOCAL).json()
+    # The web app's schemas take a missing field as absent and refuse a null one.
+    text = json.dumps(clip)
+    assert "null" not in text, text
+    assert "destination" not in clip and "title" not in clip["source"]
+
+
+def test_the_device_reads_its_owners_tree(client: TestClient) -> None:
+    token = link_device(client)
+    tree = {
+        "nodes": [
+            {
+                "id": NODE,
+                "parentId": None,
+                "title": "Physics",
+                "position": "a0",
+                "childLabel": "Chapters",
+                "icon": None,
+                "color": None,
+                "courseId": None,
+                "deletedAt": None,
+                "editedAt": 1,
+            }
+        ],
+        "removed": [],
+    }
+    assert client.put("/v1/notebooks/tree", json=tree, headers=LOCAL).status_code == 200
+    device = {**internal_headers(), "X-Mew-Device-Token": token}
+    nodes = client.get("/v1/notebooks/device-tree", headers=device).json()["nodes"]
+    assert [n["title"] for n in nodes] == ["Physics"]
+    assert client.get("/v1/notebooks/device-tree", headers=internal_headers()).status_code == 401

@@ -49,14 +49,40 @@ const APPEND = {
   conceptHints: [],
 };
 
-type Call = { path: string; headers: Headers };
+const PHYSICS = "33333333-3333-4333-8333-333333333333";
+const FORCES = "44444444-4444-4444-8444-444444444444";
+const node = (id: string, parentId: string | null, title: string, position: string) => ({
+  id,
+  parentId,
+  title,
+  position,
+  childLabel: "Chapters",
+  icon: null,
+  color: null,
+  courseId: null,
+  deletedAt: null,
+  editedAt: 1,
+});
+const TREE = {
+  nodes: [node(PHYSICS, null, "Physics", "a0"), node(FORCES, PHYSICS, "Chapter 2 · Forces", "a0")],
+};
 
-function api(verifyStatus = 200, appendStatus = 200): Call[] {
+type Call = { path: string; headers: Headers; body?: unknown };
+
+function api(verifyStatus = 200, appendStatus = 200, moveStatus = 204): Call[] {
   const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn((url: URL, init: RequestInit) => {
-      calls.push({ path: url.pathname, headers: new Headers(init.headers) });
+      calls.push({
+        path: url.pathname,
+        headers: new Headers(init.headers),
+        ...(typeof init.body === "string" && { body: JSON.parse(init.body) as unknown }),
+      });
+      if (url.pathname === "/v1/notebooks/device-tree") return Promise.resolve(Response.json(TREE));
+      if (url.pathname === "/v1/clips/destination") {
+        return Promise.resolve(new Response(null, { status: moveStatus }));
+      }
       if (url.pathname === "/v1/devices/verify") {
         return Promise.resolve(
           verifyStatus === 200
@@ -88,13 +114,18 @@ function request(url: string, body: unknown, token: string | null = TOKEN) {
   });
 }
 
+/** The questions the (mocked) model was asked. */
+let askedAbout: unknown[] = [];
+
 beforeEach(() => {
+  askedAbout = [];
   vi.resetModules();
   vi.stubEnv("INTERNAL_API_SECRET", "s".repeat(40));
   vi.stubEnv("GEMINI_API_KEY", "test-key");
   vi.doMock("@/server/circle-ask", () => ({
-    runCircleAsk: async function* () {
+    runCircleAsk: async function* (asked: { question: unknown }) {
       await Promise.resolve();
+      askedAbout.push(asked.question);
       yield STEP;
     },
     readQuestion: () =>
@@ -205,5 +236,93 @@ describe("POST /api/screen/entries/append", () => {
 
     const mismatched = { ...APPEND, strokeSteps: [0] };
     expect((await full.POST(request("/api/screen/entries/append", mismatched))).status).toBe(400);
+  });
+});
+
+describe("save where I say (K3)", () => {
+  it("takes the place out of the question and sends it first", async () => {
+    const calls = api();
+    const { POST } = await import("./screen/circle-ask/route");
+    const asked = {
+      ...ASK,
+      question: { source: "voice", text: "why is this negative? save it to physics chapter 2" },
+    };
+    const response = await POST(request("/api/screen/circle-ask", asked));
+    const [first, second] = (await response.text()).trim().split("\n");
+    expect(JSON.parse(first ?? "")).toMatchObject({
+      type: "destination",
+      phrase: "physics chapter 2",
+      resolution: {
+        kind: "resolved",
+        destination: { nodeId: FORCES, path: ["Physics", "Chapter 2 · Forces"] },
+      },
+    });
+    expect(JSON.parse(second ?? "")).toEqual(STEP);
+    // The model never sees where it's saved.
+    expect(askedAbout).toEqual([{ source: "voice", text: "why is this negative?" }]);
+    const tree = calls.find((c) => c.path === "/v1/notebooks/device-tree");
+    expect(tree?.headers.get("x-mew-device-token")).toBe(TOKEN);
+  });
+
+  it("resolves typed or said words, and lists the picker's places", async () => {
+    api();
+    const resolve = await import("./screen/destinations/resolve/route");
+    const resolved = await resolve.POST(
+      request("/api/screen/destinations/resolve", { phrase: "physics chapter 5" }),
+    );
+    expect(await resolved.json()).toEqual({
+      resolution: {
+        kind: "missing",
+        parentId: PHYSICS,
+        parentPath: ["Physics"],
+        title: "Chapter 5",
+        page: { kind: "from_screen" },
+      },
+    });
+    expect(
+      (await resolve.POST(request("/api/screen/destinations/resolve", { phrase: "" }))).status,
+    ).toBe(400);
+    expect(
+      (await resolve.POST(request("/api/screen/destinations/resolve", { phrase: "x" }, null)))
+        .status,
+    ).toBe(401);
+
+    const places = await import("./screen/destinations/route");
+    const listed = await places.POST(request("/api/screen/destinations", {}));
+    expect(await listed.json()).toEqual({
+      places: [
+        { nodeId: PHYSICS, path: ["Physics"] },
+        { nodeId: FORCES, path: ["Physics", "Chapter 2 · Forces"] },
+      ],
+    });
+  });
+
+  it("moves a saved moment (never copies it), for the device's own clips", async () => {
+    const calls = api();
+    const move = await import("./screen/entries/destination/route");
+    const body = {
+      clipId: CLIP_ID,
+      destination: {
+        nodeId: FORCES,
+        page: { kind: "from_screen" },
+        path: ["Physics", "Chapter 2"],
+      },
+    };
+    expect((await move.POST(request("/api/screen/entries/destination", body))).status).toBe(204);
+    const sent = calls.find((c) => c.path === "/v1/clips/destination");
+    expect(sent?.body).toEqual({ clipId: CLIP_ID, destination: body.destination });
+    expect(sent?.headers.get("x-mew-device-token")).toBe(TOKEN);
+
+    for (const bad of [
+      { ...body, clipId: "nope" },
+      { ...body, destination: { nodeId: FORCES, page: { kind: "somewhere" } } },
+    ]) {
+      expect((await move.POST(request("/api/screen/entries/destination", bad))).status).toBe(400);
+    }
+
+    vi.resetModules();
+    api(200, 200, 404);
+    const missing = await import("./screen/entries/destination/route");
+    expect((await missing.POST(request("/api/screen/entries/destination", body))).status).toBe(404);
   });
 });

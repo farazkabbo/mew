@@ -208,6 +208,12 @@ pub enum CircleEvent {
     Error {
         message: String,
     },
+    /// Where the student said to save this (K3), or the source's sticky place; checked by
+    /// `destination::parse_resolution`.
+    Destination {
+        phrase: Option<String>,
+        resolution: serde_json::Value,
+    },
 }
 
 /// Parses and checks one line of the stream; None for anything malformed or out of bounds.
@@ -242,6 +248,10 @@ pub fn parse_circle_event(line: &str) -> Option<CircleEvent> {
         }
         CircleEvent::Abort { speech } => within(speech, SPEECH_CHARS),
         CircleEvent::Error { message } => within(message, 300),
+        CircleEvent::Destination { phrase, resolution } => {
+            phrase.as_deref().is_none_or(|p| within(p, 160))
+                && super::destination::parse_resolution(resolution.clone()).is_some()
+        }
     };
     ok.then_some(event)
 }

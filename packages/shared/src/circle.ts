@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { DestinationResolution } from "./destinations";
 import {
   AppName,
   type ScreenBox,
@@ -177,6 +178,15 @@ export type CircleStep = z.infer<typeof CircleStep>;
 
 /** Newline-delimited JSON events streamed by `POST /api/screen/circle-ask`. */
 export const CircleStreamEvent = z.discriminatedUnion("type", [
+  /**
+   * Where the student said to save this (K3), taken out of the question before the model saw
+   * it, or the source's sticky place: first, so the card shows "Saving to: …" at once.
+   */
+  z.object({
+    type: z.literal("destination"),
+    phrase: z.string().max(160).nullable(),
+    resolution: DestinationResolution,
+  }),
   /** A step, as soon as it's complete and checked. */
   z.object({ type: z.literal("step"), step: CircleStep, latencyMs: z.number() }),
   /** Everything else, once the answer is complete. */

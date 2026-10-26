@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
+import { useShortcutKeys } from "../shortcuts/useShortcutKeys";
 import { HIGHLIGHTER_COLORS, INK_COLORS, PEN_WIDTHS, type PenSize, type Tool } from "./palette";
 import { useNotebookUi } from "./store";
 
@@ -28,11 +29,11 @@ type Props = {
   onExportLine(): void;
 };
 
-const TOOLS: { tool: Tool; label: string; shortcut: string; icon: LucideIcon }[] = [
-  { tool: "pen", label: "Pen", shortcut: "P", icon: Pen },
-  { tool: "highlighter", label: "Highlighter", shortcut: "H", icon: Highlighter },
-  { tool: "eraser", label: "Eraser", shortcut: "E", icon: Eraser },
-  { tool: "lasso", label: "Lasso select", shortcut: "L", icon: LassoSelect },
+const TOOLS: { tool: Tool; label: string; icon: LucideIcon }[] = [
+  { tool: "pen", label: "Pen", icon: Pen },
+  { tool: "highlighter", label: "Highlighter", icon: Highlighter },
+  { tool: "eraser", label: "Eraser", icon: Eraser },
+  { tool: "lasso", label: "Lasso select", icon: LassoSelect },
 ];
 
 export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: Props) {
@@ -50,6 +51,7 @@ export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: P
   const { setTool, setColor, setPenSize, toggleLines, toggleTutorInk } = useNotebookUi.getState();
   const colors = tool === "highlighter" ? HIGHLIGHTER_COLORS : INK_COLORS;
   const activeColor = tool === "highlighter" ? highlighterColor : inkColor;
+  const keys = useShortcutKeys();
 
   return (
     <div
@@ -57,11 +59,11 @@ export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: P
       aria-label="Drawing tools"
       className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-rule bg-paper-raised/95 p-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] backdrop-blur"
     >
-      {TOOLS.map(({ tool: t, label, shortcut, icon }) => (
+      {TOOLS.map(({ tool: t, label, icon }) => (
         <IconButton
           key={t}
           icon={icon}
-          label={`${label} (${shortcut})`}
+          label={`${label} (${keys.shown(t)})`}
           pressed={tool === t}
           onClick={() => setTool(t)}
         />
@@ -114,8 +116,18 @@ export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: P
       )}
 
       <Divider />
-      <IconButton icon={Undo2} label="Undo (Ctrl+Z)" disabled={!canUndo} onClick={onUndo} />
-      <IconButton icon={Redo2} label="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={onRedo} />
+      <IconButton
+        icon={Undo2}
+        label={`Undo (${keys.shown("undo")})`}
+        disabled={!canUndo}
+        onClick={onUndo}
+      />
+      <IconButton
+        icon={Redo2}
+        label={`Redo (${keys.shown("redo")})`}
+        disabled={!canRedo}
+        onClick={onRedo}
+      />
 
       <Divider />
       <IconButton icon={ZoomOut} label="Zoom out (−)" onClick={() => onZoom(1 / 1.25)} />

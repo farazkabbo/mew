@@ -39,6 +39,8 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
   const [draft, setDraft] = useState<Pick<Notebook, "title" | "icon" | "color"> | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
+  /** A page being moved to another node (K3: the picker, when it wasn't clear where). */
+  const [movingPageId, setMovingPageId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ id: string; title: string; body: string } | null>(
     null,
   );
@@ -118,6 +120,29 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
 
   const reorder = (id: string, step: -1 | 1) => run(repo.tree.reorder(id, step), () => undefined);
 
+  /** Moves a page to another node, says where, and offers Undo (K3). */
+  const movePage = (pageId: string, nodeId: string) =>
+    run(repo.movePage(pageId, nodeId), (result) => {
+      setMovingPageId(null);
+      if (!result) return;
+      openPage(result.page);
+      const where = tree
+        .path(nodeId)
+        .map((n) => n.title)
+        .join(" › ");
+      notify({
+        text: `Moved this page to ${where}.`,
+        tone: "info",
+        action: {
+          label: "Undo",
+          run: () =>
+            run(repo.movePage(pageId, result.from.notebookId, result.from.index), (back) => {
+              if (back) openPage(back.page);
+            }),
+        },
+      });
+    });
+
   const trash = (id: string) => {
     const title = tree.get(id)?.title ?? "it";
     run(repo.tree.trash(id), () =>
@@ -169,6 +194,8 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
     setRenamingId,
     movingId,
     setMovingId,
+    movingPageId,
+    setMovingPageId,
     deleting,
     setDeleting,
     trashOpen,
@@ -184,6 +211,7 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
     rename,
     move,
     reorder,
+    movePage,
     trash,
     requestDelete,
     restore,

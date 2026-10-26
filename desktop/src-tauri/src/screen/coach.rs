@@ -1,6 +1,6 @@
-//! Screen Coach's runtime on Windows: settings, hotkeys, the tray, and the capture worker.
+//! Screen Coach's runtime on Windows: settings, the hold gesture, the tray, and the capture worker.
 //!
-//! Captures start only here, from the hotkey and tray handlers (decision 2). No command a page
+//! Captures start only here, from the hold gesture and tray handlers (decision 2). No command a page
 //! can call starts a capture or returns screen pixels. What a capture does, step by step, is in
 //! `pipeline.rs`; asking about it is in `ask.rs`; connecting to the account in `account.rs`;
 //! ink on screen in `annotate.rs` and saving clips in `clip.rs` (S3); walkthroughs in
@@ -17,7 +17,7 @@ use tauri::image::Image;
 use tauri::ipc::CapabilityBuilder;
 use tauri::menu::{CheckMenuItem, MenuItem};
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{Shortcut, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
 
 use super::account::PendingLink;
@@ -26,11 +26,9 @@ use super::ask;
 use super::circle;
 use super::clip::{self, ClipDraft, Purpose};
 use super::coach_mode::{self, CoachCapture, CoachState};
-use super::config::{
-    self, CaptureScope, HotkeyError, Loaded, Privacy, ScreenConfig, CONSENT_VERSION,
-};
+use super::config::{self, CaptureScope, Loaded, Privacy, ScreenConfig, CONSENT_VERSION};
 use super::frame::{CapturedFrame, FrameMeta, FrameSlot, Timings, FRAME_TTL};
-use super::notes_check;
+use super::hold::HoldEvent;
 use super::page;
 use super::pipeline::{self, Captured, Request, ScreenError, Tools};
 use super::privacy::blocklist::DEFAULT_BLOCKED_APPS;
@@ -76,42 +74,15 @@ struct State {
     /// The settings file was unreadable and was reset (the settings page says so).
     config_reset: bool,
     status: Status,
+    /// The hold gesture is down (K2).
     talk_held: bool,
-    /// The page is listening for this hold of the talk hotkey (a capture started for it).
+    /// The page is listening for this hold.
     hold_active: bool,
+    /// The capture for the last hold was refused (and the student was told why): its words
+    /// aren't asked about.
+    hold_refused: bool,
     /// A device token is saved: Screen Coach can ask the server.
     connected: bool,
-    talk: HotkeyReport,
-    pause: HotkeyReport,
-    clip: HotkeyReport,
-    notes: HotkeyReport,
-    draw: HotkeyReport,
-}
-
-impl State {
-    /// Every hotkey's report, in `Hotkeys::all` order.
-    fn reports(&self) -> [&HotkeyReport; 5] {
-        [&self.talk, &self.pause, &self.clip, &self.notes, &self.draw]
-    }
-
-    fn reports_mut(&mut self) -> [&mut HotkeyReport; 5] {
-        [
-            &mut self.talk,
-            &mut self.pause,
-            &mut self.clip,
-            &mut self.notes,
-            &mut self.draw,
-        ]
-    }
-}
-
-#[derive(Debug, Clone, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HotkeyReport {
-    pub accelerator: String,
-    pub registered: bool,
-    /// Why it isn't registered, in words for the settings page.
-    pub problem: Option<String>,
 }
 
 /// What the settings page shows. Nothing here is screen content; the blocked list is the
@@ -126,11 +97,8 @@ pub struct StatusView {
     pub status: Status,
     pub consent_version: u32,
     pub settings_reset: bool,
-    pub talk: HotkeyReport,
-    pub pause: HotkeyReport,
-    pub clip: HotkeyReport,
-    pub notes: HotkeyReport,
-    pub draw: HotkeyReport,
+    /// "Shortcuts got simpler" is waiting to be read (K2: the old hotkeys were replaced).
+    pub shortcuts_notice: bool,
     pub privacy: Privacy,
     pub circle: config::CircleSettings,
     pub default_blocked_apps: &'static [&'static str],
@@ -139,25 +107,14 @@ pub struct StatusView {
     pub connected: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HotkeyKind {
-    Talk,
-    Pause,
-    Clip,
-    Notes,
-    Draw,
-}
-
-/// Who asked for a capture: the hold-to-talk hotkey (the page listens, then asks with the
-/// words), the tray (asked at once, without words), saving a clip (S3), the Notes Check hotkey
-/// (compared with the notes at once), or the progress pill's Done, Hint and Resume (S4).
+/// Who asked for a capture: the hold gesture without marks (the page listened; it asks with the
+/// words), the tray (asked at once, without words), saving a clip (S3), or the progress pill's
+/// Done, Hint and Resume (S4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Origin {
     Hotkey,
     Tray,
     Clip(Purpose),
-    NotesCheck,
     Coach(CoachCapture),
     /// Circle & Ask: the monitor under the first mark (S3.2 §3.2).
     Circle,
@@ -192,11 +149,7 @@ impl ScreenCoach {
             status: state.status,
             consent_version: CONSENT_VERSION,
             settings_reset: state.config_reset,
-            talk: state.talk.clone(),
-            pause: state.pause.clone(),
-            clip: state.clip.clone(),
-            notes: state.notes.clone(),
-            draw: state.draw.clone(),
+            shortcuts_notice: state.config.shortcuts_notice,
             privacy: state.config.privacy.clone(),
             circle: state.config.circle.clone(),
             default_blocked_apps: DEFAULT_BLOCKED_APPS,
@@ -293,21 +246,14 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     let loaded = config::load(&config_path);
     let config_reset = matches!(loaded, Loaded::Reset(_));
     let config = loaded.into_config();
-    let report = |accelerator: &str| HotkeyReport {
-        accelerator: accelerator.to_owned(),
-        ..Default::default()
-    };
+    let shortcuts_notice = config.shortcuts_notice && config.is_on();
     let state = State {
-        talk: report(&config.hotkeys.talk),
-        pause: report(&config.hotkeys.pause),
-        clip: report(&config.hotkeys.clip),
-        notes: report(&config.hotkeys.notes),
-        draw: report(&config.hotkeys.draw),
         config,
         config_reset,
         status: Status::Off,
         talk_held: false,
         hold_active: false,
+        hold_refused: false,
         connected: credential::is_saved(),
     };
     let coach = ScreenCoach {
@@ -331,9 +277,14 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     app.manage(coach);
     settings_capability(app)?;
     overlay_capabilities(app)?;
-    sync_hotkeys(app);
     refresh(app);
     circle::start_tracker(app);
+    if shortcuts_notice {
+        notify(
+            app,
+            "Shortcuts got simpler: hold Ctrl+Alt to circle and talk, and double-tap Ctrl+Alt              for draw mode. Screen Coach settings lists what changed.",
+        );
+    }
     Ok(())
 }
 
@@ -347,7 +298,7 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-status")
             .permission("allow-screen-coach-set-enabled")
             .permission("allow-screen-coach-set-paused")
-            .permission("allow-screen-coach-set-hotkey")
+            .permission("allow-screen-coach-shortcuts-seen")
             .permission("allow-screen-coach-set-privacy")
             .permission("allow-screen-coach-set-circle")
             .permission("allow-screen-coach-open-mic-settings")
@@ -435,143 +386,98 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// Registers the hotkeys Screen Coach needs right now (none while it's off).
-fn sync_hotkeys<R: Runtime>(app: &AppHandle<R>) {
-    let Some(coach) = app.try_state::<ScreenCoach>() else {
-        return;
-    };
-    let shortcuts = app.global_shortcut();
-    let mut guard = coach.lock();
-    let state = &mut *guard;
-    for report in state.reports_mut() {
-        if report.registered {
-            if let Ok(shortcut) = config::validate_hotkey(&report.accelerator) {
-                let _ = shortcuts.unregister(shortcut);
-            }
-            report.registered = false;
-        }
-        report.problem = None;
-    }
-    let accelerators = state.config.hotkeys.all().map(str::to_owned);
-    for (report, accelerator) in state.reports_mut().into_iter().zip(accelerators) {
-        report.accelerator = accelerator;
-    }
-    if coach.support.is_err() || !state.config.is_on() {
-        return;
-    }
-    for report in state.reports_mut() {
-        match config::validate_hotkey(&report.accelerator) {
-            Ok(shortcut) => match shortcuts.register(shortcut) {
-                Ok(()) => report.registered = true,
-                Err(_) => {
-                    report.problem = Some(format!(
-                        "Another app is already using {}. Choose a different shortcut.",
-                        report.accelerator
-                    ))
-                }
-            },
-            Err(error) => report.problem = Some(hotkey_problem(error).to_owned()),
-        }
-    }
-}
-
-fn hotkey_problem(error: HotkeyError) -> &'static str {
-    match error {
-        HotkeyError::Invalid => {
-            "That isn't a shortcut I understand. Try something like Ctrl+Alt+Space."
-        }
-        HotkeyError::NeedsModifier => {
-            "Shortcuts need Ctrl or Alt, so normal typing never triggers them."
-        }
-        HotkeyError::UsesWinKey => {
-            "Windows reserves shortcuts with the Windows key. Use Ctrl or Alt instead."
-        }
-        HotkeyError::ReservedBySystem => {
-            "Windows already uses that shortcut. Choose a different one."
-        }
-    }
-}
-
-/// Called for every global shortcut that isn't the summon hotkey.
+/// Called for every global shortcut: only Esc, registered while ink or a Circle & Ask session is
+/// on screen (K2: Screen Coach has no other global hotkeys; the hold gesture is polled).
 pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed: ShortcutState) {
-    let Some(coach) = app.try_state::<ScreenCoach>() else {
-        return;
-    };
     // Esc is only registered while ink is on screen.
-    if shortcut == &annotate::escape() {
+    if shortcut == &annotate::escape() && !circle::takes_escape(app) {
         if pressed == ShortcutState::Pressed {
             annotate::clear(app);
         }
         return;
     }
-    if circle::on_shortcut(app, shortcut, pressed) {
-        return; // Esc or a step control while Circle & Ask had it registered
-    }
-    let [is_talk, is_pause, is_clip, is_notes, is_draw] = {
-        let state = coach.lock();
-        state.reports().map(|report| {
-            report.registered
-                && config::validate_hotkey(&report.accelerator).is_ok_and(|s| &s == shortcut)
-        })
+    circle::on_shortcut(app, shortcut, pressed);
+}
+
+/// The hold gesture (K2, docs/NOTEBOOKS_K.md §11.1; read by `keys.rs`). Holding left Ctrl + left
+/// Alt draws and listens at the same time; on release, words said over marks ask about them,
+/// marks without words open the ask bar, and words without marks are asked about one capture of
+/// the screen, taken then. A double tap toggles draw mode. With Screen Coach off or paused, the
+/// hold summons Neb's own window instead (nothing on the screen is looked at).
+pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
+    let coach = app.try_state::<ScreenCoach>();
+    let Some(coach) = coach.filter(|coach| usable(coach)) else {
+        if event == HoldEvent::Started {
+            crate::summon(app);
+        }
+        return;
     };
-    if is_draw {
-        if pressed == ShortcutState::Pressed && usable(&coach) {
-            circle::toggle_draw_mode(app);
-        }
-        return;
-    }
-    if is_notes {
-        if pressed == ShortcutState::Pressed && usable(&coach) {
-            capture(app, Origin::NotesCheck, None);
-        }
-        return;
-    }
-    if is_clip {
-        if pressed == ShortcutState::Pressed && usable(&coach) {
-            clip::on_hotkey(app);
-        }
-        return;
-    }
-    match (is_talk, is_pause, pressed) {
-        (true, _, ShortcutState::Pressed) if circle::takes_words(app) => {
-            // The marks' capture is the one asked about: just listen (and stop any explanation).
+    match event {
+        HoldEvent::Started => {
+            circle::set_hold(app, true);
             let silent = circle_settings(app).silent;
-            circle::on_listen(app);
-            if !silent {
-                let mut state = coach.lock();
-                state.talk_held = true;
-                state.hold_active = true;
-                drop(state);
-                page::dispatch(app, page::LISTEN, serde_json::Value::Null);
+            let in_session = circle::takes_words(app);
+            if in_session {
+                circle::on_listen(app); // barge-in: the explanation stops
             }
-        }
-        (true, _, ShortcutState::Pressed) => {
-            coach.lock().talk_held = true;
-            if capture(app, Origin::Hotkey, None) {
-                coach.lock().hold_active = true;
-                page::dispatch(app, page::LISTEN, serde_json::Value::Null);
+            let mut state = coach.lock();
+            // Without a connection there is nothing to ask yet: drawing still works, and the
+            // release says how to connect.
+            if silent || !(state.connected || in_session) {
+                return;
             }
+            state.talk_held = true;
+            state.hold_active = true;
+            state.hold_refused = false;
+            state.status = Status::Listening;
+            drop(state);
+            circle::set_listening(app, true);
+            page::dispatch(app, page::LISTEN, serde_json::Value::Null);
+            refresh(app);
         }
-        (true, _, ShortcutState::Released) => {
+        HoldEvent::Ended | HoldEvent::Cancelled => {
+            circle::set_hold(app, false);
+            circle::set_listening(app, false);
             let mut state = coach.lock();
             state.talk_held = false;
             let was_listening = std::mem::take(&mut state.hold_active);
             if state.status == Status::Listening {
                 state.status = coach.resting_status(&state);
             }
+            let connected = state.connected;
             drop(state);
-            // The page finishes hearing the question and asks with it (`screen_coach_ask`).
-            if was_listening {
-                page::dispatch(app, page::RELEASE, serde_json::Value::Null);
+            let marked = circle::takes_words(app);
+            if event == HoldEvent::Cancelled {
+                if was_listening {
+                    page::dispatch(app, page::CANCEL, serde_json::Value::Null);
+                }
+                circle::words_cancelled(app);
+            } else if was_listening {
+                // Words without marks are about the screen as it is now: one capture, which
+                // the page's question waits for (`ask.rs`).
+                if !marked && !capture(app, Origin::Hotkey, None) {
+                    coach.lock().hold_refused = true;
+                    page::dispatch(app, page::CANCEL, serde_json::Value::Null);
+                } else {
+                    page::dispatch(app, page::RELEASE, serde_json::Value::Null);
+                }
+            } else if !connected && !marked && !circle_settings(app).silent {
+                notify(app, "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.");
             }
             refresh(app);
         }
-        (_, true, ShortcutState::Pressed) => toggle_pause(app),
-        _ => {}
+        HoldEvent::DoubleTap => circle::toggle_draw_mode(app),
     }
 }
 
-/// "Pause Screen Coach" from the tray or the pause hotkey.
+/// The capture for this hold's words was refused or failed (the student was told why): taken
+/// once, so the words aren't asked about without a picture.
+pub fn take_hold_refused<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<ScreenCoach>()
+        .is_some_and(|coach| std::mem::take(&mut coach.lock().hold_refused))
+}
+
+/// "Pause Screen Coach" from the tray, or said ("Neb, pause").
 pub fn toggle_pause<R: Runtime>(app: &AppHandle<R>) {
     let Some(coach) = app.try_state::<ScreenCoach>() else {
         return;
@@ -582,13 +488,21 @@ pub fn toggle_pause<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
+/// "Neb, pause" (said while holding the keys): Screen Coach pauses until resumed from the tray.
+pub fn pause<R: Runtime>(app: &AppHandle<R>) {
+    match set_paused(app, true) {
+        Ok(_) => notify(app, "Screen Coach is paused. Resume it from the tray icon."),
+        Err(_) => notify(app, "Couldn't save Screen Coach settings."),
+    }
+}
+
 /// "Look at my screen" from the tray.
 pub fn look_from_tray<R: Runtime>(app: &AppHandle<R>) {
     capture(app, Origin::Tray, None);
 }
 
 /// Captures the screen to clip from (S3): to re-place the earlier ink on, or to drag a region
-/// out of. Only from the clip hotkey, the pill or "save this" (decision 2).
+/// out of. Only from the pill or "save this" (decision 2).
 pub fn capture_for_clip<R: Runtime>(app: &AppHandle<R>, scope: CaptureScope, purpose: Purpose) {
     capture(app, Origin::Clip(purpose), Some(scope));
 }
@@ -641,7 +555,7 @@ pub fn take_coach_notice<R: Runtime>(app: &AppHandle<R>) -> bool {
     true
 }
 
-/// On, not paused, on a supported PC: the hotkeys may act.
+/// On, not paused, on a supported PC: the hold gesture may act.
 fn usable(coach: &ScreenCoach) -> bool {
     let state = coach.lock();
     coach.support.is_ok() && state.config.is_on() && !state.config.paused
@@ -668,7 +582,7 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
             return false;
         }
         state.status = Status::Looking;
-        // During a walkthrough the hotkey sees the monitor: menus and dialogs are often separate
+        // During a walkthrough the hold sees the monitor: menus and dialogs are often separate
         // windows (decision 6).
         let default_scope = if coach_mode::is_coaching(app) {
             CaptureScope::Monitor
@@ -723,7 +637,7 @@ pub fn privacy_of<R: Runtime>(app: &AppHandle<R>) -> Privacy {
 }
 
 /// Keeps the frame (and shows the indicator) or tells the user why there's none. A tray capture
-/// is asked about at once; a hotkey capture waits for the page to send the words.
+/// is asked about at once; a hold's capture waits for the page to send the words.
 fn finish_capture<R: Runtime>(
     app: &AppHandle<R>,
     origin: Origin,
@@ -734,7 +648,6 @@ fn finish_capture<R: Runtime>(
     };
     let mut kept = false;
     let mut for_clip = None;
-    let mut for_notes = None;
     let mut for_coach = None;
     let mut for_circle = None;
     let mut for_question = None;
@@ -749,7 +662,6 @@ fn finish_capture<R: Runtime>(
                 indicator::flash(monitor, dpi);
                 match origin {
                     Origin::Clip(purpose) => for_clip = Some((purpose, captured)),
-                    Origin::NotesCheck => for_notes = Some(captured),
                     Origin::Coach(kind) => for_coach = Some((kind, captured)),
                     Origin::Circle => for_circle = Some(captured),
                     Origin::Question(area) => for_question = Some((area, captured)),
@@ -769,9 +681,6 @@ fn finish_capture<R: Runtime>(
     if let Some((purpose, captured)) = for_clip {
         clip::on_captured(app, purpose, captured);
     }
-    if let Some(captured) = for_notes {
-        notes_check::start(app, captured, false);
-    }
     if let Some((kind, captured)) = for_coach {
         coach_mode::on_captured(app, kind, captured);
     }
@@ -784,7 +693,7 @@ fn finish_capture<R: Runtime>(
     match (origin, kept) {
         (Origin::Tray, true) => ask::ask_in_background(app, String::new()),
         (Origin::Hotkey, false) => {
-            coach.lock().hold_active = false;
+            coach.lock().hold_refused = true;
             page::dispatch(app, page::CANCEL, serde_json::Value::Null);
         }
         (Origin::Coach(_), false) => coach_mode::capture_failed(app),
@@ -995,7 +904,6 @@ pub fn screen_coach_set_enabled<R: Runtime>(
         coach_mode::end_quietly(app);
         circle::end_session(app);
     }
-    sync_hotkeys(app);
     refresh(app);
     circle::start_tracker(app);
     Ok(coach.view())
@@ -1010,68 +918,15 @@ pub fn screen_coach_set_paused<R: Runtime>(
     set_paused(window.app_handle(), paused)
 }
 
-/// Changes a hotkey. The new one must be valid and free; otherwise the old one stays.
+/// "Got it" on the settings page's "Shortcuts got simpler" card (K2): it isn't shown again.
 #[tauri::command]
-pub fn screen_coach_set_hotkey<R: Runtime>(
+pub fn screen_coach_shortcuts_seen<R: Runtime>(
     window: WebviewWindow<R>,
-    which: HotkeyKind,
-    accelerator: String,
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
     let coach = coach_of(app)?;
-    let accelerator: String = accelerator
-        .chars()
-        .filter(|c| !c.is_control())
-        .take(40)
-        .collect();
-    let shortcut =
-        config::validate_hotkey(&accelerator).map_err(|e| hotkey_problem(e).to_owned())?;
-    let normalised = shortcut.to_string();
-    {
-        let state = coach.lock();
-        let own = which as usize; // `HotkeyKind` lists them in `Hotkeys::all` order
-        let others = state
-            .config
-            .hotkeys
-            .all()
-            .into_iter()
-            .enumerate()
-            .filter(|(i, _)| *i != own)
-            .map(|(_, other)| other);
-        if others
-            .into_iter()
-            .any(|other| config::validate_hotkey(other).is_ok_and(|s| s == shortcut))
-        {
-            return Err("That shortcut is already used by another Screen Coach action.".to_owned());
-        }
-        if crate::is_summon_hotkey(&shortcut) {
-            return Err("That shortcut already summons Neb. Choose a different one.".to_owned());
-        }
-    }
-    // Check it's free before switching, so a taken shortcut never leaves the user with none.
-    let shortcuts = app.global_shortcut();
-    let already_ours = {
-        let state = coach.lock();
-        state.reports().iter().any(|report| {
-            report.registered
-                && config::validate_hotkey(&report.accelerator).is_ok_and(|s| s == shortcut)
-        })
-    };
-    if !already_ours {
-        shortcuts.register(shortcut).map_err(|_| {
-            format!("Another app is already using {accelerator}. Choose a different shortcut.")
-        })?;
-        let _ = shortcuts.unregister(shortcut);
-    }
-    coach.update(|config| match which {
-        HotkeyKind::Talk => config.hotkeys.talk = normalised,
-        HotkeyKind::Pause => config.hotkeys.pause = normalised,
-        HotkeyKind::Clip => config.hotkeys.clip = normalised,
-        HotkeyKind::Notes => config.hotkeys.notes = normalised,
-        HotkeyKind::Draw => config.hotkeys.draw = normalised,
-    })?;
-    sync_hotkeys(app);
+    coach.update(|config| config.shortcuts_notice = false)?;
     refresh(app);
     Ok(coach.view())
 }

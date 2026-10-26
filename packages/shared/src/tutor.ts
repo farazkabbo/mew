@@ -114,8 +114,11 @@ export const ClippedText = z.object({
 export type ClippedText = z.infer<typeof ClippedText>;
 
 export const TutorRequest = z.object({
-  /** Why the tutor is responding (the gate's label; never "ignore"). */
-  intent: MewLabel.exclude(["ignore"]),
+  /**
+   * Why the tutor is responding (the gate's label; never "ignore", and never the notebook's own
+   * commands: saving and organising are done in the notebook, K3).
+   */
+  intent: MewLabel.exclude(["ignore", "save_to_notebook", "notebook_command"]),
   lastUtterance: z.string().max(MEW_LIMITS.utteranceChars),
   recentTranscript: z.array(z.string().max(MEW_LIMITS.utteranceChars)).max(10),
   /** PNG (base64, no data: prefix) of the student's recent work, if any. */

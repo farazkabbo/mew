@@ -46,4 +46,7 @@ export const MEW_LABEL_NAMES: Record<MewLabel, string> = {
   give_hint: "Give a hint",
   complete_step: "Next step",
   draw_visual: "Draw",
+  save_to_notebook: "Save to notebook",
+  notebook_command: "Notebook command",
+  show_full_solution: "Full solution",
 };

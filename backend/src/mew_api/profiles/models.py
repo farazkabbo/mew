@@ -1,10 +1,37 @@
 """Settings payloads (mirrored by zod schemas in packages/shared/src/settings.ts)."""
 
-from typing import Annotated, Literal
+import re
+from typing import Annotated, Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 VoiceId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9]{8,64}$")]
+
+#: The notebook's rebindable shortcuts (K2; mirrors SHORTCUT_ACTIONS in shortcuts.ts).
+ShortcutAction = Literal[
+    "new_notebook",
+    "new_chapter",
+    "new_page",
+    "rename",
+    "jump",
+    "check_work",
+    "move_up",
+    "move_down",
+    "undo",
+    "redo",
+    "pen",
+    "eraser",
+    "highlighter",
+    "lasso",
+]
+#: Two keys at most: Ctrl or Alt with a key, or a key alone (the same rule as the database's).
+SHORTCUT_BINDING = (
+    r"^(?:(?:Ctrl|Alt)\+)?(?:[A-Z0-9]|F(?:[1-9]|1[0-2])|Arrow(?:Up|Down|Left|Right)|Enter|Space"
+    r"|Tab|Escape|Backspace|Delete|Insert|Home|End|PageUp|PageDown|Comma|Period|Slash|Semicolon"
+    r"|Quote|Minus|Equal|BracketLeft|BracketRight|Backslash|Backquote)$"
+)
+ShortcutBinding = Annotated[str, StringConstraints(pattern=SHORTCUT_BINDING)]
+_ACTIONS = set(get_args(ShortcutAction))
 
 
 class UserSettings(BaseModel):
@@ -24,6 +51,24 @@ class UserSettings(BaseModel):
     #: Notes Check keeps a searchable copy of the notes' text (S3.5). On unless turned off.
     notes_index: bool = True
     onboarded: bool = False
+    #: The student's own shortcuts (K2): only the actions they changed.
+    shortcuts: dict[str, str] = Field(default_factory=dict)
+    #: The one-time "Shortcuts got simpler" card was read (K2).
+    shortcuts_notice_seen: bool = False
+
+    @field_validator("shortcuts", mode="before")
+    @classmethod
+    def _known_shortcuts(cls, value: Any) -> dict[str, str]:
+        """Keeps the bindings this version understands (another version may know more)."""
+        if not isinstance(value, dict):
+            return {}
+        return {
+            action: binding
+            for action, binding in value.items()
+            if action in _ACTIONS
+            and isinstance(binding, str)
+            and re.fullmatch(SHORTCUT_BINDING, binding)
+        }
 
 
 class SettingsPatch(BaseModel):
@@ -40,3 +85,5 @@ class SettingsPatch(BaseModel):
     mew_logging_opt_in: bool | None = None
     notes_index: bool | None = None
     onboarded: bool | None = None
+    shortcuts: Annotated[dict[ShortcutAction, ShortcutBinding], Field(max_length=14)] | None = None
+    shortcuts_notice_seen: bool | None = None

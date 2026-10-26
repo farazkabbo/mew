@@ -54,7 +54,7 @@ pub enum Surface {
 pub const PILL_SIZE: (f64, f64) = (300.0, 52.0);
 /// Size of the Circle & Ask card, in CSS pixels (room for a caption and its buttons, targets of
 /// at least 44 px: brief §4).
-pub const CARD_SIZE: (f64, f64) = (440.0, 176.0);
+pub const CARD_SIZE: (f64, f64) = (440.0, 236.0);
 
 impl Surface {
     pub const fn label(self) -> &'static str {

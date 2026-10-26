@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
+import { ShortcutsSection } from "../shortcuts/ShortcutsSection";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
 import { Section, Toggle } from "./controls";
 import { DevicesSection } from "./DevicesSection";
@@ -13,7 +14,10 @@ import { LatencyTable } from "./LatencyTable";
 import { PrivacySection } from "./PrivacySection";
 import { useSettings } from "./store";
 
-/** The settings screen (brief §12): listening, Mew, the tutor, voice, privacy, performance. */
+/**
+ * The settings screen (brief §12): listening, Mew, the tutor, voice, shortcuts (K2), privacy,
+ * performance.
+ */
 export function SettingsApp() {
   const { settings, loaded, localOnly, error, voices, update } = useSettings();
 
@@ -130,6 +134,8 @@ export function SettingsApp() {
             />
           )}
         </Section>
+
+        <ShortcutsSection />
 
         <PrivacySection />
 

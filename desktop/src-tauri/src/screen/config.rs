@@ -9,7 +9,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
 
 use super::pointer::{Corner, PointerShow, PointerSize};
 use super::privacy::blocklist::{self, default_blocked_apps};
@@ -25,62 +24,7 @@ use super::privacy::detect::RedactionRules;
 ///    saved to the notebook automatically after a few seconds (with Undo).
 pub const CONSENT_VERSION: u32 = 4;
 
-pub const DEFAULT_TALK_HOTKEY: &str = "Ctrl+Alt+Space";
-pub const DEFAULT_PAUSE_HOTKEY: &str = "Ctrl+Alt+P";
-pub const DEFAULT_CLIP_HOTKEY: &str = "Ctrl+Alt+C";
-pub const DEFAULT_NOTES_HOTKEY: &str = "Ctrl+Alt+N";
-pub const DEFAULT_DRAW_HOTKEY: &str = "Ctrl+Alt+D";
-
 const FILE_NAME: &str = "screen-coach.json";
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct Hotkeys {
-    /// Hold to ask about the screen.
-    pub talk: String,
-    /// Pause or resume Screen Coach.
-    pub pause: String,
-    /// Save to the notebook (S3; files written before it existed get the default).
-    #[serde(default = "default_clip_hotkey")]
-    pub clip: String,
-    /// Check my notes (Notes Check; files written before it existed get the default).
-    #[serde(default = "default_notes_hotkey")]
-    pub notes: String,
-    /// Draw mode on or off (Circle & Ask, for pen and touch; holding left Ctrl + left Alt draws
-    /// too). Files written before it existed get the default.
-    #[serde(default = "default_draw_hotkey")]
-    pub draw: String,
-}
-
-fn default_clip_hotkey() -> String {
-    DEFAULT_CLIP_HOTKEY.to_owned()
-}
-
-fn default_notes_hotkey() -> String {
-    DEFAULT_NOTES_HOTKEY.to_owned()
-}
-
-fn default_draw_hotkey() -> String {
-    DEFAULT_DRAW_HOTKEY.to_owned()
-}
-
-impl Default for Hotkeys {
-    fn default() -> Self {
-        Self {
-            talk: DEFAULT_TALK_HOTKEY.to_owned(),
-            pause: DEFAULT_PAUSE_HOTKEY.to_owned(),
-            clip: default_clip_hotkey(),
-            notes: default_notes_hotkey(),
-            draw: default_draw_hotkey(),
-        }
-    }
-}
-
-impl Hotkeys {
-    pub fn all(&self) -> [&str; 5] {
-        [&self.talk, &self.pause, &self.clip, &self.notes, &self.draw]
-    }
-}
 
 /// When an explanation is saved to the notebook (decision 11).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -165,8 +109,7 @@ impl Privacy {
     }
 }
 
-/// The default is everything off: not enabled, no consent, not paused, default hotkeys and
-/// default privacy settings.
+/// The default is everything off: not enabled, no consent, not paused, default privacy settings.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ScreenConfig {
@@ -174,9 +117,15 @@ pub struct ScreenConfig {
     pub enabled: bool,
     /// The version of the explanation the user agreed to when turning it on (0: never).
     pub consent_version: u32,
-    /// Paused from the tray or the pause hotkey (survives restarts: a pause is a promise).
+    /// Paused from the tray or by voice (survives restarts: a pause is a promise).
     pub paused: bool,
-    pub hotkeys: Hotkeys,
+    /// The three-key hotkeys of S0–S3.2, only ever read from older files: K2 replaced them with
+    /// the hold gesture (docs/NOTEBOOKS_K.md §11.1). Never written back.
+    #[serde(default, skip_serializing)]
+    hotkeys: Option<serde_json::Value>,
+    /// "Shortcuts got simpler" is waiting to be read (an older file with hotkeys was loaded).
+    #[serde(default)]
+    pub shortcuts_notice: bool,
     #[serde(default)]
     pub privacy: Privacy,
     /// The one-time notice that coach mode sees the whole monitor was shown (decision 6, S4).
@@ -216,20 +165,13 @@ pub fn path_in(dir: &Path) -> PathBuf {
 }
 
 pub fn parse(text: &str) -> Loaded {
-    let Ok(config) = serde_json::from_str::<ScreenConfig>(text) else {
+    let Ok(mut config) = serde_json::from_str::<ScreenConfig>(text) else {
         return Loaded::Reset(ScreenConfig::default());
     };
-    let hotkeys = config.hotkeys.all();
-    let shortcuts: Vec<_> = hotkeys
-        .iter()
-        .filter_map(|text| validate_hotkey(text).ok())
-        .collect();
-    // All valid, and no two the same.
-    let hotkeys_ok = shortcuts.len() == hotkeys.len()
-        && shortcuts
-            .iter()
-            .enumerate()
-            .all(|(i, a)| shortcuts[i + 1..].iter().all(|b| a != b));
+    // Old hotkeys are moved to the new gesture once, whatever they were (K2 §11.4).
+    if config.hotkeys.take().is_some() {
+        config.shortcuts_notice = true;
+    }
     // A blocked list that only loads after "cleaning" was edited by hand: start over from the
     // defaults rather than guess what was meant.
     let privacy_ok = config
@@ -237,7 +179,7 @@ pub fn parse(text: &str) -> Loaded {
         .clone()
         .normalized()
         .is_ok_and(|privacy| privacy == config.privacy);
-    if hotkeys_ok && privacy_ok {
+    if privacy_ok {
         Loaded::Read(config)
     } else {
         Loaded::Reset(ScreenConfig::default())
@@ -266,55 +208,6 @@ pub fn save(path: &Path, config: &ScreenConfig) -> io::Result<()> {
     fs::rename(&temp, path)
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum HotkeyError {
-    /// Not a key combination we understand.
-    Invalid,
-    /// Needs Ctrl or Alt, so ordinary typing never triggers it.
-    NeedsModifier,
-    /// Windows reserves Win-key combinations.
-    UsesWinKey,
-    /// Belongs to Windows (Alt+Space opens the window menu, Alt+Tab, Alt+F4, …).
-    ReservedBySystem,
-}
-
-/// Parses and checks a hotkey the user (or the settings file) chose.
-pub fn validate_hotkey(text: &str) -> Result<Shortcut, HotkeyError> {
-    let shortcut: Shortcut = text.trim().parse().map_err(|_| HotkeyError::Invalid)?;
-    let mods = shortcut.mods;
-    if mods.contains(Modifiers::SUPER) || matches!(shortcut.key, Code::MetaLeft | Code::MetaRight) {
-        return Err(HotkeyError::UsesWinKey);
-    }
-    if !mods.intersects(Modifiers::CONTROL | Modifiers::ALT) {
-        return Err(HotkeyError::NeedsModifier);
-    }
-    let only_alt =
-        mods.contains(Modifiers::ALT) && !mods.intersects(Modifiers::CONTROL | Modifiers::SHIFT);
-    let only_ctrl =
-        mods.contains(Modifiers::CONTROL) && !mods.intersects(Modifiers::ALT | Modifiers::SHIFT);
-    let ctrl_alt = mods.contains(Modifiers::CONTROL | Modifiers::ALT);
-    let reserved = (only_alt
-        && matches!(
-            shortcut.key,
-            Code::Space | Code::Tab | Code::F4 | Code::Escape
-        ))
-        || (only_ctrl && matches!(shortcut.key, Code::Escape))
-        || (ctrl_alt && matches!(shortcut.key, Code::Delete | Code::Backspace))
-        || matches!(
-            shortcut.key,
-            Code::ControlLeft
-                | Code::ControlRight
-                | Code::AltLeft
-                | Code::AltRight
-                | Code::ShiftLeft
-                | Code::ShiftRight
-        );
-    if reserved {
-        return Err(HotkeyError::ReservedBySystem);
-    }
-    Ok(shortcut)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -332,19 +225,27 @@ mod tests {
     }
 
     #[test]
-    fn a_damaged_or_unexpected_file_turns_everything_off() {
-        // A file written by S0 (before privacy settings and the clip and notes hotkeys existed)
-        // loads with the defaults.
+    fn older_files_load_and_their_hotkeys_become_the_new_gesture() {
+        // A file written by S0 (before privacy settings, with the old three-key hotkeys) loads
+        // with the defaults; its hotkeys go, and "Shortcuts got simpler" waits to be read.
         let on = r#"{"enabled":true,"consentVersion":4,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
-        assert!(matches!(
-            parse(on),
-            Loaded::Read(c) if c.is_on()
-                && c.privacy == Privacy::default()
-                && c.hotkeys.clip == DEFAULT_CLIP_HOTKEY
-                && c.hotkeys.notes == DEFAULT_NOTES_HOTKEY
-                && c.hotkeys.draw == DEFAULT_DRAW_HOTKEY
-                && c.circle == CircleSettings::default()
-        ));
+        let Loaded::Read(config) = parse(on) else {
+            panic!("an S0 file should load");
+        };
+        assert!(config.is_on());
+        assert!(config.shortcuts_notice);
+        assert_eq!(config.privacy, Privacy::default());
+        assert_eq!(config.circle, CircleSettings::default());
+        // Saved again, the old hotkeys are gone for good (and the notice is still pending).
+        let saved = serde_json::to_string(&config).unwrap();
+        assert!(!saved.contains("hotkeys"), "{saved}");
+        assert!(matches!(parse(&saved), Loaded::Read(c) if c.shortcuts_notice));
+        // Even hotkeys the old version would have refused are just dropped.
+        let odd = on.replace("Ctrl+Alt+P", "Alt+Space");
+        assert!(matches!(parse(&odd), Loaded::Read(c) if c.is_on() && c.shortcuts_notice));
+        // A new file (no hotkeys) has no notice.
+        let fresh = r#"{"enabled":true,"consentVersion":4,"paused":false}"#;
+        assert!(matches!(parse(fresh), Loaded::Read(c) if c.is_on() && !c.shortcuts_notice));
         // Consent given before S3 explained clips, before Notes Check explained sending the
         // screen's text, or before Circle & Ask explained the pointer and saving, no longer turns
         // Screen Coach on.
@@ -358,27 +259,21 @@ mod tests {
                 "{older}"
             );
         }
-        // The notes hotkey can't share a shortcut with another action either.
-        let clash = on.replace(
-            r#""pause":"Ctrl+Alt+P""#,
-            r#""pause":"Ctrl+Alt+P","notes":"Ctrl+Alt+P""#,
-        );
-        assert!(matches!(parse(&clash), Loaded::Reset(_)));
+    }
+
+    #[test]
+    fn a_damaged_or_unexpected_file_turns_everything_off() {
         for bad in [
-            // Two actions on one shortcut.
-            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P","clip":"Ctrl+Alt+P"}}"#,
             // A hand-edited blocked list with a path in it.
-            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"},"privacy":{"blockedApps":["C:\\x.exe"]}}"#,
+            r#"{"enabled":true,"consentVersion":4,"paused":false,"privacy":{"blockedApps":["C:\x.exe"]}}"#,
             // A privacy setting we don't know.
-            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"},"privacy":{"sendEverything":true}}"#,
+            r#"{"enabled":true,"consentVersion":4,"paused":false,"privacy":{"sendEverything":true}}"#,
             "",
             "{",
             "null",
             r#"{"enabled":true}"#,
             // Unknown fields are refused, not ignored.
-            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"},"blockedApps":[]}"#,
-            // A hotkey that fails validation.
-            r#"{"enabled":true,"consentVersion":1,"paused":false,"hotkeys":{"talk":"Alt+Space","pause":"Ctrl+Alt+P"}}"#,
+            r#"{"enabled":true,"consentVersion":4,"paused":false,"blockedApps":[]}"#,
         ] {
             let loaded = parse(bad);
             assert!(
@@ -398,7 +293,8 @@ mod tests {
             enabled: true,
             consent_version: CONSENT_VERSION,
             paused: true,
-            hotkeys: Hotkeys::default(),
+            hotkeys: None,
+            shortcuts_notice: true,
             privacy: Privacy {
                 ask_scope: CaptureScope::Monitor,
                 ..Privacy::default()
@@ -414,52 +310,5 @@ mod tests {
         assert_eq!(load(&path), Loaded::Read(config));
         assert!(!path.with_extension("json.tmp").exists());
         fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn accepts_sensible_hotkeys() {
-        for ok in [
-            "Ctrl+Alt+Space",
-            "ctrl+alt+space",
-            "Ctrl+Alt+C",
-            "Ctrl+Shift+M",
-            "Alt+Shift+S",
-            "Ctrl+F9",
-        ] {
-            assert!(validate_hotkey(ok).is_ok(), "{ok}");
-        }
-    }
-
-    #[test]
-    fn refuses_system_and_unsafe_hotkeys() {
-        assert_eq!(
-            validate_hotkey("Alt+Space"),
-            Err(HotkeyError::ReservedBySystem)
-        );
-        assert_eq!(
-            validate_hotkey("Alt+Tab"),
-            Err(HotkeyError::ReservedBySystem)
-        );
-        assert_eq!(
-            validate_hotkey("Alt+F4"),
-            Err(HotkeyError::ReservedBySystem)
-        );
-        assert_eq!(
-            validate_hotkey("Ctrl+Alt+Delete"),
-            Err(HotkeyError::ReservedBySystem)
-        );
-        assert_eq!(
-            validate_hotkey("Ctrl+Escape"),
-            Err(HotkeyError::ReservedBySystem)
-        );
-        assert_eq!(validate_hotkey("Super+Space"), Err(HotkeyError::UsesWinKey));
-        assert_eq!(
-            validate_hotkey("Ctrl+Super+S"),
-            Err(HotkeyError::UsesWinKey)
-        );
-        assert_eq!(validate_hotkey("Space"), Err(HotkeyError::NeedsModifier));
-        assert_eq!(validate_hotkey("Shift+A"), Err(HotkeyError::NeedsModifier));
-        assert_eq!(validate_hotkey("Ctrl+Nope"), Err(HotkeyError::Invalid));
-        assert_eq!(validate_hotkey(""), Err(HotkeyError::Invalid));
     }
 }

@@ -120,7 +120,7 @@ window.addEventListener("keydown", (event) => {
     const block = blocks[highlighted];
     if (block) {
       markRect(block);
-      announce("Marked. Tab to another, or Ctrl+Alt+D to ask.");
+      announce("Marked. Tab to another, or double-tap Ctrl+Alt to ask.");
     }
   } else if (event.shiftKey && event.key.startsWith("Arrow")) {
     event.preventDefault();
@@ -139,7 +139,7 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     markRect(keyBox);
     keyBox = null;
-    announce("Marked. Ctrl+Alt+D to ask.");
+    announce("Marked. Double-tap Ctrl+Alt to ask.");
   }
   paint();
 });

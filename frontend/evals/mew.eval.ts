@@ -22,6 +22,8 @@ type Case = {
   signals?: Partial<MewInput["notebookSignals"]>;
   expect?: MewLabel;
   expectAnyOf?: MewLabel[];
+  /** The place the gate should copy out (K3), compared loosely (case and spaces). */
+  destinationPhrase?: string;
   acceptance?: boolean;
 };
 
@@ -60,7 +62,11 @@ for (const c of cases) {
   });
   const decision = await classifyMew(input);
   const allowed = c.expectAnyOf ?? (c.expect ? [c.expect] : []);
-  const ok = allowed.includes(decision.output.label);
+  const loose = (text: string | undefined) => text?.toLowerCase().replace(/\s+/g, " ").trim();
+  const phraseOk =
+    c.destinationPhrase === undefined ||
+    loose(decision.output.destinationPhrase) === loose(c.destinationPhrase);
+  const ok = allowed.includes(decision.output.label) && phraseOk;
   if (ok) correct++;
   if (!ok && c.acceptance) acceptanceFailures++;
   if (decision.source === "model") latencies.push(decision.latencyMs);

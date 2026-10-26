@@ -107,7 +107,7 @@ export function LinkDevice() {
         )}
         {step.kind === "connecting" && <p className="text-ink-muted">Connecting…</p>}
         {step.kind === "connected" && (
-          <p>Connected. Hold Ctrl+Alt+Space in any app and ask about your screen.</p>
+          <p>Connected. Hold Ctrl+Alt in any app and ask about your screen.</p>
         )}
         {step.kind === "failed" && (
           <p role="alert" className="text-error">

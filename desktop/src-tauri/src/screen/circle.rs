@@ -3,16 +3,16 @@
 //!
 //! This module holds a **session** (one set of marks, its capture, its questions) and everything
 //! up to asking:
-//! 1. A tracker thread (`run_tracker`) follows the cursor with the pointer and watches the two
-//!    drawing keys (polling, no hooks: decision 11). Holding left Ctrl + left Alt, or Ctrl+Alt+D,
+//! 1. A tracker thread (`run_tracker`) follows the cursor with the pointer. The hold gesture
+//!    (left Ctrl + left Alt held, polled by `keys.rs`: decision 11, K2) or a double tap of them
 //!    turns draw mode on: the draw overlay takes the mouse, pen and touch.
 //! 2. The first mark starts a session: the privacy checks run as drawing begins; when the mark is
 //!    finished, the monitor under it is captured once (the usual pipeline: blocked windows
 //!    blacked out, redaction) and watched, so the marks fade if the content moves.
 //! 3. Each mark is understood on the device (`marks.rs`) against the capture's text, and the ask
 //!    bar (the card) appears beside the first one.
-//! 4. The question (typed, said over the hotkey, read from the screen, or Enter) is sent with the
-//!    marks by `circle_answer.rs`, which plays the explanation and saves it.
+//! 4. The question (typed, said while holding the keys, read from the screen, or Enter) is sent
+//!    with the marks by `circle_answer.rs`, which plays the explanation and saves it.
 //!
 //! Locks are never held across calls into a window (they may wait for the main thread).
 
@@ -22,11 +22,12 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 
 use super::circle_answer::{self, Answer};
 use super::circle_protocol::{clean_question, Question};
 use super::coach::{self, ScreenCoach};
+use super::destination::save_to_phrase;
 use super::drag::{Drag, DragLook};
 use super::frame::ScreenRect;
 use super::marks::{self, MarkKind, Pt, WordBox, MAX_MARKS};
@@ -104,6 +105,17 @@ pub(super) struct Session {
     pub entry: Option<circle_answer::SavedEntry>,
     /// A question asked before the capture was ready (Enter right after the first mark).
     pub pending: Option<Question>,
+    /// Where this session's entry goes (K3): what the student said, the source's sticky place, or
+    /// what they picked on the card. None: the notebook open in Neb.
+    pub place: Option<super::destination::Place>,
+    /// What the card offers to choose (K3): close candidates, a chapter to make, or the picker.
+    pub place_offer: Option<circle_answer::PlaceOffer>,
+    /// "Save this to …" with no explanation: the marks are saved once the place is chosen.
+    pub save_only_pending: bool,
+    /// The explanation was paused for the hold's words (K3: "save it to …" isn't barge-in).
+    pub paused_for_words: bool,
+    /// The card's last view (besides the picker), to go back to.
+    pub last_view: Option<serde_json::Value>,
 }
 
 impl Session {
@@ -114,7 +126,11 @@ impl Session {
 
 #[derive(Default)]
 pub struct CircleState {
-    /// Ctrl+Alt+D turned draw mode on (pen and touch).
+    /// The hold gesture is down (K2).
+    hold: bool,
+    /// The hold is listening (voice on): the pointer says so.
+    listening: bool,
+    /// A double tap turned draw mode on (pen and touch).
     draw_toggle: bool,
     /// Keyboard drawing (silent mode): the window that had the focus, to give it back.
     keyboard: Option<isize>,
@@ -132,8 +148,7 @@ pub struct CircleState {
     tracker_running: bool,
 }
 
-/// Esc and the step controls are global hotkeys only while a session needs them (they'd take
-/// those keys from every app otherwise).
+/// Esc is a global hotkey only while a session needs it (it'd take Esc from every app otherwise).
 static KEYS_ON: AtomicBool = AtomicBool::new(false);
 
 pub(super) fn state<R: Runtime>(
@@ -187,10 +202,9 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
 
     while coach::is_usable(app) {
         let now = Instant::now();
-        let held = input::draw_keys_held();
         let drawing = state(app).map(|mut s| {
             // A stroke keeps draw mode on until it ends (the keys often come up first).
-            let drawing = held || s.draw_toggle || s.drag.active();
+            let drawing = s.hold || s.draw_toggle || s.drag.active();
             let changed = drawing != s.drawing;
             s.drawing = drawing;
             (drawing, changed)
@@ -256,6 +270,8 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
     end_session(app);
     if let Some(mut state) = state(app) {
         state.tracker_running = false;
+        state.hold = false;
+        state.listening = false;
         state.drawing = false;
         state.draw_toggle = false;
         state.keyboard = None;
@@ -365,6 +381,7 @@ fn update_look<R: Runtime>(app: &AppHandle<R>, drawing: bool) {
             _ if drawing && state.session.as_ref().is_some_and(|s| s.refused.is_some()) => {
                 PointerLook::Blocked
             }
+            _ if state.listening => PointerLook::Listening,
             _ if drawing => PointerLook::Drawing,
             Some(session) => match session.stage {
                 Stage::Answering => circle_answer::look(session),
@@ -388,8 +405,26 @@ fn update_look<R: Runtime>(app: &AppHandle<R>, drawing: bool) {
 
 // ─── Draw mode ───────────────────────────────────────────────────────────────────────────────
 
-/// Ctrl+Alt+D: draw mode on or off (for pen and touch, which can't hold keys). In silent mode
-/// it also draws with the keyboard (§4): the draw overlay takes the keyboard while it's on.
+/// The hold gesture went down or up (K2): draw mode follows it (the tracker reads this).
+pub fn set_hold<R: Runtime>(app: &AppHandle<R>, held: bool) {
+    if held {
+        start_tracker(app);
+    }
+    if let Some(mut state) = state(app) {
+        state.hold = held;
+    }
+}
+
+/// The hold is listening for words (the pointer shows "listening").
+pub fn set_listening<R: Runtime>(app: &AppHandle<R>, listening: bool) {
+    if let Some(mut state) = state(app) {
+        state.listening = listening;
+    }
+}
+
+/// A double tap of Ctrl+Alt (K2; it was Ctrl+Alt+D): draw mode on or off, for pen and touch,
+/// which can't hold keys. In silent mode it also draws with the keyboard (§4): the draw overlay
+/// takes the keyboard while it's on.
 pub fn toggle_draw_mode<R: Runtime>(app: &AppHandle<R>) {
     start_tracker(app);
     let keyboard = coach::circle_settings(app).silent;
@@ -549,6 +584,11 @@ fn begin_session_if_needed<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindo
             history: Vec::new(),
             entry: None,
             pending: None,
+            place: None,
+            place_offer: None,
+            save_only_pending: false,
+            paused_for_words: false,
+            last_view: None,
         });
     }
     overlay::place(window, monitor);
@@ -861,65 +901,61 @@ fn expire_session<R: Runtime>(app: &AppHandle<R>, now: Instant) {
     }
 }
 
-/// True while a session is going on (it takes Esc, and the words said over the hotkey).
+/// True while a session is going on (it takes Esc, and the words said while holding the keys).
 pub fn in_session<R: Runtime>(app: &AppHandle<R>) -> bool {
     state(app).is_some_and(|s| s.session.as_ref().is_some_and(|s| !s.marks.is_empty()))
 }
 
-// ─── Keys while a session needs them ─────────────────────────────────────────────────────────
+// ─── Esc while a session needs it ────────────────────────────────────────────────────────────
 
 fn escape() -> Shortcut {
     Shortcut::new(None, Code::Escape)
 }
 
-/// Ctrl+Alt+. (next step) and Ctrl+Alt+, (repeat it): decision 11.
-fn next_key() -> Shortcut {
-    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Period)
-}
-
-fn repeat_key() -> Shortcut {
-    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Comma)
-}
-
-/// Registers or unregisters Esc and the step controls. Never call with a lock held.
+/// Registers or unregisters Esc. Never call with a lock held. (The step controls are the card's
+/// keys now, → and ←: K2 keeps every shortcut to two keys.)
 pub(super) fn set_keys<R: Runtime>(app: &AppHandle<R>, on: bool) {
     if KEYS_ON.swap(on, Ordering::SeqCst) == on {
         return;
     }
     let shortcuts = app.global_shortcut();
-    for key in [escape(), next_key(), repeat_key()] {
-        // Another app may own one already: the card's buttons still work.
-        let _ = if on {
-            shortcuts.register(key)
-        } else {
-            shortcuts.unregister(key)
-        };
-    }
+    // The ink overlay may hold Esc too (the same shortcut): only the first registration counts,
+    // and Esc goes to whoever needs it (`takes_escape`).
+    let _ = if on {
+        shortcuts.register(escape())
+    } else if !super::annotate::escape_on() {
+        shortcuts.unregister(escape())
+    } else {
+        Ok(())
+    };
 }
 
-/// A global shortcut Circle & Ask registered. True if it was one of ours.
+/// Esc is registered for Circle & Ask.
+pub(super) fn keys_on() -> bool {
+    KEYS_ON.load(Ordering::SeqCst)
+}
+
+/// Esc belongs to Circle & Ask while it has a session (before the ink overlay's own Esc).
+pub fn takes_escape<R: Runtime>(app: &AppHandle<R>) -> bool {
+    KEYS_ON.load(Ordering::SeqCst) && state(app).is_some_and(|s| s.session.is_some())
+}
+
+/// A global shortcut Circle & Ask registered (Esc). True if it was ours.
 pub fn on_shortcut<R: Runtime>(
     app: &AppHandle<R>,
     shortcut: &Shortcut,
     pressed: ShortcutState,
 ) -> bool {
-    if !KEYS_ON.load(Ordering::SeqCst) {
+    if !KEYS_ON.load(Ordering::SeqCst) || shortcut != &escape() {
         return false;
     }
-    let ours = [escape(), next_key(), repeat_key()].contains(shortcut);
-    if ours && pressed == ShortcutState::Pressed {
-        if shortcut == &escape() {
-            // Esc: stops an explanation first; a second Esc clears everything (§2.2).
-            if !circle_answer::stop_if_playing(app) {
-                end_session(app);
-            }
-        } else if shortcut == &next_key() {
-            circle_answer::control(app, circle_answer::Control::Next);
-        } else {
-            circle_answer::control(app, circle_answer::Control::Repeat);
+    if pressed == ShortcutState::Pressed {
+        // Esc: stops an explanation first; a second Esc clears everything (§2.2).
+        if !circle_answer::stop_if_playing(app) {
+            end_session(app);
         }
     }
-    ours
+    true
 }
 
 // ─── The card's buttons ──────────────────────────────────────────────────────────────────────
@@ -943,6 +979,15 @@ pub enum CardAction {
     Open,
     /// Save now ("ask each time").
     Save,
+    /// Ctrl+S in the ask bar: save the marks without an explanation (K2 §11.2).
+    SaveOnly,
+    /// K3: the picker ("Change", the chip's ▾, Ctrl+D).
+    ChangePlace,
+    /// K3: one of the offered places (its index is the text).
+    PickPlace,
+    /// K3: "Create it and save".
+    CreatePlace,
+    PlaceCancel,
     Close,
 }
 
@@ -961,6 +1006,12 @@ pub fn screen_circle_card<R: Runtime>(
         .map(clean_question)
         .filter(|t| !t.is_empty());
     match action {
+        // Typed "save to physics ch 5": a save, not a question (K3 §4.2).
+        CardAction::Ask if words.as_deref().and_then(save_to_phrase).is_some() => {
+            if let Some(phrase) = words.as_deref().and_then(save_to_phrase) {
+                circle_answer::save_to(app, phrase);
+            }
+        }
         CardAction::Ask => {
             let question = match words {
                 Some(text) => Question::Typed { text },
@@ -991,29 +1042,50 @@ pub fn screen_circle_card<R: Runtime>(
         CardAction::EditCrop => circle_answer::edit_crop(app),
         CardAction::Open => circle_answer::save_now(app, true),
         CardAction::Save => circle_answer::save_now(app, false),
+        CardAction::SaveOnly => circle_answer::save_marks(app),
+        CardAction::ChangePlace => circle_answer::change_place(app),
+        CardAction::PickPlace => {
+            let index = text.as_deref().and_then(|t| t.trim().parse::<usize>().ok());
+            circle_answer::pick_place(app, index.ok_or("Choose a place.")?);
+        }
+        CardAction::CreatePlace => circle_answer::create_place(app),
+        CardAction::PlaceCancel => circle_answer::cancel_place(app),
         CardAction::Close => end_session(app),
     }
     Ok(())
 }
 
-/// The words said over the hotkey during a session are its question (or a follow-up).
+/// The words said while holding the keys during a session are its question (or a follow-up).
 pub fn takes_words<R: Runtime>(app: &AppHandle<R>) -> bool {
     in_session(app)
 }
 
+/// Circled and talked: the words are the question. Circled without a word: the ask bar opens
+/// (K2 §11.1), to type a question or press Enter. "Save it to Physics chapter 5" is a command,
+/// not a question (K3 §4.2): an explanation paused for the words goes on.
 pub fn on_words<R: Runtime>(app: &AppHandle<R>, transcript: &str) {
     let text = clean_question(transcript);
-    let question = if text.is_empty() {
-        Question::None
+    if let Some(phrase) = save_to_phrase(&text) {
+        circle_answer::save_to(app, phrase);
+    } else if text.is_empty() {
+        if !circle_answer::resume_after_words(app) {
+            circle_answer::show_ask_bar(app);
+        }
     } else {
-        Question::Voice { text }
-    };
-    circle_answer::ask(app, question);
+        circle_answer::interrupt(app);
+        circle_answer::ask(app, Question::Voice { text });
+    }
 }
 
-/// The talk hotkey went down during a session: the student is about to speak (barge-in).
+/// The hold was cancelled (another key): an explanation paused for it goes on.
+pub fn words_cancelled<R: Runtime>(app: &AppHandle<R>) {
+    circle_answer::resume_after_words(app);
+}
+
+/// The hold went down during a session: the student is about to speak. The explanation pauses
+/// (K3: if the words are only "save it to …", it goes on; a question stops it, `on_words`).
 pub fn on_listen<R: Runtime>(app: &AppHandle<R>) {
-    circle_answer::interrupt(app);
+    circle_answer::pause_for_words(app);
     with_session(app, |s| s.last_input = Instant::now());
 }
 

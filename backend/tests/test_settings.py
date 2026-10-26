@@ -38,6 +38,8 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         "mew_logging_opt_in": False,
         "notes_index": True,
         "onboarded": False,
+        "shortcuts": {},
+        "shortcuts_notice_seen": False,
     }
     changed = client.patch(
         "/v1/me/settings",
@@ -62,11 +64,50 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         {"voice_id": "../../v1/admin"},
         {"captions": "yes please"},
         {"is_admin": True},
+        {"shortcuts": {"jump": "Ctrl+Shift+K"}},
+        {"shortcuts": {"jump": "Ctrl+Alt+K"}},
+        {"shortcuts": {"fly": "Alt+K"}},
+        {"shortcuts": {"jump": 3}},
+        {"shortcuts_notice_seen": "maybe"},
     ],
-    ids=["threshold", "style", "voice-path", "type", "unknown-key"],
+    ids=[
+        "threshold",
+        "style",
+        "voice-path",
+        "type",
+        "unknown-key",
+        "three-keys",
+        "altgr",
+        "unknown-action",
+        "binding-type",
+        "notice-type",
+    ],
 )
 def test_settings_reject_invalid_changes(client: TestClient, body: dict[str, Any]) -> None:
     assert client.patch("/v1/me/settings", json=body, headers=LOCAL).status_code == 422
+
+
+def test_shortcuts_are_saved_whole_and_read_leniently(client: TestClient) -> None:
+    saved = client.patch(
+        "/v1/me/settings",
+        json={"shortcuts": {"jump": "Alt+J", "pen": "Q"}, "shortcuts_notice_seen": True},
+        headers=LOCAL,
+    ).json()
+    assert saved["shortcuts"] == {"jump": "Alt+J", "pen": "Q"}
+    assert saved["shortcuts_notice_seen"] is True
+    # The whole set is replaced (a reset sends {}).
+    reset = client.patch("/v1/me/settings", json={"shortcuts": {}}, headers=LOCAL).json()
+    assert reset["shortcuts"] == {}
+
+
+def test_stored_shortcuts_from_another_version_are_dropped_not_fatal() -> None:
+    store = MemoryProfileStore()
+    store.update_settings(
+        "a", {"shortcuts": {"jump": "Alt+J", "teleport": "Alt+T", "pen": "Ctrl+Shift+P"}}
+    )
+    assert store.get_settings("a").shortcuts == {"jump": "Alt+J"}
+    store.update_settings("b", {"shortcuts": ["Alt+J"]})
+    assert store.get_settings("b").shortcuts == {}
 
 
 def test_settings_need_a_caller(client: TestClient) -> None:

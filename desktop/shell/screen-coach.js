@@ -25,17 +25,7 @@ function render(view) {
   $("pause").setAttribute("aria-pressed", String(view.paused));
   $("consent").disabled = !usable;
 
-  for (const which of ["talk", "pause", "clip", "notes", "draw"]) {
-    const report = view[which];
-    const input = $(`hotkey-${which}`);
-    if (document.activeElement !== input) input.value = report.accelerator;
-    const problem = $(`problem-${which}`);
-    problem.textContent = report.problem ?? "";
-    problem.hidden = !report.problem;
-    for (const kbd of document.querySelectorAll(`kbd[data-hotkey="${which}"]`)) {
-      kbd.textContent = report.accelerator;
-    }
-  }
+  $("shortcuts-notice").hidden = !view.shortcutsNotice;
 
   renderPrivacy(view);
   renderCircle(view);
@@ -67,8 +57,7 @@ $("turn-on").addEventListener("click", async () => {
   const ok = await run(() =>
     invoke("screen_coach_set_enabled", { enabled: true, consentVersion: current.consentVersion }),
   );
-  if (ok)
-    showNotice(`Screen Coach is on. Hold ${current.talk.accelerator} and ask about your screen.`);
+  if (ok) showNotice("Screen Coach is on. Hold Ctrl+Alt and ask about your screen.");
 });
 
 $("turn-off").addEventListener("click", async () => {
@@ -83,21 +72,9 @@ $("pause").addEventListener("click", () =>
   run(() => invoke("screen_coach_set_paused", { paused: !current.paused })),
 );
 
-for (const form of document.querySelectorAll("form.hotkey")) {
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const which = form.dataset.which;
-    const accelerator = form.elements.accelerator.value;
-    const problem = $(`problem-${which}`);
-    try {
-      form.elements.accelerator.blur();
-      render(await invoke("screen_coach_set_hotkey", { which, accelerator }));
-    } catch (error) {
-      problem.textContent = typeof error === "string" ? error : "Couldn't change the shortcut.";
-      problem.hidden = false;
-    }
-  });
-}
+$("shortcuts-seen").addEventListener("click", () =>
+  run(() => invoke("screen_coach_shortcuts_seen")),
+);
 
 // ─── Account ─────────────────────────────────────────────────────────────────────────────────
 
@@ -235,6 +212,6 @@ $("restore-defaults").addEventListener("click", () =>
 
 $("open-mic").addEventListener("click", () => invoke("screen_coach_open_mic_settings"));
 
-// Rust tells the page when anything changes elsewhere (tray, hotkeys).
+// Rust tells the page when anything changes elsewhere (tray, voice, the hold gesture).
 window.addEventListener("screen-coach:changed", refresh);
 refresh();

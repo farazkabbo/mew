@@ -79,6 +79,10 @@ export const ImageBlock = z.object({
       stepGroups: z.array(z.array(z.uuid()).max(5)).max(12),
       /** How many of the clip's tutor strokes are already on the page (follow-ups add more). */
       strokeCount: z.number().int().nonnegative(),
+      /** "Tue 25 Oct": shown above the first entry of each day on a "From screen" page (K3). */
+      heading: z.string().min(1).max(40).optional(),
+      /** The entry's strokes on the page (so it can move to another page whole, K3). */
+      strokeIds: z.array(z.uuid()).max(5_000).optional(),
     })
     .optional(),
   createdAt: z.number().int().nonnegative(),
@@ -95,8 +99,13 @@ export const Page = z.object({
   index: z.number().int().nonnegative(),
   background: PageBackground,
   createdAt: z.number().int().nonnegative(),
-  /** The day's "From screen" page (Circle & Ask's entries stack on it, S3.2 §2.5). */
+  /** The day's "From screen" page (S3.2 §2.5; pages made before K3). */
   fromScreenDay: z.iso.date().optional(),
+  /**
+   * The node's "From screen" page (K3, decision 7): one per node, entries stacked with a date
+   * heading per day; after about 30 entries the next one starts ("From screen 2").
+   */
+  fromScreen: z.number().int().min(1).max(999).optional(),
 });
 export type Page = z.infer<typeof Page>;
 

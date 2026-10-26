@@ -47,8 +47,16 @@ function logLocalDecision(input: MewInput, decision: MewDecisionResponse): Promi
   }).catch(() => undefined);
 }
 
+/** Mew's notebook labels (K3): handled by the notebook, never sent to the tutor. */
+export type NotebookVoiceHandler = (
+  label: "save_to_notebook" | "notebook_command",
+  utterance: string,
+  destinationPhrase: string | undefined,
+) => void;
+
 /** The voice → Mew → tutor pipeline, independent of React. */
 function createPipeline() {
+  let notebookVoice: NotebookVoiceHandler | null = null;
   let engine: PageEngine | null = null;
   let courseId: string | null = null;
   let mew: MewController | null = null;
@@ -116,6 +124,11 @@ function createPipeline() {
   });
   mew = new MewController(gateV2, browserClock, {
     onRespond: (turn) => {
+      if (turn.intent === "save_to_notebook" || turn.intent === "notebook_command") {
+        notebookVoice?.(turn.intent, turn.utterance, turn.destinationPhrase);
+        return;
+      }
+      const intent = turn.intent;
       if (quizSession.active) {
         // "Is this right?" during a quiz is answered by the grader; asking for help counts.
         if (turn.intent === "check_work") {
@@ -124,7 +137,7 @@ function createPipeline() {
         }
         quizSession.helpedByTutor();
       }
-      void tutor.respond(turn);
+      void tutor.respond({ ...turn, intent });
     },
     // A quiz is a test: no quiet ticks or remarks on pauses while the student answers.
     skip: (trigger) => trigger === "pen_pause" && quizSession.active,
@@ -151,6 +164,10 @@ function createPipeline() {
     setCourse(next: string | null) {
       courseId = next;
     },
+    /** Who handles Mew's notebook labels (the notebook screen, K3). */
+    setNotebookVoice(handler: NotebookVoiceHandler | null) {
+      notebookVoice = handler;
+    },
     /** Follows the page on screen. */
     setEngine(next: PageEngine | null) {
       if (next !== engine) ink.finish(); // unfinished ink lands on the page it was meant for
@@ -164,8 +181,15 @@ function createPipeline() {
  * Owns the voice → Mew → tutor pipeline for the notebook screen: listening, the gate, tutor turns
  * with spoken replies, barge-in, and background handwriting recognition.
  */
-export function useMewSession(engine: PageEngine | null, courseId: string | null = null) {
+export function useMewSession(
+  engine: PageEngine | null,
+  courseId: string | null = null,
+  onNotebookVoice: NotebookVoiceHandler | null = null,
+) {
   const [pipeline] = useState(createPipeline);
+  useEffect(() => {
+    pipeline.setNotebookVoice(onNotebookVoice);
+  }, [pipeline, onNotebookVoice]);
   const { mew, tutor, recognition, ink, quiz } = pipeline;
   const voice = useRef<VoiceSession | null>(null);
 
@@ -231,7 +255,35 @@ export function useMewSession(engine: PageEngine | null, courseId: string | null
   /** The pen touched the page: don't talk over someone who's writing. */
   const penDown = useCallback(() => tutor.writing(), [tutor]);
 
-  return { startListening, stopListening, say, summon, penDown, ink, quiz, recognition };
+  /**
+   * Alt+C (K2 §11.3): check my work, the same turn as asking "is this right?" (during a quiz,
+   * the grader checks the answer).
+   */
+  const checkWork = useCallback(() => {
+    tutor.unlockAudio();
+    if (quiz.active) {
+      void quiz.check();
+      return;
+    }
+    void tutor.respond({
+      intent: "check_work",
+      utterance: "Check my work.",
+      triggeredAt: Date.now(),
+      gateMs: 0,
+    });
+  }, [tutor, quiz]);
+
+  return {
+    startListening,
+    stopListening,
+    say,
+    summon,
+    penDown,
+    checkWork,
+    ink,
+    quiz,
+    recognition,
+  };
 }
 
 /** Recognises the line being written after the pen rests, so Mew and the tutor know its text. */

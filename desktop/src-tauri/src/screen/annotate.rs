@@ -451,9 +451,18 @@ pub fn escape() -> Shortcut {
     Shortcut::new(None, Code::Escape)
 }
 
-/// Registers or unregisters Esc. Never call with the ink lock held (see `ESCAPE_ON`).
+/// Esc is registered for the ink.
+pub fn escape_on() -> bool {
+    ESCAPE_ON.load(Ordering::SeqCst)
+}
+
+/// Registers or unregisters Esc. Never call with the ink lock held (see `ESCAPE_ON`). Circle &
+/// Ask may hold the same shortcut: then it's left registered for it.
 fn set_escape<R: Runtime>(app: &AppHandle<R>, on: bool) {
     if ESCAPE_ON.swap(on, Ordering::SeqCst) == on {
+        return;
+    }
+    if super::circle::keys_on() {
         return;
     }
     let shortcuts = app.global_shortcut();

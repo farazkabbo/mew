@@ -26,6 +26,7 @@ from .models import (
     ClipCreate,
     ClipView,
     EntryAppend,
+    SavedDestination,
 )
 
 BUCKET = "clips"
@@ -41,6 +42,10 @@ class ClipWriter(Protocol):
     def append(self, user: str, entry: EntryAppend) -> UUID | None:
         """Adds a follow-up to the session's entry; its clip id, or None if there's no such entry.
         Raises `EntryFullError` if it would go over the caps."""
+        ...
+
+    def set_destination(self, user: str, clip_id: UUID, destination: SavedDestination) -> bool:
+        """Where the user's clip goes in the notebook (K3); False if they have no such clip."""
         ...
 
 
@@ -71,8 +76,17 @@ def _row(user: str, clip_id: UUID, clip: ClipCreate) -> dict[str, Any]:
         "annotations": [s.model_dump(mode="json") for s in clip.strokes],
         "ocr_text": clip.ocr_text,
         "captured_at": source.captured_at.isoformat(),
+        "destination": _destination_column(clip.destination),
         **_entry_columns(clip),
     }
+
+
+def _destination_column(destination: SavedDestination | None) -> dict[str, Any] | None:
+    return (
+        None
+        if destination is None
+        else destination.model_dump(mode="json", by_alias=True, exclude_none=True)
+    )
 
 
 def _entry_columns(clip: ClipCreate) -> dict[str, Any]:
@@ -132,6 +146,7 @@ def _view(row: dict[str, Any]) -> ClipView:
             "notebook_page_id": row.get("notebook_page_id"),
             "created_at": row["created_at"],
             "entry": _entry_view(row),
+            "destination": row.get("destination"),
         }
     )
 
@@ -180,6 +195,14 @@ class MemoryClipStore:
                     stored.row.update(_appended(stored.row, entry))
                     return clip_id
         return None
+
+    def set_destination(self, user: str, clip_id: UUID, destination: SavedDestination) -> bool:
+        with self._lock:
+            stored = self._clips.get((user, clip_id))
+            if stored is None:
+                return False
+            stored.row["destination"] = _destination_column(destination)
+            return True
 
     def get(self, user: str, clip_id: UUID) -> ClipView | None:
         with self._lock:
@@ -256,6 +279,16 @@ class SupabaseClipWriter(SupabaseRest):
         if not updated:
             raise StoreError("the entry changed meanwhile")
         return UUID(row["id"])
+
+    def set_destination(self, user: str, clip_id: UUID, destination: SavedDestination) -> bool:
+        if not self.service:
+            raise PermissionError("destinations are written by the service")
+        rows = self._patch(
+            "clips",
+            {"user_id": f"eq.{user}", "id": f"eq.{clip_id}"},
+            {"destination": _destination_column(destination)},
+        )
+        return bool(rows)
 
 
 class SupabaseClipReader(SupabaseRest):

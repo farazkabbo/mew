@@ -467,6 +467,9 @@ pub struct ClipHead {
     /// Circle & Ask (S3.2): what makes this clip a notebook entry.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<EntryHead>,
+    /// Where it goes in the notebook (K3); without one, the notebook open in Neb.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination: Option<super::destination::DestinationOut>,
 }
 
 /// One question and its explanation (`EntryTurn`).
@@ -630,6 +633,7 @@ mod tests {
             },
             ocr_text: "Question 3".into(),
             entry: None,
+            destination: None,
         };
         let body = clip_body(&head, b"\xff\xd8", 640, 320);
         let value: serde_json::Value = serde_json::from_slice(body.as_slice()).unwrap();

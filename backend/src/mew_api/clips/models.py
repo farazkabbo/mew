@@ -173,6 +173,47 @@ class EntryView(_Camel):
     concept_hints: list[str]
 
 
+# ─── Where it goes (K3) ──────────────────────────────────────────────────────────────────────
+
+
+class FromScreenPage(_Camel):
+    kind: Literal["from_screen"]
+
+
+class NewPage(_Camel):
+    kind: Literal["new"]
+
+
+class NumberedPage(_Camel):
+    kind: Literal["number"]
+    number: int = Field(ge=1, le=999)
+
+
+DestinationPage = Annotated[FromScreenPage | NewPage | NumberedPage, Field(discriminator="kind")]
+
+
+class DestinationCreate(_Camel):
+    """A chapter to make first (the student tapped "Create it and save")."""
+
+    title: Annotated[
+        PlainText, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
+    ]
+
+
+class SavedDestination(_Camel):
+    """Where a clip goes in the notebook (K3; mirrors SavedDestination in destinations.ts): a node
+    of the student's tree and its page. The node id is only ever compared with the student's own
+    tree on their device; nothing here trusts it further."""
+
+    node_id: UUID
+    page: DestinationPage
+    create: DestinationCreate | None = None
+    #: The titles it had when chosen ("Physics", "Chapter 5"), for the toast.
+    path: list[Annotated[PlainText, StringConstraints(min_length=1, max_length=200)]] | None = (
+        Field(default=None, min_length=1, max_length=3)
+    )
+
+
 class ClipCreate(_Camel):
     image: ClipImage
     pixel_ratio: float = Field(ge=0.25, le=8)
@@ -180,6 +221,8 @@ class ClipCreate(_Camel):
     source: ClipSource
     ocr_text: Annotated[PlainText, StringConstraints(max_length=OCR_CHARS)]
     entry: EntryPart | None = None
+    #: Where the student said to save it (K3); without one, the notebook decides.
+    destination: SavedDestination | None = None
 
     @model_validator(mode="after")
     def _ink_is_capped(self) -> "ClipCreate":
@@ -224,10 +267,20 @@ class ClipView(_Camel):
     created_at: datetime
     #: A Circle & Ask entry's explanation; None for an ordinary clip.
     entry: EntryView | None = None
+    #: Where it goes in the notebook (K3); None: wherever the notebook is open.
+    destination: SavedDestination | None = None
 
 
 class ClipPatch(_Camel):
     notebook_page_id: UUID
+
+
+class ClipDestination(_Camel):
+    """A saved clip goes somewhere else (K3: "Change", or "save it to …" said afterwards): it
+    moves, it's never copied."""
+
+    clip_id: UUID
+    destination: SavedDestination
 
 
 # Start-of-frame markers carry the image size (all SOFn except DHT, JPG and DAC).

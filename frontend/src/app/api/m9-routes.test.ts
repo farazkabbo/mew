@@ -40,6 +40,8 @@ describe("/api/settings", () => {
     mew_logging_opt_in: false,
     notes_index: true,
     onboarded: true,
+    shortcuts: { jump: "Alt+J" },
+    shortcuts_notice_seen: true,
   };
 
   it("passes a valid change to the API service as the user", async () => {

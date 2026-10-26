@@ -26,8 +26,11 @@ describe("profile settings", () => {
       voice_id: "JBFqnCBsd6RMkjVDRZzb",
       mew_logging_opt_in: true,
       onboarded: true,
+      shortcuts: { new_notebook: "Alt+J", rename: "F2", pen: "Q", move_up: "Alt+ArrowUp" },
+      shortcuts_notice_seen: true,
       some_future_key: "kept",
     });
+    await set({ shortcuts: {} });
     await set({ voice_id: null });
   });
 
@@ -40,6 +43,22 @@ describe("profile settings", () => {
     [{ voice_id: "../../v1/user" }],
     [{ voice_id: 42 }],
     [{ mew_threshold: 3 }],
+    // Shortcuts are two keys at most (K2), in an object of lowercase names.
+    [{ shortcuts: { jump: "Ctrl+Shift+K" } }],
+    [{ shortcuts: { jump: "Ctrl+Alt+K" } }],
+    [{ shortcuts: { jump: "Shift+K" } }],
+    [{ shortcuts: { jump: 3 } }],
+    [{ shortcuts: { Jump: "Alt+K" } }],
+    [{ shortcuts: ["Alt+K"] }],
+    [{ shortcuts: "Alt+K" }],
+    [
+      {
+        shortcuts: Object.fromEntries(
+          Array.from({ length: 33 }, (_, i) => [`a${"_".repeat(i)}`, "F2"]),
+        ),
+      },
+    ],
+    [{ shortcuts_notice_seen: "yes" }],
   ])("refuses %j", async (settings) => {
     await expect(set(settings)).rejects.toThrow(/check constraint/);
   });

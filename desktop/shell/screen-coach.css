@@ -155,19 +155,41 @@ input:focus-visible {
   outline-offset: 2px;
 }
 
-.hotkey + .hotkey {
-  margin-top: 12px;
+table.keys {
+  width: 100%;
+  margin: 0 0 12px;
+  border-collapse: collapse;
 }
 
-.hotkey label {
-  display: block;
+table.keys caption {
+  text-align: left;
+  font-weight: 600;
   margin-bottom: 4px;
 }
 
-.hotkey input {
-  flex: 1;
-  min-width: 0;
-  font-family: "Cascadia Mono", Consolas, monospace;
+table.keys th,
+table.keys td {
+  padding: 6px 8px 6px 0;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--rule);
+}
+
+table.keys th {
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+#shortcuts-notice {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--tutor);
+  border-radius: 8px;
+  background: var(--raised);
+}
+
+#shortcuts-notice h3 {
+  margin: 0 0 6px;
 }
 
 fieldset {

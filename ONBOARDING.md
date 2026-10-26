@@ -61,7 +61,7 @@ Talking or writing over the tutor interrupts it ("barge-in").
 | `backend/supabase/` | Postgres migrations with row-level security, and tests that attack them     |
 | `packages/shared/`  | zod schemas, prompts and pure logic shared by the app                       |
 | `packages/ink/`     | Framework-free ink: line segmentation, undo, the tutor's handwriting        |
-| `desktop/`          | Mew for Windows (Tauri v2, Rust): summon hotkey, tray, review reminders     |
+| `desktop/`          | Mew for Windows (Tauri v2, Rust): hold Ctrl+Alt, tray, review reminders     |
 | `ml/`               | Mew v2: training the in-browser gate model from labelled decisions          |
 | `docs/`             | The product brief and the handoff (status, decisions, pitfalls)             |
 

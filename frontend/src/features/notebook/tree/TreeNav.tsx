@@ -1,9 +1,10 @@
 "use client";
 
-import { type Notebook, type NotebookTree, TREE_LIMITS } from "@mew/shared";
+import { type Notebook, type NotebookTree, shortcutFor, TREE_LIMITS } from "@mew/shared";
 import { Plus, Trash2 } from "lucide-react";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 
+import { useShortcutKeys } from "../../shortcuts/useShortcutKeys";
 import { NodeIcon } from "./node-style";
 import { childNoun } from "./tree-labels";
 import { type DropZone, type RowMenuItem, TreeRow } from "./TreeRow";
@@ -15,7 +16,7 @@ type Props = {
   /** The notebook being made (as named so far), shown as a row while its popover is open. */
   draft: Pick<Notebook, "title" | "icon" | "color"> | null;
   trashCount: number;
-  /** "Alt+B", or "Ctrl+N" in the desktop app. */
+  /** "Alt+B", "Ctrl+N" in the desktop app, or the student's own. */
   newNotebookShortcut: string;
   onOpen(id: string): void;
   onCreateNotebook(): void;
@@ -36,7 +37,7 @@ type Row = { node: Notebook; level: number; hasChildren: boolean };
 /**
  * The notebook tree in the sidebar (K1, docs/NOTEBOOKS_K.md §2.3), as an ARIA tree:
  * - arrows move between rows (→ opens or steps in, ← closes or steps out), Enter opens one,
- *   F2 renames it, Alt+↑/↓ moves it among its siblings;
+ *   F2 renames it, Alt+↑/↓ moves it among its siblings (or the student's own shortcuts, K2);
  * - a row is dragged above, below or into another (where the rules allow it);
  * - each row has + (a chapter or section) and a menu (rename, new page, move, delete).
  */
@@ -48,6 +49,7 @@ export function TreeNav(props: Props) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ id: string; zone: DropZone } | null>(null);
   const rows = useRef(new Map<string, HTMLDivElement>());
+  const keys = useShortcutKeys();
 
   // A row is expanded when the student opened it, or, unless they closed it, when it's the open
   // node or above it (so the open node and its chapters show when they arrive there).
@@ -74,13 +76,15 @@ export function TreeNav(props: Props) {
 
   const onRowKey = (row: Row, index: number, event: KeyboardEvent<HTMLDivElement>) => {
     const id = row.node.id;
-    if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+    const shortcut = shortcutFor(event, keys.platform, keys.own);
+    if (shortcut === "move_up" || shortcut === "move_down" || shortcut === "rename") {
       event.preventDefault();
-      event.stopPropagation(); // handled here, not by the app's Alt+↑/↓
-      props.onReorder(id, event.key === "ArrowUp" ? -1 : 1);
+      event.stopPropagation(); // handled here (this row), not by the app's own shortcut
+      if (shortcut === "rename") props.onStartRename(id);
+      else props.onReorder(id, shortcut === "move_up" ? -1 : 1);
       return;
     }
-    const keys: Record<string, () => void> = {
+    const moves: Record<string, () => void> = {
       ArrowDown: () => focusRow(visible[index + 1]?.node.id),
       ArrowUp: () => focusRow(visible[index - 1]?.node.id),
       Home: () => focusRow(visible[0]?.node.id),
@@ -95,9 +99,8 @@ export function TreeNav(props: Props) {
         else focusRow(tree.parentOf(id) ?? undefined);
       },
       Enter: () => props.onOpen(id),
-      F2: () => props.onStartRename(id),
     };
-    const action = keys[event.key];
+    const action = moves[event.key];
     if (action && !event.ctrlKey && !event.metaKey && !event.altKey) {
       event.preventDefault();
       event.stopPropagation();
@@ -119,17 +122,17 @@ export function TreeNav(props: Props) {
     const id = row.node.id;
     const depth = tree.depth(id);
     const items: RowMenuItem[] = [
-      { label: "Rename", shortcut: "F2", run: () => props.onStartRename(id) },
+      { label: "Rename", shortcut: keys.shown("rename"), run: () => props.onStartRename(id) },
     ];
     if (depth < TREE_LIMITS.maxDepth) {
       const noun = childNoun(tree, id);
       items.push({ label: `New ${noun}`, run: () => props.onAddChild(id) });
     }
     items.push(
-      { label: "New page", shortcut: "Alt+P", run: () => props.onAddPage(id) },
+      { label: "New page", shortcut: keys.shown("new_page"), run: () => props.onAddPage(id) },
       { label: "Move to…", run: () => props.onMoveTo(id) },
-      { label: "Move up", shortcut: "Alt+↑", run: () => props.onReorder(id, -1) },
-      { label: "Move down", shortcut: "Alt+↓", run: () => props.onReorder(id, 1) },
+      { label: "Move up", shortcut: keys.shown("move_up"), run: () => props.onReorder(id, -1) },
+      { label: "Move down", shortcut: keys.shown("move_down"), run: () => props.onReorder(id, 1) },
       { label: "Delete", run: () => props.onDelete(id), danger: true },
     );
     return items;

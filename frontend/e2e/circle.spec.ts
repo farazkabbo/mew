@@ -74,7 +74,7 @@ function entryClip(turns: unknown[], strokes: unknown[], strokeSteps: number[][]
 async function stored(page: Page) {
   return page.evaluate(
     (name) =>
-      new Promise<{ pages: { fromScreenDay?: string }[]; authors: string[] }>((resolve, reject) => {
+      new Promise<{ pages: { fromScreen?: number }[]; authors: string[] }>((resolve, reject) => {
         const open = indexedDB.open(name);
         open.onerror = () => reject(new Error("can't open the notebook"));
         open.onsuccess = () => {
@@ -83,7 +83,7 @@ async function stored(page: Page) {
           const strokes = tx.objectStore("strokes").getAll();
           tx.oncomplete = () =>
             resolve({
-              pages: pages.result as { fromScreenDay?: string }[],
+              pages: pages.result as { fromScreen?: number }[],
               authors: (strokes.result as { author: string }[]).map((s) => s.author),
             });
         };
@@ -125,7 +125,7 @@ test("an explanation saved from the screen lands on today's From screen page, wi
   await expect(note).toContainText("To check: What's the acceleration on the flat part?");
 
   const first = await stored(page);
-  expect(first.pages.filter((p) => p.fromScreenDay)).toHaveLength(1);
+  expect(first.pages.filter((p) => p.fromScreen)).toHaveLength(1);
   // The student's mark is their own stroke; the tutor's ink is the tutor's.
   expect(first.authors.sort()).toEqual(["student", "tutor", "tutor"]);
 
@@ -158,6 +158,6 @@ test("an explanation saved from the screen lands on today's From screen page, wi
   );
   await expect(note).toContainText("And this?");
   const after = await stored(page);
-  expect(after.pages.filter((p) => p.fromScreenDay)).toHaveLength(1);
+  expect(after.pages.filter((p) => p.fromScreen)).toHaveLength(1);
   expect(after.authors.filter((a) => a === "tutor")).toHaveLength(3);
 });

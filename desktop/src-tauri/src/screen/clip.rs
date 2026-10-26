@@ -1,6 +1,6 @@
 //! Saving part of the screen to the notebook (S3 §3): all in Rust until the student confirms.
 //!
-//! 1. A draft is made from the live ink's screenshot ("save this", Ctrl+Alt+C, the pill), or
+//! 1. A draft is made from the live ink's screenshot ("save this", the pill), or
 //!    from a new capture: the ink re-placed first, or with no ink, the monitor to drag a region
 //!    out of. Its source (app, window title, a trimmed link) is read now, on the device.
 //! 2. The local preview window shows it. Its page fetches the image from `mewclip://` (served
@@ -25,6 +25,7 @@ use super::account::{forget_revoked_token, wipe_string};
 use super::annotate::{self, InkTurn, TurnState};
 use super::coach::{self, ScreenCoach};
 use super::config::CaptureScope;
+use super::destination::{DestinationOut, Place};
 use super::frame::{FrameDetail, FrameMeta};
 use super::image::{crop, downscale_bgra_to_bgr, looks_blank};
 use super::ink::{
@@ -76,6 +77,8 @@ pub struct ClipDraft {
     source: DraftSource,
     /// Circle & Ask: what makes it an entry.
     entry: Option<EntryDraft>,
+    /// Where it goes in the notebook (K3).
+    destination: Option<Place>,
 }
 
 /// A Circle & Ask explanation to save with its picture (S3.2 §5). Strokes are in overlay pixels,
@@ -87,6 +90,8 @@ pub struct EntryDraft {
     /// The explanation step of each of the draft's tutor strokes.
     pub stroke_steps: Vec<u8>,
     pub concept_hints: Vec<String>,
+    /// Where the student said it goes (K3).
+    pub destination: Option<Place>,
 }
 
 /// What an entry is drawn and saved from: the capture and everything on it.
@@ -169,12 +174,7 @@ pub fn from_ink<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// The clip hotkey (Ctrl+Alt+C).
-pub fn on_hotkey<R: Runtime>(app: &AppHandle<R>) {
-    from_ink(app);
-}
-
-/// "Save this" said while holding the talk hotkey: its capture is either not needed (live ink),
+/// "Save this" said while holding Ctrl+Alt: its capture is either not needed (live ink),
 /// used to re-place the ink, or the picture to drag a region out of.
 pub fn from_voice<R: Runtime>(app: &AppHandle<R>, captured: Captured) {
     match annotate::turn_state(app) {
@@ -245,6 +245,31 @@ pub fn open_entry<R: Runtime>(
     }
 }
 
+/// Circle & Ask's Ctrl+S (K2): the marked part of the screen in the preview, with the student's
+/// marks as its ink, and no explanation.
+pub fn open_marks<R: Runtime>(
+    app: &AppHandle<R>,
+    tools: &mut pipeline::Tools,
+    captured: Captured,
+    strokes: Vec<InkStroke>,
+    crop: Rect,
+    destination: Option<Place>,
+) {
+    // Only if looking would be allowed right now (a password field, a blocked app).
+    if let Err(error) = pipeline::may_use_screen_now(tools, &coach::privacy_of(app)) {
+        return coach::notify(app, &error.message());
+    }
+    let Captured { meta, detail, .. } = captured;
+    let source = read_source(tools, &meta, None, &detail);
+    match draft(meta, detail, strokes, Vec::new(), Some(crop), source) {
+        Some(mut draft) => {
+            draft.destination = destination;
+            open(app, draft)
+        }
+        None => coach::notify(app, "I couldn't prepare that clip. Try again."),
+    }
+}
+
 fn entry_draft(tools: &mut pipeline::Tools, capture: EntryCapture) -> Option<ClipDraft> {
     let EntryCapture {
         meta,
@@ -255,6 +280,7 @@ fn entry_draft(tools: &mut pipeline::Tools, capture: EntryCapture) -> Option<Cli
     } = capture;
     let source = read_source(tools, &meta, None, &detail);
     let mut draft = draft(meta, detail, strokes, Vec::new(), Some(crop), source)?;
+    draft.destination = entry.destination.clone();
     draft.entry = Some(entry);
     Some(draft)
 }
@@ -314,6 +340,7 @@ fn draft(
         crop,
         source,
         entry: None,
+        destination: None,
     })
 }
 
@@ -699,6 +726,7 @@ fn save<R: Runtime>(
         },
         ocr_text: ocr_text.clone(),
         entry,
+        destination: draft.destination.as_ref().map(DestinationOut::from),
     };
     wipe_string(&mut ocr_text);
     let body = clip_body(&head, jpeg.as_slice(), width, height);

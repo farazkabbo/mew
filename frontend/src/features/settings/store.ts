@@ -48,7 +48,8 @@ export const useSettings = create<SettingsState & SettingsActions>()((set, get) 
     try {
       const response = await fetch("/api/settings", { cache: "no-store" });
       if (!response.ok) throw new Error(String(response.status));
-      const settings = UserSettings.parse(await response.json());
+      // Keys an older API doesn't send yet keep their defaults.
+      const settings = UserSettings.parse({ ...DEFAULT_SETTINGS, ...(await response.json()) });
       // Changes made while this was loading win (they're being saved).
       if (edits === started) {
         apply(settings);
@@ -123,7 +124,7 @@ async function save(set: SetState): Promise<void> {
       keepalive: true, // a change made just before leaving the page still lands
     });
     if (!response.ok) throw new Error(String(response.status));
-    const saved = UserSettings.parse(await response.json());
+    const saved = UserSettings.parse({ ...DEFAULT_SETTINGS, ...(await response.json()) });
     // A reply older than the latest change must not undo it on screen.
     if (edits === sentAt) {
       apply(saved);

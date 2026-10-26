@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { ShortcutBindings } from "./shortcuts";
+
 /**
  * Per-user settings (M9), stored in profiles.settings. Mirrors
  * backend/src/mew_api/profiles/models.py; keys are snake_case as stored.
@@ -26,6 +28,10 @@ export const UserSettings = z.object({
   notes_index: z.boolean(),
   /** The first-run introduction has been seen. */
   onboarded: z.boolean(),
+  /** The student's own keyboard shortcuts (K2: two keys at most; the rest keep the defaults). */
+  shortcuts: ShortcutBindings,
+  /** The one-time "Shortcuts got simpler" card was read (K2; new students never see it). */
+  shortcuts_notice_seen: z.boolean(),
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
@@ -39,6 +45,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   mew_logging_opt_in: false,
   notes_index: true,
   onboarded: false,
+  shortcuts: {},
+  shortcuts_notice_seen: false,
 };
 
 export const SettingsPatch = UserSettings.partial().strict();
