@@ -11,7 +11,9 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 Evidence = Literal["independent", "with_hint", "after_explanation"]
-AttemptSource = Literal["practice", "quiz", "notes_check", "your_turn", "moment_check"]
+AttemptSource = Literal[
+    "practice", "quiz", "notes_check", "your_turn", "moment_check", "live_annotation"
+]
 
 
 class _Model(BaseModel):

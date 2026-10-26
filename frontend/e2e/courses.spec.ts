@@ -110,6 +110,19 @@ test("the tutor gets the right pages of the course for a question", async ({ pag
     route.fulfill({ contentType: "audio/pcm;rate=24000", body: Buffer.alloc(4800) }),
   );
 
+  // The dev server compiles a route on its first call, which can outlast the tutor's 2.5 s wait
+  // for course pages: call it once first (a production build has nothing to compile).
+  const courseId = new URL(page.url()).searchParams.get("course");
+  await page.evaluate(
+    (id) =>
+      fetch(`/api/courses/${id}/retrieve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "friction", k: 1 }),
+      }).then((r) => r.status),
+    courseId,
+  );
+
   await page.getByRole("button", { name: "Debug panel" }).click();
   const input = page.getByRole("textbox", { name: "Simulated utterance" });
   await input.fill("why does friction slow a sliding box down?");

@@ -112,8 +112,8 @@ export function SettingsApp() {
             onChange={(captions) => void update({ captions })}
           />
           <Toggle
-            label="Check my steps as I write"
-            hint="After a pause, a correct step gets a quiet tick; a wrong one gets a hint."
+            label="Mark my work as I write"
+            hint="Each line you finish is checked: a right step gets a small tick, a wrong one a circle and a short hint, silently. Choose how much in each notebook from the toolbar (Off, Quiet, Normal, Coach)."
             checked={settings.auto_check}
             onChange={(auto_check) => void update({ auto_check })}
           />

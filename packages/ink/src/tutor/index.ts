@@ -7,6 +7,7 @@ export * from "./figures/triangle";
 export { FONT_METRICS, glyph, hasGlyph } from "./glyphs/font";
 export * from "./handwriting";
 export * from "./inkify";
+export * from "./live";
 export * from "./placement";
 export * from "./random";
 export * from "./screen/plan";

@@ -21,6 +21,15 @@ export const HexColor = z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/);
 
 export const MAX_POINTS_PER_STROKE = 10_000;
 
+/**
+ * What a live annotation's stroke is (K9 §7.1): a tick, an error circle and its note, an
+ * underline or arrow for something missing, a margin note, or the dashed "?" of a line neb
+ * couldn't read. Marks live on their own layer: never erased, selected or undone with the
+ * student's ink; they're removed by tapping them.
+ */
+export const LiveMarkKind = z.enum(["tick", "error", "missing", "margin", "unsure"]);
+export type LiveMarkKind = z.infer<typeof LiveMarkKind>;
+
 export const Stroke = z.object({
   id: z.uuid(),
   pageId: z.uuid(),
@@ -33,6 +42,8 @@ export const Stroke = z.object({
   createdAt: z.number().int().nonnegative(),
   /** Tutor strokes from one response share a group. */
   groupId: z.uuid().optional(),
+  /** A live annotation's mark (K9); absent for everything else. */
+  markKind: LiveMarkKind.optional(),
 });
 export type Stroke = z.infer<typeof Stroke>;
 

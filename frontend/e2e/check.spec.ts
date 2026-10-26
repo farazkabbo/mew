@@ -1,8 +1,8 @@
 import { expect, type Page, test } from "./fixtures";
 
 /**
- * M5 acceptance: I write a wrong algebra step → it gets circled with a short hint; a correct
- * step gets a small check. Handwriting recognition is mocked (each line gets the LaTeX below,
+ * M5 acceptance, as K9's live annotations do it: I write a wrong algebra step → it gets circled
+ * (just the wrong part) with a short hint, silently; a correct step gets a small check. Handwriting recognition is mocked (each line gets the LaTeX below,
  * in writing order); the maths check runs for real (Next → FastAPI → SymPy), as do the code
  * runner (Pyodide in a worker), Mew's pen-pause trigger and the ink.
  */
@@ -129,7 +129,9 @@ const studentBetween = async (page: Page, top: number, bottom: number) =>
     (s) => s.author === "student" && s.bbox[1] >= top && s.bbox[1] + s.bbox[3] <= bottom,
   );
 
-test("a wrong algebra step is circled with a short hint", async ({ page }) => {
+test("a wrong algebra step is circled where it's wrong, with a short hint, silently (K9)", async ({
+  page,
+}) => {
   test.setTimeout(90_000); // may include the checker service's first start
   const tutorCalls = await fakeServices(page, [
     { text: "2x + 3 = 7", latex: "2x+3=7", subject: "math" },
@@ -143,30 +145,22 @@ test("a wrong algebra step is circled with a short hint", async ({ page }) => {
   await page.waitForTimeout(3000); // pause: line 1 is recognised (and is just a first line)
   await writeLine(page, 250, 3); // a different shape, so it isn't mistaken for line 1
 
-  // The pause after line 2 → SymPy says it doesn't follow → the tutor gets the verdict.
-  await expect.poll(() => tutorCalls.length, { timeout: 15_000 }).toBe(1);
-  expect(tutorCalls[0]?.intent).toBe("check_work");
-  expect(tutorCalls[0]?.checks).toEqual([
-    expect.objectContaining({
-      checker: "math",
-      verdict: "incorrect",
-      target: true,
-      detail: "x = 2 before, x = 5 after",
-    }),
-  ]);
-
-  // Circled in red around line 2 (the model sent no marks: the verifier's mark is added),
-  // with a short note beside it.
+  // The pause after line 2 → SymPy says it doesn't follow → a red loop and a note, no voice.
   await expect
     .poll(async () => (await tutorInColor(page, RED)).length, { timeout: 15_000 })
     .toBeGreaterThan(3);
   const red = await tutorInColor(page, RED);
   const loop = red.reduce((a, b) => (a.bbox[2] * a.bbox[3] > b.bbox[2] * b.bbox[3] ? a : b));
-  for (const s of await studentBetween(page, 240, 290)) {
-    expect(loop.bbox[0]).toBeLessThan(s.bbox[0]);
-    expect(loop.bbox[0] + loop.bbox[2]).toBeGreaterThan(s.bbox[0] + s.bbox[2]);
-  }
-  await expect(page.getByTestId("tutor-caption")).toContainText("Look again");
+  // Round the wrong side ("10", the last letter), not the whole line.
+  const line = (await studentBetween(page, 240, 290)).sort((a, b) => a.bbox[0] - b.bbox[0]);
+  const last = line.at(-1);
+  const first = line[0];
+  if (!last || !first) throw new Error("no line");
+  expect(loop.bbox[0]).toBeLessThan(last.bbox[0]);
+  expect(loop.bbox[0] + loop.bbox[2]).toBeGreaterThan(last.bbox[0] + last.bbox[2]);
+  expect(loop.bbox[0]).toBeGreaterThan(first.bbox[0] + first.bbox[2] / 2);
+  await expect(page.getByTestId("live-mark")).toHaveAttribute("aria-label", "Mark: sign?");
+  expect(tutorCalls).toHaveLength(0); // silent by default: no tutor turn, no voice
 });
 
 test("a correct step gets a small tick, quietly", async ({ page }) => {
@@ -200,12 +194,14 @@ test("code that crashes is caught by actually running it (Pyodide)", async ({ pa
   await page.goto("/notebook");
   await writeLine(page, 200);
 
-  await expect.poll(() => tutorCalls.length, { timeout: 60_000 }).toBe(1);
-  expect(tutorCalls[0]?.checks).toEqual([
-    expect.objectContaining({
-      checker: "code",
-      verdict: "incorrect",
-      detail: expect.stringContaining("NameError") as unknown,
-    }),
-  ]);
+  // The line fails when run: marked, quietly (K9), with a short note.
+  await expect(page.getByTestId("live-mark")).toHaveAttribute(
+    "aria-label",
+    "Mark: this line fails",
+    {
+      timeout: 60_000,
+    },
+  );
+  expect(await tutorInColor(page, RED)).not.toHaveLength(0);
+  expect(tutorCalls).toHaveLength(0);
 });

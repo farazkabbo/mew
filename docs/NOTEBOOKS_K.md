@@ -1340,3 +1340,91 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
     - desktop notifications;
     - a merged card shows only its first moment;
     - filing from the notebook needs a connection (the entry is read from the server to move it).
+96. **Live annotations replace M5's pause check (K9 §7).** A wrong line no longer starts a spoken
+    tutor turn. It gets a circle and a 1–4 word hint, silently, and the tutor speaks only on
+    "Why?" or when asked. Mew's pen pause now asks `live_annotate` first (`liveAnnotate` hook):
+    when a verifier settled the line, the gate model isn't called. "Mark my work as I write"
+    (`auto_check`) stays the overall switch; the level is per notebook.
+97. **When a line is finished (K9 §7.2).** `features/annotate/annotator.ts` watches the page: a
+    line is finished when the pen rests 1.2 s after its last stroke, or when a stroke lands on
+    another line. Each finished line is read (cached by strokes) and checked by the checker router
+    against the working above it (`derivationLines`). An unchanged line isn't checked again. A
+    mark waits until the pen has rested 0.5 s, so it's never drawn over the pen; marks appear at
+    once, without animating, so there's nothing to finish within 150 ms.
+98. **Which mark (`planLiveMark`, shared).**
+    - A tick only after a verifier said so.
+    - A wrong line: a loop round the wrong part plus a hint, never the fix. The wrong part is the
+      equation's side whose numbers changed into ones the line above doesn't have
+      (`wrongPart`), mapped to the strokes by where they sit along the line; else the whole line.
+    - Hints: "sign?" for a term moved across with its sign kept (`signSlip`: a new number that
+      is the sum or difference of a term on one side and a number on the other; coefficients
+      don't count), "units?", "not balanced", "this line fails" (code), "check arithmetic",
+      "check this step".
+    - Below 0.75 recognition confidence a wrong line is never marked wrong: it gets a dashed
+      "?". A maths line nothing could check gets the "?" only when the reading is in doubt.
+    - A fixed line's mark resolves into a tick; the same mistake written again keeps its one
+      mark; a different mistake replaces it.
+99. **Marks are strokes outside the undo history (K9 §7.3).** Each mark is tutor strokes with a
+    `markKind` (`tick`, `error`, `missing`, `margin`, `unsure`), drawn by
+    `packages/ink/src/tutor/live.ts`. `PageEngine.applyMarks` puts them on the page without
+    recording an undo step. They're stored in one Dexie transaction with their record (Dexie v7
+    `annotations`), the strokes of any mark they replace, and the line's reading (on its Notes
+    Check line, when it has one and wasn't read yet). The eraser and the lasso leave marks alone
+    (`isEditable`); a mark is removed by tapping it. A line erased or undone away takes its marks
+    with it.
+100.  **The server keeps what each mark was (K9 §7.3).** Migration `annotations` (RLS, the
+      student's own token):
+      - kind, verdict, method, note, confidence, how it ended (`resolved_at`, `dismissed_as`) and
+        its evidence;
+      - the recognised text only with `notes_index` on;
+      - never strokes or boxes (decision 14).
+
+      The device sends each mark once made and again when it changes (`AnnotationSync`, batches
+      of 50, offline-safe) through `PUT /api/annotations` → `PUT /v1/annotations` (an upsert by
+      id). A trigger keeps a mark's page, line, stroke group and time from changing. "Not wrong"
+      rows are the correction set for §8's evals.
+
+101.  **Levels, per notebook (K9 §7.1).** The toolbar's marks control: Off, Quiet (errors only),
+      Normal (errors and ticks, the default) and Coach (also margin notes, and "next step?" after
+      20 s without writing following a right line). It also has "Hide marks until I'm done" and
+      "Show marks on this page" (the page's eye). The level and the hide choice are kept per
+      notebook on the device (localStorage); the eye per page. At most six unresolved marks show
+      at once; more are saved unseen and appear as others come off.
+102.  **Hide until done.** Marks are worked out and saved, but their strokes stay hidden
+      (`unrevealedMarks`) until Alt+C (or "check", the same path) shows them. Alt+C only reveals
+      when something is held back; otherwise it checks as before.
+103.  **Tapping a mark (K9 §7.1).** A layer over the page puts a button over each mark's tick,
+      note or "?", never over the loop round the line, which the student writes on to fix it.
+      - **Why?** asks the tutor about that line: the line is the turn's circled line (K6),
+        `answer_question`, and fixing the line afterwards counts as `after_explanation`.
+      - **Not wrong** removes the mark and keeps it as a correction.
+      - **Hide** removes it.
+      - **On a "?":** "I read: … — right?", answered "Yes" or by typing what the line says. Either
+        way the line is checked again as certain (confidence 1).
+104.  **Writing subjects (K9, Coach).** A finished line of biology, history, languages or "other"
+      gets at most one rubric margin note (`POST /api/annotate/mark`, prompt `live-mark.v1`, the
+      verifier model). The note is 1–4 words that point at a problem without fixing it, cut to
+      four words and passed through the safety check; null when unsure. It's the only model call
+      live annotations make besides recognition.
+105.  **Evidence (K9 §7.4).** Only checker-verified lines (maths, chemistry, code) count, once per
+      line, when the line is right:
+      - right first time is `independent`;
+      - right after a mark is `with_hint`;
+      - right after "Why?" is `after_explanation`.
+
+      A mark dismissed as "not wrong" doesn't count as a mark. Attempts need concepts: the page's
+      latest worked solution names them (`source: live_annotation`), else nothing is logged (the
+      evidence is still kept on the mark).
+
+106.  **Budget (K9 §7.5).** The margin notes have their own limits (`liveMark`: 20 a minute, 200 a
+      day). When a 429 asks to wait more than 10 minutes (the margin notes' or recognition's
+      daily budget), every notebook drops to Quiet for the rest of the day, with a notice.
+      Measured end to end with SymPy: the mark showed about 0.7 s after the line counted as
+      finished (1.9 s after the pen stopped, the 1.2 s pause included).
+107.  **Left for later (K9):**
+      - marks in page exports, page Replay, Notes Check and Moments context;
+      - concepts for live evidence without a worked solution;
+      - a fade as a circle resolves (it's swapped for the tick at once);
+      - "the student moves to the next problem" as a finish signal (a new line covers it);
+      - an offline reload in the e2e test (the dev server can't serve one: the test reloads, then
+        goes offline).

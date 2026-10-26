@@ -20,6 +20,10 @@ type ToolState = {
    * check), and replay with its voice when asked.
    */
   momentRequest: { imageId: string; replay: boolean } | null;
+  /** K9: pages whose marks layer is hidden (the eye), remembered on this device. */
+  marksHiddenOn: ReadonlySet<string>;
+  /** K9: marks held back by "Hide marks until I'm done" (their stroke groups). */
+  unrevealedMarks: ReadonlySet<string>;
 };
 
 type ViewState = {
@@ -38,10 +42,13 @@ type Actions = {
   setReplayHidden(groups: ReadonlySet<string>): void;
   setFoldedGroups(groups: ReadonlySet<string>): void;
   requestMoment(request: { imageId: string; replay: boolean } | null): void;
+  toggleMarksOn(pageId: string): void;
+  setUnrevealedMarks(groups: ReadonlySet<string>): void;
   setView(view: Partial<ViewState>): void;
 };
 
 const TUTOR_INK_KEY = "mew:show-tutor-ink";
+const MARKS_HIDDEN_KEY = "mew:marks-hidden-pages";
 
 /**
  * UI state for the notebook (tool choice, toolbar indicators). The canvas reads it with
@@ -57,6 +64,8 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   replayHidden: new Set(),
   foldedGroups: new Set(),
   momentRequest: null,
+  marksHiddenOn: new Set(readList(MARKS_HIDDEN_KEY)),
+  unrevealedMarks: new Set(),
   zoom: 1,
   canUndo: false,
   canRedo: false,
@@ -76,6 +85,13 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   setReplayHidden: (replayHidden) => set({ replayHidden }),
   setFoldedGroups: (foldedGroups) => set({ foldedGroups }),
   requestMoment: (momentRequest) => set({ momentRequest }),
+  toggleMarksOn: (pageId) => {
+    const next = new Set(get().marksHiddenOn);
+    if (!next.delete(pageId)) next.add(pageId);
+    writeList(MARKS_HIDDEN_KEY, [...next].slice(-500));
+    set({ marksHiddenOn: next });
+  },
+  setUnrevealedMarks: (unrevealedMarks) => set({ unrevealedMarks }),
   setView: (view) => set(view),
 }));
 
@@ -93,5 +109,24 @@ function writeFlag(key: string, value: boolean): void {
     localStorage.setItem(key, value ? "1" : "0");
   } catch {
     // Storage unavailable: the setting lasts for this session only.
+  }
+}
+
+function readList(key: string): string[] {
+  if (typeof window === "undefined") return []; // the server render (and tests): nothing kept
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeList(key: string, values: readonly string[]): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(values));
+  } catch {
+    // Storage unavailable: the choice lasts for this session only.
   }
 }

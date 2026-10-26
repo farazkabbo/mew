@@ -27,6 +27,8 @@ type Props = {
   onZoom(factor: number): void;
   onResetView(): void;
   onExportLine(): void;
+  /** K9: the live annotations' control (level, hide until done, the page's marks). */
+  marks?: ReactNode;
 };
 
 const TOOLS: { tool: Tool; label: string; icon: LucideIcon }[] = [
@@ -36,7 +38,7 @@ const TOOLS: { tool: Tool; label: string; icon: LucideIcon }[] = [
   { tool: "lasso", label: "Lasso select", icon: LassoSelect },
 ];
 
-export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: Props) {
+export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine, marks }: Props) {
   const {
     tool,
     inkColor,
@@ -156,6 +158,7 @@ export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine }: P
         onClick={toggleTutorInk}
       />
       <IconButton icon={ImageDown} label="Export current line as PNG" onClick={onExportLine} />
+      {marks}
     </div>
   );
 }

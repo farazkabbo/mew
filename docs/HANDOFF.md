@@ -276,6 +276,33 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     the attempts); a biology video with no Biology notebook going to Unsorted with "+ New
     notebook: Biology"; and the real model's check questions (`pnpm eval:solution` doesn't cover
     them yet).
+- **K9 (live annotations)** — NOTEBOOKS_K.md §7, decisions 96–107:
+  - **Shared:** `annotations.ts` (`planLiveMark`, `markHint`, `signSlip`, `wrongPart`,
+    `liveEvidence`, the `Annotation` record and its sync schemas, levels); `Stroke.markKind`;
+    prompt `live-mark.v1`; attempt source `live_annotation`.
+  - **Ink:** `tutor/live.ts` (tick, loop round the wrong part with its note, underline, margin
+    note with an arrow, dashed "?"; strokes tagged with `markKind`).
+  - **Notebook:** `features/annotate/`:
+    - `annotator.ts` (`LiveAnnotator`: finished lines, check, mark, resolve, queue and cap,
+      Coach nudge, evidence);
+    - `records.ts` (Dexie v7, one transaction), `sync.ts`, `prefs.ts` (level per notebook,
+      hide until done, budget → Quiet), `MarksMenu.tsx` (toolbar), `MarkLayer.tsx` (tap menu).
+
+    `PageEngine.applyMarks` keeps marks out of undo; the eraser and lasso skip them. It's wired
+    in `useMewSession` (the `liveAnnotate` pen-pause hook, "Why?" via `askAboutLine`, Alt+C
+    reveals).
+
+  - **Server:** `PUT /api/annotations` → FastAPI `PUT /v1/annotations` (`routes/annotations.py`,
+    RLS upsert); `POST /api/annotate/mark` (margin notes, `server/live-mark.ts`, `liveMark` limits).
+  - **The `annotations` migration (`20261105000000_annotations.sql`) is not applied to the
+    hosted project yet.**
+  - **To verify by hand:**
+    - the K9 acceptance with real handwriting and Gemini recognition (`3x + 7 = 19`, `3x = 26`,
+      then fixed);
+    - margin notes on a history paragraph at Coach;
+    - a pen, and a finger, tapping a mark;
+    - marks at 150 % zoom;
+    - an offline reload of the production build (the PWA).
   - **To verify by hand:** the K3 acceptance on a YouTube video in the desktop app ("why is this
     the hypotenuse? save it to my physics notebook chapter 5" → Physics › Chapter 5 › From
     screen with the timestamp; with four chapters, "Create Chapter 5 and save").
@@ -351,6 +378,9 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K9): **1,605 unit tests** (frontend 517, backend 362, ink 169, shared 391,
+database 143, desktop overlays 23), the same 169 Rust tests, and **80 Playwright tests** (all passing in one full run).
 
 Tests (after K8): **1,575 unit tests** (frontend 509, backend 360, ink 164, shared 381,
 database 138, desktop overlays 23), **169 Rust tests** (+5 real-Windows ones) and **76 Playwright

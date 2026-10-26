@@ -37,6 +37,11 @@ export class RecognitionService {
     this.store(this.key(doc, line), recognition);
   }
 
+  /** How long recognition is paused for after a 429 (ms; 0 when it isn't): K9's budget. */
+  get pausedForMs(): number {
+    return Math.max(0, this.pausedUntil - Date.now());
+  }
+
   /** Whether a batch could be sent now (not paused after a 429, and configured). */
   get canBatch(): boolean {
     return !this.unavailable && !this.batchUnavailable && Date.now() >= this.pausedUntil;

@@ -9,6 +9,11 @@ import {
 } from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { MarkLayer } from "../annotate/MarkLayer";
+import { MarksMenu } from "../annotate/MarksMenu";
+import { useMarkPrefs } from "../annotate/prefs";
+import { AnnotationRecords } from "../annotate/records";
+import { AnnotationSync } from "../annotate/sync";
 import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
@@ -37,6 +42,7 @@ import { useHoldToTalk } from "../shortcuts/useHoldToTalk";
 import { useShortcutKeys } from "../shortcuts/useShortcutKeys";
 import { useVoice } from "../voice/store";
 import { useQuiz } from "../quiz/store";
+import { useSettings } from "../settings/store";
 import { type CanvasHandle, NotebookCanvas } from "./canvas/NotebookCanvas";
 import { ClipSource } from "./ClipSource";
 import { NotebookDb } from "./db";
@@ -560,6 +566,37 @@ export function NotebookApp({ userId }: { userId: string }) {
   const loadCounts = useCallback((ids: readonly string[]) => repo.countPages(ids), [repo]);
   /** Where Alt+N adds a chapter: the open notebook (a chapter's own notebook). */
   const rootId = notebookId ? (tree.path(notebookId)[0]?.id ?? null) : null;
+
+  // Live annotations (K9): kept on this device, sent to the server, per notebook level.
+  const annotationRecords = useMemo(() => new AnnotationRecords(db), [db]);
+  const { setLiveAnnotations, setLiveNotebook } = mew;
+  useEffect(() => {
+    const sync = new AnnotationSync(
+      annotationRecords,
+      () => useSettings.getState().settings.notes_index,
+    );
+    setLiveAnnotations({ records: annotationRecords, sync });
+    return () => {
+      setLiveAnnotations(null);
+      sync.dispose();
+    };
+  }, [setLiveAnnotations, annotationRecords]);
+  useEffect(() => {
+    setLiveNotebook(rootId);
+  }, [setLiveNotebook, rootId]);
+  // The day's budget for live marking spent (§7.5): Quiet until tomorrow, and the student is told.
+  useEffect(
+    () =>
+      useMarkPrefs.subscribe((state, previous) => {
+        if (state.quietUntil > previous.quietUntil) {
+          setNotice({
+            text: "Live marks are on Quiet for the rest of today: today's budget is used.",
+            tone: "info",
+          });
+        }
+      }),
+    [],
+  );
   useTreeShortcuts(
     {
       newNotebook: treeActions.startCreating,
@@ -670,12 +707,21 @@ export function NotebookApp({ userId }: { userId: string }) {
             onZoom={actions.zoom}
             onResetView={actions.resetView}
             onExportLine={() => void exportLine().catch(report)}
+            marks={<MarksMenu notebookId={rootId} pageId={view === "page" ? pageId : null} />}
           />
         </div>
 
         {engine && <EntryNotes canvas={canvas} images={engine.images} />}
 
         {engine && view === "page" && <NotebookPointer canvas={canvas} ink={mew.ink} />}
+
+        {engine && view === "page" && (
+          <MarkLayer
+            canvas={canvas}
+            live={mew.live}
+            onWhy={(mark) => mew.askAboutLine(mark.lineStrokeIds)}
+          />
+        )}
 
         {engine && view === "page" && (
           <SolutionLayer

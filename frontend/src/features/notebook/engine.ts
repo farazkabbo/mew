@@ -126,6 +126,28 @@ export class PageEngine {
     this.perform(addCommand([...strokes]), "tutor");
   }
 
+  /**
+   * Live annotations' marks (K9 §7.3): on the page at once, but never in the student's undo
+   * history (undo must never skip over their own writing); `write` stores them (with the mark's
+   * record, in one transaction), queued after the page's other writes.
+   */
+  applyMarks(added: readonly Stroke[], removedIds: readonly string[], write: () => Promise<void>) {
+    const removed = this.existing(removedIds);
+    if (added.length === 0 && removed.length === 0) return;
+    this.doc.apply({ removed, added: [...added] });
+    this.emit("tutor");
+    this.pendingWrites = this.pendingWrites
+      .then(async () => {
+        await write();
+        if (!this.disposed)
+          this.channel?.postMessage({
+            type: "strokes-changed",
+            pageId: this.pageId,
+          } satisfies SyncMessage);
+      })
+      .catch(this.onError);
+  }
+
   deleteStrokes(ids: readonly string[]): void {
     this.perform(eraseCommand(this.existing(ids)), "delete");
   }

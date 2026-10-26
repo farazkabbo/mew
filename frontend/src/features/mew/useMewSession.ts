@@ -6,13 +6,17 @@ import {
   type Evidence,
   type MewDecisionResponse,
   type MewInput,
-  reconcileMarks,
   type SavedQuizFilter,
   savedQuizRequest,
   TUTOR_LIMITS,
 } from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { BUDGET_PAUSE_MS, liveMarkNote } from "../annotate/api";
+import { LiveAnnotator } from "../annotate/annotator";
+import { useMarkPrefs } from "../annotate/prefs";
+import type { AnnotationRecords } from "../annotate/records";
+import type { AnnotationSync } from "../annotate/sync";
 import { coursesApi } from "../courses/api";
 import { circledLines } from "../notebook/circle";
 import type { PageEngine } from "../notebook/engine";
@@ -200,14 +204,15 @@ function createPipeline() {
       return phase !== "idle" || recent;
     },
     activeRegionText: (doc) => recognition.currentLineText(doc),
-    quickCheck: (doc) => {
+    // K9: a finished line is checked and marked by live annotations (silently: a wrong line gets
+    // a circle and a hint, not a tutor turn); the gate isn't asked when a verifier settled it.
+    liveAnnotate: () => live.annotateNow(),
+    quickCheck: () => {
       if (!useTutor.getState().autoCheck) return Promise.resolve(null);
       // A pen pause in the Your Turn box checks it from its problem (and marks it itself).
       if (solutions?.owns(engine)) return solutions.check({ quiet: true }).then(() => null);
-      return checker.quickCheck(doc);
+      return Promise.resolve(null);
     },
-    // A verified-correct line just gets a small tick: no voice, no model call.
-    onVerifiedCorrect: (checks) => void ink.render(reconcileMarks([], checks)),
   });
   const gate = mew;
   const read = (doc: PageEngine["doc"], line: Parameters<RecognitionService["recognize"]>[1]) =>
@@ -228,6 +233,50 @@ function createPipeline() {
         .catch(() => undefined);
     }
   };
+  // Live annotations (K9 §7): every finished line checked and marked as the student writes.
+  let liveRecords: AnnotationRecords | null = null;
+  let liveNotebook: string | null = null;
+  let liveSync: AnnotationSync | null = null;
+  const live = new LiveAnnotator({
+    engine: () => engine,
+    records: {
+      forPage: (pageId) => liveRecords?.forPage(pageId) ?? Promise.resolve([]),
+      save: (change) => liveRecords?.save(change) ?? Promise.resolve(),
+      noteLineId: (pageId, strokeIds) =>
+        liveRecords?.noteLineId(pageId, strokeIds) ?? Promise.resolve(null),
+    },
+    recognize: async (page, line) => {
+      const reading = await read(page.doc, line);
+      // Recognition's daily budget spent: marking drops to Quiet for the day (§7.5).
+      if (!reading && recognition.pausedForMs > BUDGET_PAUSE_MS)
+        useMarkPrefs.getState().budgetSpent();
+      return reading;
+    },
+    known: (page, line) => recognition.cached(page.doc, line),
+    remember: (page, line, reading) => recognition.remember(page.doc, line, reading),
+    check: (page, line) => checker.check(page.doc, line),
+    level: () =>
+      useTutor.getState().autoCheck ? useMarkPrefs.getState().levelFor(liveNotebook) : "off",
+    active: () => !quizSession.active && !(solutions?.owns(engine) ?? false),
+    hideUntilDone: () => useMarkPrefs.getState().prefsFor(liveNotebook).hideUntilDone,
+    colors: () => ({
+      ink: TUTOR_INK.light,
+      error: INK_COLORS[2].light,
+      correct: INK_COLORS[3].light,
+    }),
+    viewport: () => ink.viewport(),
+    rubric: liveMarkNote,
+    onEvidence: (evidence) => {
+      const page = engine?.pageId;
+      if (!page || !records) return;
+      // The page's concepts, when a worked solution on it named them (else nothing is logged).
+      void records
+        .forPage(page)
+        .then((list) => attempt(list.at(-1)?.conceptIds ?? [], evidence, "live_annotation"))
+        .catch(() => undefined);
+    },
+    onChanged: () => liveSync?.soon(),
+  });
   // Show-then-You (K6): "just give me the answer" is worked, verified, folded, then a Your Turn.
   solutions = new ShowThenYou({
     engine: () => engine,
@@ -314,6 +363,7 @@ function createPipeline() {
     quiz: quizSession,
     classifier,
     showThenYou,
+    live,
     engine: () => engine,
     /** Where worked solutions are kept on this device (the notebook's database). */
     setRecords(next: SolutionRecords | null) {
@@ -326,6 +376,33 @@ function createPipeline() {
     /** Who handles Mew's notebook labels (the notebook screen, K3). */
     setNotebookVoice(handler: NotebookVoiceHandler | null) {
       notebookVoice = handler;
+    },
+    /** Where live annotations are kept, and the notebook on screen (its level, K9). */
+    setLiveAnnotations(next: { records: AnnotationRecords; sync: AnnotationSync } | null) {
+      liveRecords = next?.records ?? null;
+      liveSync = next?.sync ?? null;
+      if (next) void next.sync.run();
+    },
+    setLiveNotebook(id: string | null) {
+      liveNotebook = id;
+    },
+    /** "Why?" on a mark (K9 §7.1): the tutor explains that line (it's the turn's circled line). */
+    askAboutLine(strokeIds: readonly string[]) {
+      if (!engine) return;
+      const wanted = new Set(strokeIds);
+      const line = studentLines(engine.doc)
+        .map((l) => ({ l, shared: l.strokeIds.filter((id) => wanted.has(id)).length }))
+        .filter((c) => c.shared > 0)
+        .sort((a, b) => b.shared - a.shared)[0]?.l;
+      if (!line) return;
+      circled = { lines: [line], at: Date.now() };
+      act({
+        intent: "answer_question",
+        trigger: "summon",
+        utterance: "Why is this marked?",
+        triggeredAt: Date.now(),
+        gateMs: 0,
+      });
     },
     /** Who opens the Quick check for "quiz me on what I saved" (the notebook screen, K8). */
     setQuizSaved(handler: ((filter: SavedQuizFilter) => void) | null) {
@@ -369,6 +446,7 @@ function createPipeline() {
     },
     /** Follows the page on screen. */
     setEngine(next: PageEngine | null) {
+      void live.attach(next);
       if (next !== engine) ink.finish(); // unfinished ink lands on the page it was meant for
       engine = next;
       gate.observe(next);
@@ -478,6 +556,11 @@ export function useMewSession(
    */
   const checkWork = useCallback(() => {
     tutor.unlockAudio();
+    // K9 "Hide marks until I'm done": Alt+C shows what was worked out first.
+    if (pipeline.live.open.some((m) => !m.revealed)) {
+      void pipeline.live.reveal();
+      return;
+    }
     if (quiz.active) {
       void quiz.check();
       return;
@@ -507,6 +590,10 @@ export function useMewSession(
     showThenYou,
     setSolutionRecords: pipeline.setRecords,
     hold,
+    live: pipeline.live,
+    setLiveAnnotations: pipeline.setLiveAnnotations,
+    setLiveNotebook: pipeline.setLiveNotebook,
+    askAboutLine: pipeline.askAboutLine,
   };
 }
 

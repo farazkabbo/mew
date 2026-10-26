@@ -1,3 +1,4 @@
+export * from "./annotations";
 export * from "./auth";
 export * from "./check";
 export * from "./chemistry";
@@ -23,6 +24,7 @@ export * from "./notes-check";
 export * from "./notes-panel";
 export * from "./notes-validate";
 export * from "./pdfs";
+export * from "./prompts/annotations";
 export * from "./prompts/coach";
 export * from "./prompts/destination";
 export * from "./prompts/notes";

@@ -46,6 +46,11 @@ export type MewHooks = {
    * definite verdict short-circuits the gate; null means "can't tell", and the gate decides.
    */
   quickCheck?(doc: PageDocument): Promise<LineCheck[] | null>;
+  /**
+   * K9 `live_annotate`: after a writing pause, live annotations check and mark the line first
+   * (rule-based: no gate model call). True when a verifier settled it, and the turn is done.
+   */
+  liveAnnotate?(): Promise<boolean>;
   /** A pause produced a verified-correct line: tick it quietly (no tutor turn). */
   onVerifiedCorrect?(checks: LineCheck[]): void;
   /** Whether to ignore a trigger altogether (e.g. writing pauses during a quiz). */
@@ -121,6 +126,23 @@ export class MewController {
     const started = this.clock.now();
     const mew = useMew.getState();
     mew.begin();
+    if (trigger === "pen_pause" && this.hooks.liveAnnotate) {
+      const marked = await this.hooks.liveAnnotate().catch(() => false);
+      if (marked) {
+        const gateMs = this.clock.now() - started;
+        useMew.getState().record({
+          output: { label: "ignore", confidence: 1, reason: "live annotation marked the line" },
+          source: "checker",
+          latencyMs: Math.round(gateMs),
+          at: started,
+          trigger,
+          utterance: input.lastUtterance,
+          roundTripMs: gateMs,
+          acted: false,
+        });
+        return;
+      }
+    }
     if (trigger === "pen_pause" && this.page && this.hooks.quickCheck) {
       const checks = await this.hooks.quickCheck(this.page.doc).catch(() => null);
       if (checks && this.verified(checks, input, started)) return;

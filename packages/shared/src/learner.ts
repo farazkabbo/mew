@@ -18,6 +18,8 @@ export const AttemptSource = z.enum([
   "your_turn",
   /** A saved moment's check question (K8). */
   "moment_check",
+  /** A line marked while the student wrote, then right (K9). */
+  "live_annotation",
 ]);
 export type AttemptSource = z.infer<typeof AttemptSource>;
 

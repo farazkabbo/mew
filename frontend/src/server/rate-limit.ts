@@ -42,6 +42,14 @@ export const RATE_RULES = {
   /** K8: a moment's voice, uploaded a step at a time after it was played. */
   momentAudio: { limit: 30, windowMs: MINUTE },
   momentAudioDaily: { limit: 600, windowMs: DAY },
+  /**
+   * K9: live annotations' margin notes (writing subjects, Coach level: a fast model call). Its
+   * daily budget running out drops the page to Quiet (§7.5); the verifiers have their own.
+   */
+  liveMark: { limit: 20, windowMs: MINUTE },
+  liveMarkDaily: { limit: 200, windowMs: DAY },
+  /** K9: sending live annotations (batched by the device; a database write, no model). */
+  annotationsSync: { limit: 60, windowMs: MINUTE },
   /** Handwriting recognition of single lines. */
   recognize: { limit: 30, windowMs: MINUTE },
   recognizeDaily: { limit: 1500, windowMs: DAY },

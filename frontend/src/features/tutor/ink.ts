@@ -120,6 +120,11 @@ export class TutorInk implements InkLayer {
   }
 
   /** The canvas tells us what's on screen, so ink lands where the student is looking. */
+  /** The page area on screen (where new ink should land), or a default before it's known. */
+  viewport(): BBox {
+    return this.viewportOf?.() ?? FALLBACK_VIEWPORT;
+  }
+
   attachViewport(viewport: () => BBox): () => void {
     this.viewportOf = viewport;
     return () => {

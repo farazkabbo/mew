@@ -1,5 +1,5 @@
 import { ERASER_RADIUS_PX } from "../../palette";
-import { isShown } from "../../visibility";
+import { isEditable } from "../../visibility";
 import type { PagePoint, ToolContext, ToolController } from "./types";
 
 /** Stroke eraser: removes whole strokes it touches; one drag is one undo step. */
@@ -38,7 +38,7 @@ export class EraserTool implements ToolController {
   private eraseTo(point: PagePoint): void {
     const from = this.last ?? [point.x, point.y];
     const to: [number, number] = [point.x, point.y];
-    if (this.ctx.engine.eraseAlong(from, to, this.radius(), isShown)) {
+    if (this.ctx.engine.eraseAlong(from, to, this.radius(), isEditable)) {
       this.ctx.invalidate({ ink: true });
     }
     this.last = to;

@@ -154,7 +154,7 @@ export const pointAtLine: ActionRenderer<Of<"point_at">> = (action, planner, ind
 };
 
 /** A hand-drawn loop around a line: slightly uneven, overlapping where it closes. */
-function ellipseAround(bbox: BBox, planner: BoardPlanner): [number, number][] {
+export function ellipseAround(bbox: BBox, planner: BoardPlanner): [number, number][] {
   const pad = 0.45 * planner.scale.xHeight;
   const [x, y, w, h] = inflateBBox(bbox, pad);
   const cx = x + w / 2;
@@ -175,7 +175,7 @@ function ellipseAround(bbox: BBox, planner: BoardPlanner): [number, number][] {
   return points;
 }
 
-function seeded(bbox: BBox): () => number {
+export function seeded(bbox: BBox): () => number {
   let s = Math.round(bbox[0] * 31 + bbox[1] * 17) >>> 0;
   return () => {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;

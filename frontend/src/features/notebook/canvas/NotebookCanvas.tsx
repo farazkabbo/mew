@@ -247,7 +247,9 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       if (
         state.showTutorInk !== previous.showTutorInk ||
         state.replayHidden !== previous.replayHidden ||
-        state.foldedGroups !== previous.foldedGroups
+        state.foldedGroups !== previous.foldedGroups ||
+        state.marksHiddenOn !== previous.marksHiddenOn ||
+        state.unrevealedMarks !== previous.unrevealedMarks
       ) {
         schedule({ ink: true, live: true });
       }

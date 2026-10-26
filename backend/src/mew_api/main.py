@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
+from .annotations.store import MemoryAnnotationStore
 from .auth import ClerkTokenVerifier, JwksCache, TokenVerifier
 from .checker.sandbox import CheckerPool, limit_memory
 from .clips.store import MemoryClipStore
@@ -26,6 +27,7 @@ from .notes.store import MemoryNoteLineStore
 from .pdfs.store import MemoryPdfStore
 from .profiles.store import MemoryProfileStore
 from .routes import (
+    annotations,
     check,
     clips,
     courses,
@@ -102,6 +104,7 @@ def create_app(
         lambda user: moment_texts(app.state.local_clips.moment_rows(user)),
     )
     app.state.local_audio = MemoryAudioStore()
+    app.state.local_annotations = MemoryAnnotationStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -120,6 +123,7 @@ def create_app(
     v1.include_router(notes.router)
     v1.include_router(walkthroughs.router)
     v1.include_router(moments.router)
+    v1.include_router(annotations.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

@@ -1,4 +1,11 @@
-import { type ImageBlock, type Notebook, NotebookTree, type Page, type Stroke } from "@mew/shared";
+import {
+  type Annotation,
+  type ImageBlock,
+  type Notebook,
+  NotebookTree,
+  type Page,
+  type Stroke,
+} from "@mew/shared";
 import Dexie, { type EntityTable } from "dexie";
 
 import type { LocalNoteLine } from "../notes/local-lines";
@@ -58,6 +65,8 @@ export class NotebookDb extends Dexie {
   pdfs!: EntityTable<LocalPdf, "pdfId">;
   /** Worked solutions on pages, folded or not, and their Your Turns (K6). */
   solutions!: EntityTable<LocalSolution, "id">;
+  /** Live annotations' marks, and how each ended (K9). */
+  annotations!: EntityTable<Annotation, "id">;
 
   constructor(readonly userId: string) {
     super(databaseName(userId));
@@ -95,6 +104,7 @@ export class NotebookDb extends Dexie {
       });
     this.version(5).stores({ pdfPages: "key, pdfId, usedAt", pdfs: "pdfId" });
     this.version(6).stores({ solutions: "id, pageId" });
+    this.version(7).stores({ annotations: "id, pageId" });
   }
 }
 
