@@ -106,6 +106,29 @@ export function unsortedNodeId(userId: string): string {
 
 export const UNSORTED_TITLE = "Unsorted";
 
+/** Unsorted's "File these" (§4.6): ask for a place for each waiting moment. */
+export const MomentSuggestionsRequest = z.object({
+  clipIds: z.array(z.uuid()).min(1).max(30),
+});
+export type MomentSuggestionsRequest = z.infer<typeof MomentSuggestionsRequest>;
+
+/** A place for a waiting moment, or none (nothing fits well enough to suggest one). */
+export const MomentSuggestion = z.object({
+  clipId: z.uuid(),
+  nodeId: z.uuid().nullish(),
+  path: z.array(z.string().min(1).max(200)).min(1).max(3).nullish(),
+  method: FilingMethod.exclude(["spoken", "unsorted"]).nullish(),
+  matched: z.string().max(80).nullish(),
+});
+export type MomentSuggestion = z.infer<typeof MomentSuggestion>;
+
+export const MomentSuggestions = z.object({ suggestions: z.array(MomentSuggestion).max(30) });
+export type MomentSuggestions = z.infer<typeof MomentSuggestions>;
+
+/** `POST /api/moments/[clipId]/move`: a moment filed from the notebook (moved, or accepted). */
+export const MomentMove = z.object({ nodeId: z.uuid() });
+export type MomentMove = z.infer<typeof MomentMove>;
+
 // ─── "Quiz me on what I saved today" (§4.5) ──────────────────────────────────────────────────
 
 export type SavedQuizFilter = { since: "today" | "week" | null; place: string | null };

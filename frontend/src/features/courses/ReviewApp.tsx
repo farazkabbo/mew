@@ -3,16 +3,30 @@
 import type { ReviewItem } from "@mew/shared";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { QuickCheck } from "../moments/QuickCheck";
+import { useMomentChecks } from "../moments/store";
 import { coursesApi, CourseApiError, formatDue, quizHref } from "./api";
 import { CourseShell } from "./CourseShell";
 
-/** What's due for review across all courses (FSRS), grouped by course, with a quiz per course. */
+/**
+ * What's due for review across all courses (FSRS), grouped by course, with a quiz per course;
+ * and (K8 §4.7) the check questions of moments saved from the screen, as a Quick check.
+ */
 export function ReviewApp() {
+  const router = useRouter();
+  const checks = useMomentChecks((s) => s.checks);
+  const openQuickCheck = useMomentChecks((s) => s.openQuickCheck);
   const [items, setItems] = useState<ReviewItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now] = useState(() => new Date());
+
+  useEffect(() => {
+    void useMomentChecks.getState().load(true);
+  }, []);
+  const momentsDue = (checks ?? []).filter((c) => Date.parse(c.dueAt) <= now.getTime()).length;
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +60,31 @@ export function ReviewApp() {
         </p>
       )}
       {!items && !error && <p className="text-ink-muted">Loading…</p>}
-      {items?.length === 0 && (
+      {momentsDue > 0 && (
+        <section
+          aria-label="Saved moments"
+          data-testid="review-moments"
+          className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rule bg-paper-raised p-4"
+        >
+          <span>
+            <span className="font-serif text-2xl">From what you saved</span>
+            <span className="block text-sm text-ink-muted">
+              {momentsDue === 1 ? "1 check" : `${momentsDue} checks`} due from moments you saved
+              from your screen.
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={() => openQuickCheck()}
+            className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-paper"
+          >
+            <Sparkles className="size-4" aria-hidden />
+            Quick check
+          </button>
+        </section>
+      )}
+      <QuickCheck onReplay={(clipId) => router.push(`/notebook?moment=${clipId}`)} />
+      {items?.length === 0 && momentsDue === 0 && (
         <p className="rounded-2xl border border-rule bg-paper-raised p-6">
           Nothing is due right now. Open a lesson or{" "}
           <Link href="/courses" className="underline hover:text-accent">

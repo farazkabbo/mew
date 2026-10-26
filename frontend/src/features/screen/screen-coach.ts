@@ -4,12 +4,14 @@ import { askAboutScreen, reportSpoken } from "../desktop/bridge";
 import { useSettings } from "../settings/store";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
 import type { ScreenAnswerDetail } from "./events";
+import { collect, type SpokenLines } from "./entry-voice";
 import { HoldToTalk } from "./hold-to-talk";
 
 export type ScreenCoachDeps = {
   listener: Pick<HoldToTalk, "start" | "finish" | "cancel">;
   ask: (transcript: string) => Promise<void>;
-  speak: (text: string) => Promise<void>;
+  /** `keep`: remember how it sounded (a Circle & Ask step: K8 keeps it with its entry). */
+  speak: (text: string, keep?: boolean) => Promise<void>;
   /** Stops whatever is being said (the student pressed the hotkey, or newer words came). */
   hush: () => void;
   /** Tells the desktop app a line with a token has been said. */
@@ -55,7 +57,7 @@ export class ScreenCoachVoice {
    */
   onSay(text: string, token?: number): void {
     this.deps.hush();
-    const said = this.deps.speak(text).catch(() => undefined);
+    const said = this.deps.speak(text, token !== undefined).catch(() => undefined);
     if (token !== undefined) void said.then(() => this.deps.spoken(token));
   }
 
@@ -71,12 +73,12 @@ export class ScreenCoachVoice {
   }
 }
 
-function defaultDeps(): ScreenCoachDeps {
+export function defaultDeps(spoken: SpokenLines | null = null): ScreenCoachDeps {
   const player = new PcmStreamPlayer();
   return {
     listener: new HoldToTalk(),
     ask: askAboutScreen,
-    speak: async (text) => {
+    speak: async (text, keep = false) => {
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,7 +86,14 @@ function defaultDeps(): ScreenCoachDeps {
         cache: "no-store",
       }).catch(() => null);
       if (!response?.ok || !response.body) return;
-      await player.play(response.body, { sampleRate: TTS_SAMPLE_RATE });
+      if (!keep || !spoken) {
+        await player.play(response.body, { sampleRate: TTS_SAMPLE_RATE });
+        return;
+      }
+      // Played and kept at once: the kept copy goes with the entry when it's saved (K8).
+      const [heard, kept] = response.body.tee();
+      void collect(kept).then((pcm) => pcm && spoken.remember(text, pcm));
+      await player.play(heard, { sampleRate: TTS_SAMPLE_RATE });
     },
     hush: () => player.stop(),
     spoken: (token) => void reportSpoken(token).catch(() => undefined),

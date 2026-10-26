@@ -24,6 +24,8 @@ type Props = {
   addNoun: string | null;
   dropZone: DropZone | null;
   menu: readonly RowMenuItem[];
+  /** A number shown after the title (K8: the moments waiting in Unsorted). */
+  count?: number;
   rowRef: Ref<HTMLDivElement>;
   onOpen(): void;
   onToggle(): void;
@@ -52,6 +54,7 @@ export function TreeRow({
   addNoun,
   dropZone,
   menu,
+  count,
   rowRef,
   onOpen,
   onToggle,
@@ -145,6 +148,15 @@ export function TreeRow({
         <RenameField initial={node.title} onSave={onRename} onCancel={onCancelRename} />
       ) : (
         <span className="min-w-0 flex-1 truncate">{node.title}</span>
+      )}
+      {!renaming && count !== undefined && count > 0 && (
+        <span
+          data-testid="tree-row-count"
+          aria-label={`${count} waiting`}
+          className="shrink-0 rounded-full bg-sidebar-ink/10 px-1.5 text-xs tabular-nums"
+        >
+          {count}
+        </span>
       )}
 
       {!renaming && (

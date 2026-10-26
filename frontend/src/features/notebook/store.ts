@@ -15,6 +15,11 @@ type ToolState = {
   replayHidden: ReadonlySet<string>;
   /** Worked solutions folded into their "Solution · tap to peek" tab (K6 §6.1). */
   foldedGroups: ReadonlySet<string>;
+  /**
+   * A moment to bring into view once its page is open (K8: from Moments, Ctrl+K or a Quick
+   * check), and replay with its voice when asked.
+   */
+  momentRequest: { imageId: string; replay: boolean } | null;
 };
 
 type ViewState = {
@@ -32,6 +37,7 @@ type Actions = {
   toggleTutorInk(): void;
   setReplayHidden(groups: ReadonlySet<string>): void;
   setFoldedGroups(groups: ReadonlySet<string>): void;
+  requestMoment(request: { imageId: string; replay: boolean } | null): void;
   setView(view: Partial<ViewState>): void;
 };
 
@@ -50,6 +56,7 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   showTutorInk: readFlag(TUTOR_INK_KEY, true),
   replayHidden: new Set(),
   foldedGroups: new Set(),
+  momentRequest: null,
   zoom: 1,
   canUndo: false,
   canRedo: false,
@@ -68,6 +75,7 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   },
   setReplayHidden: (replayHidden) => set({ replayHidden }),
   setFoldedGroups: (foldedGroups) => set({ foldedGroups }),
+  requestMoment: (momentRequest) => set({ momentRequest }),
   setView: (view) => set(view),
 }));
 

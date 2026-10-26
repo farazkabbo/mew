@@ -44,6 +44,8 @@ class FilingFacts:
 
     node_id: UUID | None
     hints: list[str]
+    #: What the answer said it's about ("physics"), for a suggestion when it waits in Unsorted.
+    subject: str | None
     source_app: str
     source_title: str | None
     source_url: str | None
@@ -55,9 +57,12 @@ def _filing_facts(row: dict[str, Any]) -> FilingFacts:
         node = UUID(str(destination.get("nodeId"))) if destination else None
     except ValueError:
         node = None
+    entry = row.get("entry") or {}
+    subject = (entry.get("moment") or {}).get("subject")
     return FilingFacts(
         node_id=node,
-        hints=list((row.get("entry") or {}).get("conceptHints") or []),
+        hints=list(entry.get("conceptHints") or []),
+        subject=subject if isinstance(subject, str) else None,
         source_app=row["source_app"],
         source_title=row.get("source_title"),
         source_url=row.get("source_url"),

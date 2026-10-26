@@ -60,12 +60,20 @@ describe("ScreenCoachVoice", () => {
     voice.onSpeech("An answer.");
     voice.onSay("Nice. Click PivotTable.");
     voice.onSay("Look where I'm pointing.");
+    // Coach mode's lines aren't kept: only a Circle & Ask step (with a token) is (K8).
     expect(deps.speak.mock.calls).toEqual([
       ["An answer."],
-      ["Nice. Click PivotTable."],
-      ["Look where I'm pointing."],
+      ["Nice. Click PivotTable.", false],
+      ["Look where I'm pointing.", false],
     ]);
     expect(deps.hush).toHaveBeenCalledTimes(3); // the hotkey, then each line
+  });
+
+  it("keeps a Circle & Ask step's voice for its entry and reports it said (K8)", async () => {
+    const { voice, deps } = coach();
+    voice.onSay("This axis is velocity.", 7);
+    expect(deps.speak).toHaveBeenCalledWith("This axis is velocity.", true);
+    await vi.waitFor(() => expect(deps.spoken).toHaveBeenCalledWith(7));
   });
 
   it("stops listening without asking when the capture was refused", () => {

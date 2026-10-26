@@ -9,7 +9,7 @@ import {
   type ResolvedDestination,
   type SavedDestination,
   sourceKey,
-  Subject,
+  type Subject,
 } from "@mew/shared";
 import { z } from "zod";
 

@@ -1,12 +1,17 @@
 "use client";
 
 import type { ImageBlock } from "@mew/shared";
-import { Fragment, type RefObject, useEffect, useRef, useState } from "react";
+import { Fragment, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
+import { loadMomentAudio, MOMENT_AUDIO_RATE } from "../moments/api";
+import { PcmStreamPlayer } from "../tutor/pcm-player";
 import type { CanvasHandle } from "./canvas/NotebookCanvas";
 import { HEADING_SPACE } from "./clip-page";
 import { replayEntry, type ReplayStep } from "./entry-replay";
 import { useNotebookUi } from "./store";
+
+/** Turns and steps a moment's voice is kept for (the audio route's own bounds). */
+const VOICED = { turns: 3, steps: 5 } as const;
 
 type Props = {
   canvas: RefObject<CanvasHandle | null>;
@@ -17,7 +22,8 @@ type Props = {
 /**
  * The explanation under each Circle & Ask entry's picture (S3.2 §5): the question, its steps,
  * the summary and a question to check, with Replay to watch the tutor's ink draw itself again
- * step by step. A layer above the page that follows the camera (like Notes Check's marks), so
+ * step by step, said in the voice it was first said in when that was kept (K8 §4.7). A moment
+ * opened from elsewhere (Moments, Ctrl+K, a Quick check) is scrolled to, and replayed if asked. A layer above the page that follows the camera (like Notes Check's marks), so
  * the note stays under its picture; only the notes take the pointer.
  */
 export function EntryNotes({ canvas, images }: Props) {
@@ -26,6 +32,7 @@ export function EntryNotes({ canvas, images }: Props) {
     null,
   );
   const stop = useRef<(() => void) | null>(null);
+  const player = useRef<PcmStreamPlayer | null>(null);
 
   useEffect(() => {
     return canvas.current?.onCamera(({ x, y, zoom }) => {
@@ -37,19 +44,48 @@ export function EntryNotes({ canvas, images }: Props) {
   // A replay never outlives the page it's on.
   useEffect(() => () => stop.current?.(), []);
 
-  const entries = images.filter((image) => image.entry);
-  if (entries.length === 0) return null;
-
-  const replay = (image: ImageBlock) => {
+  const replay = useCallback((image: ImageBlock) => {
     if (!image.entry) return;
     stop.current?.();
     setReplaying({ imageId: image.id, step: null });
-    stop.current = replayEntry(
+    const clipId = image.clipId;
+    const abort = new AbortController();
+    player.current ??= new PcmStreamPlayer();
+    const voice = player.current;
+    const finish = replayEntry(
       image.entry,
       (groups) => useNotebookUi.getState().setReplayHidden(groups),
       (step) => setReplaying(step ? { imageId: image.id, step } : null),
+      undefined,
+      async ({ turn, step }) => {
+        if (!clipId || turn >= VOICED.turns || step >= VOICED.steps) return false;
+        const stream = await loadMomentAudio(clipId, turn, step, abort.signal);
+        if (!stream || abort.signal.aborted) return false;
+        await voice.play(stream, { sampleRate: MOMENT_AUDIO_RATE, signal: abort.signal });
+        return true;
+      },
     );
-  };
+    stop.current = () => {
+      abort.abort();
+      voice.stop();
+      finish();
+    };
+  }, []);
+
+  // K8: a moment asked for from elsewhere, once its page is open.
+  const request = useNotebookUi((s) => s.momentRequest);
+  useEffect(() => {
+    if (!request) return;
+    const image = images.find((i) => i.id === request.imageId);
+    if (!image) return;
+    useNotebookUi.getState().requestMoment(null);
+    canvas.current?.showTop(image.y - (image.entry?.heading ? HEADING_SPACE : 0));
+    // After this render: the replay's first state change belongs to the next one.
+    if (request.replay) queueMicrotask(() => replay(image));
+  }, [request, images, canvas, replay]);
+
+  const entries = images.filter((image) => image.entry);
+  if (entries.length === 0) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="entry-notes">

@@ -79,3 +79,29 @@ class CheckSchedule(_Camel):
     fsrs_state: dict[str, Any]
     due_at: datetime
     reps: int = Field(ge=0, le=100_000)
+
+
+class SuggestionsRequest(_Camel):
+    """Unsorted's "File these" (§4.6): the moments waiting there, by id."""
+
+    clip_ids: list[UUID] = Field(min_length=1, max_length=30)
+
+
+class Suggestion(_Camel):
+    """Where one waiting moment would go, or no place (none fits well enough to suggest)."""
+
+    clip_id: UUID
+    node_id: UUID | None = None
+    path: list[Title] | None = Field(default=None, min_length=1, max_length=3)
+    method: Literal["source_memory", "content_match", "subject_match", "sticky"] | None = None
+    matched: str | None = None
+
+
+class Suggestions(_Camel):
+    suggestions: list[Suggestion]
+
+
+class MomentMove(_Camel):
+    """The student filed a moment from the notebook (moved it, or accepted a suggestion)."""
+
+    node_id: UUID

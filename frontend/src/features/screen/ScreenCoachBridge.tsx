@@ -17,7 +17,9 @@ import {
   ScreenSayDetail,
   ScreenSpeechDetail,
 } from "./events";
-import { ScreenCoachVoice } from "./screen-coach";
+import { momentsApi, saveMomentAudio } from "../moments/api";
+import { keepEntryVoice, SpokenLines } from "./entry-voice";
+import { defaultDeps, ScreenCoachVoice } from "./screen-coach";
 
 /**
  * Connects the desktop app's Screen Coach events to this page (desktop only): its voice (answers,
@@ -30,6 +32,9 @@ import { ScreenCoachVoice } from "./screen-coach";
  */
 const pendingEntries = new Set<string>();
 
+/** How long after an entry is saved its steps' voice is uploaded (K8). */
+const KEEP_VOICE_AFTER_MS = 2_000;
+
 export function takePendingEntries(): string[] {
   const ids = [...pendingEntries];
   pendingEntries.clear();
@@ -40,7 +45,10 @@ export function ScreenCoachBridge() {
   const router = useRouter();
   useEffect(() => {
     if (!isDesktop()) return;
-    const coach = new ScreenCoachVoice();
+    // K8: each Circle & Ask step's voice, kept until its entry is saved, then uploaded with it.
+    const spoken = new SpokenLines();
+    const uploaded = new Set<string>();
+    const coach = new ScreenCoachVoice(defaultDeps(spoken));
     const detail = (event: Event): unknown => (event as CustomEvent<unknown>).detail;
 
     const handlers: [string, (event: Event) => void][] = [
@@ -67,6 +75,14 @@ export function ScreenCoachBridge() {
         (event) => {
           const saved = ScreenEntrySavedDetail.safeParse(detail(event));
           if (!saved.success) return;
+          // A moment later: the last step may still be arriving when the entry is saved.
+          const clipId = saved.data.clipId;
+          setTimeout(() => {
+            void keepEntryVoice(clipId, spoken, uploaded, {
+              clip: momentsApi.clip,
+              upload: saveMomentAudio,
+            }).catch(() => undefined); // best effort: Replay falls back to captions
+          }, KEEP_VOICE_AFTER_MS);
           // The notebook adds the entry; it only comes to the front when asked (Open).
           if (window.location.pathname === "/notebook") {
             window.dispatchEvent(new CustomEvent(OPEN_ENTRY_EVENT, { detail: saved.data }));

@@ -26,9 +26,14 @@ import { isTypingTarget } from "../dom";
 import type { InkLayer } from "../../tutor/ink";
 import { isShown } from "../visibility";
 
+/** Room left above something scrolled to the top, in CSS px (the toolbar sits there). */
+const SHOW_TOP_MARGIN = 96;
+
 export type CanvasHandle = {
   zoomBy(factor: number): void;
   resetView(): void;
+  /** Scrolls the page so that page height `y` is near the top (K8: a moment opened). */
+  showTop(y: number): void;
   /**
    * Follows the camera (pan and zoom), e.g. to keep an overlay over the page: called at once,
    * then on every change. Returns a function that stops following.
@@ -54,7 +59,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
   const gridRef = useRef<HTMLCanvasElement>(null);
   const inkRef = useRef<HTMLCanvasElement>(null);
   const liveRef = useRef<HTMLCanvasElement>(null);
-  const controls = useRef<Pick<CanvasHandle, "zoomBy" | "resetView"> | null>(null);
+  const controls = useRef<Pick<CanvasHandle, "zoomBy" | "resetView" | "showTop"> | null>(null);
   const cameraListeners = useRef(new Set<(camera: Camera) => void>());
   const latestCamera = useRef<Camera>(DEFAULT_CAMERA);
   const penDown = useRef(onPenDown);
@@ -67,6 +72,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
   useImperativeHandle(ref, () => ({
     zoomBy: (factor) => controls.current?.zoomBy(factor),
     resetView: () => controls.current?.resetView(),
+    showTop: (y) => controls.current?.showTop(y),
     onCamera: (listener) => {
       const listeners = cameraListeners.current;
       listeners.add(listener);
@@ -168,6 +174,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
         setCamera(zoomAt(camera, [width / 2, height / 2], factor));
       },
       resetView: () => setCamera(DEFAULT_CAMERA),
+      showTop: (y) => setCamera({ ...camera, y: Math.max(0, y - SHOW_TOP_MARGIN / camera.zoom) }),
     };
 
     // --- Tools.
@@ -217,6 +224,9 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       if (!entry) return;
       const { width, height } = entry.contentRect;
       renderer.resize(width, height, window.devicePixelRatio || 1);
+      // Every layer: a frame drawn before the size was known drew nothing (and no picture asked
+      // for), and its layers are no longer marked as needing it.
+      Object.assign(dirty, all);
       render();
     });
     resize.observe(container);

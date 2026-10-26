@@ -1,12 +1,22 @@
 "use client";
 
-import type { Page, PdfInfo } from "@mew/shared";
+import {
+  type ImageBlock,
+  type Page,
+  type PdfInfo,
+  type SavedQuizFilter,
+  unsortedNodeId,
+} from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
 import { type NotebookVoiceHandler, useMewSession } from "../mew/useMewSession";
+import { momentsApi } from "../moments/api";
+import { dueByNode, type Moment, momentsFrom, subtreeIds } from "../moments/moments";
+import { QuickCheck } from "../moments/QuickCheck";
+import { useMomentChecks } from "../moments/store";
 import { useNotesCheck } from "../notes/check-store";
 import { checkClip, pageOfFinding, usePageMarks } from "../notes/notebook-check";
 import { NotesCheckPanel } from "../notes/NotesCheckPanel";
@@ -43,6 +53,7 @@ import { useClipImport } from "./useClipImport";
 import { pullTree } from "./tree-api";
 import { useShortcuts } from "./useShortcuts";
 import { Breadcrumb } from "./tree/Breadcrumb";
+import { DestinationPicker } from "./tree/DestinationPicker";
 import { NodeHome } from "./tree/NodeHome";
 import { TreeDialogs } from "./tree/TreeDialogs";
 import { TreeNav } from "./tree/TreeNav";
@@ -93,6 +104,9 @@ export function NotebookApp({ userId }: { userId: string }) {
   const treeNotice = useCallback((text: string) => setNotice({ text, tone: "info" }), []);
 
   const { nodes, tree } = useNotebookTree(repo, treeNotice, report);
+  /** Bumped when moments change on this device (K8: saved, filed, moved). */
+  const [momentsVersion, setMomentsVersion] = useState(0);
+  const reloadMoments = useCallback(() => setMomentsVersion((v) => v + 1), []);
   const now = useMinuteClock();
   // Known only in the browser (the server renders the web app's shortcuts).
   const keys = useShortcutKeys();
@@ -108,12 +122,19 @@ export function NotebookApp({ userId }: { userId: string }) {
         .then(() => repo.tree.tree())
         .then((current) => {
           setNotebookId(id);
-          setView(current.children(id).length > 0 ? "home" : "page");
+          // Unsorted (K8) is where moments wait: its home is where they're filed from.
+          const home = current.children(id).length > 0 || id === unsortedNodeId(userId);
+          setView(home ? "home" : "page");
         })
         .catch(report);
     },
-    [repo, report],
+    [repo, report, userId],
   );
+  /** A node's home, chapters or not (the breadcrumb; K8: a chapter's Moments). */
+  const openHome = useCallback((id: string) => {
+    setNotebookId(id);
+    setView("home");
+  }, []);
 
   const openPage = useCallback((page: Page) => {
     wantedPage.current = page.id;
@@ -263,6 +284,7 @@ export function NotebookApp({ userId }: { userId: string }) {
           : [...list, page],
       );
       if (page.id === pageId) setPageVersion((v) => v + 1);
+      reloadMoments();
       const where = tree
         .path(page.notebookId)
         .map((n) => n.title)
@@ -275,7 +297,7 @@ export function NotebookApp({ userId }: { userId: string }) {
         ...(page.id !== pageId && { action: { label: "Open", run: () => openPage(page) } }),
       });
     },
-    [pageId, tree, openPage],
+    [pageId, tree, openPage, reloadMoments],
   );
   const clipFailed = useCallback((text: string) => setNotice({ text, tone: "error" }), []);
   useClipImport({
@@ -287,6 +309,114 @@ export function NotebookApp({ userId }: { userId: string }) {
   });
   const clipImage = engine?.images.at(-1);
   const node = notebookId ? (tree.get(notebookId) ?? null) : null;
+
+  // K8: the moments on this device, and their checks (badges, Quick check, Review).
+  const [entries, setEntries] = useState<{ images: ImageBlock[]; pages: Page[] }>({
+    images: [],
+    pages: [],
+  });
+  useEffect(() => {
+    let live = true;
+    void repo
+      .listEntries()
+      .then((read) => live && setEntries(read))
+      .catch(report);
+    return () => {
+      live = false;
+    };
+  }, [repo, report, momentsVersion, view, notebookId]);
+  const moments = useMemo(
+    () => momentsFrom(entries.images, entries.pages).filter((m) => tree.isLive(m.nodeId)),
+    [entries, tree],
+  );
+  const checks = useMomentChecks((s) => s.checks);
+  const loadChecks = useMomentChecks((s) => s.load);
+  // Read where they're shown (a home's badges and Quick check card), not on every page open.
+  useEffect(() => {
+    if (view !== "home") return;
+    void loadChecks();
+    const again = () => void loadChecks();
+    window.addEventListener("focus", again);
+    return () => window.removeEventListener("focus", again);
+  }, [loadChecks, momentsVersion, view]);
+  const dueCounts = useMemo(() => dueByNode(checks ?? [], tree, now), [checks, tree, now]);
+  const unsortedCount = useMemo(() => {
+    const unsorted = unsortedNodeId(userId);
+    return new Map([[unsorted, moments.filter((m) => m.nodeId === unsorted).length]]);
+  }, [moments, userId]);
+  const momentOf = useCallback(
+    (clipId: string) => moments.find((m) => m.clipId === clipId),
+    [moments],
+  );
+  /** Shows a moment on its page (from Moments, Ctrl+K or a Quick check), replaying if asked. */
+  const openMoment = useCallback(
+    (moment: Moment, replay = false) => {
+      void repo
+        .getPage(moment.pageId)
+        .then((page) => {
+          if (!page) return;
+          useNotebookUi.getState().requestMoment({ imageId: moment.imageId, replay });
+          openPage(page);
+        })
+        .catch(report);
+    },
+    [repo, report, openPage],
+  );
+  /**
+   * Files a moment from the notebook (K8: "File these", or a place chosen for it): its entry
+   * moves there whole, then the server's copy follows, and filing learns from it.
+   */
+  const fileMoment = useCallback(
+    async (moment: Moment, nodeId: string) => {
+      const clip = await momentsApi.clip(moment.clipId);
+      const page = await repo.importEntry(nodeId, clip, { kind: "from_screen" });
+      void fetch(`/api/clips/${clip.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notebookPageId: page.id }),
+        keepalive: true,
+      }).catch(() => undefined);
+      // Best effort: it's filed here either way; another device follows once the server does.
+      await momentsApi.moved(moment.clipId, nodeId).catch(() => undefined);
+      reloadMoments();
+      void loadChecks(true);
+    },
+    [repo, reloadMoments, loadChecks],
+  );
+  const [choosingFor, setChoosingFor] = useState<Moment | null>(null);
+  const openQuickCheck = useMomentChecks((s) => s.openQuickCheck);
+  /** "Quiz me on what I saved today / this week / in Physics" (K8 §4.5). */
+  const quizSaved = useCallback(
+    (filter: SavedQuizFilter) => {
+      const place = filter.place?.toLowerCase() ?? null;
+      const match = place
+        ? [...(nodes ?? [])].find((n) => tree.isLive(n.id) && n.title.toLowerCase() === place)
+        : undefined;
+      void loadChecks(true).then(() =>
+        openQuickCheck({
+          filter,
+          nodeIds: match ? [...subtreeIds(tree, match.id)] : null,
+        }),
+      );
+    },
+    [nodes, tree, loadChecks, openQuickCheck],
+  );
+
+  // /notebook?moment=<clip id> (K8: Replay from the Review page's Quick check): shown and replayed
+  // once this device's moments are read.
+  const momentParam = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (momentParam.current === undefined) {
+      const wanted = new URLSearchParams(window.location.search).get("moment");
+      momentParam.current = wanted && UUID.test(wanted) ? wanted : null;
+    }
+    const wanted = momentParam.current;
+    if (!wanted) return;
+    const moment = moments.find((m) => m.clipId === wanted);
+    if (!moment) return;
+    momentParam.current = null;
+    openMoment(moment, true);
+  });
   // A chapter's course is its notebook's.
   const courseId = (notebookId && tree.path(notebookId)[0]?.courseId) || null;
   // Mew's notebook labels (K3) go to `useNotebookVoice`, made below with the tree's actions.
@@ -295,7 +425,7 @@ export function NotebookApp({ userId }: { userId: string }) {
     (...args) => voice.current?.(...args),
     [],
   );
-  const mew = useMewSession(engine, courseId, onNotebookVoice);
+  const mew = useMewSession(engine, courseId, onNotebookVoice, quizSaved);
   const solutionRecords = useMemo(() => new SolutionRecords(db), [db]);
   useEffect(() => {
     mew.setSolutionRecords(solutionRecords);
@@ -465,6 +595,7 @@ export function NotebookApp({ userId }: { userId: string }) {
             renamingId={treeActions.renamingId}
             draft={treeActions.draft}
             trashCount={tree.trash().length}
+            counts={unsortedCount}
             newNotebookShortcut={keys.shown("new_notebook")}
             onOpen={openNode}
             onCreateNotebook={treeActions.startCreating}
@@ -498,6 +629,14 @@ export function NotebookApp({ userId }: { userId: string }) {
             onAddChild={() => treeActions.addChild(node.id)}
             onAddPage={() => treeActions.addPage(node.id)}
             onImportPdf={() => setImporting({ nodeId: node.id, file: null })}
+            moments={moments.filter((m) => subtreeIds(tree, node.id).has(m.nodeId))}
+            dueCounts={dueCounts}
+            onOpenMoment={(moment) => openMoment(moment)}
+            onQuickCheck={() => openQuickCheck({ nodeIds: [...subtreeIds(tree, node.id)] })}
+            onSetSubject={(subject) => void repo.tree.setSubject(node.id, subject).catch(report)}
+            {...(node.id === unsortedNodeId(userId) && {
+              unsorted: { onFile: fileMoment, onChoose: setChoosingFor },
+            })}
           />
         ) : engine && engine.pageId === pageId ? (
           <NotebookCanvas
@@ -519,7 +658,7 @@ export function NotebookApp({ userId }: { userId: string }) {
               tree={tree}
               nodeId={notebookId}
               pageNumber={(pages.find((p) => p.id === pageId)?.index ?? 0) + 1}
-              onOpen={openNode}
+              onOpen={openHome}
             />
           </div>
         )}
@@ -673,7 +812,40 @@ export function NotebookApp({ userId }: { userId: string }) {
           onClose={() => setImporting(null)}
         />
       )}
+      <QuickCheck
+        findMoment={momentOf}
+        onReplay={(clipId) => {
+          const moment = momentOf(clipId);
+          if (moment) openMoment(moment, true);
+          else setNotice({ text: "That moment isn't on this device.", tone: "info" });
+        }}
+      />
+      <DestinationPicker
+        open={choosingFor !== null}
+        title="File this moment in…"
+        tree={tree}
+        topLevel={false}
+        refuse={(destination) =>
+          destination === unsortedNodeId(userId)
+            ? "it's here"
+            : destination === choosingFor?.nodeId
+              ? "already here"
+              : null
+        }
+        onPick={(destination) => {
+          const moment = choosingFor;
+          setChoosingFor(null);
+          if (moment && destination) {
+            void fileMoment(moment, destination).catch(() =>
+              setNotice({ text: "Couldn't file that just now. Try again.", tone: "error" }),
+            );
+          }
+        }}
+        onClose={() => setChoosingFor(null)}
+      />
       <TreeDialogs
+        moments={moments}
+        onOpenMoment={(moment) => openMoment(moment)}
         onFromPdf={(input) => {
           treeActions.cancelCreating();
           void repo.tree

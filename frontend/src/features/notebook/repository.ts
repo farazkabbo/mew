@@ -119,6 +119,16 @@ export class NotebookRepository {
     return validRows(Page, rows, "page");
   }
 
+  /** Every saved screen entry and the pages they're on (K8: Moments, Ctrl+K, Quick check). */
+  async listEntries(): Promise<{ images: ImageBlock[]; pages: Page[] }> {
+    const rows = await this.db.images.where("clipId").above("").toArray();
+    const images = validRows(ImageBlock, rows, "image").filter((image) => image.entry);
+    const pageIds = [...new Set(images.map((image) => image.pageId))];
+    const found = (await this.db.pages.bulkGet(pageIds)).filter((p) => p !== undefined);
+    const pages = validRows(Page, found, "page");
+    return { images, pages };
+  }
+
   /** Every page of every node (the jump palette lists them). */
   async listAllPages(): Promise<Page[]> {
     return validRows(Page, await this.db.pages.toArray(), "page");

@@ -75,6 +75,7 @@ class MomentStore(Protocol):
         self, user: str, check_id: UUID, fsrs_state: dict[str, Any], due_at: datetime, reps: int
     ) -> bool: ...
     def clear_checks(self, user: str) -> None: ...
+    def move_checks(self, user: str, clip_id: UUID, node_id: UUID) -> None: ...
 
 
 def moment_texts(rows: Iterable[Mapping[str, Any]]) -> dict[UUID, list[str]]:
@@ -239,6 +240,12 @@ class MemoryMomentStore:
     def clear_checks(self, user: str) -> None:
         with self._lock:
             self._data(user).checks.clear()
+
+    def move_checks(self, user: str, clip_id: UUID, node_id: UUID) -> None:
+        with self._lock:
+            for check in self._data(user).checks.values():
+                if check.clip_id == clip_id:
+                    check.node_id = node_id
 
 
 # ─── Supabase ────────────────────────────────────────────────────────────────────────────────
@@ -519,3 +526,11 @@ class SupabaseMomentStore(SupabaseRest):
 
     def clear_checks(self, user: str) -> None:
         self._delete("moment_checks", self._mine(user))
+
+    def move_checks(self, user: str, clip_id: UUID, node_id: UUID) -> None:
+        """A moment's check follows it to its new place (its badge, its course)."""
+        self._patch(
+            "moment_checks",
+            {**self._mine(user), "clip_id": f"eq.{clip_id}"},
+            {"node_id": str(node_id)},
+        )

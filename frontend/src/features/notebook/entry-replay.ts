@@ -26,44 +26,76 @@ export function stepMs(entry: ImageEntry, { turn, step }: ReplayStep): number {
   return Math.max(AT_LEAST_MS, words * PER_WORD_MS);
 }
 
+/** After a step's own voice ends, a beat before the next one. */
+const AFTER_VOICE_MS = 350;
+
+type Timers = {
+  set: (run: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  clear: (timer: ReturnType<typeof setTimeout>) => void;
+};
+
+const browserTimers: Timers = {
+  // Wrapped: the browser's timers must be called on the window, not on this object.
+  set: (run, ms) => setTimeout(run, ms),
+  clear: (timer) => clearTimeout(timer),
+};
+
 /**
  * Runs a replay: `hide` gets the groups still hidden (all, then fewer, then none), `onStep`
  * the step being shown (null at the end). Returns a function that stops it (and shows all).
+ *
+ * With `voice` (K8 §4.7: "Replay … with the original voice"), each step is said with the audio
+ * kept when it was explained: the next step comes once it's been said (and was shown at least
+ * as long as a step always is). A step whose voice wasn't kept (`voice` resolves false) is timed
+ * like a caption, as before.
  */
 export function replayEntry(
   entry: ImageEntry,
   hide: (groups: ReadonlySet<string>) => void,
   onStep: (step: ReplayStep | null) => void,
-  timers: {
-    set: (run: () => void, ms: number) => ReturnType<typeof setTimeout>;
-    clear: (timer: ReturnType<typeof setTimeout>) => void;
-  } = {
-    // Wrapped: the browser's timers must be called on the window, not on this object.
-    set: (run, ms) => setTimeout(run, ms),
-    clear: (timer) => clearTimeout(timer),
-  },
+  timers: Timers = browserTimers,
+  voice?: (step: ReplayStep) => Promise<boolean>,
 ): () => void {
   const steps = replaySteps(entry);
   const hidden = new Set(steps.map((s) => s.group));
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const pending = new Set<ReturnType<typeof setTimeout>>();
+  let stopped = false;
   let index = 0;
+  const after = (ms: number, run: () => void) => {
+    const timer = timers.set(() => {
+      pending.delete(timer);
+      run();
+    }, ms);
+    pending.add(timer);
+  };
+  const wait = (ms: number) => new Promise<void>((resolve) => after(ms, resolve));
   const finish = () => {
-    if (timer !== undefined) timers.clear(timer);
-    timer = undefined;
+    if (stopped) return;
+    stopped = true;
+    for (const timer of pending) timers.clear(timer);
+    pending.clear();
     hide(new Set());
     onStep(null);
   };
   const show = () => {
+    if (stopped) return;
     const step = steps[index];
     if (!step) return finish();
     hidden.delete(step.group);
     hide(new Set(hidden));
     onStep(step);
     index++;
-    timer = timers.set(show, stepMs(entry, step));
+    if (!voice) {
+      after(stepMs(entry, step), show);
+      return;
+    }
+    const said = voice(step)
+      .catch(() => false)
+      .then((played) => (played ? wait(AFTER_VOICE_MS) : wait(stepMs(entry, step))));
+    void Promise.all([said, wait(AT_LEAST_MS)]).then(show);
   };
   hide(new Set(hidden));
   // A beat with nothing, so the first step visibly draws in.
-  timer = timers.set(show, 300);
+  after(300, show);
   return finish;
 }

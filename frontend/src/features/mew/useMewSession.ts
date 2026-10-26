@@ -7,6 +7,8 @@ import {
   type MewDecisionResponse,
   type MewInput,
   reconcileMarks,
+  type SavedQuizFilter,
+  savedQuizRequest,
   TUTOR_LIMITS,
 } from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -77,6 +79,7 @@ export type NotebookVoiceHandler = (
 /** The voice → Mew → tutor pipeline, independent of React. */
 function createPipeline() {
   let notebookVoice: NotebookVoiceHandler | null = null;
+  let quizSaved: ((filter: SavedQuizFilter) => void) | null = null;
   let records: SolutionRecords | null = null;
   let engine: PageEngine | null = null;
   let courseId: string | null = null;
@@ -157,6 +160,12 @@ function createPipeline() {
   });
   /** A turn Mew decided on, or the hold asked for: each goes where it belongs. */
   const act: NonNullable<MewHooks["onRespond"]> = (turn) => {
+    // "Quiz me on what I saved today" (K8 §4.5): a Quick check of those moments, not a quiz.
+    const saved = quizSaved ? savedQuizRequest(turn.utterance) : null;
+    if (saved && quizSaved) {
+      quizSaved(saved);
+      return;
+    }
     if (turn.intent === "save_to_notebook" || turn.intent === "notebook_command") {
       notebookVoice?.(turn.intent, turn.utterance, turn.destinationPhrase);
       return;
@@ -318,6 +327,10 @@ function createPipeline() {
     setNotebookVoice(handler: NotebookVoiceHandler | null) {
       notebookVoice = handler;
     },
+    /** Who opens the Quick check for "quiz me on what I saved" (the notebook screen, K8). */
+    setQuizSaved(handler: ((filter: SavedQuizFilter) => void) | null) {
+      quizSaved = handler;
+    },
     /** A loop drawn while holding Ctrl+Alt: the lines in it join what the next ask is about. */
     circle(loop: readonly Vec[]) {
       if (!engine) return;
@@ -371,11 +384,15 @@ export function useMewSession(
   engine: PageEngine | null,
   courseId: string | null = null,
   onNotebookVoice: NotebookVoiceHandler | null = null,
+  onQuizSaved: ((filter: SavedQuizFilter) => void) | null = null,
 ) {
   const [pipeline] = useState(createPipeline);
   useEffect(() => {
     pipeline.setNotebookVoice(onNotebookVoice);
   }, [pipeline, onNotebookVoice]);
+  useEffect(() => {
+    pipeline.setQuizSaved(onQuizSaved);
+  }, [pipeline, onQuizSaved]);
   const { mew, tutor, recognition, ink, quiz, showThenYou } = pipeline;
   const voice = useRef<VoiceSession | null>(null);
 

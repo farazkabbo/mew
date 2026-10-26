@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
+import { momentsApi } from "../moments/api";
+import { useMomentChecks } from "../moments/store";
 import { ShortcutsSection } from "../shortcuts/ShortcutsSection";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
 import { Section, Toggle } from "./controls";
@@ -20,6 +22,8 @@ import { useSettings } from "./store";
  */
 export function SettingsApp() {
   const { settings, loaded, localOnly, error, voices, update } = useSettings();
+  /** "Quiz me on things I save" was just turned off: keep the checks, or clear them (K8). */
+  const [askClear, setAskClear] = useState(false);
 
   useEffect(() => {
     void useSettings.getState().load();
@@ -119,6 +123,49 @@ export function SettingsApp() {
             checked={settings.your_turn_after_solution}
             onChange={(your_turn_after_solution) => void update({ your_turn_after_solution })}
           />
+          <Toggle
+            label="Quiz me on things I save"
+            hint="Every moment you save from your screen comes back as a check question, about a day later and then spaced out. Answering it on your own counts toward what you know."
+            checked={settings.quiz_saved_moments}
+            onChange={(quiz_saved_moments) => {
+              void update({ quiz_saved_moments });
+              setAskClear(!quiz_saved_moments);
+            }}
+          />
+          {askClear && (
+            <div
+              role="group"
+              aria-label="Checks you already have"
+              data-testid="moment-checks-keep-or-clear"
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-rule bg-paper p-3 text-sm"
+            >
+              <span className="flex-1">
+                No new checks from now on. Keep the ones you already have?
+              </span>
+              <button
+                type="button"
+                onClick={() => setAskClear(false)}
+                className="rounded-full border border-rule px-3 py-1 hover:border-accent"
+              >
+                Keep them
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  void momentsApi.clearChecks().then(
+                    () => {
+                      useMomentChecks.getState().clear();
+                      setAskClear(false);
+                    },
+                    () => undefined,
+                  )
+                }
+                className="rounded-full bg-ink px-3 py-1 font-medium text-paper"
+              >
+                Clear them
+              </button>
+            </div>
+          )}
           <Toggle
             label="Let the tutor check my notes"
             hint="Keeps the text of your notes (never your handwriting itself) with your account, so the tutor can compare what's on your screen with what you wrote. Turning this off deletes that copy."

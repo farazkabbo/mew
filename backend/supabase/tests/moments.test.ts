@@ -85,13 +85,15 @@ beforeAll(async () => {
 describe("a notebook's subject (K8)", () => {
   it("is synced with the tree, and must be one of the subjects", async () => {
     const { rows } = await db.as(ALICE, () =>
-      db.query<{ subject: string | null }>("select subject from notebooks where id = $1", [PHYSICS]),
+      db.query<{ subject: string | null }>("select subject from notebooks where id = $1", [
+        PHYSICS,
+      ]),
     );
     expect(rows[0]?.subject).toBe("physics");
 
-    const [result] = (
-      await sync(ALICE, [node(PHYSICS, "Physics", { subject: "astrology" })])
-    ).rows[0]?.sync_notebook_tree ?? [];
+    const [result] =
+      (await sync(ALICE, [node(PHYSICS, "Physics", { subject: "astrology" })])).rows[0]
+        ?.sync_notebook_tree ?? [];
     expect(result?.status).toBe("rejected");
     expect(result?.node.subject).toBe("physics");
   });
@@ -161,9 +163,10 @@ describe("moment checks", () => {
 
     // The owner answers (the schedule changes) but can't rewrite the question or its key.
     await db.as(ALICE, () =>
-      db.query("update moment_checks set due_at = now() + interval '3 days', reps = 1 where id = $1", [
-        id,
-      ]),
+      db.query(
+        "update moment_checks set due_at = now() + interval '3 days', reps = 1 where id = $1",
+        [id],
+      ),
     );
     await expect(
       db.as(ALICE, () =>

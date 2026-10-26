@@ -211,3 +211,71 @@ def test_a_moments_voice_is_kept_for_replay(client: TestClient) -> None:  # noqa
         f"/v1/moments/{clip}/audio/3/0", content=pcm, headers={**LOCAL, "content-type": "audio/L16"}
     )
     assert too_far.status_code == 422
+
+
+def waiting_moment(client: TestClient, token: str, **moment: Any) -> str:  # noqa: F811
+    """A moment saved into Unsorted, with what its answer said it's about."""
+    body = entry_body(conceptHints=moment.pop("hints", ["projectile motion"]))
+    body["entry"]["moment"] = {"subject": moment.get("subject"), "checkQuestion": QUESTION}
+    body["destination"] = {
+        "nodeId": str(unsorted_node_id("local")),
+        "page": {"kind": "from_screen"},
+    }
+    created = save(client, token, body)
+    assert created.status_code == 201, created.text
+    return str(created.json()["clipId"])
+
+
+def test_file_these_suggests_a_place_for_each_waiting_moment(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    physics_notebook(client)
+    kinematics = waiting_moment(client, token, subject="physics")
+    biology = waiting_moment(client, token, subject="biology", hints=["mitosis"])
+
+    response = client.post(
+        "/v1/clips/suggestions",
+        json={"clipIds": [kinematics, biology, str(uuid.uuid4())]},
+        headers=LOCAL,
+    )
+    assert response.status_code == 200, response.text
+    suggestions = response.json()["suggestions"]
+    # An unknown clip is left out; one with no place to go has none (never Unsorted again).
+    assert [s["clipId"] for s in suggestions] == [kinematics, biology]
+    assert suggestions[0]["nodeId"] == KINEMATICS
+    assert suggestions[0]["path"] == ["Physics", "Chapter 3 · Kinematics"]
+    assert suggestions[0]["method"] == "content_match"
+    assert suggestions[1].get("nodeId") is None
+
+    too_many = client.post(
+        "/v1/clips/suggestions", json={"clipIds": [kinematics] * 31}, headers=LOCAL
+    )
+    assert too_many.status_code == 422
+    unsigned = client.post(
+        "/v1/clips/suggestions", json={"clipIds": [kinematics]}, headers=internal_headers()
+    )
+    assert unsigned.status_code == 401
+
+
+def test_a_move_in_the_notebook_files_it_and_takes_its_check(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    physics_notebook(client)
+    clip_id = waiting_moment(client, token, subject="physics")
+
+    moved = client.post(f"/v1/clips/{clip_id}/move", json={"nodeId": GRAVITY}, headers=LOCAL)
+    assert moved.status_code == 204, moved.text
+    view = client.get(f"/v1/clips/{clip_id}", headers=LOCAL).json()
+    assert view["destination"]["nodeId"] == GRAVITY
+    assert view["destination"]["path"] == ["Physics", "Chapter 5 · Gravity"]
+    # Its check's badge is on the new chapter now.
+    due = client.get("/v1/moments/checks/due", headers=LOCAL).json()["checks"]
+    assert [c["nodeId"] for c in due] == [GRAVITY]
+    # And its source's next moment goes there too.
+    filed = file(client, token, sourceKey="youtube:dQw4w9WgXcQ", subject="physics", hints=["x"])
+    assert (filed["method"], filed["nodeId"]) == ("source_memory", GRAVITY)
+
+    nowhere = client.post(
+        f"/v1/clips/{clip_id}/move", json={"nodeId": str(uuid.uuid4())}, headers=LOCAL
+    )
+    assert nowhere.status_code == 404
+    unknown = client.post(f"/v1/clips/{uuid.uuid4()}/move", json={"nodeId": GRAVITY}, headers=LOCAL)
+    assert unknown.status_code == 404

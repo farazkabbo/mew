@@ -8,6 +8,7 @@ import type { NewNotebook } from "../tree-repository";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { CreateNotebookDialog } from "./CreateNotebookDialog";
 import { DestinationPicker } from "./DestinationPicker";
+import type { Moment } from "../../moments/moments";
 import { JumpPalette } from "./JumpPalette";
 import { TrashDialog } from "./TrashDialog";
 import type { TreeActions } from "./useTreeActions";
@@ -21,12 +22,25 @@ type Props = {
   now: number;
   openNode(id: string): void;
   openPage(page: Page): void;
+  /** K8: saved moments, which Ctrl+K finds too. */
+  moments: readonly Moment[];
+  onOpenMoment(moment: Moment): void;
 };
 
 const MOVE_REASONS = { depth: "too deep", cycle: "inside itself", missing: "gone" } as const;
 
 /** The notebook tree's dialogs: create, move to…, delete, trash and jump (Ctrl+K). */
-export function TreeDialogs({ actions, tree, repo, now, openNode, openPage, onFromPdf }: Props) {
+export function TreeDialogs({
+  actions,
+  tree,
+  repo,
+  now,
+  openNode,
+  openPage,
+  onFromPdf,
+  moments,
+  onOpenMoment,
+}: Props) {
   const [pages, setPages] = useState<Page[]>([]);
   const moving = actions.movingId ? tree.get(actions.movingId) : undefined;
 
@@ -109,6 +123,8 @@ export function TreeDialogs({ actions, tree, repo, now, openNode, openPage, onFr
         pages={pages}
         onOpenNode={openNode}
         onOpenPage={openPage}
+        moments={moments}
+        onOpenMoment={onOpenMoment}
         onClose={() => actions.setPaletteOpen(false)}
       />
     </>

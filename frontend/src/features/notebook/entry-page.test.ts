@@ -186,4 +186,37 @@ describe("replaying an entry", () => {
     vi.useRealTimers();
     expect(hidden).toEqual([2, 0]);
   });
+
+  it("says each step in its own voice, waiting for it, and times a step without one (K8)", async () => {
+    const entry = entryToPage(clip(), PAGE, 300, ids()).image.entry!;
+    vi.useFakeTimers();
+    const shown: (string | null)[] = [];
+    const said: string[] = [];
+    let finishVoice: ((played: boolean) => void) | null = null;
+    replayEntry(
+      entry,
+      () => undefined,
+      (step) => shown.push(step ? `${step.turn}.${step.step}` : null),
+      undefined,
+      (step) => {
+        said.push(`${step.turn}.${step.step}`);
+        // The first step has its voice (and is slow to say); the second has none.
+        return step.step === 0
+          ? new Promise<boolean>((resolve) => (finishVoice = resolve))
+          : Promise.resolve(false);
+      },
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(shown).toEqual(["0.0"]);
+    // Shown long enough, but still being said: the next step waits.
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(shown).toEqual(["0.0"]);
+    finishVoice!(true);
+    await vi.advanceTimersByTimeAsync(350);
+    expect(shown).toEqual(["0.0", "0.1"]);
+    await vi.advanceTimersByTimeAsync(10_000);
+    vi.useRealTimers();
+    expect(shown).toEqual(["0.0", "0.1", null]);
+    expect(said).toEqual(["0.0", "0.1"]);
+  });
 });

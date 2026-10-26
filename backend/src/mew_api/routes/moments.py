@@ -11,6 +11,7 @@ Logs carry ids, counts and methods only: never titles, hints or text.
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
@@ -26,7 +27,7 @@ from ..moments.audio import (
     MemoryAudioStore,
     SupabaseAudioStore,
 )
-from ..moments.filing import Moment, Node, decide, path_of, unsorted_node_id
+from ..moments.filing import Decision, Moment, Node, decide, path_of, unsorted_node_id
 from ..moments.models import (
     CheckSchedule,
     ChecksDue,
@@ -84,7 +85,8 @@ def owner_moments(request: Request, caller: Caller, settings: Settings) -> Momen
     )
 
 
-def _device_tree(request: Request, settings: Settings, local: bool) -> NotebookTreeStore:
+def service_tree(request: Request, settings: Settings, local: bool) -> NotebookTreeStore:
+    """The student's tree with the secret key (for filing; always read for one owner)."""
     if local:
         tree: NotebookTreeStore = request.app.state.local_notebooks
         return tree
@@ -109,24 +111,10 @@ def file_moment(
 ) -> FilingResponse:
     """Where an unspoken moment goes (§4.6): source memory, content, subject, sticky, Unsorted."""
     device = screen_device(x_mew_device_token, request, settings)
-    tree = _device_tree(request, settings, device.local)
-    moments = service_moments(request, settings, device.local)
-    nodes = [
-        Node(n.id, n.parent_id, n.title, n.position, n.subject, n.deleted_at is not None)
-        for n in _call(lambda: tree.tree(device.user_id))
-    ]
-    memory, corrections = _call(lambda: moments.filing_inputs(device.user_id, body.source_key))
-    texts = _call(lambda: moments.node_texts(device.user_id))
-    unsorted = unsorted_node_id(device.user_id)
-    decision = decide(
-        Moment(body.subject, tuple(body.hints), body.source_key),
-        nodes,
-        texts,
-        unsorted_id=unsorted,
-        memory=memory,
-        corrections=corrections,
-        sticky_id=body.sticky_node_id,
-    )
+    context = filing_context(request, settings, device.local, device.user_id)
+    moment = Moment(body.subject, tuple(body.hints), body.source_key)
+    decision = context.decide(moment, sticky_id=body.sticky_node_id)
+    nodes = context.nodes
     # Method and score only: never the place or what matched.
     logger.info("Filed a moment (%s, %.2f)", decision.method, decision.score)
     path = path_of(decision.node_id, nodes) or ["Unsorted"]
@@ -141,6 +129,40 @@ def file_moment(
         ],
         new_notebook=decision.new_notebook,
     )
+
+
+@dataclass
+class FilingContext:
+    """One student's tree and texts, read once to file one moment or a batch of them."""
+
+    user: str
+    nodes: list[Node]
+    texts: dict[UUID, list[str]]
+    moments: MomentStore
+
+    def decide(self, moment: Moment, sticky_id: UUID | None = None) -> Decision:
+        memory, corrections = _call(
+            lambda: self.moments.filing_inputs(self.user, moment.source_key)
+        )
+        return decide(
+            moment,
+            self.nodes,
+            self.texts,
+            unsorted_id=unsorted_node_id(self.user),
+            memory=memory,
+            corrections=corrections,
+            sticky_id=sticky_id,
+        )
+
+
+def filing_context(request: Request, settings: Settings, local: bool, user: str) -> FilingContext:
+    tree = service_tree(request, settings, local)
+    moments = service_moments(request, settings, local)
+    nodes = [
+        Node(n.id, n.parent_id, n.title, n.position, n.subject, n.deleted_at is not None)
+        for n in _call(lambda: tree.tree(user))
+    ]
+    return FilingContext(user, nodes, _call(lambda: moments.node_texts(user)), moments)
 
 
 # ─── Checks (the owner) ──────────────────────────────────────────────────────────────────────

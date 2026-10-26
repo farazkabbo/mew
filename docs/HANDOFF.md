@@ -234,6 +234,48 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     project yet.**
   - **To verify by hand:** the K6 acceptance with a real voice and model ("just give me the
     answer" on `3x + 7 = 19`); the pointer at 150 % zoom; circling with a pen and with a finger.
+- **K7 (Show-then-You on screen)** — NOTEBOOKS_K.md §6.2, decisions 73–81:
+  - `asksForAnswer` spots "just tell me the answer" in code; `server/circle-solution.ts` solves
+    with K6's `solve` and streams the steps as ordinary Circle & Ask `step` events.
+  - The verified solution is kept by the web server (`entry-extras.ts`, 30 minutes) and attached
+    when the entry is saved. In the notebook, `ShowThenYou.adoptEntries` writes it folded with its
+    Your Turn the first time the page opens.
+  - **To verify by hand:** the K7 acceptance in Edge on Windows ("just tell me the answer and
+    save it to Physics chapter 5", then the Your Turn with the keyboard and pen only).
+- **K8 (auto-filing, Moments and quizzes)** — NOTEBOOKS_K.md §4.6–4.7, decisions 82–95:
+  - **Answer:** `circle-ask.v4` adds `subject`, sharper `conceptHints` and a `checkQuestion`,
+    verified by `server/check-question.ts` and kept server-side with the entry
+    (`entry-extras.ts`).
+  - **Filing:** `server/filing.ts` → FastAPI `POST /v1/moments/file`, which calls
+    `moments/filing.py` (source memory, content match, subject match, sticky, Unsorted). The
+    desktop toast shows the reason, chips and "+ New notebook".
+  - **Moving a moment:** `POST /v1/clips/destination` (desktop Change) and the owner's new `POST
+/v1/clips/{id}/move` (the notebook) both teach filing and move the check.
+  - **"File these":** `POST /v1/clips/suggestions`.
+  - **Checks:** `moments/checks.py` (merge, 15 a day), `moments/store.py`, and routes
+    `/v1/moments/checks/*`; the web server's `server/moment-checks.ts` grades, reschedules (FSRS)
+    and logs evidence (attempt source `moment_check`).
+  - **Notebook:** `features/moments/` (`moments.ts`: list, filter, Open source links, due counts;
+    `MomentsList`, `QuickCheck`, `FileThese`, the `useMomentChecks` store, `api.ts`).
+    - The Moments tab and the checks-due badges are in `NodeHome`; Ctrl+K finds moments.
+    - The breadcrumb opens any node's home.
+    - Unsorted shows a count in the sidebar; the notebook subject is set on its home.
+    - Settings has "Quiz me on things I save"; Review has its own Quick check.
+    - "Quiz me on what I saved today" goes through `useMewSession`.
+  - **Voice for Replay:** `screen/entry-voice.ts` (tees each step's TTS and uploads it after the
+    entry is saved) to `/api/moments/[clipId]/audio/[turn]/[step]`; Replay waits for each step's
+    voice (`replayEntry`).
+  - **The `moments` migration (`20261104000000_moments.sql`: notebook `subject`,
+    `filing_memory`, `filing_corrections`, `moment_checks`, the `moment-audio` bucket) is not
+    applied to the hosted project yet.**
+  - **To verify by hand:** the K8 acceptance on Windows. A projectile-motion YouTube lecture with
+    the Chemistry notebook open, "why is this curved?" with no place said, lands in Physics ›
+    Chapter 3 · Kinematics with "matched projectile motion" (this needs that chapter's course
+    material, or an earlier moment there, to mention it). Then Open source at that second;
+    Replay in the same voice; the next day's Quick check, right with no peek (`independent` in
+    the attempts); a biology video with no Biology notebook going to Unsorted with "+ New
+    notebook: Biology"; and the real model's check questions (`pnpm eval:solution` doesn't cover
+    them yet).
   - **To verify by hand:** the K3 acceptance on a YouTube video in the desktop app ("why is this
     the hypotenuse? save it to my physics notebook chapter 5" → Physics › Chapter 5 › From
     screen with the timestamp; with four chapters, "Create Chapter 5 and save").
@@ -309,6 +351,12 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K8): **1,575 unit tests** (frontend 509, backend 360, ink 164, shared 381,
+database 138, desktop overlays 23), **169 Rust tests** (+5 real-Windows ones) and **76 Playwright
+tests**. In full runs one of the Notes Check e2e tests (`notes.spec.ts`, which wait on real
+pen-pause timing) sometimes times out late in the suite; they pass alone and in smaller groups,
+and the baseline shows the same timing flakiness (`notebook.spec.ts`'s 1,500-stroke test).
 
 Tests (after K6): **1,417 unit tests** (frontend 465, backend 320, ink 164, shared 321,
 database 125, desktop overlays 22), the same Rust tests, and **73 Playwright tests**.

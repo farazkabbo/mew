@@ -11,6 +11,7 @@ import {
   type NotebookTreeSyncResult,
   singular,
   type Subject,
+  suggestSubject,
   toNodeSync,
   TREE_LIMITS,
   UNSORTED_TITLE,
@@ -109,6 +110,7 @@ export class TreeRepository {
     return this.write(async () => {
       const tree = await this.tree();
       const now = this.clock();
+      const subject = input.subject ?? suggestSubject(input.title);
       const notebook = Notebook.parse({
         id: crypto.randomUUID(),
         title: tree.freeName(null, cleanTitle(input.title) ?? "Untitled notebook"),
@@ -118,7 +120,8 @@ export class TreeRepository {
         ...(input.icon && { icon: input.icon }),
         ...(input.color && { color: input.color }),
         ...(input.courseId && { courseId: input.courseId }),
-        ...(input.subject && { subject: input.subject }),
+        // K8: filing compares it with what a moment is about; suggested from the name.
+        ...(subject && { subject }),
         editedAt: now,
         createdAt: now,
         updatedAt: now,

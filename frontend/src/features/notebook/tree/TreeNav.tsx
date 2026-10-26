@@ -16,6 +16,8 @@ type Props = {
   /** The notebook being made (as named so far), shown as a row while its popover is open. */
   draft: Pick<Notebook, "title" | "icon" | "color"> | null;
   trashCount: number;
+  /** K8: a count after a row's title (the moments waiting in Unsorted). */
+  counts?: ReadonlyMap<string, number>;
   /** "Alt+B", "Ctrl+N" in the desktop app, or the student's own. */
   newNotebookShortcut: string;
   onOpen(id: string): void;
@@ -184,6 +186,7 @@ export function TreeNav(props: Props) {
               addNoun={depth < TREE_LIMITS.maxDepth ? childNoun(tree, id) : null}
               dropZone={drop?.id === id ? drop.zone : null}
               menu={menuFor(row)}
+              count={props.counts?.get(id) ?? 0}
               rowRef={(element) => {
                 if (element) rows.current.set(id, element);
                 else rows.current.delete(id);

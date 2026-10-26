@@ -36,6 +36,9 @@ export const RATE_RULES = {
   momentAnswerDaily: { limit: 300, windowMs: DAY },
   /** K8: reading checks and a moment's voice (no model). */
   momentRead: { limit: 120, windowMs: MINUTE },
+  /** K8: filing from the notebook ("File these", a moment moved): database work, no model. */
+  momentFile: { limit: 30, windowMs: MINUTE },
+  momentFileDaily: { limit: 600, windowMs: DAY },
   /** K8: a moment's voice, uploaded a step at a time after it was played. */
   momentAudio: { limit: 30, windowMs: MINUTE },
   momentAudioDaily: { limit: 600, windowMs: DAY },

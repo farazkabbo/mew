@@ -11,6 +11,7 @@ API):
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -23,6 +24,8 @@ from ..clips.models import (
     ClipPatch,
     ClipView,
     EntryAppend,
+    FromScreenPage,
+    SavedDestination,
 )
 from ..clips.store import (
     ClipReader,
@@ -36,12 +39,14 @@ from ..clips.store import (
 from ..config import Settings
 from ..deps import Caller, CurrentCaller, SettingsDep
 from ..devices.models import VerifiedDevice
-from ..moments.filing import unsorted_node_id
+from ..moments.filing import Moment, Node, path_of, unsorted_node_id
+from ..moments.models import MomentMove, Suggestion, Suggestions, SuggestionsRequest
 from ..moments.source import source_key
+from ..moments.store import MomentStore
 from ..profiles.store import ProfileStore, SupabaseProfileStore
 from ..supabase_rest import StoreError
 from .devices import screen_device
-from .moments import service_moments
+from .moments import filing_context, service_moments, service_tree
 
 logger = logging.getLogger(__name__)
 
@@ -207,23 +212,104 @@ def move_clip(
     # Ids only: never the place's title.
     logger.info("Moved a clip (%s)", body.clip_id)
     if before is not None and before.node_id != body.destination.node_id:
-        _learn_from_move(request, settings, device, before, body.destination.node_id)
+        moments = service_moments(request, settings, device.local)
+        _learn_from_move(moments, device.user_id, body.clip_id, before, body.destination.node_id)
 
 
 def _learn_from_move(
-    request: Request, settings: Settings, device: VerifiedDevice, before: FilingFacts, to_node: UUID
+    moments: MomentStore, user: str, clip_id: UUID, before: FilingFacts, to_node: UUID
 ) -> None:
     """K8 "Change teaches": the source's moments go to the new place from now on, and similar
-    moments aren't filed back where this one was taken from. Stored as data on the account."""
-    moments = service_moments(request, settings, device.local)
+    moments aren't filed back where this one was taken from. Stored as data on the account. The
+    moment's check goes with it. Moving out of Unsorted teaches the same, minus the correction
+    (Unsorted was never a guess to correct)."""
     key = source_key(before.source_app, before.source_title, before.source_url)
+    waited = before.node_id == unsorted_node_id(user)
     try:
         if key:
-            moments.remember(device.user_id, key, to_node, corrected=True)
-        if before.hints:
-            moments.add_correction(device.user_id, before.node_id, to_node, before.hints)
+            moments.remember(user, key, to_node, corrected=True)
+        if before.hints and not waited:
+            moments.add_correction(user, before.node_id, to_node, before.hints)
     except (StoreError, PermissionError):
         logger.warning("Couldn't learn from a moved moment")
+    try:
+        moments.move_checks(user, clip_id, to_node)
+    except (StoreError, PermissionError):
+        # The place may not be on the server yet (local-first): the check keeps its old one.
+        logger.warning("Couldn't move a moment's check")
+
+
+# ─── The owner filing from the notebook (K8) ─────────────────────────────────────────────────
+# The student's own Clerk token says who they are; the clip and the tree are then read and
+# written with the secret key, filtered to them (destinations are the service's to write, as for
+# the desktop app's calls).
+
+
+@router.post("/suggestions")
+def suggest_places(
+    body: SuggestionsRequest, request: Request, caller: CurrentCaller, settings: SettingsDep
+) -> Suggestions:
+    """Unsorted's "File these" (§4.6): a place for each waiting moment, or none. Never Unsorted
+    itself and never a notebook to make (that takes a tap on its own chip)."""
+    writer = _writer(request, settings, caller.is_local)
+    context = filing_context(request, settings, caller.is_local, caller.user_id)
+    nodes = context.nodes
+    unsorted = unsorted_node_id(caller.user_id)
+    suggestions: list[Suggestion] = []
+    for clip_id in dict.fromkeys(body.clip_ids):
+        facts = _call(partial(writer.filing_facts, caller.user_id, clip_id))
+        if facts is None:
+            continue
+        key = source_key(facts.source_app, facts.source_title, facts.source_url)
+        decision = context.decide(Moment(facts.subject, tuple(facts.hints), key))
+        node = decision.node_id if decision.method != "unsorted" else None
+        if node is None and decision.alternatives:
+            node = decision.alternatives[0]
+        path = path_of(node, nodes) if node and node != unsorted else None
+        suggestions.append(
+            Suggestion(
+                clip_id=clip_id,
+                node_id=node if path else None,
+                path=path or None,
+                method=None if decision.method == "unsorted" or not path else decision.method,
+                matched=decision.matched if path else None,
+            )
+        )
+    # Counts only: never the places.
+    placed = sum(1 for s in suggestions if s.node_id)
+    logger.info("Suggested places for %d moments (%d placed)", len(suggestions), placed)
+    return Suggestions(suggestions=suggestions)
+
+
+@router.post("/{clip_id}/move", status_code=status.HTTP_204_NO_CONTENT)
+def move_from_notebook(
+    clip_id: UUID, body: MomentMove, request: Request, caller: CurrentCaller, settings: SettingsDep
+) -> None:
+    """The student moved a moment in the notebook (or accepted "File these"): its destination
+    follows, so other devices put it there too, and filing learns from it like "Change"."""
+    tree = service_tree(request, settings, caller.is_local)
+    nodes = {n.id: n for n in _call(lambda: tree.tree(caller.user_id))}
+    target = nodes.get(body.node_id)
+    if target is None or target.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such place")
+    writer = _writer(request, settings, caller.is_local)
+    before = _call(lambda: writer.filing_facts(caller.user_id, clip_id))
+    if before is None:
+        raise _not_found()
+    if before.node_id == body.node_id:
+        return
+    path = path_of(
+        body.node_id,
+        [Node(n.id, n.parent_id, n.title, n.position, n.subject, False) for n in nodes.values()],
+    )
+    destination = SavedDestination(
+        node_id=body.node_id, page=FromScreenPage(kind="from_screen"), path=path or None
+    )
+    if not _call(lambda: writer.set_destination(caller.user_id, clip_id, destination)):
+        raise _not_found()
+    logger.info("Moved a moment from the notebook (%s)", clip_id)
+    moments = service_moments(request, settings, caller.is_local)
+    _learn_from_move(moments, caller.user_id, clip_id, before, body.node_id)
 
 
 # ─── The owner ───────────────────────────────────────────────────────────────────────────────

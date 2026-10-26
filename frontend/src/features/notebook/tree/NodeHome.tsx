@@ -1,11 +1,14 @@
 "use client";
 
-import { type Notebook, type NotebookTree, type Page, TREE_LIMITS } from "@mew/shared";
-import { FileText, FileUp, GraduationCap, Plus } from "lucide-react";
+import { type Notebook, type NotebookTree, type Page, Subject, TREE_LIMITS } from "@mew/shared";
+import { FileText, FileUp, GraduationCap, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { coursesApi } from "../../courses/api";
+import { FileThese } from "../../moments/FileThese";
+import type { Moment } from "../../moments/moments";
+import { MomentsList } from "../../moments/MomentsList";
 import { useShortcutKeys } from "../../shortcuts/useShortcutKeys";
 import { Breadcrumb } from "./Breadcrumb";
 import { NodeIcon } from "./node-style";
@@ -25,14 +28,53 @@ type Props = {
   onAddPage(): void;
   /** K4: "Import PDF" into this node. */
   onImportPdf(): void;
+  /** K8: the moments saved in this node and everything under it, newest first. */
+  moments: readonly Moment[];
+  /** K8: checks due now on each node (counted up the tree). */
+  dueCounts: ReadonlyMap<string, number>;
+  onOpenMoment(moment: Moment): void;
+  /** K8: a Quick check of what's due here. */
+  onQuickCheck(): void;
+  /** K8: the notebook's subject changed (filing compares it with what a moment is about). */
+  onSetSubject(subject: Subject | null): void;
+  /** K8: this is the student's Unsorted notebook ("File these"). */
+  unsorted?: {
+    onFile(moment: Moment, nodeId: string): Promise<void>;
+    onChoose(moment: Moment): void;
+  };
 };
+
+const SUBJECT_LABELS: Record<Subject, string> = {
+  math: "Maths",
+  physics: "Physics",
+  chemistry: "Chemistry",
+  biology: "Biology",
+  history: "History",
+  language: "Languages",
+  programming: "Programming",
+  other: "Other",
+};
+
+type Tab = "contents" | "moments";
 
 /**
  * A notebook's (or chapter's) home (K1, docs/NOTEBOOKS_K.md §2.2): a card per chapter with its
  * page count and when it was last edited, its own "Loose pages", and a card to add a chapter.
  */
-export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Props) {
+export function NodeHome({
+  node,
+  tree,
+  loadCounts,
+  pages,
+  now,
+  moments,
+  dueCounts,
+  unsorted,
+  ...actions
+}: Props) {
   const keys = useShortcutKeys();
+  // Unsorted is where moments wait: they're what it's for, so they come first there.
+  const [tab, setTab] = useState<Tab>(unsorted ? "moments" : "contents");
   const root = tree.path(node.id)[0] ?? node;
   const children = tree.children(node.id);
   const childIds = children.map((c) => c.id).join(",");
@@ -88,6 +130,27 @@ export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Pro
             <span>
               {plural(children.length, noun)} · {plural(totalPages, "page")}
             </span>
+            {node.parentId === null && !unsorted && (
+              <label className="inline-flex items-center gap-1">
+                <span>Subject</span>
+                <select
+                  data-testid="notebook-subject"
+                  value={node.subject ?? ""}
+                  onChange={(event) => {
+                    const subject = Subject.safeParse(event.target.value);
+                    actions.onSetSubject(subject.success ? subject.data : null);
+                  }}
+                  className="rounded-md bg-transparent px-1 py-0.5 hover:bg-rule/50"
+                >
+                  <option value="">Not set</option>
+                  {Subject.options.map((subject) => (
+                    <option key={subject} value={subject}>
+                      {SUBJECT_LABELS[subject]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {root.courseId && (
               <Link
                 href={`/courses/${root.courseId}`}
@@ -121,92 +184,181 @@ export function NodeHome({ node, tree, loadCounts, pages, now, ...actions }: Pro
           </aside>
         )}
 
-        <section aria-labelledby="chapters-heading" className="flex flex-col gap-3">
-          <h2 id="chapters-heading" className="text-xs tracking-wide text-ink-muted uppercase">
-            {root.childLabel}
-          </h2>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {children.map((child, index) => (
-              <li key={child.id}>
-                <button
-                  type="button"
-                  onClick={() => actions.onOpen(child.id)}
-                  data-testid="chapter-card"
-                  className="flex h-full w-full flex-col gap-2 rounded-2xl border border-rule bg-paper-raised p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 motion-reduce:transition-none"
-                >
-                  <span className="text-xs text-ink-muted tabular-nums">{index + 1}</span>
-                  <span className="font-serif text-xl leading-tight">{child.title}</span>
-                  <span className="mt-auto text-xs text-ink-muted">
-                    {plural(pageCounts.get(child.id) ?? 0, "page")}
-                    {tree.children(child.id).length > 0 &&
-                      ` · ${plural(tree.children(child.id).length, "section")}`}{" "}
-                    · edited {ago(child.updatedAt, now)}
-                  </span>
-                </button>
-              </li>
-            ))}
-            {canAdd && (
-              <li>
-                <button
-                  type="button"
-                  onClick={actions.onAddChild}
-                  title={keys.shown("new_chapter")}
-                  aria-keyshortcuts={keys.aria("new_chapter")}
-                  className="flex h-full min-h-28 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-rule p-4 text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
-                >
-                  <Plus className="size-4" aria-hidden />
-                  Add {noun}
-                </button>
-              </li>
-            )}
-          </ul>
-        </section>
+        {(dueCounts.get(node.id) ?? 0) > 0 && (
+          <aside
+            data-testid="quick-check-card"
+            className="flex items-center justify-between gap-4 rounded-2xl border border-rule bg-paper-raised p-4"
+          >
+            <span className="flex items-center gap-2 text-sm">
+              <Sparkles className="size-4 text-tutor" aria-hidden />
+              {plural(dueCounts.get(node.id) ?? 0, "check")} due from what you saved here.
+            </span>
+            <button
+              type="button"
+              onClick={actions.onQuickCheck}
+              className="shrink-0 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
+            >
+              Quick check
+            </button>
+          </aside>
+        )}
 
-        <section aria-labelledby="pages-heading" className="flex flex-col gap-3">
-          <h2 id="pages-heading" className="text-xs tracking-wide text-ink-muted uppercase">
-            Loose pages
-          </h2>
-          <ul className="flex flex-wrap gap-3">
-            {pages.map((page) => (
-              <li key={page.id}>
-                <button
-                  type="button"
-                  onClick={() => actions.onOpenPage(page.id)}
-                  className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-rule bg-paper-raised text-sm text-ink-muted hover:border-ink/25 hover:text-ink"
-                >
-                  <FileText className="size-5" aria-hidden />
-                  Page {page.index + 1}
-                </button>
-              </li>
-            ))}
-            <li>
-              <button
-                type="button"
-                onClick={actions.onAddPage}
-                title={keys.shown("new_page")}
-                aria-keyshortcuts={keys.aria("new_page")}
-                className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
-              >
-                <Plus className="size-5" aria-hidden />
-                New page
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                onClick={actions.onImportPdf}
-                title={keys.shown("import_pdf")}
-                aria-keyshortcuts={keys.aria("import_pdf")}
-                className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
-              >
-                <FileUp className="size-5" aria-hidden />
-                Import PDF
-              </button>
-            </li>
-          </ul>
-        </section>
+        <div role="tablist" aria-label="Show" className="flex gap-1 border-b border-rule">
+          <TabButton selected={tab === "contents"} onSelect={() => setTab("contents")}>
+            Contents
+          </TabButton>
+          <TabButton selected={tab === "moments"} onSelect={() => setTab("moments")}>
+            Moments{moments.length > 0 && ` (${moments.length})`}
+          </TabButton>
+        </div>
+
+        {tab === "moments" ? (
+          <div role="tabpanel" aria-label="Moments" className="flex flex-col gap-6">
+            {unsorted && (
+              <FileThese
+                moments={moments}
+                isLive={(id) => tree.isLive(id)}
+                onFile={unsorted.onFile}
+                onChoose={unsorted.onChoose}
+              />
+            )}
+            <MomentsList
+              moments={moments}
+              now={now}
+              onOpen={actions.onOpenMoment}
+              placeOf={(moment) =>
+                moment.nodeId === node.id
+                  ? null
+                  : tree
+                      .path(moment.nodeId)
+                      .slice(tree.path(node.id).length)
+                      .map((n) => n.title)
+                      .join(" › ") || null
+              }
+            />
+          </div>
+        ) : (
+          <div role="tabpanel" aria-label="Contents" className="flex flex-col gap-8">
+            <section aria-labelledby="chapters-heading" className="flex flex-col gap-3">
+              <h2 id="chapters-heading" className="text-xs tracking-wide text-ink-muted uppercase">
+                {root.childLabel}
+              </h2>
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {children.map((child, index) => (
+                  <li key={child.id}>
+                    <button
+                      type="button"
+                      onClick={() => actions.onOpen(child.id)}
+                      data-testid="chapter-card"
+                      className="flex h-full w-full flex-col gap-2 rounded-2xl border border-rule bg-paper-raised p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 motion-reduce:transition-none"
+                    >
+                      <span className="flex items-center justify-between gap-2 text-xs text-ink-muted tabular-nums">
+                        {index + 1}
+                        {(dueCounts.get(child.id) ?? 0) > 0 && (
+                          <span
+                            data-testid="checks-due-badge"
+                            className="rounded-full bg-tutor/15 px-2 py-0.5 font-medium text-ink"
+                          >
+                            {plural(dueCounts.get(child.id) ?? 0, "check")} due
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-serif text-xl leading-tight">{child.title}</span>
+                      <span className="mt-auto text-xs text-ink-muted">
+                        {plural(pageCounts.get(child.id) ?? 0, "page")}
+                        {tree.children(child.id).length > 0 &&
+                          ` · ${plural(tree.children(child.id).length, "section")}`}{" "}
+                        · edited {ago(child.updatedAt, now)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+                {canAdd && (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={actions.onAddChild}
+                      title={keys.shown("new_chapter")}
+                      aria-keyshortcuts={keys.aria("new_chapter")}
+                      className="flex h-full min-h-28 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-rule p-4 text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
+                    >
+                      <Plus className="size-4" aria-hidden />
+                      Add {noun}
+                    </button>
+                  </li>
+                )}
+              </ul>
+            </section>
+
+            <section aria-labelledby="pages-heading" className="flex flex-col gap-3">
+              <h2 id="pages-heading" className="text-xs tracking-wide text-ink-muted uppercase">
+                Loose pages
+              </h2>
+              <ul className="flex flex-wrap gap-3">
+                {pages.map((page) => (
+                  <li key={page.id}>
+                    <button
+                      type="button"
+                      onClick={() => actions.onOpenPage(page.id)}
+                      className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-rule bg-paper-raised text-sm text-ink-muted hover:border-ink/25 hover:text-ink"
+                    >
+                      <FileText className="size-5" aria-hidden />
+                      Page {page.index + 1}
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button
+                    type="button"
+                    onClick={actions.onAddPage}
+                    title={keys.shown("new_page")}
+                    aria-keyshortcuts={keys.aria("new_page")}
+                    className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
+                  >
+                    <Plus className="size-5" aria-hidden />
+                    New page
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={actions.onImportPdf}
+                    title={keys.shown("import_pdf")}
+                    aria-keyshortcuts={keys.aria("import_pdf")}
+                    className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
+                  >
+                    <FileUp className="size-5" aria-hidden />
+                    Import PDF
+                  </button>
+                </li>
+              </ul>
+            </section>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function TabButton({
+  selected,
+  onSelect,
+  children,
+}: {
+  selected: boolean;
+  onSelect(): void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      onClick={onSelect}
+      className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-ink-muted hover:text-ink aria-selected:border-ink aria-selected:text-ink"
+    >
+      {children}
+    </button>
   );
 }
 

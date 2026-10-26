@@ -5,6 +5,9 @@ import { sourceKey } from "./destinations";
 import {
   checkEvidence,
   type MomentCheckView,
+  MomentSuggestion,
+  MomentSuggestions,
+  MomentSuggestionsRequest,
   pickQuickCheck,
   savedQuizRequest,
   unsortedNodeId,
@@ -122,5 +125,38 @@ describe("a notebook's subject, from its name", () => {
     ["Diary", null],
   ])("%s → %s", (name, subject) => {
     expect(suggestSubject(name)).toBe(subject);
+  });
+});
+
+describe("File these (K8 §4.6)", () => {
+  const clipId = "66666666-6666-4666-8666-000000000001";
+
+  it("takes a place, or none, for each waiting moment, never Unsorted or a spoken one", () => {
+    const placed = MomentSuggestions.parse({
+      suggestions: [
+        {
+          clipId,
+          nodeId: "00000000-0000-4000-8000-000000000013",
+          path: ["Physics", "Chapter 3"],
+          method: "content_match",
+          matched: "projectile motion",
+        },
+        { clipId },
+      ],
+    });
+    expect(placed.suggestions[1]?.nodeId).toBeUndefined();
+    for (const method of ["unsorted", "spoken"]) {
+      expect(MomentSuggestion.safeParse({ clipId, method }).success).toBe(false);
+    }
+  });
+
+  it("asks for at most 30 at once", () => {
+    expect(MomentSuggestionsRequest.safeParse({ clipIds: Array(30).fill(clipId) }).success).toBe(
+      true,
+    );
+    expect(MomentSuggestionsRequest.safeParse({ clipIds: Array(31).fill(clipId) }).success).toBe(
+      false,
+    );
+    expect(MomentSuggestionsRequest.safeParse({ clipIds: [] }).success).toBe(false);
   });
 });

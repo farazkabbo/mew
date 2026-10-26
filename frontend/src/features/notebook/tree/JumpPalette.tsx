@@ -1,9 +1,10 @@
 "use client";
 
 import type { Notebook, NotebookTree, Page } from "@mew/shared";
-import { FileText, Search } from "lucide-react";
+import { FileText, Search, Sparkles } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 
+import type { Moment } from "../../moments/moments";
 import { Dialog } from "./Dialog";
 import { fuzzyScore } from "./fuzzy";
 import { NodeIcon } from "./node-style";
@@ -13,7 +14,8 @@ const MAX_RESULTS = 12;
 
 type Item =
   | { kind: "node"; id: string; label: string; detail: string; node: Notebook }
-  | { kind: "page"; id: string; label: string; detail: string; nodeId: string };
+  | { kind: "page"; id: string; label: string; detail: string; nodeId: string }
+  | { kind: "moment"; id: string; label: string; detail: string; moment: Moment };
 
 type Props = {
   open: boolean;
@@ -22,10 +24,16 @@ type Props = {
   pages: readonly Page[];
   onOpenNode(id: string): void;
   onOpenPage(page: Page): void;
+  /** K8: saved moments, found by their question and where they came from. */
+  moments?: readonly Moment[];
+  onOpenMoment?(moment: Moment): void;
   onClose(): void;
 };
 
-/** Ctrl+K: jump to any notebook, chapter, section or page by typing part of its name. */
+/**
+ * Ctrl+K: jump to any notebook, chapter, section or page by typing part of its name, or (K8) to
+ * a saved moment by its question or source.
+ */
 export function JumpPalette(props: Props) {
   return (
     <Dialog
@@ -39,7 +47,15 @@ export function JumpPalette(props: Props) {
   );
 }
 
-function PaletteBody({ tree, pages, onOpenNode, onOpenPage, onClose }: Props) {
+function PaletteBody({
+  tree,
+  pages,
+  moments = [],
+  onOpenNode,
+  onOpenPage,
+  onOpenMoment,
+  onClose,
+}: Props) {
   const ids = useId();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -71,18 +87,29 @@ function PaletteBody({ tree, pages, onOpenNode, onOpenPage, onClose }: Props) {
         nodeId: page.notebookId,
       });
     }
+    for (const moment of query.trim() ? moments : []) {
+      if (!tree.isLive(moment.nodeId)) continue;
+      all.push({
+        kind: "moment",
+        id: moment.imageId,
+        label: `${moment.question} · ${moment.sourceName}`,
+        detail: "moment",
+        moment,
+      });
+    }
     return all
       .map((item) => ({ item, score: fuzzyScore(query, item.label) }))
       .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, MAX_RESULTS)
       .map((r) => r.item);
-  }, [tree, pages, query]);
+  }, [tree, pages, moments, query]);
 
   const choose = (item: Item | undefined) => {
     if (!item) return;
     onClose();
     if (item.kind === "node") onOpenNode(item.id);
+    else if (item.kind === "moment") onOpenMoment?.(item.moment);
     else {
       const page = pages.find((p) => p.id === item.id);
       if (page) onOpenPage(page);
@@ -102,8 +129,8 @@ function PaletteBody({ tree, pages, onOpenNode, onOpenPage, onClose }: Props) {
           aria-expanded
           aria-controls={`${ids}-list`}
           aria-activedescendant={items[current] ? `${ids}-${items[current].id}` : undefined}
-          aria-label="Jump to a notebook, chapter or page"
-          placeholder="Jump to a notebook, chapter or page…"
+          aria-label="Jump to a notebook, chapter, page or moment"
+          placeholder="Jump to a notebook, chapter, page or moment…"
           onChange={(event) => {
             setQuery(event.target.value);
             setActive(0);
@@ -134,6 +161,8 @@ function PaletteBody({ tree, pages, onOpenNode, onOpenPage, onClose }: Props) {
           >
             {item.kind === "node" ? (
               <NodeIcon node={item.node} />
+            ) : item.kind === "moment" ? (
+              <Sparkles className="size-4 shrink-0 text-tutor" aria-hidden />
             ) : (
               <FileText className="size-4 shrink-0 text-ink-muted" aria-hidden />
             )}

@@ -1238,3 +1238,105 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
 81. **Left for later (K7):** an entry moved to another page after its solution was written
     leaves the solution behind (its strokes aren't the entry's); "One more" isn't offered on
     screen (it is in the notebook).
+82. **Filing matches phrases, not embeddings (K8 §4.6).** The API service files a moment that
+    wasn't given a place (`moments/filing.py`, pure). It uses the answer's own `subject` and
+    `conceptHints` (prompt `circle-ask.v4`, the same call: no extra model call or embedding).
+    These are matched against each chapter's title, its course passages and its earlier moments'
+    hints and summaries. A hint counts 0.9 if it's a phrase and 0.75 if it's one word, divided by
+    √(places mentioning it), and hints combine as 1 − Π(1 − w). A chapter must score ≥ 0.80 and
+    beat the next by 0.15. Embedding each moment would cost a call per save and blur "projectile
+    motion" with "motion"; the precedence (§4.6) is unchanged. Only the method and score are
+    logged.
+83. **Unsorted is one per student, made where it's needed (K8).** Its id comes from the user id
+    (`unsortedNodeId`, FNV-1a, version-8 UUID, mirrored in Python), so the server can file into it
+    before any device has it. The device makes it the first time an entry arrives for it
+    (`ensureUnsorted`). It can't be renamed, moved or deleted. Its sidebar row shows how many
+    moments wait there, and it opens on its home with the Moments tab first.
+84. **Filing from the notebook goes through the server too (K8).** "File these" and "Choose…"
+    move the entry on the device whole (`importEntry`, as K3's move), then call `POST
+/api/moments/[clipId]/move`, which calls `POST /v1/clips/{id}/move` as the owner (the Clerk
+    token says who; the clip and tree are read and written with the secret key, filtered to
+    them, as destinations always are). The server's destination follows, so other devices put it
+    there too. Filing learns from the move exactly as from the desktop toast's Change. The
+    moment's check follows it (`move_checks`), so its badge moves. Leaving Unsorted teaches the
+    source's memory but records no correction (Unsorted was never a guess).
+85. **"File these" (K8 §4.6).** `POST /v1/clips/suggestions` (at most 30 clips) returns a place
+    per waiting moment: the filing decision, its first alternative when the decision is Unsorted,
+    or none. It never suggests Unsorted and never a notebook to make (that's the toast's "+ New
+    notebook" chip, a tap). Moments are filed one by one or with "File all" (one move at a time).
+    A moment with no suggestion gets "Choose…", the place picker.
+86. **Check questions are made with the answer and checked before they're kept (K8 §4.7).**
+    `circle-ask.v4` returns one `checkQuestion` (short, mcq or work; about the idea, not the
+    screen). `verifiedCheckQuestion` keeps it only if:
+    - a maths key follows from its problem by SymPy (both ways, on its numbers);
+    - a chemistry key is balanced;
+    - an mcq key is one of its choices;
+    - and every text passes the safety check.
+
+    A worded key is kept, and the grader judges answers to it. The question waits with the
+    session's other extras on the web server (`entry-extras.ts`, 30 minutes, as decision 75) and
+    is attached when the entry is saved. The device never sees a key.
+
+87. **Moment checks are their own cards (K8).** `moment_checks` (migration `moments`) holds each
+    card's own FSRS state, apart from concept reviews:
+    - a moment about a concept hint shared with a card from the last 7 days joins that card
+      (`merged_clip_ids`, at most 20);
+    - otherwise it's a new card, due a day later;
+    - after 15 new cards in a day, the rest queue, and the next read of the due list activates
+      them, oldest first, as there's room.
+
+    No card is made while "Quiz me on things I save" is off.
+
+88. **The Quick check (K8 §4.7).** `features/moments/QuickCheck.tsx`, a dialog opened from:
+    - the home's "N checks due" card;
+    - the Review page;
+    - "quiz me on what I saved today / this week / in Physics" (`savedQuizRequest`, read before
+      the tutor; the place is matched to a notebook or chapter title).
+
+    `pickQuickCheck` takes up to 5: the newest half first, then the most overdue. A "saved
+    today" request also takes checks that aren't due yet. The question shows alone (retrieval).
+    The student types an answer or picks a choice, and the web server grades it (mcq by its
+    choice, maths by SymPy both ways, words by the quiz grader), reschedules it, and logs
+    evidence for the course concepts its hints name. Only after the answer come the key, "From
+    your moment on Tue" with its picture, Replay and Open source. A right answer is `independent`
+    only with no peek and no hint:
+    - a peek is "Show the moment", or Replay before answering;
+    - the hint is "It's about: …", from its concept hints.
+
+    No course means no evidence, as before.
+
+89. **The explanation's own voice, kept by the page that said it (K8 §4.7).** The desktop app
+    hands the web page each Circle & Ask step to say. The page tees that TTS stream and keeps
+    about a minute of the latest lines in memory (`entry-voice.ts`: 40 lines, 1 MB a line). Two
+    seconds after the entry is saved, it uploads the steps whose words it said (turns 0–2,
+    steps 0–4) to the private `moment-audio` bucket under the student's own folder. A follow-up
+    adds its own steps; a failed upload is tried again at the next save. Nothing changed in the
+    desktop app. Replay (`replayEntry` with `voice`) waits for each step's voice, then 350 ms. A
+    step with no voice kept is timed by its caption, as before.
+90. **Moments are read from the device (K8 §4.7).** The Moments tab, Ctrl+K and the Quick check's
+    "From your moment" come from the entries on this device's pages (`listEntries`), so a moment
+    is wherever its entry is. A notebook's tab includes its chapters' moments, with the place
+    shown. Search covers the question, the summaries and the source's name, filtered by source
+    (videos, web pages, PDFs, apps). Ctrl+K lists moments only once something is typed. Every
+    node now has a home: the breadcrumb opens it, a chapter without sections included (that's
+    where a chapter's Moments are).
+91. **Open source (K8 §4.7).** A video opens at its second (the desktop app already writes `t=`).
+    A web page gets a text fragment of the first line of the circled text with three or more
+    words (up to six words; `-` and `,` encoded). A PDF on the web and other apps open as they
+    were saved; other apps show their name only.
+92. **Badges (K8 §4.7).** Due checks are counted on their node and every node above it. Chapter
+    cards show "2 checks due"; a home with any due gets a Quick check card, and Review gets "From
+    what you saved". All in-app; desktop notifications stay opt-in and aren't built yet.
+93. **A notebook's subject (K8 §4.6).** Every way a notebook is made (the dialog, voice, "+ New
+    notebook", a course) takes the subject its name suggests (`suggestSubject`). It's set or
+    cleared on the notebook's home ("Subject") and synced with the tree.
+94. **The setting (K8 §4.7).** "Quiz me on things I save" (`quiz_saved_moments`, default on).
+    Turning it off stops new cards and asks "Keep them" or "Clear them" for the existing ones.
+95. **Left for later (K8):**
+    - answering a check by voice or on a quiz page (typed answers and choices only for now);
+    - Open source for a PDF imported into neb (its page with the circled area) and for an external
+      PDF later imported (linked to that page);
+    - exam dates outranking moment checks;
+    - desktop notifications;
+    - a merged card shows only its first moment;
+    - filing from the notebook needs a connection (the entry is read from the server to move it).
