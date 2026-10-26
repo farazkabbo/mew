@@ -172,6 +172,8 @@ class RetrievedLine(_Camel):
     confidence: float
     #: Found by the search itself (the others are its neighbours, for context).
     hit: bool
+    #: K9: the line's open live annotation (a verifier's tick or error, or "?"), if any.
+    mark: Literal["tick", "error", "missing", "unsure"] | None = None
 
 
 class RetrievedPage(_Camel):

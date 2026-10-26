@@ -15,6 +15,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
+from ..annotations.store import AnnotationStore, SupabaseAnnotationStore
 from ..checker.sandbox import CheckerPool, CheckTimeoutError
 from ..config import Settings
 from ..courses.store import CourseNotFoundError, CourseStore
@@ -46,6 +47,29 @@ from .devices import screen_device
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notes", tags=["notes"])
+
+
+def annotation_store(
+    request: Request, local: bool, settings: Settings, token: str | None
+) -> AnnotationStore | None:
+    """K9: live annotations, read for the lines a check compares (None when not configured).
+    The owner's token reads them through RLS; a verified device's check uses the secret key,
+    every query filtered to the device's owner."""
+    if local:
+        store: AnnotationStore = request.app.state.local_annotations
+        return store
+    if not settings.supabase_url:
+        return None
+    if token:
+        if not settings.supabase_publishable_key:
+            return None
+        key = settings.supabase_publishable_key
+    elif settings.supabase_secret_key is not None:
+        key = settings.supabase_secret_key.get_secret_value()
+    else:
+        return None
+    return SupabaseAnnotationStore(settings.supabase_url, api_key=key, user_token=token)
+
 
 #: Course passages given to the comparison as tie-breaking evidence (brief §5.4).
 PASSAGES = 3
@@ -117,7 +141,8 @@ def retrieve_for_student(
     """For a check started in the notebook (e.g. a clip's page against the notes)."""
     store = note_store(request, caller, settings)
     courses = _user_store(request, caller, settings)
-    return _retrieve_notes(request, settings, store, courses, caller.user_id, body)
+    marks = annotation_store(request, caller.is_local, settings, caller.token)
+    return _retrieve_notes(request, settings, store, courses, caller.user_id, body, marks)
 
 
 @router.post("/device/retrieve")
@@ -140,7 +165,8 @@ def retrieve_for_device(
         url, key = _service_credentials(settings)
         store = SupabaseNoteLineStore(url, api_key=key, user_token=None)
         courses = SupabaseCourseStore(url, api_key=key, user_token=None)
-    return _retrieve_notes(request, settings, store, courses, device.user_id, body)
+    marks = annotation_store(request, device.local, settings, None)
+    return _retrieve_notes(request, settings, store, courses, device.user_id, body, marks)
 
 
 # ─── N3: keeping a check's results, and the maths verifier ──────────────────────────────────
@@ -269,6 +295,7 @@ def _retrieve_notes(
     courses: CourseStore,
     user: str,
     body: RetrieveRequest,
+    marks: AnnotationStore | None = None,
 ) -> RetrieveResponse:
     def passages(course_id: UUID, query: str) -> list[CoursePassage]:
         try:
@@ -278,4 +305,8 @@ def _retrieve_notes(
         return [CoursePassage(page=c.page, heading=c.heading, text=c.text) for c in chunks]
 
     embedder = _embedder(request, settings)
-    return _call(lambda: retrieve(store, embedder, user, body, passages))
+
+    def open_marks(line_ids: list[UUID]) -> dict[UUID, str]:
+        return marks.open_marks(user, line_ids) if marks else {}
+
+    return _call(lambda: retrieve(store, embedder, user, body, passages, open_marks))

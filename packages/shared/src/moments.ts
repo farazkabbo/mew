@@ -166,6 +166,8 @@ export function savedQuizRequest(utterance: string): SavedQuizFilter | null {
 export const MomentCheckView = z.object({
   id: z.uuid(),
   clipId: z.uuid(),
+  /** Other moments about the same concept that week, merged into this card. */
+  mergedClipIds: z.array(z.uuid()).max(20).default([]),
   nodeId: z.uuid().nullable(),
   prompt: z.string(),
   kind: CheckQuestion.shape.kind,
@@ -219,7 +221,13 @@ export function checkEvidence(answer: {
  */
 export function pickQuickCheck(
   checks: readonly MomentCheckView[],
-  options: { now: number; since?: "today" | "week" | null; nodeIds?: ReadonlySet<string> | null },
+  options: {
+    now: number;
+    since?: "today" | "week" | null;
+    nodeIds?: ReadonlySet<string> | null;
+    /** An exam is close (`examSoon`): the Quick check stays short, the exam's reviews first. */
+    examSoon?: boolean;
+  },
 ): MomentCheckView[] {
   const startOfDay = new Date(options.now);
   startOfDay.setHours(0, 0, 0, 0);
@@ -238,11 +246,37 @@ export function pickQuickCheck(
   // "Quiz me on what I saved today" asks about those moments even before they're due.
   const asked = options.since ? fits : fits.filter((c) => Date.parse(c.dueAt) <= options.now);
   const recent = [...asked].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-  const half = Math.ceil(L.quickCheck.max / 2);
+  const max = options.examSoon ? L.quickCheck.min : L.quickCheck.max;
+  const half = Math.ceil(max / 2);
   const newest = recent.slice(0, half);
   const overdue = recent
     .slice(half)
     .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))
-    .slice(0, L.quickCheck.max - newest.length);
+    .slice(0, max - newest.length);
   return [...newest, ...overdue];
+}
+
+/** Days before an exam when its course's reviews outrank saved moments' checks (§4.7). */
+export const EXAM_PRIORITY_DAYS = 14;
+
+/**
+ * The nearest exam still to come within two weeks ("exam dates still take priority", §4.7), or
+ * null. Courses' `exam_date` are ISO dates; today counts (0 days left).
+ */
+export function examSoon(
+  courses: readonly { id: string; title: string; exam_date?: string | null | undefined }[],
+  now: number,
+): { courseId: string; title: string; daysLeft: number } | null {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  let best: { courseId: string; title: string; daysLeft: number } | null = null;
+  for (const course of courses) {
+    if (!course.exam_date) continue;
+    const exam = new Date(`${course.exam_date.slice(0, 10)}T00:00:00`);
+    const daysLeft = Math.round((exam.getTime() - today.getTime()) / 86_400_000);
+    if (Number.isNaN(daysLeft) || daysLeft < 0 || daysLeft > EXAM_PRIORITY_DAYS) continue;
+    if (!best || daysLeft < best.daysLeft)
+      best = { courseId: course.id, title: course.title, daysLeft };
+  }
+  return best;
 }

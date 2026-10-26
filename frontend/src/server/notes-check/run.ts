@@ -168,6 +168,7 @@ function promptLines(retrieval: NotesRetrieval): {
       latex: line.latex,
       confidence: line.confidence,
       source: line.source,
+      mark: line.mark ?? null,
     };
   });
   return { notes, uuidOf };

@@ -6,19 +6,36 @@ import {
   pickQuickCheck,
   type SavedQuizFilter,
 } from "@mew/shared";
-import { Check, ExternalLink, Lightbulb, Loader2, Play, Sparkles, X } from "lucide-react";
-import { useId, useState } from "react";
+import {
+  BookOpen,
+  Check,
+  ExternalLink,
+  Lightbulb,
+  Loader2,
+  Mic,
+  PenLine,
+  Play,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { useEffect, useId, useState } from "react";
 
 import { Dialog } from "../notebook/tree/Dialog";
 import { clipImageUrl, momentsApi, MomentApiError } from "./api";
 import { type Moment, momentDay, openSourceLink } from "./moments";
 import { useMomentChecks } from "./store";
+import { WritePad } from "./WritePad";
 
 type Props = {
   /** This device's copy of a moment (for Open source and its date), when it has one. */
   findMoment?(clipId: string): Moment | undefined;
   /** Replay the moment's explanation (the notebook opens its page and replays it). */
   onReplay(clipId: string): void;
+  /** K8: a moment's PDF is imported in neb: open it there (at the circled words' page). */
+  inNeb?(moment: Moment): boolean;
+  onOpenInNeb?(moment: Moment): void;
+  /** Start listening, to answer out loud (the notebook's voice: what's said comes back here). */
+  onListen?(): void;
 };
 
 /**
@@ -52,11 +69,15 @@ type Phase =
 function QuickCheckBody({
   findMoment,
   onReplay,
+  onListen,
+  inNeb,
+  onOpenInNeb,
   filter,
   nodeIds,
 }: Props & { filter: SavedQuizFilter | null; nodeIds: readonly string[] | null }) {
   const ids = useId();
   const all = useMomentChecks((s) => s.checks);
+  const exam = useMomentChecks((s) => s.exam);
   const answered = useMomentChecks((s) => s.answered);
   const close = useMomentChecks((s) => s.closeQuickCheck);
   // Chosen once, when it opens: answering reschedules a check, it doesn't change the set.
@@ -66,6 +87,7 @@ function QuickCheckBody({
       now,
       since: filter?.since ?? null,
       nodeIds: nodeIds ? new Set(nodeIds) : null,
+      examSoon: exam !== null,
     }),
   );
   const [index, setIndex] = useState(0);
@@ -74,6 +96,18 @@ function QuickCheckBody({
   const [peeked, setPeeked] = useState(false);
   const [hinted, setHinted] = useState(false);
   const [score, setScore] = useState({ asked: 0, right: 0 });
+  const [writing, setWriting] = useState(false);
+  // Said out loud (the notebook's voice hands it here while this is open): it's the answer.
+  useEffect(
+    () =>
+      useMomentChecks.subscribe((state, previous) => {
+        if (state.heard && state.heard !== previous.heard) {
+          const said = state.heard.text.trim();
+          setReply((now) => (now.trim() ? `${now.trim()} ${said}` : said).slice(0, 500));
+        }
+      }),
+    [],
+  );
 
   const check = picked[index];
   if (all === null) {
@@ -104,7 +138,6 @@ function QuickCheckBody({
     );
   }
 
-  const moment = findMoment?.(check.clipId);
   const submit = async (answer: string) => {
     const text = answer.trim();
     if (!text || phase.kind === "grading") return;
@@ -122,6 +155,7 @@ function QuickCheckBody({
     }
   };
   const next = () => {
+    setWriting(false);
     setIndex((i) => i + 1);
     setPhase({ kind: "asking" });
     setReply("");
@@ -190,7 +224,29 @@ function QuickCheckBody({
             }}
             className="w-full resize-y rounded-xl border border-rule bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
           />
+          {writing && (
+            <WritePad
+              onRead={(text) =>
+                setReply((now) => (now.trim() ? `${now.trim()} ${text}` : text).slice(0, 500))
+              }
+            />
+          )}
           <div className="flex flex-wrap items-center gap-2 text-sm">
+            {onListen && (
+              <button type="button" onClick={onListen} className={SECONDARY}>
+                <Mic className="size-3.5" aria-hidden />
+                Say it
+              </button>
+            )}
+            <button
+              type="button"
+              aria-pressed={writing}
+              onClick={() => setWriting((v) => !v)}
+              className={`${SECONDARY} aria-pressed:border-accent`}
+            >
+              <PenLine className="size-3.5" aria-hidden />
+              Write it
+            </button>
             <button
               type="submit"
               disabled={!reply.trim() || phase.kind === "grading"}
@@ -232,46 +288,34 @@ function QuickCheckBody({
       )}
 
       {showMoment && (
-        <aside
-          data-testid="quick-check-moment"
-          className="mt-4 flex items-center gap-3 rounded-xl border border-rule bg-paper p-2"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- a private, signed-in image */}
-          <img
-            src={clipImageUrl(check.clipId)}
-            alt=""
-            className="h-14 w-20 shrink-0 rounded-md object-cover"
-          />
-          <div className="min-w-0 flex-1 text-sm">
-            <p className="text-ink-muted">
-              From your moment on {momentDay(Date.parse(check.createdAt), now)}
-            </p>
-            {moment && <p className="truncate font-medium">{moment.question}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (!result) setPeeked(true);
-              close();
-              onReplay(check.clipId);
-            }}
-            className={SECONDARY}
-          >
-            <Play className="size-3.5" aria-hidden />
-            Replay
-          </button>
-          {moment && openSourceLink(moment.image) && (
-            <a
-              href={openSourceLink(moment.image) ?? undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={SECONDARY}
-            >
-              <ExternalLink className="size-3.5" aria-hidden />
-              Open source
-            </a>
+        <ul data-testid="quick-check-moments" className="mt-4 flex flex-col gap-2">
+          {[check.clipId, ...check.mergedClipIds].slice(0, SHOWN_MOMENTS).map((clipId) => (
+            <MomentRow
+              key={clipId}
+              clipId={clipId}
+              moment={findMoment?.(clipId)}
+              fallbackAt={check.createdAt}
+              now={now}
+              {...(onOpenInNeb && {
+                onOpenInNeb: (moment: Moment) => {
+                  close();
+                  onOpenInNeb(moment);
+                },
+              })}
+              {...(inNeb && { inNeb })}
+              onReplay={() => {
+                if (!result) setPeeked(true);
+                close();
+                onReplay(clipId);
+              }}
+            />
+          ))}
+          {check.mergedClipIds.length + 1 > SHOWN_MOMENTS && (
+            <li className="text-xs text-ink-muted">
+              and {check.mergedClipIds.length + 1 - SHOWN_MOMENTS} more moments about this
+            </li>
           )}
-        </aside>
+        </ul>
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
@@ -298,6 +342,65 @@ function QuickCheckBody({
         )}
       </div>
     </Shell>
+  );
+}
+
+/** Moments a merged card shows at once (one card can gather a week of them). */
+const SHOWN_MOMENTS = 3;
+
+/** "From your moment on Tue", with its picture, Replay and Open source. */
+function MomentRow({
+  clipId,
+  moment,
+  fallbackAt,
+  now,
+  onReplay,
+  inNeb,
+  onOpenInNeb,
+}: {
+  clipId: string;
+  moment: Moment | undefined;
+  fallbackAt: string;
+  now: number;
+  onReplay(): void;
+  inNeb?(moment: Moment): boolean;
+  onOpenInNeb?(moment: Moment): void;
+}) {
+  const link = moment ? openSourceLink(moment.image) : null;
+  return (
+    <li
+      data-testid="quick-check-moment"
+      className="flex items-center gap-3 rounded-xl border border-rule bg-paper p-2"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- a private, signed-in image */}
+      <img
+        src={clipImageUrl(clipId)}
+        alt=""
+        className="h-14 w-20 shrink-0 rounded-md object-cover"
+      />
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="text-ink-muted">
+          From your moment on {momentDay(moment?.createdAt ?? Date.parse(fallbackAt), now)}
+        </p>
+        {moment && <p className="truncate font-medium">{moment.question}</p>}
+      </div>
+      <button type="button" onClick={onReplay} className={SECONDARY}>
+        <Play className="size-3.5" aria-hidden />
+        Replay
+      </button>
+      {moment && onOpenInNeb && inNeb?.(moment) && (
+        <button type="button" onClick={() => onOpenInNeb(moment)} className={SECONDARY}>
+          <BookOpen className="size-3.5" aria-hidden />
+          Open in neb
+        </button>
+      )}
+      {link && (
+        <a href={link} target="_blank" rel="noopener noreferrer" className={SECONDARY}>
+          <ExternalLink className="size-3.5" aria-hidden />
+          Open source
+        </a>
+      )}
+    </li>
   );
 }
 

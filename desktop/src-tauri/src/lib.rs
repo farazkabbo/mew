@@ -84,6 +84,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::notes_check::screen_notes_panel;
     tauri::generate_handler![
         reminders::notify_due,
+        reminders::notify_checks,
         screen_coach_status,
         screen_coach_set_enabled,
         screen_coach_set_paused,
@@ -112,7 +113,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
 
 #[cfg(not(windows))]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
-    tauri::generate_handler![reminders::notify_due]
+    tauri::generate_handler![reminders::notify_due, reminders::notify_checks]
 }
 
 /// The web app's pages (and only they) may call these: review reminders, and Screen Coach's
@@ -124,6 +125,7 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
             .local(false)
             .window(MAIN)
             .permission("allow-notify-due")
+            .permission("allow-notify-checks")
             .permission("allow-screen-coach-ask")
             .permission("allow-screen-coach-spoken")
             .permission("allow-screen-coach-link-finish"),

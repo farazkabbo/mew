@@ -1,6 +1,6 @@
 "use client";
 
-import { AppWindow, ExternalLink, FileText, Globe, Search, Video } from "lucide-react";
+import { AppWindow, BookOpen, ExternalLink, FileText, Globe, Search, Video } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { clipImageUrl } from "./api";
@@ -23,6 +23,9 @@ type Props = {
   onOpen(moment: Moment): void;
   /** Where each one is ("Chapter 3"), when the list spans more than one place. */
   placeOf?(moment: Moment): string | null;
+  /** K8: its PDF is imported in neb: open it there, at the page of the circled words. */
+  inNeb?(moment: Moment): boolean;
+  onOpenInNeb?(moment: Moment): void;
 };
 
 /**
@@ -30,7 +33,7 @@ type Props = {
  * question, date and where it came from, searchable and filtered by kind of source. Opening one
  * shows it on its page; Open source goes back to the exact spot.
  */
-export function MomentsList({ moments, now, onOpen, placeOf }: Props) {
+export function MomentsList({ moments, now, onOpen, placeOf, inNeb, onOpenInNeb }: Props) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<SourceKind | null>(null);
   const shown = useMemo(
@@ -114,6 +117,17 @@ export function MomentsList({ moments, now, onOpen, placeOf }: Props) {
                   </span>
                 </span>
               </button>
+              {onOpenInNeb && inNeb?.(moment) && (
+                <button
+                  type="button"
+                  onClick={() => onOpenInNeb(moment)}
+                  title="Open in neb"
+                  aria-label={`Open in neb: ${moment.sourceName}`}
+                  className="grid size-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-rule/60 hover:text-ink"
+                >
+                  <BookOpen className="size-4" aria-hidden />
+                </button>
+              )}
               {link && (
                 <a
                   href={link}

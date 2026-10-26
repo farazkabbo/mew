@@ -44,6 +44,7 @@ describe("/api/settings", () => {
     shortcuts_notice_seen: true,
     your_turn_after_solution: true,
     quiz_saved_moments: true,
+    notify_moment_checks: false,
   };
 
   it("passes a valid change to the API service as the user", async () => {

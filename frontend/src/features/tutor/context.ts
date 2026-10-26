@@ -38,6 +38,8 @@ type ContextInput = {
   quiz?: QuizContext | null;
   /** Lines the student circled (K6 §6.3): the turn is about them, not the latest lines. */
   circled?: readonly Line[] | null;
+  /** K9: a line's open live annotation (the tutor sees what's already marked). */
+  markOf?: ((line: Line) => RecognizedLine["mark"] | null) | undefined;
   fetchImpl?: typeof fetch;
 };
 
@@ -85,7 +87,14 @@ export async function buildTutorRequest(input: ContextInput): Promise<TutorReque
     );
     lines.forEach((line, i) => {
       const known = read[i];
-      if (known) recognizedLines.push({ lineId: line.id, text: known.text, latex: known.latex });
+      if (!known) return;
+      const mark = input.markOf?.(line);
+      recognizedLines.push({
+        lineId: line.id,
+        text: known.text,
+        latex: known.latex,
+        ...(mark && { mark }),
+      });
     });
   }
 

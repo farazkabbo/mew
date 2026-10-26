@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isDesktop, remindAboutReviews } from "./bridge";
+import { isDesktop, remindAboutChecks, remindAboutReviews } from "./bridge";
 
 const ITEM = {
   courseId: "22222222-2222-4222-8222-222222222222",
@@ -35,6 +35,33 @@ describe("desktop bridge", () => {
 
     invoke.mockClear();
     expect(await remindAboutReviews(reviews([]))).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("reminds about saved moments' checks only when some are due (K8)", async () => {
+    const invoke = vi.fn(() => Promise.resolve(true));
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke } } });
+    const now = Date.parse("2026-10-26T12:00:00Z");
+    const check = (dueAt: string) => ({
+      id: crypto.randomUUID(),
+      clipId: crypto.randomUUID(),
+      nodeId: null,
+      prompt: "Why?",
+      kind: "short",
+      choices: [],
+      conceptHints: [],
+      isNew: true,
+      dueAt,
+      createdAt: "2026-10-25T09:00:00Z",
+    });
+    const checks = (list: unknown[]) => () => Promise.resolve(Response.json({ checks: list }));
+    const due = [check("2026-10-26T09:00:00Z"), check("2026-10-26T11:00:00Z")];
+    expect(await remindAboutChecks(checks([...due, check("2026-10-30T09:00:00Z")]), now)).toBe(
+      true,
+    );
+    expect(invoke).toHaveBeenCalledWith("notify_checks", { count: 2 });
+    invoke.mockClear();
+    expect(await remindAboutChecks(checks([check("2026-10-30T09:00:00Z")]), now)).toBe(false);
     expect(invoke).not.toHaveBeenCalled();
   });
 });

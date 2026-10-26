@@ -85,6 +85,8 @@ export const RetrievedNoteLine = z.object({
   latex: z.string().nullable(),
   confidence: z.number().min(0).max(1),
   hit: z.boolean(),
+  /** K9: the line's open live annotation (a verifier's tick or error, or "?"), if any. */
+  mark: z.enum(["tick", "error", "missing", "unsure"]).nullish(),
 });
 export type RetrievedNoteLine = z.infer<typeof RetrievedNoteLine>;
 

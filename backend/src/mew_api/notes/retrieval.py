@@ -333,6 +333,8 @@ def _retrieved(line: StoredNoteLine, *, hit: bool) -> RetrievedLine:
 # ─── Retrieval ───────────────────────────────────────────────────────────────────────────────
 
 PassageFinder = Callable[[UUID, str], list[CoursePassage]]
+#: K9: the open live annotation of each of these lines (by line id), if any.
+MarkFinder = Callable[[list[UUID]], dict[UUID, str]]
 
 
 def retrieve(
@@ -341,6 +343,7 @@ def retrieve(
     user: str,
     request: RetrieveRequest,
     passages: PassageFinder | None = None,
+    marks: MarkFinder | None = None,
 ) -> RetrieveResponse:
     """The notes related to the screen, with the course passages on the same topic."""
     started = time.perf_counter()
@@ -370,6 +373,16 @@ def retrieve(
     ranked = prefer_near(ranked, {page: info.notebook_id for page, info in infos.items()}, ladder)
     pages = best_pages(ranked)
     lines = select_context(ranked, store.page_lines(user, pages), pages, exclude)
+    if marks and lines:
+        # K9: what live annotations said about these lines (best effort: none if unreachable).
+        try:
+            found = marks([line.line_id for line in lines])
+        except Exception:
+            found = {}
+        lines = [
+            line.model_copy(update={"mark": found[line.line_id]}) if line.line_id in found else line
+            for line in lines
+        ]
     titles = {
         n.id: n.title for n in store.notebooks(user, ids=[p.notebook_id for p in infos.values()])
     }

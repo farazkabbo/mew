@@ -326,3 +326,17 @@ export const LiveMarkResponse = z.object({
   note: z.string().max(60).nullable(),
 });
 export type LiveMarkResponse = z.infer<typeof LiveMarkResponse>;
+
+// ─── Which concept a right line shows (evidence without a worked solution, §7.4) ────────────
+
+/** The working that was just checked right, and the course it's in. */
+export const LiveConceptRequest = z.object({
+  courseId: z.uuid(),
+  /** The line and up to three lines before it, as read, top to bottom. */
+  lines: z.array(z.string().trim().min(1).max(ANNOTATION_LIMITS.textChars)).min(1).max(4),
+});
+export type LiveConceptRequest = z.infer<typeof LiveConceptRequest>;
+
+/** One of the course's concepts (by id), or null when the working shows none clearly. */
+export const LiveConceptResponse = z.object({ conceptId: z.uuid().nullable() });
+export type LiveConceptResponse = z.infer<typeof LiveConceptResponse>;

@@ -18,8 +18,15 @@ import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
 import { type NotebookVoiceHandler, useMewSession } from "../mew/useMewSession";
-import { momentsApi } from "../moments/api";
-import { dueByNode, type Moment, momentsFrom, subtreeIds } from "../moments/moments";
+import { MomentMoves } from "../moments/outbox";
+import {
+  circledWords,
+  dueByNode,
+  type Moment,
+  momentsFrom,
+  pdfFileName,
+  subtreeIds,
+} from "../moments/moments";
 import { QuickCheck } from "../moments/QuickCheck";
 import { useMomentChecks } from "../moments/store";
 import { useNotesCheck } from "../notes/check-store";
@@ -52,8 +59,10 @@ import { HoldCircle } from "./HoldCircle";
 import { PageNav } from "./PageNav";
 import { NotebookRepository } from "./repository";
 import { Sidebar } from "./Sidebar";
+import { replayPage } from "./page-replay";
 import { useNotebookUi } from "./store";
 import { Toolbar } from "./Toolbar";
+import { isShown } from "./visibility";
 import { useAppServices } from "./useAppServices";
 import { useClipImport } from "./useClipImport";
 import { pullTree } from "./tree-api";
@@ -321,11 +330,17 @@ export function NotebookApp({ userId }: { userId: string }) {
     images: [],
     pages: [],
   });
+  /** The PDFs imported on this device, by file name (K8: "Open in neb"). */
+  const [pdfNames, setPdfNames] = useState<ReadonlyMap<string, string>>(new Map());
   useEffect(() => {
     let live = true;
     void repo
       .listEntries()
       .then((read) => live && setEntries(read))
+      .catch(report);
+    void repo
+      .pdfFileNames()
+      .then((names) => live && setPdfNames(names))
       .catch(report);
     return () => {
       live = false;
@@ -372,24 +387,62 @@ export function NotebookApp({ userId }: { userId: string }) {
    * Files a moment from the notebook (K8: "File these", or a place chosen for it): its entry
    * moves there whole, then the server's copy follows, and filing learns from it.
    */
+  const momentMoves = useMemo(() => new MomentMoves(), []);
+  useEffect(() => {
+    void momentMoves.flush();
+    const online = () => void momentMoves.flush();
+    window.addEventListener("online", online);
+    return () => window.removeEventListener("online", online);
+  }, [momentMoves]);
   const fileMoment = useCallback(
     async (moment: Moment, nodeId: string) => {
-      const clip = await momentsApi.clip(moment.clipId);
-      const page = await repo.importEntry(nodeId, clip, { kind: "from_screen" });
-      void fetch(`/api/clips/${clip.id}`, {
+      // Moved on this device first (offline too); the server follows now or once it's reachable.
+      const page = await repo.relocateEntry(moment.imageId, nodeId);
+      if (!page) throw new Error("That moment isn't on this device any more.");
+      void fetch(`/api/clips/${moment.clipId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notebookPageId: page.id }),
         keepalive: true,
       }).catch(() => undefined);
-      // Best effort: it's filed here either way; another device follows once the server does.
-      await momentsApi.moved(moment.clipId, nodeId).catch(() => undefined);
+      void momentMoves.moved(moment.clipId, nodeId);
       reloadMoments();
       void loadChecks(true);
     },
-    [repo, reloadMoments, loadChecks],
+    [repo, reloadMoments, loadChecks, momentMoves],
   );
   const [choosingFor, setChoosingFor] = useState<Moment | null>(null);
+  /** K8 §4.7: a moment from a PDF that's imported here opens on its page in neb. */
+  const inNeb = useCallback(
+    (moment: Moment) => {
+      const name = pdfFileName(moment.image);
+      return name !== null && pdfNames.has(name);
+    },
+    [pdfNames],
+  );
+  const openInNeb = useCallback(
+    (moment: Moment) => {
+      const name = pdfFileName(moment.image);
+      const pdfId = name ? pdfNames.get(name) : undefined;
+      if (!pdfId) return;
+      const words = circledWords(moment.image);
+      void repo
+        .pdfPageWith(pdfId, words)
+        .then((page) => {
+          if (!page) {
+            setNotice({ text: "That PDF's pages aren't on this device yet.", tone: "info" });
+            return;
+          }
+          openPage(page);
+          setNotice({
+            text: words ? `From your moment: “${words}…”` : "From your moment.",
+            tone: "info",
+          });
+        })
+        .catch(report);
+    },
+    [pdfNames, repo, openPage, report],
+  );
   const openQuickCheck = useMomentChecks((s) => s.openQuickCheck);
   /** "Quiz me on what I saved today / this week / in Physics" (K8 §4.5). */
   const quizSaved = useCallback(
@@ -611,9 +664,35 @@ export function NotebookApp({ userId }: { userId: string }) {
     keys.own,
   );
 
+  // K9 page Replay: the page redraws itself in the order it was written (marks included).
+  const stopPageReplay = useRef<(() => void) | null>(null);
+  const [replayingPage, setReplayingPage] = useState(false);
+  const togglePageReplay = () => {
+    if (stopPageReplay.current) {
+      stopPageReplay.current();
+      return;
+    }
+    if (!engine) return;
+    setReplayingPage(true);
+    stopPageReplay.current = replayPage(
+      engine.doc.all(),
+      (ids) => useNotebookUi.getState().setPageReplayHidden(ids.size > 0 ? ids : null),
+      () => {
+        stopPageReplay.current = null;
+        setReplayingPage(false);
+      },
+    );
+  };
+  // A replay never outlives its page, and the pen touching the page stops it.
+  useEffect(() => () => stopPageReplay.current?.(), [engine]);
+  useEffect(
+    () => engine?.subscribe((change) => change === "draw" && stopPageReplay.current?.()),
+    [engine],
+  );
+
   const exportLine = async () => {
     if (!engine) return;
-    const crop = await cropCurrentLine(engine.doc);
+    const crop = await cropCurrentLine(engine.doc, { marks: isShown });
     if (!crop) {
       setNotice({ text: "Write something first — there's no line to export.", tone: "info" });
       return;
@@ -669,6 +748,8 @@ export function NotebookApp({ userId }: { userId: string }) {
             moments={moments.filter((m) => subtreeIds(tree, node.id).has(m.nodeId))}
             dueCounts={dueCounts}
             onOpenMoment={(moment) => openMoment(moment)}
+            inNeb={inNeb}
+            onOpenInNeb={openInNeb}
             onQuickCheck={() => openQuickCheck({ nodeIds: [...subtreeIds(tree, node.id)] })}
             onSetSubject={(subject) => void repo.tree.setSubject(node.id, subject).catch(report)}
             {...(node.id === unsortedNodeId(userId) && {
@@ -708,6 +789,8 @@ export function NotebookApp({ userId }: { userId: string }) {
             onResetView={actions.resetView}
             onExportLine={() => void exportLine().catch(report)}
             marks={<MarksMenu notebookId={rootId} pageId={view === "page" ? pageId : null} />}
+            {...(view === "page" && engine && { onReplayPage: togglePageReplay })}
+            replayingPage={replayingPage}
           />
         </div>
 
@@ -859,6 +942,9 @@ export function NotebookApp({ userId }: { userId: string }) {
         />
       )}
       <QuickCheck
+        onListen={mew.startListening}
+        inNeb={inNeb}
+        onOpenInNeb={openInNeb}
         findMoment={momentOf}
         onReplay={(clipId) => {
           const moment = momentOf(clipId);

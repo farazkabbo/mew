@@ -42,6 +42,7 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         "shortcuts_notice_seen": False,
         "your_turn_after_solution": True,
         "quiz_saved_moments": True,
+        "notify_moment_checks": False,
     }
     changed = client.patch(
         "/v1/me/settings",

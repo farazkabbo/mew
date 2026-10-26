@@ -316,6 +316,40 @@ def test_the_student_retrieves_their_related_notes(client: TestClient) -> None:
     assert body["pages"][0]["notebookTitle"] == "Biology"
 
 
+def test_a_lines_open_live_mark_comes_with_it(client: TestClient) -> None:
+    sync_page(client, ["Enzymes", "enzymes lower activation energy"])
+    first = client.post("/v1/notes/retrieve", json=SCREEN, headers=LOCAL).json()["lines"]
+    marked = next(line for line in first if line["text"] == "enzymes lower activation energy")
+    mark = {
+        "id": str(uuid4()),
+        "pageId": marked["pageId"],
+        "lineId": marked["lineId"],
+        "markKind": "error",
+        "verdict": "incorrect",
+        "checkerMethod": "rubric",
+        "recognizedText": None,
+        "confidence": 0.9,
+        "strokeGroupId": str(uuid4()),
+        "note": "evidence?",
+        "createdAt": 1_790_000_000_000,
+        "resolvedAt": None,
+        "dismissedAs": None,
+        "evidence": None,
+    }
+    assert (
+        client.put("/v1/annotations", json={"annotations": [mark]}, headers=LOCAL).status_code
+        == 200
+    )
+    lines = client.post("/v1/notes/retrieve", json=SCREEN, headers=LOCAL).json()["lines"]
+    by_text = {line["text"]: line.get("mark") for line in lines}
+    assert by_text == {"Enzymes": None, "enzymes lower activation energy": "error"}
+    # Resolved: no longer said about the line.
+    done = {**mark, "resolvedAt": 1_790_000_060_000}
+    client.put("/v1/annotations", json={"annotations": [done]}, headers=LOCAL)
+    lines = client.post("/v1/notes/retrieve", json=SCREEN, headers=LOCAL).json()["lines"]
+    assert all(line.get("mark") is None for line in lines)
+
+
 def test_a_device_retrieves_its_owners_notes_but_never_names_a_scope(client: TestClient) -> None:
     sync_page(client, ["enzymes lower activation energy"])
     token = link_device(client)

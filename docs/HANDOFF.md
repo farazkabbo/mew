@@ -296,6 +296,19 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     RLS upsert); `POST /api/annotate/mark` (margin notes, `server/live-mark.ts`, `liveMark` limits).
   - **The `annotations` migration (`20261105000000_annotations.sql`) is not applied to the
     hosted project yet.**
+- **K8 and K9 follow-ups** — NOTEBOOKS_K.md decisions 108–119:
+  - Quick check by voice ("Say it") and in writing (`moments/WritePad.tsx`); "Open in neb" for
+    moments from an imported PDF; exam dates first (`examSoon`); opt-in check reminders in the
+    desktop app (`notify_checks`, migration `check_reminders`); merged cards list their moments;
+    filing offline (`relocateEntry`, `moments/outbox.ts`).
+  - Marks in the line export, page Replay (`notebook/page-replay.ts`), the tutor's context
+    (`tutor.v9`) and Notes Check (`notes-compare.v4`, `RetrievedLine.mark`); concepts for live
+    evidence (`/api/annotate/concept`, `live-concept.v1`); resolved circles fade; leaving a page
+    finishes its line.
+  - **Hosted database (checked 2026-10-26):** `note_lines` through `clip_entries` and
+    `notes_resolution` are applied but not recorded in the migration history. `notebook_tree`
+    onwards (8 migrations, `check_reminders` included) are not applied. The Supabase MCP
+    connection is read-only, so they need the SQL editor or `supabase db push`.
   - **To verify by hand:**
     - the K9 acceptance with real handwriting and Gemini recognition (`3x + 7 = 19`, `3x = 26`,
       then fixed);
@@ -378,6 +391,10 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after the K8/K9 follow-ups): **1,621 unit tests** (frontend 529, backend 364, ink 169,
+shared 392, database 144, desktop overlays 23), **170 Rust tests** (+5 real-Windows ones) and
+**80 Playwright tests**, all passing.
 
 Tests (after K9): **1,605 unit tests** (frontend 517, backend 362, ink 169, shared 391,
 database 143, desktop overlays 23), the same 169 Rust tests, and **80 Playwright tests** (all passing in one full run).

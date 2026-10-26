@@ -17,6 +17,8 @@ export type Overlay = {
   selection: { strokes: Stroke[]; bbox: BBox; dx: number; dy: number } | null;
   /** The tutor's ink being written (finished strokes plus the one in progress). */
   tutor: readonly Stroke[];
+  /** K9: a resolved mark fading out (taken off the page already), and how far gone (0–1). */
+  fading?: { strokes: readonly Stroke[]; alpha: number } | null;
 };
 
 export type ToolContext = {

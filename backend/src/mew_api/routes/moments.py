@@ -172,6 +172,7 @@ def _view(check: CheckRow) -> CheckView:
     return CheckView(
         id=check.id,
         clip_id=check.clip_id,
+        merged_clip_ids=check.merged_clip_ids,
         node_id=check.node_id,
         prompt=check.prompt,
         kind=check.kind,

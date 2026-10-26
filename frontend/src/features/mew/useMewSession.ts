@@ -6,18 +6,20 @@ import {
   type Evidence,
   type MewDecisionResponse,
   type MewInput,
+  type LiveMarkKind,
   type SavedQuizFilter,
   savedQuizRequest,
   TUTOR_LIMITS,
 } from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { BUDGET_PAUSE_MS, liveMarkNote } from "../annotate/api";
+import { BUDGET_PAUSE_MS, liveConceptOf, liveMarkNote } from "../annotate/api";
 import { LiveAnnotator } from "../annotate/annotator";
 import { useMarkPrefs } from "../annotate/prefs";
 import type { AnnotationRecords } from "../annotate/records";
 import type { AnnotationSync } from "../annotate/sync";
 import { coursesApi } from "../courses/api";
+import { useMomentChecks } from "../moments/store";
 import { circledLines } from "../notebook/circle";
 import type { PageEngine } from "../notebook/engine";
 import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
@@ -90,6 +92,8 @@ function createPipeline() {
   let mew: MewController | null = null;
   /** Lines circled while holding Ctrl+Alt (K6 §6.3), until the turn about them takes them. */
   let circled: { lines: Line[]; at: number } | null = null;
+  /** K9: a line's open live mark, for the tutor's context (set once the annotator exists). */
+  let markOf: (line: Line) => { kind: LiveMarkKind; note: string | null } | null = () => null;
   const takeCircled = (): Line[] | null => {
     const taken = circled;
     circled = null;
@@ -121,6 +125,8 @@ function createPipeline() {
     doc: () => engine?.doc ?? null,
     images: () => engine?.images ?? [],
     takeCircled,
+    // K9: what live annotations already marked (wired once `live` is made, below).
+    markOf: (line) => markOf(line),
     onFinished: () => mew?.tutorFinished(),
   });
   quiz = new QuizSession({
@@ -237,6 +243,8 @@ function createPipeline() {
   let liveRecords: AnnotationRecords | null = null;
   let liveNotebook: string | null = null;
   let liveSync: AnnotationSync | null = null;
+  /** The course concept each page's verified working practises (K9 §7.4), once found. */
+  const pageConcepts = new Map<string, string>();
   const live = new LiveAnnotator({
     engine: () => engine,
     records: {
@@ -266,17 +274,26 @@ function createPipeline() {
     }),
     viewport: () => ink.viewport(),
     rubric: liveMarkNote,
-    onEvidence: (evidence) => {
-      const page = engine?.pageId;
-      if (!page || !records) return;
-      // The page's concepts, when a worked solution on it named them (else nothing is logged).
-      void records
-        .forPage(page)
-        .then((list) => attempt(list.at(-1)?.conceptIds ?? [], evidence, "live_annotation"))
-        .catch(() => undefined);
+    onEvidence: (evidence, working) => {
+      const course = courseId;
+      if (!course) return; // evidence needs a course's concepts
+      void (async () => {
+        // The page's concepts: a worked solution on it named them, or the verifier picks one
+        // of the course's for the working (once per page, then kept).
+        const named = (await records?.forPage(working.pageId))?.at(-1)?.conceptIds ?? [];
+        let ids = named;
+        if (ids.length === 0) {
+          const known = pageConcepts.get(working.pageId);
+          const picked = known ?? (await liveConceptOf({ courseId: course, lines: working.lines }));
+          if (picked) pageConcepts.set(working.pageId, picked);
+          ids = picked ? [picked] : [];
+        }
+        attempt(ids, evidence, "live_annotation");
+      })().catch(() => undefined);
     },
     onChanged: () => liveSync?.soon(),
   });
+  markOf = (line) => live.markFor(line);
   // Show-then-You (K6): "just give me the answer" is worked, verified, folded, then a Your Turn.
   solutions = new ShowThenYou({
     engine: () => engine,
@@ -502,7 +519,10 @@ export function useMewSession(
     voice.current?.stop();
     const session = new VoiceSession({
       onUtterance: (text) => {
-        if (!tutor.isEcho(text)) mew.utterance(text);
+        if (tutor.isEcho(text)) return;
+        // K8: a Quick check is open: what's said is its answer.
+        if (useMomentChecks.getState().quickCheck) useMomentChecks.getState().hear(text);
+        else mew.utterance(text);
       },
       onSpeech: (partial) => {
         mew.speech();
@@ -523,7 +543,8 @@ export function useMewSession(
     (text: string) => {
       tutor.unlockAudio();
       useVoice.getState().commit(text);
-      mew.utterance(text);
+      if (useMomentChecks.getState().quickCheck) useMomentChecks.getState().hear(text);
+      else mew.utterance(text);
     },
     [mew, tutor],
   );

@@ -1,3 +1,4 @@
+import type { Stroke } from "@mew/shared";
 import { create } from "zustand";
 
 import { HIGHLIGHTER_COLORS, INK_COLORS, type PenSize, type Tool } from "./palette";
@@ -24,6 +25,10 @@ type ToolState = {
   marksHiddenOn: ReadonlySet<string>;
   /** K9: marks held back by "Hide marks until I'm done" (their stroke groups). */
   unrevealedMarks: ReadonlySet<string>;
+  /** K9: a resolved mark's strokes, fading out on the live layer since `since`. */
+  fadingMarks: { strokes: readonly Stroke[]; since: number } | null;
+  /** Page Replay (K9): strokes not drawn again yet; null when no replay is running. */
+  pageReplayHidden: ReadonlySet<string> | null;
 };
 
 type ViewState = {
@@ -44,6 +49,8 @@ type Actions = {
   requestMoment(request: { imageId: string; replay: boolean } | null): void;
   toggleMarksOn(pageId: string): void;
   setUnrevealedMarks(groups: ReadonlySet<string>): void;
+  fadeMarks(strokes: readonly Stroke[]): void;
+  setPageReplayHidden(ids: ReadonlySet<string> | null): void;
   setView(view: Partial<ViewState>): void;
 };
 
@@ -66,6 +73,8 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
   momentRequest: null,
   marksHiddenOn: new Set(readList(MARKS_HIDDEN_KEY)),
   unrevealedMarks: new Set(),
+  fadingMarks: null,
+  pageReplayHidden: null,
   zoom: 1,
   canUndo: false,
   canRedo: false,
@@ -92,6 +101,9 @@ export const useNotebookUi = create<ToolState & ViewState & Actions>()((set, get
     set({ marksHiddenOn: next });
   },
   setUnrevealedMarks: (unrevealedMarks) => set({ unrevealedMarks }),
+  setPageReplayHidden: (pageReplayHidden) => set({ pageReplayHidden }),
+  fadeMarks: (strokes) =>
+    set({ fadingMarks: strokes.length > 0 ? { strokes, since: performance.now() } : null }),
   setView: (view) => set(view),
 }));
 

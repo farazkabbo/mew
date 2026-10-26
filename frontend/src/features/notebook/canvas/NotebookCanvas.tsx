@@ -26,6 +26,9 @@ import { isTypingTarget } from "../dom";
 import type { InkLayer } from "../../tutor/ink";
 import { isShown } from "../visibility";
 
+/** How long a resolved mark takes to fade out (K9). */
+const FADE_MS = 400;
+
 /** Room left above something scrolled to the top, in CSS px (the toolbar sits there). */
 const SHOW_TOP_MARGIN = 96;
 
@@ -145,7 +148,12 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       if (dirty.live) {
         overlay.tutor =
           tutorInk && useNotebookUi.getState().showTutorInk ? tutorInk.liveStrokes() : [];
+        // K9: a resolved circle fades out instead of vanishing (then a frame per step).
+        const fading = useNotebookUi.getState().fadingMarks;
+        const alpha = fading ? 1 - (performance.now() - fading.since) / FADE_MS : 0;
+        overlay.fading = fading && alpha > 0 ? { strokes: fading.strokes, alpha } : null;
         renderer.drawLive(camera, overlay);
+        if (overlay.fading) schedule({ live: true });
       }
       dirty.grid = dirty.ink = dirty.live = false;
     };
@@ -244,12 +252,14 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     });
     const unsubscribeUi = useNotebookUi.subscribe((state, previous) => {
       if (state.showLines !== previous.showLines) schedule({ ink: true });
+      if (state.fadingMarks !== previous.fadingMarks) schedule({ live: true });
       if (
         state.showTutorInk !== previous.showTutorInk ||
         state.replayHidden !== previous.replayHidden ||
         state.foldedGroups !== previous.foldedGroups ||
         state.marksHiddenOn !== previous.marksHiddenOn ||
-        state.unrevealedMarks !== previous.unrevealedMarks
+        state.unrevealedMarks !== previous.unrevealedMarks ||
+        state.pageReplayHidden !== previous.pageReplayHidden
       ) {
         schedule({ ink: true, live: true });
       }

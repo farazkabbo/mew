@@ -1332,7 +1332,7 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
     cleared on the notebook's home ("Subject") and synced with the tree.
 94. **The setting (K8 §4.7).** "Quiz me on things I save" (`quiz_saved_moments`, default on).
     Turning it off stops new cards and asks "Keep them" or "Clear them" for the existing ones.
-95. **Left for later (K8):**
+95. **Left for later (K8)** (built since: decisions 109–114):
     - answering a check by voice or on a quiz page (typed answers and choices only for now);
     - Open source for a PDF imported into neb (its page with the circled area) and for an external
       PDF later imported (linked to that page);
@@ -1428,3 +1428,65 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
       - "the student moves to the next problem" as a finish signal (a new line covers it);
       - an offline reload in the e2e test (the dev server can't serve one: the test reloads, then
         goes offline).
+108.  **K8 and K9's left-for-later, built (decisions 95 and 107).** Each is below; what's still
+      left is listed last.
+109.  **Answering a check out loud or in writing (K8 §4.7).** The Quick check has "Say it" and
+      "Write it".
+      - **Say it** starts the notebook's own voice session. While a Quick check is open, finished
+        utterances go into its answer box instead of to Mew (`useMomentChecks.hear`), and the
+        student checks them before sending.
+      - **Write it** opens a small pad. "Read my writing" sends it to the same handwriting
+        recognition as the notebook and puts the reading in the answer box.
+
+      The Review page has the pad (it has no voice session).
+
+110.  **Open in neb (K8 §4.7).** A moment from a PDF (by its link's file name or its window
+      title) whose file is imported on this device gets "Open in neb" in the Moments list and the
+      Quick check. It opens the notebook page of that PDF whose text (kept on the device once
+      viewed) has the first circled words, else the PDF's first page here, and says which words.
+      There's no highlight on the page, since moments don't keep word boxes.
+111.  **Exam dates come first (K8 §4.7).** When a course's exam is within 14 days (`examSoon`):
+      - the Review page lists that course's reviews first, and the saved moments' checks after
+        them, with a note saying why;
+      - the Quick check is 3 questions, not 5.
+112.  **Desktop notifications, opt-in (K8 §4.7).** "Tell me when checks are due" (desktop app only,
+      `notify_moment_checks`, default off; migration `check_reminders`). The page counts the due
+      checks every half hour, as it does for reviews. The desktop app's `notify_checks` shows "2
+      checks from things you saved are due" at most twice a day.
+113.  **A merged card shows its moments (K8).** A check now carries `mergedClipIds`. The Quick
+      check lists the first three moments it's about, each with Replay (and Open source, or Open
+      in neb), then "and N more".
+114.  **Filing offline (K8).** "File these" and "Choose…" move the entry on the device with nothing
+      fetched (`relocateEntry`: the picture, note and strokes, laid out below that page's entries
+      under its own day heading). The server's copy follows through a small outbox
+      (`MomentMoves`), sent now or when the connection comes back; the latest move of a moment
+      wins.
+115.  **Marks everywhere else (K9 §7.3).**
+      - **Export:** the current line's PNG includes the shown marks beside it.
+      - **Page Replay:** a toolbar button redraws the whole page in the order it was made (the
+        student's ink, the tutor's, the marks), pauses cut to 0.7 s, 45 s at most. The pen
+        touching the page stops it.
+      - **Tutor:** each line in its context carries its open mark (`recognizedLines[].mark`,
+        prompt `tutor.v9`), so "Why?" explains that mark and the tutor doesn't mark a line again.
+      - **Notes Check:** retrieved lines carry their open mark from the `annotations` table (by
+        line id: marks take Notes Check's line ids, decision 99). The comparison (prompt
+        `notes-compare.v4`) doesn't report a known slip again, doesn't call a verified-right line
+        wrong, and treats a doubtful reading as "unclear".
+      - **Moments:** an entry's From screen page is a page like any other: the marks on the
+        student's working under it reach the tutor the same way.
+116.  **Concepts for live evidence (K9 §7.4).** On a page without a worked solution, the first
+      checker-verified right line asks `POST /api/annotate/concept` (prompt `live-concept.v1`, the
+      verifier model) which of the course's own concepts the working practises. The answer is
+      checked against the course's concept ids and kept for the page. Limits: 10 a minute, 150 a
+      day. No course, or no clear concept: nothing is logged, as before.
+117.  **A circle fades as it resolves (K9 §7.1).** A mark taken off the page fades out on the live
+      layer over 400 ms (`fadingMarks`) while its tick appears. A mark held back or on a hidden
+      layer doesn't flash.
+118.  **The next problem finishes a line (K9 §7.2).** Opening another page finishes the line still
+      being written on the one left, and it's marked there before the new page is followed.
+119.  **Still left:**
+      - highlighting the circled words on a neb PDF page;
+      - an offline reload in the e2e test (the dev server can't serve one);
+      - K6's "the tutor offers the answer after two unsuccessful tries" and the Your Turn check for
+        code;
+      - K7's solution left behind when an entry moves, and "One more" on screen.

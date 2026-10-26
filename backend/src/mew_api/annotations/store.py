@@ -7,6 +7,7 @@ resolves or is dismissed. Local mode keeps them in memory.
 import threading
 from datetime import UTC, datetime
 from typing import Any, Protocol
+from uuid import UUID
 
 from ..supabase_rest import SupabaseRest
 from .models import AnnotationUpsert
@@ -37,6 +38,11 @@ def annotation_row(a: AnnotationUpsert) -> dict[str, Any]:
 
 class AnnotationStore(Protocol):
     def upsert(self, user: str, annotations: list[AnnotationUpsert]) -> int: ...
+    def open_marks(self, user: str, line_ids: list[UUID]) -> dict[UUID, str]: ...
+
+
+#: A line's open mark that says something about it (a tick, an error, something missing, a "?").
+MARK_KINDS = ("tick", "error", "missing", "unsure")
 
 
 class MemoryAnnotationStore:
@@ -58,6 +64,21 @@ class MemoryAnnotationStore:
                 saved += 1
         return saved
 
+    def open_marks(self, user: str, line_ids: list[UUID]) -> dict[UUID, str]:
+        wanted = {str(i) for i in line_ids}
+        with self._lock:
+            rows = [r for (owner, _), r in self._rows.items() if owner == user]
+        latest: dict[UUID, tuple[str, str]] = {}
+        for r in rows:
+            if r["line_id"] not in wanted or r["resolved_at"] or r["dismissed_as"]:
+                continue
+            if r["mark_kind"] not in MARK_KINDS:
+                continue
+            line = UUID(r["line_id"])
+            if line not in latest or r["created_at"] > latest[line][0]:
+                latest[line] = (r["created_at"], r["mark_kind"])
+        return {line: kind for line, (_, kind) in latest.items()}
+
     def rows(self, user: str) -> list[dict[str, Any]]:
         with self._lock:
             return [dict(r) for (owner, _), r in self._rows.items() if owner == user]
@@ -74,3 +95,21 @@ class SupabaseAnnotationStore(SupabaseRest):
             headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
         )
         return len(rows)
+
+    def open_marks(self, user: str, line_ids: list[UUID]) -> dict[UUID, str]:
+        if not line_ids:
+            return {}
+        rows = self._get(
+            "annotations",
+            {
+                "select": "line_id,mark_kind,created_at",
+                "user_id": f"eq.{user}",
+                "line_id": f"in.({','.join(str(i) for i in line_ids[:500])})",
+                "resolved_at": "is.null",
+                "dismissed_as": "is.null",
+                "mark_kind": f"in.({','.join(MARK_KINDS)})",
+                "order": "created_at.asc",
+            },
+        )
+        # The latest open mark per line wins.
+        return {UUID(r["line_id"]): str(r["mark_kind"]) for r in rows}

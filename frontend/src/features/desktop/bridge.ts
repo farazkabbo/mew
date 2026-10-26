@@ -1,9 +1,10 @@
-import { ReviewQueue } from "@mew/shared";
+import { MomentChecksDue, ReviewQueue } from "@mew/shared";
 
 /**
  * The desktop app (Tauri, desktop/) shows this web app in its own window. Inside it, the page may
  * call three commands, each checked in Rust:
  * - `notify_due`: show a review reminder;
+ * - `notify_checks`: saved moments' checks are due (K8; only when the student turned it on);
  * - `screen_coach_ask`: ask Screen Coach about the frame the desktop app captured on the hotkey
  *   (the page sends only the words; it never sees the screenshot);
  * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code;
@@ -40,6 +41,22 @@ export async function remindAboutReviews(
     first: items[0]?.conceptTitle ?? null,
   });
   return shown === true;
+}
+
+/**
+ * Saved moments' checks (K8 §4.7): "2 checks from things you saved are due", only when the
+ * student turned these on (the desktop app shows it at most twice a day).
+ */
+export async function remindAboutChecks(
+  fetchImpl: typeof fetch = (...args) => fetch(...args),
+  now = Date.now(),
+): Promise<boolean> {
+  const response = await fetchImpl("/api/moments/checks", { cache: "no-store" });
+  if (!response.ok) return false;
+  const { checks } = MomentChecksDue.parse(await response.json());
+  const due = checks.filter((c) => Date.parse(c.dueAt) <= now).length;
+  if (due === 0) return false;
+  return (await invoke("notify_checks", { count: due })) === true;
 }
 
 /** Asks Screen Coach about the captured screen. The answer arrives as `mew:screen-*` events. */

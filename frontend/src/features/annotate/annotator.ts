@@ -21,6 +21,7 @@ import { derivationLines } from "../check/lines";
 import type { PageChange, PageEngine } from "../notebook/engine";
 import { strokesOf, studentLines } from "../notebook/export-line";
 import { useNotebookUi } from "../notebook/store";
+import { isShown } from "../notebook/visibility";
 import type { AnnotationRecords } from "./records";
 import { useLiveMarks } from "./store";
 
@@ -63,8 +64,8 @@ export type AnnotatorDeps = {
     previous: string[];
     subject: "biology" | "history" | "language" | "other";
   }): Promise<string | null>;
-  /** A checker-verified line is right: what it counts as (§7.4). */
-  onEvidence?(evidence: Evidence): void;
+  /** A checker-verified line is right: what it counts as (§7.4), and the working it ends. */
+  onEvidence?(evidence: Evidence, working: { pageId: string; lines: string[] }): void;
   /** A mark changed (the device's copy should reach the server). */
   onChanged?(): void;
   now?: () => number;
@@ -95,6 +96,8 @@ export class LiveAnnotator {
   /** Lines credited with evidence (once each). */
   private readonly credited = new Set<string>();
   private queue: Promise<void> = Promise.resolve();
+  /** Bumped by every attach (a quick page flip supersedes a slow one). */
+  private attaching = 0;
   private readonly now: () => number;
   private readonly timeout: (run: () => void, ms: number) => () => void;
   private readonly newId: () => string;
@@ -113,6 +116,17 @@ export class LiveAnnotator {
   /** Follows the page on screen (null: none). Its marks are read back from the device. */
   async attach(engine: PageEngine | null): Promise<void> {
     if (engine === this.engine) return;
+    const attaching = ++this.attaching;
+    // Moving on to another page (the next problem): the line still being written there is
+    // finished, and marked on that page, before following the new one.
+    const before = this.engine;
+    const pending = before ? this.lineOf(before, this.activeLineId) : undefined;
+    if (before && pending && this.cancelFinish) {
+      this.cancelFinish();
+      this.cancelFinish = null;
+      await this.enqueue(() => this.finish(before, pending).then(() => undefined));
+      if (attaching !== this.attaching) return; // another page was opened meanwhile
+    }
     this.detach();
     this.engine = engine;
     if (!engine) return;
@@ -130,6 +144,16 @@ export class LiveAnnotator {
   /** The marks on the page, open ones only. */
   get open(): Annotation[] {
     return this.annotations.filter(isOpen);
+  }
+
+  /** The open, shown mark on a line, for the tutor's context (K9 §7.3). */
+  markFor(line: Line): { kind: LiveMarkKind; note: string | null } | null {
+    const engine = this.engine;
+    if (!engine) return null;
+    const mark = this.open
+      .filter((a) => a.revealed && this.lineFor(engine, a)?.id === line.id)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    return mark ? { kind: mark.markKind, note: mark.note } : null;
   }
 
   /** Settled: everything finished so far is checked and marked (tests, Alt+C). */
@@ -355,7 +379,10 @@ export class LiveAnnotator {
       evidence,
       wrongFocus: plan.add?.kind === "error" ? wrongPart(previous, text) : null,
     });
-    if (evidence) this.deps.onEvidence?.(evidence);
+    if (evidence) {
+      const lines = [...this.previousLines(engine, line), text].filter(Boolean).slice(-4);
+      this.deps.onEvidence?.(evidence, { pageId: engine.pageId, lines });
+    }
     if (verdict === "correct" && level === "coach") this.watchForStuck(engine, line);
     const definite = verdict === "correct" || verdict === "incorrect";
     this.checked.set(line.id, { key, definite });
@@ -486,6 +513,7 @@ export class LiveAnnotator {
     };
     const put = ended ? [ended, mark] : [mark];
     const removeIds = ended ? this.strokeIdsOf(engine, ended) : [];
+    this.fade(engine, removeIds);
     const reading =
       change.recognition && mark.lineId
         ? { lineId: mark.lineId, recognition: change.recognition }
@@ -505,6 +533,7 @@ export class LiveAnnotator {
 
   private takeOff(engine: PageEngine, ended: Annotation[]): void {
     const removeIds = ended.flatMap((a) => this.strokeIdsOf(engine, a));
+    this.fade(engine, removeIds);
     engine.applyMarks([], removeIds, () =>
       this.deps.records.save({ put: ended, addStrokes: [], removeStrokeIds: removeIds }),
     );
@@ -515,6 +544,16 @@ export class LiveAnnotator {
     this.replace(ended);
     this.showWaiting();
     this.deps.onChanged?.();
+  }
+
+  /** Marks coming off the page fade out (a resolved circle turns into its tick, §7.1). */
+  private fade(engine: PageEngine, ids: readonly string[]): void {
+    if (ids.length === 0) return;
+    const strokes = ids
+      .map((id) => engine.doc.get(id))
+      .filter((s) => s !== undefined)
+      .filter(isShown); // a mark held back or on a hidden layer doesn't flash on its way out
+    useNotebookUi.getState().fadeMarks(strokes);
   }
 
   private replace(changed: readonly Annotation[]): void {

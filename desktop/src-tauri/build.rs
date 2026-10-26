@@ -3,6 +3,7 @@ fn main() {
     // capability grants it (see `remote_capability` and `screen::settings_capability`).
     let commands = tauri_build::AppManifest::new().commands(&[
         "notify_due",
+        "notify_checks",
         "screen_coach_status",
         "screen_coach_set_enabled",
         "screen_coach_set_paused",

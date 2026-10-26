@@ -3,9 +3,10 @@
 import { TTS_SAMPLE_RATE } from "@mew/shared";
 import { Loader2, Volume2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
+import { isDesktop } from "../desktop/bridge";
 import { momentsApi } from "../moments/api";
 import { useMomentChecks } from "../moments/store";
 import { ShortcutsSection } from "../shortcuts/ShortcutsSection";
@@ -22,6 +23,8 @@ import { useSettings } from "./store";
  */
 export function SettingsApp() {
   const { settings, loaded, localOnly, error, voices, update } = useSettings();
+  // Known only in the browser (the server renders the web app's settings page).
+  const desktop = useSyncExternalStore(noChange, isDesktop, () => false);
   /** "Quiz me on things I save" was just turned off: keep the checks, or clear them (K8). */
   const [askClear, setAskClear] = useState(false);
 
@@ -132,6 +135,14 @@ export function SettingsApp() {
               setAskClear(!quiz_saved_moments);
             }}
           />
+          {desktop && (
+            <Toggle
+              label="Tell me when checks are due"
+              hint="A Windows notification, at most twice a day, when questions about things you saved are waiting. Off: they wait in Review and the Quick check."
+              checked={settings.notify_moment_checks}
+              onChange={(notify_moment_checks) => void update({ notify_moment_checks })}
+            />
+          )}
           {askClear && (
             <div
               role="group"
@@ -300,4 +311,9 @@ function VoicePicker({
       )}
     </div>
   );
+}
+
+/** Whether this is the desktop app never changes while the page is open. */
+function noChange(): () => void {
+  return () => undefined;
 }

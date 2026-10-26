@@ -59,6 +59,8 @@ class UserSettings(BaseModel):
     #: After a full solution, a similar problem to do alone (K6). On unless turned off.
     your_turn_after_solution: bool = True
     quiz_saved_moments: bool = True
+    #: A desktop notification when saved moments' checks are due (K8: opt-in).
+    notify_moment_checks: bool = False
 
     @field_validator("shortcuts", mode="before")
     @classmethod
@@ -93,3 +95,4 @@ class SettingsPatch(BaseModel):
     shortcuts_notice_seen: bool | None = None
     your_turn_after_solution: bool | None = None
     quiz_saved_moments: bool | None = None
+    notify_moment_checks: bool | None = None

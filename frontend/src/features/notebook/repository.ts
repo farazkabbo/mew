@@ -10,6 +10,7 @@ import {
   suggestSubject,
   unsortedNodeId,
 } from "@mew/shared";
+import { translateStroke } from "@mew/ink";
 import Dexie from "dexie";
 import type { z } from "zod";
 
@@ -22,9 +23,11 @@ import {
   entryFollowUps,
   entryStrokeIds,
   entryToPage,
+  HEADING_SPACE,
   nextEntryTop,
   startsNewDay,
 } from "./clip-page";
+import { pageHasWords } from "../moments/moments";
 import type { NotebookDb } from "./db";
 import { PdfPageCache } from "../pdfs/page-cache";
 import { newPage } from "./page-factory";
@@ -117,6 +120,35 @@ export class NotebookRepository {
       .between([notebookId, Dexie.minKey], [notebookId, Dexie.maxKey])
       .toArray();
     return validRows(Page, rows, "page");
+  }
+
+  /** The file names of the PDFs imported on this device (lower case), for "Open in neb" (K8). */
+  async pdfFileNames(): Promise<Map<string, string>> {
+    const names = new Map<string, string>();
+    await this.db.pdfs.each((pdf) => names.set(pdf.fileName.toLowerCase(), pdf.pdfId));
+    return names;
+  }
+
+  /**
+   * The notebook page of an imported PDF that holds these words (its pages' text, as kept on this
+   * device once viewed), else its first page. Null when the PDF has no page here.
+   */
+  async pdfPageWith(pdfId: string, words: string | null): Promise<Page | null> {
+    let pageIndex = 0;
+    if (words) {
+      const wanted = words;
+      const found = await this.db.pdfPages
+        .where("pdfId")
+        .equals(pdfId)
+        .filter((page) => pageHasWords(page.text, wanted))
+        .first();
+      if (found) pageIndex = found.pageIndex;
+    }
+    const images = await this.db.images
+      .filter((image) => image.pdf?.pdfId === pdfId && image.pdf.pageIndex <= pageIndex)
+      .toArray();
+    const best = images.sort((a, b) => (b.pdf?.pageIndex ?? 0) - (a.pdf?.pageIndex ?? 0))[0];
+    return best ? this.getPage(best.pageId) : null;
   }
 
   /** Every saved screen entry and the pages they're on (K8: Moments, Ctrl+K, Quick check). */
@@ -409,6 +441,61 @@ export class NotebookRepository {
         const { image, strokes } = entryToPage(clip, page.id, nextEntryTop(placed), ids, heading);
         await this.db.images.add(ImageBlock.parse(image));
         await this.db.strokes.bulkAdd(strokes.map((s) => Stroke.parse(s)));
+        await this.touchNotebook(notebookId);
+        return Page.parse(page);
+      },
+    );
+  }
+
+  /**
+   * Moves an entry already on this device to `notebookId`'s "From screen" page, whole: its
+   * picture, note and every stroke of it, laid out below the entries there (K8: filing from the
+   * notebook, which works offline: nothing is fetched). Returns its page, or null when it's gone.
+   */
+  async relocateEntry(imageId: string, notebookId: string): Promise<Page | null> {
+    return this.db.transaction(
+      "rw",
+      [this.db.pages, this.db.images, this.db.strokes, this.db.notebooks],
+      async () => {
+        const row = ImageBlock.safeParse(await this.db.images.get(imageId));
+        if (!row.success || !row.data.entry) return null;
+        const block = row.data;
+        const entry = row.data.entry;
+        const page = await this.entryPage(notebookId, { kind: "from_screen" });
+        if (page.id === block.pageId) return Page.parse(page);
+        const onPage = validRows(
+          Stroke,
+          await this.db.strokes.where("pageId").equals(block.pageId).toArray(),
+          "stroke",
+        );
+        const ids = new Set(entryStrokeIds(block, onPage));
+        const placed = validRows(
+          ImageBlock,
+          await this.db.images.where("pageId").equals(page.id).toArray(),
+          "image",
+        );
+        const at = new Date(block.createdAt);
+        const heading = startsNewDay(placed, at) ? dayHeading(at) : undefined;
+        const top = nextEntryTop(placed);
+        const y = heading ? top + HEADING_SPACE : top;
+        const dx = IMAGE_ORIGIN[0] - block.x;
+        const dy = y - block.y;
+        const moved = onPage
+          .filter((s) => ids.has(s.id))
+          .map((s) => ({ ...translateStroke(s, dx, dy), pageId: page.id }));
+        const rest: typeof entry = { ...entry };
+        delete rest.heading; // a heading is for its old page's day; the new page decides
+        await this.db.strokes.bulkDelete([...ids]);
+        await this.db.strokes.bulkPut(moved.map((s) => Stroke.parse(s)));
+        await this.db.images.put(
+          ImageBlock.parse({
+            ...block,
+            pageId: page.id,
+            x: block.x + dx,
+            y,
+            entry: { ...rest, ...(heading && { heading }) },
+          }),
+        );
         await this.touchNotebook(notebookId);
         return Page.parse(page);
       },

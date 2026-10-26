@@ -4,6 +4,7 @@ import { z } from "zod";
 import { sourceKey } from "./destinations";
 import {
   checkEvidence,
+  examSoon,
   type MomentCheckView,
   MomentSuggestion,
   MomentSuggestions,
@@ -72,6 +73,7 @@ describe("a Quick check", () => {
     ({
       id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
       clipId: `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+      mergedClipIds: [],
       nodeId,
       prompt: `Question ${n}`,
       kind: "short",
@@ -100,6 +102,8 @@ describe("a Quick check", () => {
       "Question 5",
     ]);
     expect(picked.map((c) => c.prompt)).not.toContain("Question 7"); // not due yet
+    // An exam is close: a short Quick check (its reviews come first).
+    expect(pickQuickCheck(due, { now: NOW, examSoon: true })).toHaveLength(3);
   });
 
   it("can be about today's moments, or one notebook's, even before they're due", () => {
@@ -158,5 +162,20 @@ describe("File these (K8 §4.6)", () => {
       false,
     );
     expect(MomentSuggestionsRequest.safeParse({ clipIds: [] }).success).toBe(false);
+  });
+});
+
+describe("exam dates come first (K8 §4.7)", () => {
+  const now = new Date("2026-10-26T15:00:00").getTime();
+  it("finds the nearest exam within two weeks", () => {
+    const courses = [
+      { id: "a", title: "Physics", exam_date: "2026-11-20" },
+      { id: "b", title: "Chemistry", exam_date: "2026-10-30" },
+      { id: "c", title: "Old", exam_date: "2026-10-01" },
+      { id: "d", title: "None", exam_date: null },
+    ];
+    expect(examSoon(courses, now)).toEqual({ courseId: "b", title: "Chemistry", daysLeft: 4 });
+    expect(examSoon([{ id: "e", title: "Today", exam_date: "2026-10-26" }], now)?.daysLeft).toBe(0);
+    expect(examSoon(courses.slice(0, 1), now)).toBeNull();
   });
 });

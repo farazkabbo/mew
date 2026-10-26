@@ -1,5 +1,14 @@
 import type { BBox, Stroke } from "@mew/shared";
-import { currentLine, type Line, type PageDocument, planCrop, segmentLines } from "@mew/ink";
+import {
+  bboxesIntersect,
+  currentLine,
+  inflateBBox,
+  type Line,
+  type PageDocument,
+  planCrop,
+  segmentLines,
+  unionBBox,
+} from "@mew/ink";
 
 import { paintStrokes } from "./canvas/paint";
 
@@ -42,13 +51,24 @@ export async function renderStrokesPng(strokes: readonly Stroke[], bbox: BBox): 
 
 /**
  * Rasterises the line the student wrote in most recently. Only the line's own strokes are
- * drawn: ink from neighbouring lines poking into the box would confuse recognition.
+ * drawn: ink from neighbouring lines poking into the box would confuse recognition. With
+ * `marks`, the live annotations beside it that it says are shown are drawn too (an export).
  * Returns null when the page has no student writing.
  */
-export async function cropCurrentLine(doc: PageDocument): Promise<LineCrop | null> {
+export async function cropCurrentLine(
+  doc: PageDocument,
+  options: { marks?: (stroke: Stroke) => boolean } = {},
+): Promise<LineCrop | null> {
   const line = currentLine(studentLines(doc));
   if (!line) return null;
-  return { line, ...(await renderStrokesPng(strokesOf(doc, [line]), line.bbox)) };
+  // K9: the export shows the line as the student sees it, with its marks (tick, circle, note).
+  const near = inflateBBox(line.bbox, line.bbox[3]);
+  const marks = options.marks
+    ? doc.all().filter((s) => options.marks?.(s) && s.markKind && bboxesIntersect(s.bbox, near))
+    : [];
+  const strokes = [...strokesOf(doc, [line]), ...marks];
+  const box = marks.reduce((b, s) => unionBBox(b, s.bbox), line.bbox);
+  return { line, ...(await renderStrokesPng(strokes, box)) };
 }
 
 /** Base64 (no data: prefix) of a blob, for JSON request bodies. */

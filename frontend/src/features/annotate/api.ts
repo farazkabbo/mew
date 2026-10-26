@@ -1,4 +1,9 @@
-import { type LiveMarkRequest, LiveMarkResponse } from "@mew/shared";
+import {
+  type LiveConceptRequest,
+  LiveConceptResponse,
+  type LiveMarkRequest,
+  LiveMarkResponse,
+} from "@mew/shared";
 
 import { useMarkPrefs } from "./prefs";
 
@@ -26,4 +31,18 @@ export async function liveMarkNote(request: LiveMarkRequest): Promise<string | n
   if (!response.ok) return null;
   const parsed = LiveMarkResponse.safeParse(await response.json().catch(() => null));
   return parsed.success ? parsed.data.note : null;
+}
+
+/** The course concept a line of right working practises (K9 §7.4), or null. */
+export async function liveConceptOf(request: LiveConceptRequest): Promise<string | null> {
+  const response = await fetch("/api/annotate/concept", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
+  }).catch(() => null);
+  if (!response?.ok) return null;
+  const parsed = LiveConceptResponse.safeParse(await response.json().catch(() => null));
+  return parsed.success ? parsed.data.conceptId : null;
 }

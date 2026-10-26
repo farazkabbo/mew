@@ -105,7 +105,7 @@ export class CanvasRenderer {
     if (lines) this.outlineLines(ctx, camera, lines);
   }
 
-  drawLive(camera: Camera, { draft, eraser, lasso, selection, tutor }: Overlay): void {
+  drawLive(camera: Camera, { draft, eraser, lasso, selection, tutor, fading }: Overlay): void {
     const ctx = this.live;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -140,6 +140,12 @@ export class CanvasRenderer {
       ctx.setLineDash([4 * hairline, 4 * hairline]);
       ctx.strokeStyle = this.theme.accent;
       ctx.stroke();
+      ctx.restore();
+    }
+    if (fading && fading.alpha > 0) {
+      ctx.save();
+      ctx.globalAlpha = fading.alpha;
+      paintStrokes(ctx, fading.strokes, this.theme.dark);
       ctx.restore();
     }
     if (draft) paintDraft(ctx, draft, this.theme.dark);

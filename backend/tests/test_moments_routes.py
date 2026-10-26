@@ -279,3 +279,18 @@ def test_a_move_in_the_notebook_files_it_and_takes_its_check(client: TestClient)
     assert nowhere.status_code == 404
     unknown = client.post(f"/v1/clips/{uuid.uuid4()}/move", json={"nodeId": GRAVITY}, headers=LOCAL)
     assert unknown.status_code == 404
+
+
+def test_a_merged_card_lists_every_moment_it_holds(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    physics_notebook(client)
+    first = waiting_moment(client, token, subject="physics")
+    body = entry_body(
+        sessionId="11111111-1111-4111-8111-000000000099", conceptHints=["projectile motion"]
+    )
+    body["entry"]["moment"] = {"subject": "physics", "checkQuestion": QUESTION}
+    second = save(client, token, body).json()["clipId"]
+    due = client.get("/v1/moments/checks/due", headers=LOCAL).json()["checks"]
+    assert len(due) == 1
+    assert due[0]["clipId"] == first
+    assert due[0]["mergedClipIds"] == [second]

@@ -36,6 +36,8 @@ export const UserSettings = z.object({
   your_turn_after_solution: z.boolean(),
   /** Every saved screen moment brings a check question back later (K8 §4.7, default on). */
   quiz_saved_moments: z.boolean(),
+  /** A Windows notification when saved moments' checks are due (K8 §4.7: opt-in, default off). */
+  notify_moment_checks: z.boolean(),
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
@@ -53,6 +55,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   shortcuts_notice_seen: false,
   your_turn_after_solution: true,
   quiz_saved_moments: true,
+  notify_moment_checks: false,
 };
 
 export const SettingsPatch = UserSettings.partial().strict();

@@ -33,6 +33,9 @@ type Props = {
   /** K8: checks due now on each node (counted up the tree). */
   dueCounts: ReadonlyMap<string, number>;
   onOpenMoment(moment: Moment): void;
+  /** K8: a moment's PDF is imported here: open it at the circled words' page. */
+  inNeb?(moment: Moment): boolean;
+  onOpenInNeb?(moment: Moment): void;
   /** K8: a Quick check of what's due here. */
   onQuickCheck(): void;
   /** K8: the notebook's subject changed (filing compares it with what a moment is about). */
@@ -226,6 +229,8 @@ export function NodeHome({
               moments={moments}
               now={now}
               onOpen={actions.onOpenMoment}
+              {...(actions.inNeb && { inNeb: actions.inNeb })}
+              {...(actions.onOpenInNeb && { onOpenInNeb: actions.onOpenInNeb })}
               placeOf={(moment) =>
                 moment.nodeId === node.id
                   ? null

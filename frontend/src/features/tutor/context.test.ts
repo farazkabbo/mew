@@ -108,4 +108,26 @@ describe("what the tutor sees (K6 §6.3: circling your own writing)", () => {
     expect(result.recognizedLines).toEqual([]);
     expect(service.recognize).toHaveBeenCalledTimes(3);
   });
+
+  it("says which lines live annotations already marked (K9)", async () => {
+    const { doc, lines } = page();
+    const service = recognition(lines);
+    const [first, , third] = lines;
+    if (!first || !third) throw new Error("expected lines");
+    const result = await buildTutorRequest({
+      intent: "answer_question",
+      utterance: "why is this marked?",
+      transcript: [],
+      previousSpeech: [],
+      answerStyle: "hints_first",
+      doc,
+      recognition: service as unknown as RecognitionService,
+      circled: [first, third],
+      markOf: (line) => (line.id === third.id ? { kind: "error", note: "sign?" } : null),
+    });
+    expect(result.recognizedLines).toEqual([
+      { lineId: first.id, text: "line 1", latex: null },
+      { lineId: third.id, text: "line 3", latex: null, mark: { kind: "error", note: "sign?" } },
+    ]);
+  });
 });

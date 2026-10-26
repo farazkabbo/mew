@@ -152,3 +152,41 @@ export function momentDay(createdAt: number, now: number): string {
     ...(!recent && { day: "numeric", month: "short" }),
   });
 }
+
+/**
+ * The PDF file a moment was circled in ("week3.pdf"), from its link or its window title, or null
+ * (K8 §4.7: an external PDF later imported into neb opens there, at the right page).
+ */
+export function pdfFileName(image: ImageBlock): string | null {
+  const url = image.source?.url ?? "";
+  const fromUrl = /\/([^/?#]+\.pdf)(?:[?#]|$)/i.exec(url)?.[1];
+  const fromTitle = /([^\\/:*?"<>|]+\.pdf)\b/i.exec(image.source?.title ?? "")?.[1];
+  const name = fromUrl ? safeDecode(fromUrl) : fromTitle;
+  return name?.trim().toLowerCase() || null;
+}
+
+function safeDecode(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+/** A few words of the circled text to find on a PDF's pages (normalised for matching). */
+export function circledWords(image: ImageBlock): string | null {
+  const words = (image.ocrText ?? "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 6);
+  return words.length >= 3 ? words.join(" ") : null;
+}
+
+/** Whether a PDF page's text has these words in order (spacing and punctuation aside). */
+export function pageHasWords(pageText: string, words: string): boolean {
+  const text = pageText.replace(/[^\p{L}\p{N}]+/gu, " ").toLowerCase();
+  return text.includes(words);
+}

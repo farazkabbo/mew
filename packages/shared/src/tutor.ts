@@ -130,6 +130,13 @@ export const RecognizedLine = z.object({
   lineId: z.string().max(80),
   text: z.string().max(300),
   latex: z.string().max(300).nullable(),
+  /** K9: the line's open live annotation (what a verifier marked on it while it was written). */
+  mark: z
+    .object({
+      kind: z.enum(["tick", "error", "missing", "margin", "unsure"]),
+      note: z.string().max(32).nullable(),
+    })
+    .optional(),
 });
 export type RecognizedLine = z.infer<typeof RecognizedLine>;
 

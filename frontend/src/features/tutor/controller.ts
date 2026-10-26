@@ -8,6 +8,7 @@ import {
   TTS_SAMPLE_RATE,
   type TutorRequest,
 } from "@mew/shared";
+import type { RecognizedLine } from "@mew/shared";
 
 import type { WorkChecker } from "../check/checker";
 import { useVoice } from "../voice/store";
@@ -45,6 +46,8 @@ export type TutorDeps = {
   images?: () => readonly ImageBlock[];
   /** Lines the student just circled (K6 §6.3), taken by the turn about them; null if none. */
   takeCircled?: () => readonly Line[] | null;
+  /** K9: a line's open live annotation, for the tutor's context. */
+  markOf?: (line: Line) => RecognizedLine["mark"] | null;
   /** Called when a turn ends, however it ends (starts Mew's cooldown). */
   onFinished(): void;
   now?: () => number;
@@ -111,6 +114,7 @@ export class TutorController {
         courseId: this.deps.courseId?.() ?? null,
         quiz: this.deps.quiz?.() ?? null,
         circled: this.deps.takeCircled?.() ?? null,
+        markOf: this.deps.markOf,
       });
       request.checks = checks;
       for await (const event of streamTutor(request, turn.abort.signal)) {

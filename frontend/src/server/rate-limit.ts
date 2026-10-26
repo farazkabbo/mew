@@ -48,6 +48,9 @@ export const RATE_RULES = {
    */
   liveMark: { limit: 20, windowMs: MINUTE },
   liveMarkDaily: { limit: 200, windowMs: DAY },
+  /** K9: which course concept a right line practises (a fast model call, once per page). */
+  liveConcept: { limit: 10, windowMs: MINUTE },
+  liveConceptDaily: { limit: 150, windowMs: DAY },
   /** K9: sending live annotations (batched by the device; a database write, no model). */
   annotationsSync: { limit: 60, windowMs: MINUTE },
   /** Handwriting recognition of single lines. */

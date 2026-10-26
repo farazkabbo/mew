@@ -13,6 +13,8 @@ export type CompareLine = {
   latex: string | null;
   confidence: number;
   source: "ink" | "clip";
+  /** K9: what live annotations' verifiers marked on the line while it was written. */
+  mark?: "tick" | "error" | "missing" | "unsure" | null | undefined;
 };
 
 export type CompareInput = {
@@ -55,7 +57,7 @@ NOTES [{"lineId":"L1","text":"d/dx cos x = sin x","recognitionConfidence":0.44}]
 → {"type":"unclear","lineIds":["L1"],"blockIds":["b1"],"noteQuote":"d/dx cos x = sin x","screenQuote":"The derivative of cos x is -sin x","explanation":"Possible missing minus sign, but the handwriting was hard to read.","question":"I couldn't quite read this line about the derivative of cos x. Is there a sign in front?","confidence":0.5}`;
 
 export const NOTES_COMPARE_PROMPT = {
-  id: "notes-compare.v3",
+  id: "notes-compare.v4",
   system: `You compare a student's own notes with the learning material currently on their screen.
 Your findings will be shown to the student as marks on their notes. Being wrong about a
 student's notes damages their trust and their learning, so you only report a difference
@@ -68,6 +70,11 @@ INPUTS
 - NOTES: the student's handwritten notes, recognized as text, each line with a lineId,
   page and recognitionConfidence (0–1). Recognition can be imperfect. Lines marked
   "fromClip" are text the student saved from a screen earlier, not their own handwriting.
+  A line may have "checkerMark": what neb's step checker marked on it while the student wrote.
+  "error" or "missing" means a verifier found a slip in it (arithmetic, units, balance): it's a
+  known mistake the student may still be fixing, so don't report it again unless the screen
+  says something about it. "tick" means a verifier proved the step right: don't call it wrong.
+  "unsure" means the reading itself is in doubt: prefer "unclear" over "difference".
 - COURSE_MATERIAL: optional passages from the student's own course files, with page refs.
 - SUBJECT: the course subject, if known.
 - MODALITY: what you received. Here always text only: the screen was read as text, so you
@@ -145,6 +152,7 @@ export function renderCompareInput(input: CompareInput): string {
     ...(n.latex && { latex: n.latex }),
     recognitionConfidence: Math.round(n.confidence * 100) / 100,
     ...(n.source === "clip" && { fromClip: true }),
+    ...(n.mark && { checkerMark: n.mark }),
   }));
   const course = input.course.map((p) => ({ page: p.page, text: p.text }));
   return [

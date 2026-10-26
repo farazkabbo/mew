@@ -13,6 +13,47 @@ const MAX_TITLE_CHARS: usize = 80;
 #[derive(Default)]
 pub struct Reminders {
     last: Mutex<Option<Instant>>,
+    /// Saved moments' checks (K8), reminded apart from concepts: opt-in, at most twice a day.
+    last_checks: Mutex<Option<Instant>>,
+}
+
+/// Saved moments' check reminders (K8 §4.7: desktop notifications are opt-in) come this rarely.
+const CHECKS_GAP: Duration = Duration::from_secs(12 * 60 * 60);
+
+/// "2 checks from what you saved are due", or None when there are none.
+pub fn checks_text(count: u32) -> Option<String> {
+    match count.min(999) {
+        0 => None,
+        1 => Some("A check from something you saved is due.".to_owned()),
+        n => Some(format!("{n} checks from things you saved are due.")),
+    }
+}
+
+/// Called by the web app (only its origin may), when the student turned these reminders on.
+#[tauri::command]
+pub fn notify_checks(
+    app: AppHandle,
+    reminders: State<'_, Reminders>,
+    count: u32,
+) -> Result<bool, String> {
+    let Some(body) = checks_text(count) else {
+        return Ok(false);
+    };
+    let mut last = reminders
+        .last_checks
+        .lock()
+        .map_err(|_| "reminder state unavailable")?;
+    if last.is_some_and(|at| at.elapsed() < CHECKS_GAP) {
+        return Ok(false);
+    }
+    app.notification()
+        .builder()
+        .title("Quick check")
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())?;
+    *last = Some(Instant::now());
+    Ok(true)
 }
 
 /// The text of a reminder, or None when there's nothing to say. `first` comes from a web page,
@@ -68,6 +109,19 @@ pub fn notify_due(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn says_how_many_checks_are_due() {
+        assert_eq!(checks_text(0), None);
+        assert_eq!(
+            checks_text(1).as_deref(),
+            Some("A check from something you saved is due.")
+        );
+        assert_eq!(
+            checks_text(4).as_deref(),
+            Some("4 checks from things you saved are due.")
+        );
+    }
 
     #[test]
     fn says_what_is_due() {

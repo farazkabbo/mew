@@ -49,6 +49,8 @@ class CheckView(_Camel):
 
     id: UUID
     clip_id: UUID
+    #: Other moments about the same concept that week, merged into this card (K8).
+    merged_clip_ids: list[UUID] = Field(default_factory=list, max_length=20)
     node_id: UUID | None
     prompt: str
     kind: Literal["short", "mcq", "work"]

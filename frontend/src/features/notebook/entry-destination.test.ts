@@ -151,3 +151,33 @@ describe("saving an entry where the student said (K3)", () => {
     expect(second.page.id).toBe(firstPage?.id);
   });
 });
+
+describe("filing a moment from the notebook, offline too (K8)", () => {
+  it("moves the entry whole to the chapter's From screen page, with nothing fetched", async () => {
+    const { ch1, ch2 } = await physics();
+    const clip = entry();
+    const page = await repo.importEntry(ch1.id, clip);
+    const [image] = await repo.loadImages(page.id);
+    if (!image) throw new Error("no entry");
+    const strokesBefore = await repo.loadStrokes(page.id);
+    expect(strokesBefore).toHaveLength(2); // the tutor's step and the student's mark
+
+    const moved = await repo.relocateEntry(image.id, ch2.id);
+    if (!moved) throw new Error("not moved");
+    expect(moved.notebookId).toBe(ch2.id);
+    expect(await repo.loadImages(page.id)).toEqual([]);
+    expect(await repo.loadStrokes(page.id)).toEqual([]);
+    const [there] = await repo.loadImages(moved.id);
+    expect(there).toMatchObject({ id: image.id, clipId: clip.id });
+    expect(there?.entry?.heading).toBeDefined(); // the first entry on that page: its day
+    const strokesAfter = await repo.loadStrokes(moved.id);
+    expect(strokesAfter.map((s) => s.id).sort()).toEqual(strokesBefore.map((s) => s.id).sort());
+    // Still where the picture is, relative to it.
+    const dy = (there?.y ?? 0) - image.y;
+    expect(strokesAfter[0]?.bbox[1]).toBeCloseTo((strokesBefore[0]?.bbox[1] ?? 0) + dy);
+
+    // Moving it where it already is changes nothing.
+    expect((await repo.relocateEntry(image.id, ch2.id))?.id).toBe(moved.id);
+    expect(await repo.relocateEntry(crypto.randomUUID(), ch2.id)).toBeNull();
+  });
+});

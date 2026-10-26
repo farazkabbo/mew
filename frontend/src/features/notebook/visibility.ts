@@ -7,9 +7,17 @@ import { useNotebookUi } from "./store";
  * the steps of an explanation that's replaying and not drawn yet, nor a folded solution (K6).
  */
 export function isShown(stroke: Stroke): boolean {
+  const {
+    showTutorInk,
+    replayHidden,
+    foldedGroups,
+    marksHiddenOn,
+    unrevealedMarks,
+    pageReplayHidden,
+  } = useNotebookUi.getState();
+  // K9 page Replay: what hasn't been drawn again yet, the student's ink too.
+  if (pageReplayHidden?.has(stroke.id)) return false;
   if (stroke.author !== "tutor") return true;
-  const { showTutorInk, replayHidden, foldedGroups, marksHiddenOn, unrevealedMarks } =
-    useNotebookUi.getState();
   // K9: the page's marks layer can be hidden (its eye), and hide-until-done holds marks back.
   if (
     stroke.markKind &&

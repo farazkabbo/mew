@@ -320,6 +320,22 @@ describe("live annotations (K9 §7)", () => {
     expect(t.live.open.filter((a) => a.revealed)).toHaveLength(6);
   });
 
+  it("finishes the line being written when the student moves to another page", async () => {
+    const t = setup();
+    t.readings.set(100, { text: "3x + 7 = 19" });
+    t.readings.set(170, { text: "3x = 26", verdict: "incorrect" });
+    t.write(line(100, 6, 0));
+    await t.wait(1300);
+    t.write(line(170, 4, 100));
+    await t.wait(200); // still writing it: not finished yet
+    expect(t.live.open).toEqual([]);
+    const leaving = t.live.attach(null); // the next page
+    await t.wait(1000);
+    await leaving;
+    expect(t.saved.some((a) => a.markKind === "error")).toBe(true);
+    expect(t.marks().some((s) => s.markKind === "error")).toBe(true);
+  });
+
   it("drops a notebook to Quiet for the day when the budget is spent", () => {
     const now = new Date("2026-10-26T15:00:00").getTime();
     useMarkPrefs.setState({

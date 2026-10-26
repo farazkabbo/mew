@@ -3,6 +3,7 @@
 import {
   Eraser,
   Highlighter,
+  History,
   ImageDown,
   LassoSelect,
   type LucideIcon,
@@ -29,6 +30,9 @@ type Props = {
   onExportLine(): void;
   /** K9: the live annotations' control (level, hide until done, the page's marks). */
   marks?: ReactNode;
+  /** K9: "watch how this page was solved" (pressed while it plays). */
+  onReplayPage?(): void;
+  replayingPage?: boolean;
 };
 
 const TOOLS: { tool: Tool; label: string; icon: LucideIcon }[] = [
@@ -38,7 +42,16 @@ const TOOLS: { tool: Tool; label: string; icon: LucideIcon }[] = [
   { tool: "lasso", label: "Lasso select", icon: LassoSelect },
 ];
 
-export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine, marks }: Props) {
+export function Toolbar({
+  onUndo,
+  onRedo,
+  onZoom,
+  onResetView,
+  onExportLine,
+  marks,
+  onReplayPage,
+  replayingPage = false,
+}: Props) {
   const {
     tool,
     inkColor,
@@ -158,6 +171,14 @@ export function Toolbar({ onUndo, onRedo, onZoom, onResetView, onExportLine, mar
         onClick={toggleTutorInk}
       />
       <IconButton icon={ImageDown} label="Export current line as PNG" onClick={onExportLine} />
+      {onReplayPage && (
+        <IconButton
+          icon={History}
+          label={replayingPage ? "Stop the replay" : "Replay this page (how it was solved)"}
+          pressed={replayingPage}
+          onClick={onReplayPage}
+        />
+      )}
       {marks}
     </div>
   );
