@@ -55,11 +55,14 @@ const text = (value: unknown, max: number): string | null =>
 
 const PLACE_CHARS = 640;
 
-/** The place part of a view (K3): its label, the offered choices, a chapter to create. */
+/** The place part of a view (K3): its label, the offered choices, a chapter to create; and
+ * (K8) why it was filed there and a notebook to start. */
 function placeOf(value: unknown): {
   label: string | null;
   choices: string[];
   create: string | null;
+  note: string | null;
+  newNotebook: string | null;
 } {
   const place = (typeof value === "object" && value !== null ? value : {}) as Record<
     string,
@@ -75,29 +78,40 @@ function placeOf(value: unknown): {
     label: text(place.label, PLACE_CHARS),
     choices,
     create: text(place.create, PLACE_CHARS),
+    note: text(place.note, NOTE_CHARS),
+    newNotebook: text(place.newNotebook, NOTE_CHARS),
   };
+}
+
+const NOTE_CHARS = 80;
+
+/** "Physics › Chapter 3 · matched “projectile motion”": the place, and why it went there (K8). */
+function placed(label: string, note: string | null): string {
+  return note ? `${label} · ${note}` : label;
 }
 
 /** The "Saving to: …" row under the main text. */
 function placeRow(value: unknown): CardLayout["place"] {
-  const { label, choices, create } = placeOf(value);
+  const { label, choices, create, note, newNotebook } = placeOf(value);
   const chips: PlaceChip[] = choices.map((choice, index) => ({
     label: choice,
     action: "pick_place",
     index,
   }));
   if (create) chips.push({ label: `Create ${create} and save`, action: "create_place" });
+  // K8: Unsorted's "+ New notebook: Biology" (made only on this tap).
+  if (newNotebook) chips.push({ label: `+ New notebook: ${newNotebook}`, action: "create_place" });
   chips.push({
     label: choices.length || create ? "Pick another…" : "Change ▾",
     action: "change_place",
   });
   const line = label
-    ? `Saving to: ${label}`
+    ? `Saving to: ${placed(label, note)}`
     : choices.length > 0
       ? "Save it to which one?"
       : create
         ? `There's no ${create} yet.`
-        : "Saving to: the notebook open in Neb";
+        : "Saving to: where it fits (you can change it)";
   return { line, chips };
 }
 
@@ -108,8 +122,8 @@ export function cardLayout(detail: unknown): CardLayout | null {
   const followUp = text(view.followUp, 220);
   const note = text(view.note, 200);
   const askBox = (placeholder: string) => ({ placeholder, value: "", action: "ask" as const });
-  const label = placeOf(view.place).label;
-  const where = label ?? "your notebook · From screen";
+  const { label, note: why } = placeOf(view.place);
+  const where = label ? placed(label, why) : "your notebook · From screen";
   const withPlace = (layout: Omit<CardLayout, "place">): CardLayout => ({
     ...layout,
     place: view.place === undefined ? null : placeRow(view.place),

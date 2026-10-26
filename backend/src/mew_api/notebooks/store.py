@@ -131,7 +131,9 @@ def _name_taken(nodes: dict[UUID, NotebookNode], node: NotebookNode, title: str)
 
 # ─── Supabase ────────────────────────────────────────────────────────────────────────────────
 
-_FIELDS = "id,parent_id,title,position,child_label,icon,color,course_id,deleted_at,edited_at"
+_FIELDS = (
+    "id,parent_id,title,position,child_label,icon,color,subject,course_id,deleted_at,edited_at"
+)
 
 
 class SupabaseNotebookTreeStore(SupabaseRest):
@@ -178,6 +180,7 @@ def _row(node: NotebookNode) -> dict[str, Any]:
         "child_label": node.child_label,
         "icon": node.icon,
         "color": node.color,
+        "subject": node.subject,
         "course_id": str(node.course_id) if node.course_id else None,
         "deleted_at": _iso(node.deleted_at),
         "edited_at": _iso(node.edited_at),

@@ -58,6 +58,7 @@ class UserSettings(BaseModel):
     shortcuts_notice_seen: bool = False
     #: After a full solution, a similar problem to do alone (K6). On unless turned off.
     your_turn_after_solution: bool = True
+    quiz_saved_moments: bool = True
 
     @field_validator("shortcuts", mode="before")
     @classmethod
@@ -91,3 +92,4 @@ class SettingsPatch(BaseModel):
     shortcuts: Annotated[dict[ShortcutAction, ShortcutBinding], Field(max_length=15)] | None = None
     shortcuts_notice_seen: bool | None = None
     your_turn_after_solution: bool | None = None
+    quiz_saved_moments: bool | None = None

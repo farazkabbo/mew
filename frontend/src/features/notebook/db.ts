@@ -59,7 +59,7 @@ export class NotebookDb extends Dexie {
   /** Worked solutions on pages, folded or not, and their Your Turns (K6). */
   solutions!: EntityTable<LocalSolution, "id">;
 
-  constructor(userId: string) {
+  constructor(readonly userId: string) {
     super(databaseName(userId));
     this.version(1).stores({
       notebooks: "id, updatedAt",

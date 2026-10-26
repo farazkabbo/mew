@@ -62,10 +62,17 @@ const defaultDeps: CircleAskDeps = {
   newTurnId: () => crypto.randomUUID(),
 };
 
+/**
+ * Called once with a complete answer, just before `done` (K8): what it returns is sent first (the
+ * filing `destination` event, when nothing was said about where it goes).
+ */
+export type OnAnswer = (answer: CircleAskModelResponse) => Promise<readonly CircleStreamEvent[]>;
+
 export async function* runCircleAsk(
   request: CircleAskRequest,
   signal?: AbortSignal,
   deps: CircleAskDeps = defaultDeps,
+  onAnswer?: OnAnswer,
 ): AsyncGenerator<CircleStreamEvent> {
   const started = deps.now();
   const elapsed = () => Math.round(deps.now() - started);
@@ -122,6 +129,7 @@ export async function* runCircleAsk(
     if (sent === 0) {
       yield fallbackStep(elapsed());
     }
+    if (answer && onAnswer) yield* await onAnswer(answer).catch(() => []);
     yield done(answer, deps.newTurnId(), elapsed());
   } catch (error) {
     if (signal?.aborted) return;

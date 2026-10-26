@@ -80,6 +80,19 @@ function api(verifyStatus = 200, appendStatus = 200, moveStatus = 204): Call[] {
         ...(typeof init.body === "string" && { body: JSON.parse(init.body) as unknown }),
       });
       if (url.pathname === "/v1/notebooks/device-tree") return Promise.resolve(Response.json(TREE));
+      if (url.pathname === "/v1/moments/file") {
+        return Promise.resolve(
+          Response.json({
+            method: "content_match",
+            nodeId: FORCES,
+            path: ["Physics", "Chapter 2 · Forces"],
+            score: 0.9,
+            matched: "projectile motion",
+            alternatives: [],
+            newNotebook: null,
+          }),
+        );
+      }
       if (url.pathname === "/v1/clips/destination") {
         return Promise.resolve(new Response(null, { status: moveStatus }));
       }
@@ -114,6 +127,24 @@ function request(url: string, body: unknown, token: string | null = TOKEN) {
   });
 }
 
+/** What the (mocked) model answered: what K8 files by. */
+const ANSWERED = {
+  readQuestion: "Explain this",
+  steps: [],
+  summary: "A flat line means constant speed.",
+  followUpQuestion: null,
+  conceptHints: ["projectile motion"],
+  subject: "physics",
+  checkQuestion: {
+    kind: "short",
+    prompt: "Why is a thrown ball's path curved?",
+    choices: [],
+    answerKey: "Gravity pulls it down while it moves sideways.",
+    answerLatex: null,
+    problemLatex: null,
+  },
+};
+
 /** The questions the (mocked) model was asked. */
 let askedAbout: unknown[] = [];
 
@@ -123,10 +154,17 @@ beforeEach(() => {
   vi.stubEnv("INTERNAL_API_SECRET", "s".repeat(40));
   vi.stubEnv("GEMINI_API_KEY", "test-key");
   vi.doMock("@/server/circle-ask", () => ({
-    runCircleAsk: async function* (asked: { question: unknown }) {
+    runCircleAsk: async function* (
+      asked: { question: unknown },
+      _signal: unknown,
+      _deps: unknown,
+      onAnswer?: (answer: unknown) => Promise<readonly CircleStreamEvent[]>,
+    ) {
       await Promise.resolve();
       askedAbout.push(asked.question);
       yield STEP;
+      // Like the real one: the hook's events go before `done`.
+      if (onAnswer) yield* await onAnswer(ANSWERED);
     },
     readQuestion: () =>
       Promise.resolve({ questions: ["Find x"], handwritten: true, confidence: 0.6 }),
@@ -145,7 +183,8 @@ describe("POST /api/screen/circle-ask", () => {
     const response = await POST(request("/api/screen/circle-ask", ASK));
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/x-ndjson");
-    expect((await response.text()).trim()).toBe(JSON.stringify(STEP));
+    // The step, then (K8) where the moment was filed.
+    expect((await response.text()).trim().split("\n")[0]).toBe(JSON.stringify(STEP));
   });
 
   it("needs a device token, a valid body and real JPEGs", async () => {
@@ -324,5 +363,138 @@ describe("save where I say (K3)", () => {
     api(200, 200, 404);
     const missing = await import("./screen/entries/destination/route");
     expect((await missing.POST(request("/api/screen/entries/destination", body))).status).toBe(404);
+  });
+});
+
+describe("just tell me the answer (K7)", () => {
+  const SOLUTION = {
+    problem: { text: "3x + 7 = 19", latex: "3x + 7 = 19" },
+    subject: "math",
+    steps: [
+      { work: "3x = 12", latex: "3x = 12", why: "Subtract 7 from both sides.", figure: null },
+    ],
+    finalAnswer: { text: "x = 4", latex: "x = 4" },
+    yourTurn: {
+      problem: "5x − 4 = 21",
+      latex: "5x - 4 = 21",
+      answerKey: { text: "x = 5", latex: "x = 5" },
+      skill: "two-step equations",
+      conceptIds: [],
+    },
+    verification: { method: "sympy", passed: true },
+    yourTurnVerified: true,
+  };
+  const FORGED = {
+    problem: { text: "2 + 2", latex: null },
+    steps: [{ work: "trust me", latex: null, why: "Because." }],
+    finalAnswer: { text: "5", latex: null },
+    yourTurn: null,
+  };
+
+  beforeEach(() => {
+    vi.doMock("@/server/solution", () => ({
+      solve: () => Promise.resolve({ type: "solution", solution: SOLUTION }),
+      checkMathRemote: () => Promise.resolve(null),
+    }));
+  });
+  afterEach(() => {
+    vi.doUnmock("@/server/solution");
+  });
+
+  it("shows the verified steps, then the entry gets the server's solution, never the device's", async () => {
+    const calls = api();
+    const ask = await import("./screen/circle-ask/route");
+    const response = await ask.POST(
+      request("/api/screen/circle-ask", {
+        ...ASK,
+        question: { source: "voice", text: "just tell me the answer" },
+      }),
+    );
+    const events = (await response.text())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as CircleStreamEvent);
+    expect(askedAbout).toEqual([]); // not an ordinary Circle & Ask answer
+    expect(
+      events.filter((e) => e.type === "step").map((e) => e.type === "step" && e.step.say),
+    ).toEqual([
+      "Subtract 7 from both sides.",
+      "So the answer is x = 4. Your turn is in Physics › Chapter 2 · Forces.",
+    ]);
+
+    const append = await import("./screen/entries/append/route");
+    await append.POST(request("/api/screen/entries/append", { ...APPEND, solution: FORGED }));
+    const sent = calls.find((c) => c.path === "/v1/clips/entries/append")?.body as {
+      solution?: { finalAnswer: { text: string } };
+    };
+    expect(sent.solution?.finalAnswer.text).toBe("x = 4");
+
+    // Taken once: the next follow-up carries none, and a forged one is dropped.
+    await append.POST(request("/api/screen/entries/append", { ...APPEND, solution: FORGED }));
+    const again = calls.filter((c) => c.path === "/v1/clips/entries/append").at(-1)?.body;
+    expect(again).not.toHaveProperty("solution");
+  });
+
+  it("an ordinary question still gets an ordinary answer", async () => {
+    api();
+    const { POST } = await import("./screen/circle-ask/route");
+    const response = await POST(
+      request("/api/screen/circle-ask", {
+        ...ASK,
+        question: { source: "typed", text: "how do I solve this?" },
+      }),
+    );
+    expect((await response.text()).trim().split("\n")[0]).toBe(JSON.stringify(STEP));
+    expect(askedAbout).toEqual([{ source: "typed", text: "how do I solve this?" }]);
+  });
+});
+
+describe("filing a moment by what it's about (K8)", () => {
+  const events = async (response: Response) =>
+    (await response.text())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as CircleStreamEvent);
+
+  it("tells the card where it went (and why) before the answer ends, when nothing was said", async () => {
+    const calls = api();
+    const { POST } = await import("./screen/circle-ask/route");
+    const sent = await events(await POST(request("/api/screen/circle-ask", ASK)));
+
+    const filing = sent.find((e) => e.type === "destination");
+    expect(filing).toMatchObject({
+      phrase: null,
+      resolution: { kind: "resolved", destination: { nodeId: FORCES, method: "filed" } },
+      filing: { method: "content_match", note: "matched “projectile motion”", alternatives: [] },
+    });
+    expect(sent.indexOf(filing as CircleStreamEvent)).toBeGreaterThan(sent.indexOf(STEP));
+    const asked = calls.find((c) => c.path === "/v1/moments/file");
+    expect(asked?.body).toMatchObject({ subject: "physics", hints: ["projectile motion"] });
+    expect(asked?.headers.get("x-mew-device-token")).toBe(TOKEN);
+
+    // The saved entry gets the answer's subject and check question from this server.
+    const append = await import("./screen/entries/append/route");
+    await append.POST(request("/api/screen/entries/append", APPEND));
+    const stored = calls.find((c) => c.path === "/v1/clips/entries/append")?.body as {
+      moment?: { subject: string; checkQuestion: { prompt: string } | null };
+    };
+    expect(stored.moment?.subject).toBe("physics");
+    expect(stored.moment?.checkQuestion?.prompt).toBe("Why is a thrown ball's path curved?");
+  });
+
+  it("doesn't file what the student said where to save", async () => {
+    const calls = api();
+    const { POST } = await import("./screen/circle-ask/route");
+    const sent = await events(
+      await POST(
+        request("/api/screen/circle-ask", {
+          ...ASK,
+          question: { source: "voice", text: "explain this and save it to physics chapter 2" },
+        }),
+      ),
+    );
+    expect(sent.filter((e) => e.type === "destination")).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ type: "destination", phrase: "physics chapter 2" });
+    expect(calls.some((c) => c.path === "/v1/moments/file")).toBe(false);
   });
 });

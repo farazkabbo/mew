@@ -166,6 +166,41 @@ describe("the Circle & Ask card", () => {
     );
   });
 
+  it("says why a moment was filed there, and offers a notebook to start (K8)", () => {
+    const filed = cardLayout({
+      mode: "saved",
+      place: {
+        label: "Physics › Chapter 3 · Kinematics",
+        note: "matched “projectile motion”",
+        choices: [],
+        create: null,
+      },
+    });
+    expect(filed?.top).toBe(
+      "✓ Saved to Physics › Chapter 3 · Kinematics · matched “projectile motion”",
+    );
+
+    const unsorted = cardLayout({
+      mode: "saved",
+      place: {
+        label: "Unsorted",
+        note: "Where should this go?",
+        choices: ["Physics", "Chemistry"],
+        newNotebook: "Biology",
+      },
+    });
+    expect(unsorted?.place?.line).toBe("Saving to: Unsorted · Where should this go?");
+    expect(unsorted?.place?.chips).toEqual([
+      { label: "Physics", action: "pick_place", index: 0 },
+      { label: "Chemistry", action: "pick_place", index: 1 },
+      { label: "+ New notebook: Biology", action: "create_place" },
+      { label: "Pick another…", action: "change_place" },
+    ]);
+    // Over-long notes are dropped, not shown cut.
+    const long = cardLayout({ mode: "saved", place: { label: "Physics", note: "x".repeat(81) } });
+    expect(long?.top).toBe("✓ Saved to Physics");
+  });
+
   it("filters the picker's places as the student types (K3)", () => {
     const picker = cardLayout({
       mode: "place",

@@ -97,10 +97,13 @@ describe("toGeminiSchema for the tutor's response", () => {
     // model no description of an action at all.
     const items = (schema as { properties: { actions: { items: { anyOf: unknown[] } } } })
       .properties.actions.items;
-    expect(items.anyOf).toHaveLength(10);
+    expect(items.anyOf).toHaveLength(13);
     for (const tag of [
       "write_math",
       "mark_error",
+      "underline",
+      "circle_region",
+      "point_at",
       "draw_plot",
       "draw_graph",
       "draw_shapes",

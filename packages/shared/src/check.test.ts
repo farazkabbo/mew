@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LineCheck } from "./check";
-import { checkBalance, looksLikeReaction } from "./chemistry";
+import { checkBalance, looksLikeReaction, sameReaction } from "./chemistry";
 import { renderTutorInput } from "./prompts/tutor";
 import { reconcileMarks } from "./reconcile";
 import { type BoardAction, TutorRequest } from "./tutor";
@@ -56,6 +56,19 @@ const check = (lineId: string, verdict: LineCheck["verdict"], target = true): Li
   verdict,
   reason: verdict === "incorrect" ? "changes_solutions" : "equivalent",
   target,
+});
+
+describe("sameReaction", () => {
+  it("is the same reaction however it's balanced, and never another one", () => {
+    expect(
+      sameReaction("H2 + O2 -> H2O", String.raw`2\text{H}_2 + \text{O}_2 \to 2\text{H}_2\text{O}`),
+    ).toBe(true);
+    expect(sameReaction("2Mg + O2 → 2MgO", "O2 + 2Mg -> 2MgO")).toBe(true);
+    expect(sameReaction("2Mg + O2 → 2MgO", "2Na + Cl2 → 2NaCl")).toBe(false);
+    expect(sameReaction("2Mg + O2 → 2MgO", "2MgO → 2Mg + O2")).toBe(false); // reversed
+    expect(sameReaction("x = 5", "x = 5")).toBe(false); // not chemistry at all
+    expect(sameReaction("H2 + → H2O", "H2 + O2 → H2O")).toBe(false);
+  });
 });
 
 describe("reconcileMarks", () => {

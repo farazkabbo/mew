@@ -35,7 +35,10 @@ export function SolutionLayer({ canvas, pageId, flow, records, checkShortcut }: 
   useEffect(() => {
     let live = true;
     void records.forPage(pageId).then((list) => {
-      if (live) flow.load(list);
+      if (!live) return;
+      flow.load(list);
+      // A worked solution saved from the screen (K7) is written the first time its page opens.
+      return flow.adoptEntries();
     });
     return () => {
       live = false;
@@ -106,7 +109,11 @@ function YourTurnPanel({ flow, checkShortcut }: Pick<Props, "flow" | "checkShort
                 Hint step
               </button>
             )}
-            <button type="button" className={`${button} opacity-80`} onClick={() => void flow.skip()}>
+            <button
+              type="button"
+              className={`${button} opacity-80`}
+              onClick={() => void flow.skip()}
+            >
               Skip for now
             </button>
           </>

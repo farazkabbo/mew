@@ -35,6 +35,9 @@ pub struct Place {
     pub path: Vec<String>,
     pub page: Page,
     pub create: Option<String>,
+    /// K8's "+ New notebook: Biology": `create` is a notebook of its own, not a chapter of
+    /// `node_id` (which is then where it stays if it can't be made: Unsorted).
+    pub root: bool,
 }
 
 impl Place {
@@ -62,6 +65,8 @@ pub struct DestinationOut {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CreateOut {
     pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub root: Option<bool>,
 }
 
 impl From<&Place> for DestinationOut {
@@ -69,7 +74,10 @@ impl From<&Place> for DestinationOut {
         DestinationOut {
             node_id: place.node_id.clone(),
             page: place.page.clone(),
-            create: place.create.clone().map(|title| CreateOut { title }),
+            create: place.create.clone().map(|title| CreateOut {
+                title,
+                root: place.root.then_some(true),
+            }),
             path: place.path.clone(),
         }
     }
@@ -145,6 +153,7 @@ fn place_of(resolved: ResolvedIn) -> Option<Place> {
         path: resolved.path,
         page: resolved.page,
         create: None,
+        root: false,
     })
 }
 
@@ -182,11 +191,56 @@ fn resolution_of(value: ResolutionIn) -> Option<Resolution> {
                     path: parent_path,
                     page,
                     create: None,
+                    root: false,
                 },
                 title,
             }
         }
         ResolutionIn::None => Resolution::None,
+    })
+}
+
+/// What the server's auto-filing adds to a `destination` event (K8): why it went there, places to
+/// tap instead, and a notebook to start. Notebook titles are only shown, never logged.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Filing {
+    pub note: Option<String>,
+    pub alternatives: Vec<Place>,
+    pub new_notebook: Option<String>,
+}
+
+const NOTE_CHARS: usize = 80;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FilingIn {
+    method: String,
+    note: Option<String>,
+    alternatives: Vec<ResolvedIn>,
+    new_notebook: Option<String>,
+}
+
+/// The `filing` of a `destination` stream event, checked; None for anything malformed.
+pub fn parse_filing(value: serde_json::Value) -> Option<Filing> {
+    let filing: FilingIn = serde_json::from_value(value).ok()?;
+    let ok = filing.method.len() <= 16
+        && filing.note.as_deref().is_none_or(|n| within(n, NOTE_CHARS))
+        && filing
+            .new_notebook
+            .as_deref()
+            .is_none_or(|t| within(t, NEW_TITLE_CHARS))
+        && filing.alternatives.len() <= MAX_CHOICES;
+    if !ok {
+        return None;
+    }
+    Some(Filing {
+        note: filing.note,
+        alternatives: filing
+            .alternatives
+            .into_iter()
+            .map(place_of)
+            .collect::<Option<_>>()?,
+        new_notebook: filing.new_notebook,
     })
 }
 
@@ -230,6 +284,7 @@ pub fn parse_places(body: &[u8]) -> Option<Vec<Place>> {
                 path: p.path,
                 page: Page::FromScreen,
                 create: None,
+                root: false,
             })
         })
         .collect()
@@ -328,6 +383,7 @@ mod tests {
                     path: vec!["Physics".into(), "Chapter 5".into()],
                     page: Page::FromScreen,
                     create: None,
+                    root: false,
                 },
                 sticky: false,
             })
@@ -403,12 +459,59 @@ mod tests {
             path: vec!["Physics".into()],
             page: Page::New,
             create: Some("Chapter 5".into()),
+            root: false,
         };
         assert_eq!(place.label(), "Physics › Chapter 5");
         assert_eq!(
             serde_json::to_value(DestinationOut::from(&place)).unwrap(),
             json!({ "nodeId": NODE, "page": { "kind": "new" }, "create": { "title": "Chapter 5" },
                     "path": ["Physics"] })
+        );
+    }
+
+    #[test]
+    fn reads_the_servers_filing_k8() {
+        let filing = parse_filing(json!({
+            "method": "unsorted",
+            "note": "Where should this go?",
+            "alternatives": [resolved(NODE, &["Physics"], "filed")],
+            "newNotebook": "Biology",
+        }))
+        .expect("a filing");
+        assert_eq!(filing.note.as_deref(), Some("Where should this go?"));
+        assert_eq!(filing.alternatives[0].label(), "Physics");
+        assert_eq!(filing.new_notebook.as_deref(), Some("Biology"));
+        let none = json!({ "method": "content_match", "note": null, "alternatives": [], "newNotebook": null });
+        assert!(parse_filing(none).is_some());
+
+        for bad in [
+            json!({ "method": "unsorted", "note": "x".repeat(81), "alternatives": [], "newNotebook": null }),
+            json!({ "method": "unsorted", "note": "bad\u{7}", "alternatives": [], "newNotebook": null }),
+            json!({ "method": "unsorted", "note": null, "alternatives": [], "newNotebook": "" }),
+            json!({ "method": "unsorted", "note": null, "newNotebook": null,
+                    "alternatives": [resolved("physics", &["Physics"], "filed")] }),
+            json!({ "method": "unsorted", "note": null, "newNotebook": null, "alternatives": [
+                resolved(NODE, &["a"], "filed"), resolved(NODE, &["b"], "filed"),
+                resolved(NODE, &["c"], "filed"), resolved(NODE, &["d"], "filed")] }),
+            json!({ "method": "x".repeat(17), "note": null, "alternatives": [], "newNotebook": null }),
+        ] {
+            assert_eq!(parse_filing(bad.clone()), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_new_notebook_saves_with_unsorted_as_its_fallback() {
+        let place = Place {
+            node_id: NODE.into(),
+            path: vec!["Unsorted".into()],
+            page: Page::FromScreen,
+            create: Some("Biology".into()),
+            root: true,
+        };
+        assert_eq!(
+            serde_json::to_value(DestinationOut::from(&place)).unwrap(),
+            json!({ "nodeId": NODE, "page": { "kind": "from_screen" },
+                    "create": { "title": "Biology", "root": true }, "path": ["Unsorted"] })
         );
     }
 

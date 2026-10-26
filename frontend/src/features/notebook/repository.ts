@@ -6,6 +6,9 @@ import {
   NotebookTree,
   Page,
   Stroke,
+  suggestStyle,
+  suggestSubject,
+  unsortedNodeId,
 } from "@mew/shared";
 import Dexie from "dexie";
 import type { z } from "zod";
@@ -288,11 +291,31 @@ export class NotebookRepository {
     const destination = clip.destination;
     const fromScreen: DestinationPage = { kind: "from_screen" };
     if (!destination) return { nodeId: fallback, page: fromScreen, missing: false };
-    const tree = await this.tree.tree();
+    let tree = await this.tree.tree();
     const live = (id: string) => tree.get(id) !== undefined && tree.isLive(id);
+    // K8: filed into the student's Unsorted notebook, made here the first time it's needed.
+    if (!live(destination.nodeId) && destination.nodeId === unsortedNodeId(this.db.userId)) {
+      await this.tree.ensureUnsorted(destination.nodeId);
+      tree = await this.tree.tree();
+    }
     if (!live(destination.nodeId)) return { nodeId: fallback, page: fromScreen, missing: true };
     const create = destination.create;
     if (!create) return { nodeId: destination.nodeId, page: destination.page, missing: false };
+    if (create.root) {
+      // "+ New notebook: Biology" (K8): one of that name if there is one, else made now (the
+      // student tapped it); filed in Unsorted (the destination) if that can't be done.
+      const title = create.title.toLowerCase();
+      const there = tree.children(null).find((n) => n.title.toLowerCase() === title);
+      const subject = suggestSubject(create.title);
+      const made =
+        there ??
+        (await this.tree.createNotebook({
+          title: create.title,
+          ...suggestStyle(create.title),
+          ...(subject && { subject }),
+        }));
+      return { nodeId: made.id, page: destination.page, missing: false };
+    }
     const title = create.title.toLowerCase();
     const there = tree
       .children(destination.nodeId)

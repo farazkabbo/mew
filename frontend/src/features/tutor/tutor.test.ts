@@ -141,7 +141,7 @@ describe("TutorController", () => {
       expect.objectContaining({ speech: SPEECH }),
     );
     const [turn] = useTutor.getState().turns;
-    expect(turn?.ink).toEqual({ strokes: 7, skipped: [], missing: [] });
+    expect(turn?.ink).toMatchObject({ strokes: 7, skipped: [], missing: [] });
     expect(turn?.timings.inkStartMs).toBeTypeOf("number");
   });
 

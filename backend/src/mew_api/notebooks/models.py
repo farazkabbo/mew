@@ -39,6 +39,10 @@ NotebookIcon = Literal[
     "calculator",
 ]
 NotebookColor = Literal["slate", "teal", "blue", "violet", "rose", "amber", "green"]
+#: What a notebook is about (K8): the tutor's subjects.
+Subject = Literal[
+    "math", "physics", "chemistry", "biology", "history", "language", "programming", "other"
+]
 #: A fractional index (`fractional-indexing`, base 62): siblings sort by it.
 Position = Annotated[str, StringConstraints(pattern=r"^[0-9A-Za-z]{1,64}$")]
 #: Epoch milliseconds, up to the year 3000.
@@ -68,6 +72,8 @@ class NotebookNode(_Camel):
     icon: NotebookIcon | None
     color: NotebookColor | None
     course_id: UUID | None
+    #: K8; older devices send none.
+    subject: Subject | None = None
     #: In the trash since.
     deleted_at: Millis | None
     #: When the student last changed it (the latest edit wins).

@@ -106,12 +106,27 @@ describe("solve", () => {
   });
 
   it("shows a verified solution without a Your Turn whose answer key is wrong", async () => {
-    const badTurn = { ...SOLUTION, yourTurn: { ...YOUR_TURN, answerKey: { text: "x = 6", latex: "x = 6" } } };
+    const badTurn = {
+      ...SOLUTION,
+      yourTurn: { ...YOUR_TURN, answerKey: { text: "x = 6", latex: "x = 6" } },
+    };
     const result = await solve(REQUEST, undefined, {
       generate: generator(badTurn, badTurn),
       checkMath: checker(["x = 6"]),
     });
     expect(result.type === "solution" && result.solution.yourTurnVerified).toBe(false);
+  });
+
+  it("refuses a Your Turn whose answer key isn't a final answer (5x = 25 for x = 5)", async () => {
+    const unsolved = {
+      ...SOLUTION,
+      yourTurn: { ...YOUR_TURN, answerKey: { text: "5x = 25", latex: "5x = 25" } },
+    };
+    const generate = generator(unsolved, SOLUTION);
+    const result = await solve(REQUEST, undefined, { generate, checkMath: checker() });
+    // SymPy would call the two equivalent; the student could never finish against it.
+    expect(result.type === "solution" && result.solution.yourTurn.answerKey.latex).toBe("x = 5");
+    expect(JSON.stringify(generate.mock.calls[1]?.[0]?.input)).toContain("solved for its variable");
   });
 
   it("is uncertain when the checker can't be reached", async () => {
@@ -141,7 +156,14 @@ describe("solve", () => {
     const result = await solve(
       { ...REQUEST, variantOf: { problem: YOUR_TURN.problem, skill: YOUR_TURN.skill } },
       undefined,
-      { generate: generator({ ...YOUR_TURN, latex: "2x + 1 = 9", answerKey: { text: "x = 4", latex: "x = 4" } }), checkMath: checker() },
+      {
+        generate: generator({
+          ...YOUR_TURN,
+          latex: "2x + 1 = 9",
+          answerKey: { text: "x = 4", latex: "x = 4" },
+        }),
+        checkMath: checker(),
+      },
     );
     expect(result.type).toBe("your_turn");
   });

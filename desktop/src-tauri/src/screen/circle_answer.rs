@@ -28,7 +28,8 @@ use super::clip::{self, EntryCapture, EntryDraft};
 use super::coach::{self, ScreenCoach};
 use super::config::SaveMode;
 use super::destination::{
-    parse_places, parse_resolution, parse_resolve_reply, DestinationOut, Place, Resolution,
+    parse_filing, parse_places, parse_resolution, parse_resolve_reply, DestinationOut, Filing,
+    Place, Resolution,
 };
 use super::frame::{FrameMeta, ScreenRect};
 use super::image::{crop, downscale_bgra_to_bgr, looks_blank, Pixels};
@@ -555,9 +556,20 @@ fn on_event<R: Runtime>(app: &AppHandle<R>, session_id: &str, event: CircleEvent
         if s.id != session_id {
             return Vec::new();
         }
-        if let CircleEvent::Destination { resolution, .. } = &event {
+        if let CircleEvent::Destination {
+            resolution, filing, ..
+        } = &event
+        {
+            let filing = filing.clone().and_then(parse_filing);
+            // K8: the server's filing never replaces a place the student picked on the card.
+            if filing.is_some() && s.place_picked {
+                return Vec::new();
+            }
             if let Some(resolution) = parse_resolution(resolution.clone()) {
                 apply_resolution(s, resolution);
+            }
+            if let Some(filing) = filing {
+                apply_filing(s, filing);
             }
             return vec![Work::Place];
         }
@@ -1411,6 +1423,12 @@ pub(super) enum PlaceOffer {
     Create { parent: Place, title: String },
     /// The picker: every notebook, chapter and section.
     Picker(Vec<Place>),
+    /// K8: the server filed it; these are its other suggestions, and Unsorted's "+ New
+    /// notebook" (made only on the tap). Doesn't hold the toast's countdown.
+    Filed {
+        choices: Vec<Place>,
+        new_notebook: Option<String>,
+    },
 }
 
 /// What a resolution does to the session. True when the student should be told it found nothing.
@@ -1436,19 +1454,43 @@ fn apply_resolution(session: &mut Session, resolution: Resolution) -> bool {
     }
 }
 
+/// K8: why it was filed there, and what else to tap: places, or a notebook to start.
+fn apply_filing(session: &mut Session, filing: Filing) {
+    session.place_note = filing.note;
+    session.place_offer = (!filing.alternatives.is_empty() || filing.new_notebook.is_some())
+        .then_some(PlaceOffer::Filed {
+            choices: filing.alternatives,
+            new_notebook: filing.new_notebook,
+        });
+}
+
 /// The card's "place" part: where it goes, and what's offered (titles only, as text).
 fn place_view(session: &Session) -> serde_json::Value {
-    let (choices, create) = match &session.place_offer {
-        Some(PlaceOffer::Choose(choices)) => (choices.iter().map(Place::label).collect(), None),
-        Some(PlaceOffer::Create { parent, title }) => {
-            (Vec::new(), Some(format!("{} › {title}", parent.label())))
+    let (choices, create, new_notebook) = match &session.place_offer {
+        Some(PlaceOffer::Choose(choices)) => {
+            (choices.iter().map(Place::label).collect(), None, None)
         }
-        _ => (Vec::new(), None),
+        Some(PlaceOffer::Create { parent, title }) => (
+            Vec::new(),
+            Some(format!("{} › {title}", parent.label())),
+            None,
+        ),
+        Some(PlaceOffer::Filed {
+            choices,
+            new_notebook,
+        }) => (
+            choices.iter().map(Place::label).collect(),
+            None,
+            new_notebook.clone(),
+        ),
+        _ => (Vec::new(), None, None),
     };
     json!({
         "label": session.place.as_ref().map(Place::label),
+        "note": session.place_note,
         "choices": choices,
         "create": create,
+        "newNotebook": new_notebook,
     })
 }
 
@@ -1590,11 +1632,17 @@ pub fn change_place<R: Runtime>(app: &AppHandle<R>) {
 pub fn pick_place<R: Runtime>(app: &AppHandle<R>, index: usize) {
     let picked = with_session(app, |s| {
         let place = match &s.place_offer {
-            Some(PlaceOffer::Choose(list) | PlaceOffer::Picker(list)) => list.get(index).cloned(),
+            Some(
+                PlaceOffer::Choose(list)
+                | PlaceOffer::Picker(list)
+                | PlaceOffer::Filed { choices: list, .. },
+            ) => list.get(index).cloned(),
             _ => None,
         }?;
         s.place = Some(place);
         s.place_offer = None;
+        s.place_note = None;
+        s.place_picked = true;
         Some(())
     })
     .flatten();
@@ -1606,13 +1654,35 @@ pub fn pick_place<R: Runtime>(app: &AppHandle<R>, index: usize) {
 /// "Create it and save": the chapter is made by the student's notebook when the entry arrives.
 pub fn create_place<R: Runtime>(app: &AppHandle<R>) {
     let created = with_session(app, |s| {
-        let Some(PlaceOffer::Create { parent, title }) = s.place_offer.take() else {
-            return false;
-        };
-        s.place = Some(Place {
-            create: Some(title),
-            ..parent
-        });
+        match s.place_offer.take() {
+            Some(PlaceOffer::Create { parent, title }) => {
+                s.place = Some(Place {
+                    create: Some(title),
+                    ..parent
+                });
+            }
+            // "+ New notebook: Biology": made by the student's notebook when the entry arrives,
+            // staying in Unsorted (the place it was filed) if that can't be done.
+            Some(PlaceOffer::Filed {
+                new_notebook: Some(title),
+                ..
+            }) => {
+                let Some(unsorted) = s.place.clone() else {
+                    return false;
+                };
+                s.place = Some(Place {
+                    create: Some(title),
+                    root: true,
+                    ..unsorted
+                });
+            }
+            other => {
+                s.place_offer = other;
+                return false;
+            }
+        }
+        s.place_note = None;
+        s.place_picked = true;
         true
     })
     .unwrap_or(false);

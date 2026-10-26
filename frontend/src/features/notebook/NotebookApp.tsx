@@ -13,6 +13,7 @@ import { NotesCheckPanel } from "../notes/NotesCheckPanel";
 import { NotesMarks } from "../notes/NotesMarks";
 import { SolutionRecords } from "../solution/record";
 import { SolutionLayer } from "../solution/SolutionLayer";
+import { NotebookPointer } from "../tutor/NotebookPointer";
 import { EntryNotes } from "./EntryNotes";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
@@ -31,6 +32,7 @@ import { ClipSource } from "./ClipSource";
 import { NotebookDb } from "./db";
 import { PageEngine } from "./engine";
 import { cropCurrentLine, downloadBlob } from "./export-line";
+import { HoldCircle } from "./HoldCircle";
 import { PageNav } from "./PageNav";
 import { NotebookRepository } from "./repository";
 import { Sidebar } from "./Sidebar";
@@ -72,6 +74,8 @@ export function NotebookApp({ userId }: { userId: string }) {
   const [pages, setPages] = useState<Page[]>([]);
   const [pageId, setPageId] = useState<string | null>(null);
   const [engine, setEngine] = useState<PageEngine | null>(null);
+  /** Ctrl+Alt held on the page (K6 §6.3): its number keys a fresh circle layer per hold. */
+  const [holding, setHolding] = useState<number | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   /** The clip page just saved, offered a notes check once (brief §2.1). */
   const [checkPrompt, setCheckPrompt] = useState<string | null>(null);
@@ -298,13 +302,22 @@ export function NotebookApp({ userId }: { userId: string }) {
     return () => mew.setSolutionRecords(null);
   }, [mew, solutionRecords]);
   useShortcuts({ ...actions, checkWork: mew.checkWork }, keys.platform, keys.own);
-  // Hold left Ctrl + left Alt to talk, let go to ask (K2; circling your writing comes with K6).
+  // Hold left Ctrl + left Alt to talk and circle your own writing, let go to ask (K2, K6).
   useHoldToTalk({
     start: () => {
+      mew.hold.start();
+      setHolding((n) => (n ?? 0) + 1);
       const { status } = useVoice.getState();
       if (status === "off" || status === "error") mew.startListening();
     },
-    release: mew.summon,
+    release: (heldAt) => {
+      setHolding(null);
+      mew.hold.release(heldAt);
+    },
+    cancel: () => {
+      setHolding(null);
+      mew.hold.cancel();
+    },
   });
   const { quiz } = mew;
   // Notes Check: every line's text, kept with the page and (if allowed) on the server.
@@ -523,6 +536,8 @@ export function NotebookApp({ userId }: { userId: string }) {
 
         {engine && <EntryNotes canvas={canvas} images={engine.images} />}
 
+        {engine && view === "page" && <NotebookPointer canvas={canvas} ink={mew.ink} />}
+
         {engine && view === "page" && (
           <SolutionLayer
             canvas={canvas}
@@ -541,6 +556,10 @@ export function NotebookApp({ userId }: { userId: string }) {
             db={db}
             ink={mew.ink}
           />
+        )}
+
+        {engine && view === "page" && holding !== null && (
+          <HoldCircle key={holding} canvas={canvas} onLoop={mew.hold.circle} />
         )}
 
         {clipImage && !quizActive && (

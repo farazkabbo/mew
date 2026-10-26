@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { DestinationSource, SavedDestination } from "./destinations";
 import { HexColor, Point, StrokeTool } from "./notebook";
+import { MomentMeta } from "./moments";
+import { SavedSolution } from "./saved-solution";
 import { AppName } from "./screen";
 
 /**
@@ -119,6 +121,13 @@ export const EntryPart = z.object({
       .max(ENTRY_LIMITS.steps - 1),
   ),
   conceptHints: z.array(PlainText(80).min(1)).max(5),
+  /**
+   * "Just tell me the answer" (K7): the verified worked solution. Attached by the web server
+   * from its own record of the answer, never taken from the desktop app.
+   */
+  solution: SavedSolution.optional(),
+  /** K8: the answer's subject and its check question (attached by the web server too). */
+  moment: MomentMeta.optional(),
 });
 export type EntryPart = z.infer<typeof EntryPart>;
 
@@ -130,6 +139,8 @@ export const EntryView = z.object({
   /** For each of the clip's strokes: [turn, step]. */
   strokeSteps: z.array(z.tuple([z.number().int().min(0), z.number().int().min(0)])),
   conceptHints: z.array(z.string()),
+  solution: SavedSolution.nullable().default(null),
+  moment: MomentMeta.nullable().default(null),
 });
 export type EntryView = z.infer<typeof EntryView>;
 
@@ -148,6 +159,9 @@ export const EntryAppendRequest = z
         .max(ENTRY_LIMITS.steps - 1),
     ),
     conceptHints: z.array(PlainText(80).trim().min(1)).max(5),
+    /** A follow-up's verified worked solution (K7) and check question (K8): the web server's. */
+    solution: SavedSolution.optional(),
+    moment: MomentMeta.optional(),
   })
   .refine((a) => a.strokeSteps.length === a.strokes.length, "each stroke has its step");
 export type EntryAppendRequest = z.infer<typeof EntryAppendRequest>;

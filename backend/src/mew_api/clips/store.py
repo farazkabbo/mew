@@ -26,7 +26,9 @@ from .models import (
     ClipCreate,
     ClipView,
     EntryAppend,
+    MomentMeta,
     SavedDestination,
+    SavedSolution,
 )
 
 BUCKET = "clips"
@@ -34,6 +36,32 @@ BUCKET = "clips"
 
 def storage_path(user: str, clip_id: UUID) -> str:
     return f"{user}/{clip_id}.jpg"
+
+
+@dataclass(frozen=True)
+class FilingFacts:
+    """What filing needs to know about a saved moment when it moves (K8 "Change teaches")."""
+
+    node_id: UUID | None
+    hints: list[str]
+    source_app: str
+    source_title: str | None
+    source_url: str | None
+
+
+def _filing_facts(row: dict[str, Any]) -> FilingFacts:
+    destination = row.get("destination") or {}
+    try:
+        node = UUID(str(destination.get("nodeId"))) if destination else None
+    except ValueError:
+        node = None
+    return FilingFacts(
+        node_id=node,
+        hints=list((row.get("entry") or {}).get("conceptHints") or []),
+        source_app=row["source_app"],
+        source_title=row.get("source_title"),
+        source_url=row.get("source_url"),
+    )
 
 
 class ClipWriter(Protocol):
@@ -46,6 +74,10 @@ class ClipWriter(Protocol):
 
     def set_destination(self, user: str, clip_id: UUID, destination: SavedDestination) -> bool:
         """Where the user's clip goes in the notebook (K3); False if they have no such clip."""
+        ...
+
+    def filing_facts(self, user: str, clip_id: UUID) -> FilingFacts | None:
+        """Where the user's clip is now, what it's about and where it came from (K8)."""
         ...
 
 
@@ -102,8 +134,23 @@ def _entry_columns(clip: ClipCreate) -> dict[str, Any]:
             "turns": [entry.turn.model_dump(mode="json", by_alias=True, exclude_none=True)],
             "strokeSteps": [[0, step] for step in entry.stroke_steps],
             "conceptHints": entry.concept_hints,
+            **_extras({}, entry.solution, entry.moment),
         },
     }
+
+
+def _extras(
+    stored: dict[str, Any], solution: SavedSolution | None, moment: MomentMeta | None
+) -> dict[str, Any]:
+    """An entry's worked solution (K7) and its subject and check question (K8), as stored. The
+    first of each stays the entry's own: a follow-up only adds one the entry didn't have."""
+    extras: dict[str, Any] = {}
+    for key, value in (("solution", solution), ("moment", moment)):
+        if key in stored:
+            extras[key] = stored[key]
+        elif value is not None:
+            extras[key] = value.model_dump(mode="json", by_alias=True)
+    return extras
 
 
 def _appended(row: dict[str, Any], entry: EntryAppend) -> dict[str, Any]:
@@ -123,6 +170,7 @@ def _appended(row: dict[str, Any], entry: EntryAppend) -> dict[str, Any]:
             "turns": turns,
             "strokeSteps": [*stored["strokeSteps"], *([turn, s] for s in entry.stroke_steps)],
             "conceptHints": hints,
+            **_extras(stored, entry.solution, entry.moment),
         },
     }
 
@@ -161,6 +209,8 @@ def _entry_view(row: dict[str, Any]) -> dict[str, Any] | None:
         "turns": entry["turns"],
         "stroke_steps": entry["strokeSteps"],
         "concept_hints": entry["conceptHints"],
+        "solution": entry.get("solution"),
+        "moment": entry.get("moment"),
     }
 
 
@@ -226,6 +276,21 @@ class MemoryClipStore:
             stored = self._clips.get((user, clip_id))
             return stored.image if stored else None
 
+    def filing_facts(self, user: str, clip_id: UUID) -> FilingFacts | None:
+        with self._lock:
+            stored = self._clips.get((user, clip_id))
+            return _filing_facts(stored.row) if stored else None
+
+    def moment_rows(self, user: str) -> list[dict[str, Any]]:
+        """Entries that have a place, newest first (K8 filing reads their hints and summaries)."""
+        with self._lock:
+            rows = [
+                dict(s.row)
+                for (owner, _), s in self._clips.items()
+                if owner == user and s.row.get("kind") == "entry" and s.row.get("destination")
+            ]
+        return sorted(rows, key=lambda r: str(r["created_at"]), reverse=True)[:500]
+
 
 # ─── Supabase ────────────────────────────────────────────────────────────────────────────────
 
@@ -289,6 +354,30 @@ class SupabaseClipWriter(SupabaseRest):
             {"destination": _destination_column(destination)},
         )
         return bool(rows)
+
+    def filing_facts(self, user: str, clip_id: UUID) -> FilingFacts | None:
+        rows = self._get(
+            "clips",
+            {
+                "user_id": f"eq.{user}",
+                "id": f"eq.{clip_id}",
+                "select": "destination,entry,source_app,source_title,source_url",
+            },
+        )
+        return _filing_facts(rows[0]) if rows else None
+
+    def moment_rows(self, user: str) -> list[dict[str, Any]]:
+        return self._get(
+            "clips",
+            {
+                "user_id": f"eq.{user}",
+                "select": "destination,entry",
+                "kind": "eq.entry",
+                "destination": "not.is.null",
+                "order": "created_at.desc",
+                "limit": "500",
+            },
+        )
 
 
 class SupabaseClipReader(SupabaseRest):

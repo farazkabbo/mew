@@ -213,6 +213,9 @@ pub enum CircleEvent {
     Destination {
         phrase: Option<String>,
         resolution: serde_json::Value,
+        /// K8: filed by the server (nothing was said): checked by `destination::parse_filing`.
+        #[serde(default)]
+        filing: Option<serde_json::Value>,
     },
 }
 
@@ -248,9 +251,16 @@ pub fn parse_circle_event(line: &str) -> Option<CircleEvent> {
         }
         CircleEvent::Abort { speech } => within(speech, SPEECH_CHARS),
         CircleEvent::Error { message } => within(message, 300),
-        CircleEvent::Destination { phrase, resolution } => {
+        CircleEvent::Destination {
+            phrase,
+            resolution,
+            filing,
+        } => {
             phrase.as_deref().is_none_or(|p| within(p, 160))
                 && super::destination::parse_resolution(resolution.clone()).is_some()
+                && filing
+                    .as_ref()
+                    .is_none_or(|f| super::destination::parse_filing(f.clone()).is_some())
         }
     };
     ok.then_some(event)

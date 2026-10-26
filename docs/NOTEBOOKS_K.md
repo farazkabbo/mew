@@ -1137,3 +1137,104 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
     property can never be chosen (draw_molecule was unreachable and benzene came out as a
     hexagon). Every variant now starts with its `type`/`kind`, and a test checks it. Verified
     with the real model (Flash-Lite): a right triangle, benzene, and a circle-ask sketch.
+64. **Solve and verify on the server, show on the device (K6).** `POST /api/solution` (prompt
+    `full-solution.v1`, the tutor model) returns a `VerifiedSolution`, a Your Turn
+    (`your-turn-variant.v1`, for "One more") or `uncertain`. Maths and physics are chained through
+    SymPy (problem → each step → the final answer; a step without LaTeX is skipped, but the answer
+    must follow); chemistry by balance; everything else by a strict rubric call
+    (`solution-rubric.v1`, `GEMINI_VERIFIER_MODEL`). Code isn't run here: it gets the rubric, since
+    Pyodide lives in the student's browser. A failure is fed back for one more try; a solution that
+    still fails is never shown (`uncertain`: the tutor says what it couldn't check and asks for the
+    first step). A verified solution whose Your Turn failed is shown without one. Limits: 6 a
+    minute, 120 a day.
+65. **A Your Turn's answer key is a final answer (K6).** SymPy calls "5x = 25" and "x = 5"
+    equivalent, so equivalence alone would end a Your Turn at its first correct step (the e2e test
+    caught exactly this). An equation's key must be solved for its variable (`solvedFor`: a
+    variable alone on the left, not on the right), or it isn't verified; the student is done when a
+    line is equal to the key **and** in that form (`inAnswerForm`), so "x = 10/2" finishes and
+    "5x = 25" gets a tick and "Keep going". An expression's key needs a line that isn't an equation.
+66. **The solution is ink, folded by its group (K6).** Steps are written one render each (a figure
+    first when it has one), said with their `why` (cut to 20 words), the answer boxed
+    (`planBoxedAnswer`); all of it is one stroke group, hidden while folded
+    (`useNotebookUi.foldedGroups`, which hidden ink can't be erased or selected through) behind a
+    "Solution · tap to peek" tab at its top. Folding is the device's (Dexie v6 `solutions`, with
+    the Your Turn's box, misses, ticks, peeks and status); the strokes themselves stay on the page
+    like any tutor ink.
+67. **The Your Turn is checked from its own problem (K6).** Its box (`planYourTurn`: "Your turn:"
+    and the problem, about five lines of room) owns any check while it has the student's lines in
+    it: a pen pause marks quietly, "is this right?", Alt+C and the panel's Check also speak. Lines
+    are read top to bottom and checked as one chain from the problem (at most 7); a correct line
+    gets a tick once, the first wrong one is the target of a `check_work` turn (the verifier's
+    circle, the tutor's smallest hint). Tries are unlimited; two misses on the same line offer a
+    "Hint step". Checking is maths only (it needs the problem as LaTeX).
+68. **Evidence (K6 §6.5).** The original problem: `after_explanation` (source `practice`). The Your
+    Turn (new attempt source `your_turn`, migration `show_then_you`): `independent` when done with
+    no peek and no hint step, else `with_hint`; a circled wrong line with a hint doesn't spoil
+    independence (the acceptance asks for it). Skip logs nothing and marks the concepts explored,
+    so they come up in review. Evidence needs a course (concepts); without one nothing is logged.
+69. **The pointer in the notebook (K6 §6.3)** follows `TutorInk.tip()` in a layer over the page:
+    it rests faintly by the mascot, and every render waits 240 ms (`leadInMs`) while it glides to
+    where the ink starts, then follows the pen. With reduced motion there's no lead-in and no
+    transition: it's just there.
+70. **Circling your own writing (K6 §6.3, decision 34).** While Ctrl+Alt is held on the page, a
+    layer takes the mouse, pen or finger (nothing is written) and draws each loop in red; a line is
+    circled when at least half its strokes are inside (`circledLines`). The lines are kept for the
+    next turn only (20 s at most): the tutor gets them instead of the latest lines, read now if
+    they weren't (3 s at most), with `circled: true` (prompt `tutor.v8`); "just give me the answer"
+    takes them as the problem. Letting go with words asks Neb as before; with only a loop it
+    explains the circled lines ("Explain this", like an empty ask bar). A cancelled hold keeps
+    nothing.
+71. **Marks on the student's own lines (K6 §6.3).** `underline`, `circle_region` and `point_at` in
+    the notebook take a `targetLineId` from `recognizedLines` (the screen's actions of the same
+    names keep their boxes); tutor.v8 describes them. An unknown line is skipped, like a mark.
+72. **Left for later (K6):** the tutor offering the answer after two unsuccessful tries (§6, the
+    second way in) — today only asking for it starts the flow; the Your Turn checking loop for
+    code. (Chemistry checking and the real-model run came with K7: decisions 78–79.)
+73. **"Just tell me the answer" on screen is spotted in code (K7).** There's no gate model on
+    screen, so `asksForAnswer` reads the question after the place is taken out of it ("just tell me
+    the answer and save it to Physics chapter 5" → the question "just tell me the answer"): asking
+    for the answer, the solution or "solve it" — never "how do I solve this?", which stays a
+    question answered hints first. The solution's rate limits apply on top of Circle & Ask's.
+74. **The same solver, shown as Circle & Ask steps (K7 §6.2).** `server/circle-solution.ts` hands
+    `solve` (K6) the question, the circled words and the text around them, and the focus image.
+    A verified solution streams as ordinary `step` events, which the desktop app already plays:
+    each step's work written beside the marks (`write_step`; the step's words when its LaTeX is
+    longer than a screen step) with its reason said, its figure in a sketch card first; more than
+    four steps are grouped (never dropped) so the answer is the fifth. The last caption is "So the
+    answer is x = 4. Your turn is in Physics › Chapter 5." (the toast has Open). Nothing changed
+    in the desktop app.
+75. **The solution never passes through the device (K7).** The verified solution is kept by the
+    web server, by student and session, for 30 minutes (in memory, like decision 39), and attached
+    by `/api/screen/clips` or `/api/screen/entries/append` when that session's entry is saved,
+    overwriting anything the device sent. It's stored in the entry's own jsonb (`solution`; no
+    migration); an entry keeps its first one. FastAPI validates it (`SavedSolution`).
+76. **In the notebook it waits folded (K7).** The entry's image carries the solution and the
+    "From screen" page leaves `SOLUTION_ROOM` (640 units) under its note. The first time the page
+    is open, `ShowThenYou.adoptEntries` writes it there at once, without voice or animation: the
+    steps (folded, behind the tab), the boxed answer, and the Your Turn box, which is then checked
+    like any other. Once per entry (`entry:<image id>`). Evidence needs course concepts, which the
+    screen doesn't give yet, so a screen Your Turn logs nothing until K8 maps moments to concepts.
+77. **Uncertain on screen:** one step that says what couldn't be checked, no ink, no solution kept
+    (the entry is saved as an explanation, as before).
+78. **Physics is checked on its numbers (K7, found with the real model).** SymPy can't follow
+    substituting the problem's values into a formula, and reads `25` and `25 m` as different
+    answers, so every physics solution came back unverified. `numbersChain` leaves units out
+    (`withoutUnits`) and starts at the formula with its numbers put in; every line from there must
+    be proved (an unreadable line now fails the check for maths too, and the retry is told to
+    write plain LaTeX: before, an unreadable middle line let the answer "follow" from the line
+    just above it). A word problem's Your Turn has the substituted equation as its `latex`, only
+    for checking: it's shown as its words (`showsAsWords`), never the equation that would give the
+    method away. On the student's side, a line that brings in new variables (`bringsInVariables`:
+    "s = ½at²") is a formula they wrote down, so it's left alone, never circled. Prompts
+    `full-solution.v2`, `your-turn-variant.v2`. `pnpm eval:solution` (real model and SymPy, the API
+    running): 4/4 verified — two-step equation, fractions, physics with units, chemistry.
+79. **A chemistry Your Turn is checked by balance (K7).** The latest line in the box: balanced and
+    the same reaction as the key (`sameReaction`: the same species, coefficients aside) is done;
+    unbalanced is circled with the counts as the hint; another reaction gets no mark.
+80. **Accessibility (K7).** The desktop card's caption and "Saving to" rows are polite live
+    regions, so Narrator reads the steps and "Your turn is in …"; the notebook's Your Turn panel is
+    a polite status; the solution tab is a button (Enter peeks); Alt+C checks. The e2e test does
+    the screen-saved Your Turn with the keyboard and pen only.
+81. **Left for later (K7):** an entry moved to another page after its solution was written
+    leaves the solution behind (its strokes aren't the entry's); "One more" isn't offered on
+    screen (it is in the notebook).

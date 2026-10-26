@@ -1,6 +1,6 @@
 /**
  * Neb's one gesture on the notebook page (K2, docs/NOTEBOOKS_K.md §11.1 and decision 5): hold
- * **left Ctrl + left Alt** to talk (circling your own writing comes with K6). The same rules as
+ * **left Ctrl + left Alt** to talk and circle your own writing (K6). The same rules as
  * the desktop app's (`desktop/src-tauri/src/screen/hold.rs`), driven by the page's own key
  * events instead of polling: the hold starts after 300 ms with no other key, any other key
  * cancels it silently, and right Alt (AltGr, used to type "@" or "€") never counts.

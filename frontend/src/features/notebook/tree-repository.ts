@@ -10,8 +10,11 @@ import {
   NotebookTree,
   type NotebookTreeSyncResult,
   singular,
+  type Subject,
   toNodeSync,
   TREE_LIMITS,
+  UNSORTED_TITLE,
+  unsortedNodeId,
 } from "@mew/shared";
 
 import { liveQuery } from "dexie";
@@ -27,6 +30,8 @@ export type NewNotebook = {
   color?: NotebookColor;
   courseId?: string;
   childLabel?: ChildLabel;
+  /** What it's about (K8): suggested from its name in the popover, editable. */
+  subject?: Subject;
   /** Its chapters' titles, in order (each gets a first page). */
   chapters?: readonly string[];
 };
@@ -113,6 +118,7 @@ export class TreeRepository {
         ...(input.icon && { icon: input.icon }),
         ...(input.color && { color: input.color }),
         ...(input.courseId && { courseId: input.courseId }),
+        ...(input.subject && { subject: input.subject }),
         editedAt: now,
         createdAt: now,
         updatedAt: now,
@@ -173,6 +179,47 @@ export class TreeRepository {
     });
   }
 
+  /**
+   * The student's Unsorted notebook (K8 §4.6): a system notebook under the id derived from their
+   * user id (so every device makes the same one), made on demand when a moment is filed there,
+   * and brought back if it was in the trash. It's never renamed or deleted.
+   */
+  async ensureUnsorted(id: string): Promise<Notebook> {
+    return this.write(async () => {
+      const tree = await this.tree();
+      const there = tree.get(id);
+      if (there) {
+        if (there.deletedAt !== undefined) await this.save(there, { deletedAt: undefined });
+        return there;
+      }
+      const now = this.clock();
+      const unsorted = Notebook.parse({
+        id,
+        title: tree.freeName(null, UNSORTED_TITLE),
+        parentId: null,
+        position: tree.positionsAtEnd(null, 1)[0],
+        icon: "book",
+        color: "slate",
+        editedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await this.db.notebooks.add(unsorted);
+      await this.queue([id]);
+      return unsorted;
+    });
+  }
+
+  /** What a notebook is about (K8), or null to leave it to its name. */
+  async setSubject(id: string, subject: Subject | null): Promise<void> {
+    await this.write(async () => {
+      const node = (await this.tree()).get(id);
+      if (node && (node.subject ?? null) !== subject) {
+        await this.save(node, { subject: subject ?? undefined });
+      }
+    });
+  }
+
   /** Links a notebook to a course (K4: "Use as course material" made one for it). */
   async setCourse(id: string, courseId: string): Promise<void> {
     await this.write(async () => {
@@ -183,7 +230,13 @@ export class TreeRepository {
 
   // ─── Changing ─────────────────────────────────────────────────────────────────────────────
 
+  /** The student's Unsorted notebook (K8): never renamed, moved or deleted. */
+  isSystem(id: string): boolean {
+    return id === unsortedNodeId(this.db.userId);
+  }
+
   async rename(id: string, raw: string): Promise<RenameResult> {
+    if (this.isSystem(id)) return { ok: false, reason: "invalid" };
     return this.write(async () => {
       const tree = await this.tree();
       const node = tree.get(id);
@@ -202,6 +255,7 @@ export class TreeRepository {
    * at the new place gets a number, and the result says so.
    */
   async move(id: string, parentId: string | null, index: number): Promise<MoveResult> {
+    if (this.isSystem(id)) return { ok: false, reason: "missing" };
     return this.write(async () => {
       const tree = await this.tree();
       const check = tree.canMove(id, parentId);
@@ -233,6 +287,7 @@ export class TreeRepository {
 
   /** To the trash (with everything under it, which stays inside it). */
   async trash(id: string): Promise<void> {
+    if (this.isSystem(id)) return;
     await this.write(async () => {
       const node = (await this.tree()).get(id);
       if (node && node.deletedAt === undefined) await this.save(node, { deletedAt: this.clock() });

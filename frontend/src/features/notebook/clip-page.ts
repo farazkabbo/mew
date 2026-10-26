@@ -1,4 +1,5 @@
 import {
+  type BBox,
   type ClipStroke,
   type ClipView,
   DESTINATION_LIMITS,
@@ -153,12 +154,28 @@ export function noteHeight(entry: ImageEntry, width: number): number {
   return NOTE_PADDING + lines * NOTE_LINE;
 }
 
+/** Room under an entry's note for its worked solution and Your Turn (K7), in page units. */
+export const SOLUTION_ROOM = 640;
+/** Space between the note and the solution (its "Solution · tap to peek" tab sits in it). */
+const SOLUTION_TOP = 48;
+
+/** Where an entry's worked solution is written (K7): under its note, across the picture. */
+export function solutionRegion(image: ImageBlock): BBox {
+  const note = image.entry ? noteHeight(image.entry, image.width) : 0;
+  return [
+    image.x,
+    image.y + image.height + note + SOLUTION_TOP,
+    Math.max(image.width, 600),
+    SOLUTION_ROOM - SOLUTION_TOP,
+  ];
+}
+
 /** Where the next entry goes on a "From screen" page: under the last one, with room to write. */
 export function nextEntryTop(images: readonly ImageBlock[]): number {
   return images.reduce((top, image) => {
-    const bottom =
-      image.y + image.height + (image.entry ? noteHeight(image.entry, image.width) : 0);
-    return Math.max(top, bottom + ENTRY_GAP);
+    const note = image.entry ? noteHeight(image.entry, image.width) : 0;
+    const solution = image.entry?.solution ? SOLUTION_ROOM : 0;
+    return Math.max(top, image.y + image.height + note + solution + ENTRY_GAP);
   }, IMAGE_ORIGIN[1]);
 }
 
@@ -206,6 +223,8 @@ export function entryToPage(
       strokeCount: clip.strokes.length,
       ...(heading && { heading }),
       strokeIds: strokes.map((s) => s.id),
+      // Written on the page the first time it's open (the flow, K7).
+      ...(entry.solution && { solution: entry.solution }),
     },
   };
   return { image, strokes };

@@ -127,6 +127,64 @@ class EntryTurn(_Camel):
 ConceptHint = Annotated[PlainText, StringConstraints(min_length=1, max_length=80)]
 
 
+SolutionText = Annotated[PlainText, StringConstraints(min_length=1, max_length=500)]
+SolutionLatex = Annotated[PlainText, StringConstraints(max_length=200)] | None
+
+
+class SavedWritten(_Camel):
+    text: SolutionText
+    latex: SolutionLatex
+
+
+class SavedStep(_Camel):
+    work: Annotated[PlainText, StringConstraints(min_length=1, max_length=120)]
+    latex: SolutionLatex
+    why: Annotated[PlainText, StringConstraints(min_length=1, max_length=200)]
+
+
+class SavedYourTurn(_Camel):
+    problem: SolutionText
+    latex: SolutionLatex
+    answer_key: SavedWritten
+    skill: Annotated[PlainText, StringConstraints(min_length=1, max_length=80)]
+
+
+Subject = Literal[
+    "math", "physics", "chemistry", "biology", "history", "language", "programming", "other"
+]
+
+
+class CheckQuestion(_Camel):
+    """A moment's check question (K8 §4.7; mirrors CheckQuestion in moments.ts). The web server
+    verified a maths key before attaching it; its key never goes to the device."""
+
+    kind: Literal["short", "mcq", "work"]
+    prompt: Annotated[PlainText, StringConstraints(min_length=1, max_length=300)]
+    choices: list[Annotated[PlainText, StringConstraints(min_length=1, max_length=120)]] = Field(
+        max_length=4
+    )
+    answer_key: Annotated[PlainText, StringConstraints(min_length=1, max_length=300)]
+    answer_latex: Annotated[PlainText, StringConstraints(max_length=300)] | None
+    problem_latex: Annotated[PlainText, StringConstraints(max_length=300)] | None
+
+
+class MomentMeta(_Camel):
+    """What K8 keeps with an entry: the answer's subject and its check question."""
+
+    subject: Subject | None
+    check_question: CheckQuestion | None
+
+
+class SavedSolution(_Camel):
+    """A verified worked solution kept with an entry (K7, "just tell me the answer" on screen).
+    The web server attaches it from its own record (packages/shared/src/saved-solution.ts)."""
+
+    problem: SavedWritten
+    steps: list[SavedStep] = Field(min_length=1, max_length=6)
+    final_answer: SavedWritten
+    your_turn: SavedYourTurn | None
+
+
 class EntryPart(_Camel):
     """What makes a new clip an entry: the session, the student's marks, the first turn, and
     the explanation step of each of the clip's tutor strokes."""
@@ -136,6 +194,8 @@ class EntryPart(_Camel):
     turn: EntryTurn
     stroke_steps: list[int] = Field(max_length=MAX_STROKES)
     concept_hints: list[ConceptHint] = Field(max_length=5)
+    solution: SavedSolution | None = None
+    moment: MomentMeta | None = None
 
     @field_validator("stroke_steps")
     @classmethod
@@ -154,6 +214,8 @@ class EntryAppend(_Camel):
     strokes: list[ClipStroke] = Field(max_length=MAX_STROKES)
     stroke_steps: list[int] = Field(max_length=MAX_STROKES)
     concept_hints: list[ConceptHint] = Field(max_length=5)
+    solution: SavedSolution | None = None
+    moment: MomentMeta | None = None
 
     @model_validator(mode="after")
     def _a_step_per_stroke(self) -> "EntryAppend":
@@ -171,6 +233,8 @@ class EntryView(_Camel):
     #: For each of the clip's strokes: [turn, step].
     stroke_steps: list[tuple[int, int]]
     concept_hints: list[str]
+    solution: SavedSolution | None = None
+    moment: MomentMeta | None = None
 
 
 # ─── Where it goes (K3) ──────────────────────────────────────────────────────────────────────
@@ -193,11 +257,13 @@ DestinationPage = Annotated[FromScreenPage | NewPage | NumberedPage, Field(discr
 
 
 class DestinationCreate(_Camel):
-    """A chapter to make first (the student tapped "Create it and save")."""
+    """A chapter to make first (the student tapped "Create it and save"), or with `root` a new
+    notebook (K8's "+ New notebook: Biology"; the node is then where it stays otherwise)."""
 
     title: Annotated[
         PlainText, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
     ]
+    root: bool | None = None
 
 
 class SavedDestination(_Camel):

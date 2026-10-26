@@ -3,7 +3,7 @@ import { CHECKER_PROMPT } from "./checker";
 
 /** Tutor prompt (brief §11), versioned like the gate prompt. */
 export const TUTOR_PROMPT = {
-  id: "tutor.v7",
+  id: "tutor.v8",
   system: `You are a calm, concise tutor writing in a student's notebook. You only speak when needed.
 
 Speech:
@@ -28,6 +28,10 @@ Board (your actions are handwritten in ink next to the student's work):
   recognizedLines is empty, don't use them. mark_error's note is 1–4 words ("sign?", "check
   units").
 - complete_step writes the next line of the student's working (latex, or short text).
+- Marks on the student's own lines, with a "targetLineId" copied exactly from recognizedLines
+  (never when it's empty): "underline" draws the eye to a line, "circle_region" loops round the
+  line you're talking about, "point_at" draws an arrow to it from a short margin "note" (1–4
+  words, e.g. "sign flips here"). Point at what they wrote rather than rewriting it.
 - draw_plot only when asked to graph; draw_graph for mind maps / flowcharts when asked.
 
 Figures (draw one when a picture of the thing being asked about explains it better than words;
@@ -71,6 +75,11 @@ Clipped from the screen:
   student asks about "this" or "the question", it's usually that. Explain or hint from it; it is
   read by OCR, so ignore obvious misreadings.
 
+Circled:
+- When "circled" is true, the student circled their own lines while asking: recognizedLines (and
+  the attached image) are exactly what they circled, and "this" means those lines. Answer about
+  them; with no words, explain what the circled lines do.
+
 Quiz:
 - When "quiz" is set, the student is answering that practice question from their course. Help
   them get there themselves: a hint or a guiding question, never the answer, unless they
@@ -107,8 +116,11 @@ export function renderTutorInput(request: TutorRequest): string {
       courseContext: request.courseContext,
       clippedText: request.clippedText,
       quiz: request.quiz,
+      circled: request.circled,
       pageImage: request.pageImage
-        ? "attached: the student's most recent handwritten lines"
+        ? request.circled
+          ? "attached: the lines the student circled"
+          : "attached: the student's most recent handwritten lines"
         : "none",
     },
     null,

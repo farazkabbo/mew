@@ -7,6 +7,8 @@ import {
   IMAGE_ORIGIN,
   nextEntryTop,
   noteHeight,
+  SOLUTION_ROOM,
+  solutionRegion,
   today,
 } from "./clip-page";
 import { replayEntry, replaySteps, stepMs } from "./entry-replay";
@@ -85,6 +87,27 @@ describe("an entry on the page", () => {
       first.y + first.height + (first.entry ? noteHeight(first.entry, first.width) : 0),
     );
     expect(nextEntryTop([])).toBe(IMAGE_ORIGIN[1]);
+  });
+
+  it("keeps a worked solution saved from the screen, with room under the note for it (K7)", () => {
+    const solution = {
+      problem: { text: "3x + 7 = 19", latex: "3x + 7 = 19" },
+      steps: [{ work: "3x = 12", latex: "3x = 12", why: "Subtract 7." }],
+      finalAnswer: { text: "x = 4", latex: "x = 4" },
+      yourTurn: null,
+    };
+    const base = clip();
+    const solved = ClipView.parse({ ...base, entry: { ...base.entry, solution } });
+    const { image } = entryToPage(solved, PAGE, IMAGE_ORIGIN[1], ids());
+    expect(image.entry?.solution).toEqual(solution);
+
+    const plain = entryToPage(clip(), PAGE, IMAGE_ORIGIN[1], ids()).image;
+    expect(nextEntryTop([image]) - nextEntryTop([plain])).toBe(SOLUTION_ROOM);
+    // The solution goes under the note, inside that room.
+    const [, top, , height] = solutionRegion(image);
+    const note = image.entry ? noteHeight(image.entry, image.width) : 0;
+    expect(top).toBeGreaterThan(image.y + image.height + note);
+    expect(top + height).toBeLessThanOrEqual(image.y + image.height + note + SOLUTION_ROOM);
   });
 
   it("adds a follow-up's turn and strokes to the same entry", () => {

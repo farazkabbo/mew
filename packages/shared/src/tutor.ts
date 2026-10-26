@@ -163,6 +163,11 @@ export const TutorRequest = z.object({
   quiz: QuizContext.nullable().default(null),
   /** Text of images on the page saved from the screen (Screen Coach S3), newest first. */
   clippedText: z.array(ClippedText).max(TUTOR_LIMITS.clippedTexts).default([]),
+  /**
+   * The student circled `recognizedLines` while holding Ctrl+Alt (K6 §6.3): they and the image
+   * are exactly what was circled, so "this" means them.
+   */
+  circled: z.boolean().default(false),
 });
 export type TutorRequest = z.infer<typeof TutorRequest>;
 

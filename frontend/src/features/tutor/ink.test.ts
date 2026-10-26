@@ -122,6 +122,36 @@ describe("TutorInk", () => {
     expect(ink.busy).toBe(false);
   });
 
+  it("waits out the lead-in with the pen where the ink starts, then follows the pen (K6)", async () => {
+    const time = fakeClock();
+    const page = fakeEngine(line());
+    const ink = new TutorInk({
+      engine: () => page.engine,
+      colors: () => COLORS,
+      newId,
+      clock: time.clock,
+      leadInMs: () => 240,
+    });
+    ink.attachViewport(() => [0, 0, 1200, 800]);
+    expect(ink.tip()).toBeNull();
+    await ink.render([math("x = 2")], { speech: "Yes." });
+
+    time.advance(200);
+    expect(ink.liveStrokes()).toEqual([]); // the pointer is still gliding there
+    const start = ink.tip();
+    expect(start).not.toBeNull();
+    expect(page.committed).toHaveLength(0);
+
+    time.advance(300);
+    const written = ink.liveStrokes();
+    expect(written.length).toBeGreaterThan(0);
+    expect(written[0]?.points[0]?.slice(0, 2)).toEqual(start);
+    expect(ink.tip()).not.toEqual(start); // it moves with the pen
+
+    time.advance(10_000);
+    expect(ink.tip()).toBeNull(); // done: back to rest
+  });
+
   it("paces writing to the speech, within limits", async () => {
     const short = setup();
     await short.ink.render([math("x = 2")], { speech: "Yes." });
@@ -213,6 +243,12 @@ describe("TutorInk", () => {
     expect(result.strokes).toBeGreaterThan(0);
 
     const pageless = new TutorInk({ engine: () => null, colors: () => COLORS });
-    expect(await pageless.render([math("x")])).toEqual({ strokes: 0, skipped: [], missing: [] });
+    expect(await pageless.render([math("x")], { groupId: "g" })).toEqual({
+      strokes: 0,
+      skipped: [],
+      missing: [],
+      groupId: "g",
+      bbox: null,
+    });
   });
 });

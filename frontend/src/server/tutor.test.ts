@@ -19,6 +19,7 @@ const request: TutorRequest = {
   courseContext: [],
   quiz: null,
   clippedText: [],
+  circled: false,
 };
 
 const RESPONSE: TutorResponse = {

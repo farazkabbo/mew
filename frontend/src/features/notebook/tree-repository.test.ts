@@ -167,6 +167,7 @@ describe("syncing", () => {
       icon: node.icon ?? null,
       color: node.color ?? null,
       courseId: node.courseId ?? null,
+      subject: node.subject ?? null,
       deletedAt: node.deletedAt ?? null,
       editedAt: node.editedAt,
       ...changes,

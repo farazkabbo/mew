@@ -13,9 +13,12 @@ import {
   SOLUTION_RUBRIC_PROMPT,
   type SolutionRequest,
   type SolutionResponse,
+  numbersChain,
   solutionChain,
+  solvedFor,
   type VerifiedSolution,
   type VerificationMethod,
+  withoutUnits,
   YOUR_TURN_VARIANT_PROMPT,
   YourTurn,
 } from "@mew/shared";
@@ -34,7 +37,7 @@ export type CheckMath = (steps: string[]) => Promise<MathCheckResponse["results"
 
 export type SolutionDeps = { generate: GenerateStructured; checkMath: CheckMath };
 
-const checkMathRemote: CheckMath = async (steps) => {
+export const checkMathRemote: CheckMath = async (steps) => {
   try {
     const result = await apiFetch("/v1/check/math", MathCheckResponse, {
       method: "POST",
@@ -68,16 +71,26 @@ export async function solve(
   request: SolutionRequest,
   signal?: AbortSignal,
   deps: SolutionDeps = defaultDeps,
+  /** The problem as a picture other than the notebook page (the screen's focus image, K7). */
+  image?: Extract<InputPart, { type: "image" }>,
 ): Promise<SolutionResponse> {
   if (request.variantOf) return variant(request, signal, deps);
   const model = geminiEnv().GEMINI_TUTOR_MODEL;
+  const picture: InputPart | null =
+    image ??
+    (request.pageImage
+      ? { type: "image", base64: request.pageImage, mimeType: "image/png" }
+      : null);
   let feedback: string | undefined;
   let best: VerifiedSolution | null = null;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const parts: InputPart[] = [{ type: "text", text: renderSolutionInput(request, feedback) }];
-    if (request.pageImage) {
-      parts.push({ type: "image", base64: request.pageImage, mimeType: "image/png" });
-    }
+    const text = renderSolutionInput(
+      request,
+      feedback,
+      image && "attached: what the student circled on their screen, with their marks",
+    );
+    const parts: InputPart[] = [{ type: "text", text }];
+    if (picture) parts.push(picture);
     const raw = await deps.generate({
       model,
       system: FULL_SOLUTION_PROMPT.system,
@@ -199,28 +212,37 @@ async function verify(
 }
 
 /**
- * Every line must follow from the one before, and the final answer must be verified: a chain
- * with an unreadable step in the middle still passes if nothing is wrong and the answer follows.
+ * Every checked line must be proved to follow from the one before, up to the final answer: an
+ * unreadable line breaks the proof, so it fails too (and the retry is told how to write it).
+ * Physics is checked on its numbers (`numbersChain`, K7): from the formula with its values put in.
  */
 async function maths(solution: FullSolution, checkMath: CheckMath): Promise<Check> {
-  const { lines, positions } = solutionChain(solution);
-  if (lines.length < 2 || positions.at(-1) !== solution.steps.length) {
-    return { passed: false, feedback: "Give the problem and the final answer as LaTeX." };
+  const physics = solution.subject === "physics";
+  const chain = physics ? numbersChain(solution) : solutionChain(solution);
+  if (!chain || chain.lines.length < 2 || chain.positions.at(-1) !== solution.steps.length) {
+    return {
+      passed: false,
+      feedback: physics
+        ? "Write the formula with the problem's numbers put in as a step of its own, then the arithmetic, all as LaTeX."
+        : "Give the problem and the final answer as LaTeX.",
+    };
   }
+  const { lines, positions } = chain;
   const results = await checkMath(lines);
   if (!results) return { passed: false };
-  const wrong = results.find((r) => r.verdict === "incorrect");
-  if (wrong) {
-    const failedStep = Math.max(0, positions[wrong.index] ?? 0);
+  const failed = results.find((r) => r.index > 0 && r.verdict !== "correct");
+  if (failed || results.length !== lines.length) {
+    const index = failed?.index ?? lines.length - 1;
+    const failedStep = Math.max(0, positions[index] ?? 0);
+    const line = lines[index] ?? "";
     return {
       passed: false,
       failedStep,
-      feedback: `Step ${failedStep + 1} (${lines[wrong.index]}) doesn't follow from the line before${wrong.detail ? `: ${wrong.detail}` : ""}.`,
+      feedback:
+        failed?.verdict === "incorrect"
+          ? `Step ${failedStep + 1} (${line}) doesn't follow from the line before${failed.detail ? `: ${failed.detail}` : ""}.`
+          : `Step ${failedStep + 1} (${line}) couldn't be checked: write each line as plain LaTeX, with \\cdot for multiplication (0 \\cdot 5, not 0(5)).`,
     };
-  }
-  const last = results.find((r) => r.index === lines.length - 1);
-  if (last?.verdict !== "correct") {
-    return { passed: false, feedback: "The final answer couldn't be checked from the steps." };
   }
   return { passed: true };
 }
@@ -246,7 +268,16 @@ async function verifyYourTurn(yourTurn: YourTurn, deps: SolutionDeps): Promise<C
   if (!yourTurn.latex || !key) {
     return { passed: false, feedback: "Give the practice problem and its answer as LaTeX." };
   }
-  const results = await deps.checkMath([yourTurn.latex, key, yourTurn.latex]);
+  // The student finishes by writing the answer in this form, so it must be a final answer.
+  if (key.includes("=") && !solvedFor(key)) {
+    return {
+      passed: false,
+      feedback: `The practice answer key (${key}) must be solved for its variable, like "x = 5".`,
+    };
+  }
+  // On its numbers: "s = 24 m" is the answer to s = ½ · 3 · 4² (K7).
+  const problem = withoutUnits(yourTurn.latex);
+  const results = await deps.checkMath([problem, withoutUnits(key), problem]);
   const ok =
     results !== null &&
     results.filter((r) => r.index > 0).every((r) => r.verdict === "correct") &&

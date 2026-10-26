@@ -1,0 +1,27 @@
+[
+  {
+    "source": { "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42" },
+    "key": "youtube:dQw4w9WgXcQ"
+  },
+  { "source": { "url": "https://youtu.be/dQw4w9WgXcQ" }, "key": "youtube:dQw4w9WgXcQ" },
+  {
+    "source": { "url": "https://m.youtube.com/watch?v=abcDEF12345" },
+    "key": "youtube:abcDEF12345"
+  },
+  { "source": { "url": "https://Example.org/notes/Ch3.PDF" }, "key": "pdf:ch3.pdf" },
+  {
+    "source": { "url": "https://Khan.org/physics/kinematics" },
+    "key": "web:khan.org/physics/kinematics"
+  },
+  { "source": { "url": "https://khan.org" }, "key": "web:khan.org/" },
+  {
+    "source": { "app": "acrord32.exe", "title": "Physics Textbook.pdf - Adobe Acrobat Reader" },
+    "key": "pdf:physics textbook.pdf"
+  },
+  {
+    "source": { "app": "winword.exe", "title": "Lab report" },
+    "key": "app:winword.exe:lab report"
+  },
+  { "source": { "app": "msedge.exe" }, "key": null },
+  { "source": {}, "key": null }
+]

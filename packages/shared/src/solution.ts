@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { COURSE_LIMITS, CourseExcerpt } from "./course";
+import type { SavedSolution } from "./saved-solution";
 import { SketchFigure } from "./screen";
 import { ClippedText, RecognizedLine, Subject, TUTOR_LIMITS } from "./tutor";
 
@@ -118,6 +119,56 @@ export function clipWhy(why: string): string {
     .replace(/[,;:.!?]+$/, "")}…`;
 }
 
+/** "x = 5", "x_1 = \frac{3}{2}": a variable alone on the left of a single "=". */
+const SOLVED = /^\s*([A-Za-z](?:_\{?[A-Za-z0-9]+\}?)?)\s*=\s*([^=]+)$/;
+
+/**
+ * The variable a line is solved for ("x = 5" → "x"), or null when it isn't ("5x = 25", "x = 2x
+ * − 5", or not an equation at all).
+ */
+export function solvedFor(latex: string): string | null {
+  const match = SOLVED.exec(withoutUnits(latex));
+  const [, variable, rest] = match ?? [];
+  if (!variable || !rest?.trim()) return null;
+  const name = variable.replace(/[{}]/g, "");
+  return variablesOf(rest).includes(name) ? null : name;
+}
+
+/** Units written as text ("\text{ m/s}", "\,\mathrm{kg}") and degree signs. */
+const UNITS =
+  /\\[,;:!]?\s*\\(?:text|mathrm)\s*\{[^}]*\}|\\(?:text|mathrm)\s*\{[^}]*\}|\^\s*\\circ/g;
+
+/** A line without its units: a physics line is checked on its numbers (K7). */
+export function withoutUnits(latex: string): string {
+  return latex.replace(UNITS, " ").replace(/\s+/g, " ").trim();
+}
+
+/** The variables a line names ("v_0", "x", "a"), units and LaTeX commands (\frac…) left out. */
+export function variablesOf(latex: string): string[] {
+  const bare = withoutUnits(latex).replace(/\\[A-Za-z]+/g, " ");
+  // A subscript is one character, or braced: v_0 t is v₀ times t; v_{0t} is one name.
+  const names = bare.match(/[A-Za-z](?:_(?:\{[A-Za-z0-9]+\}|[A-Za-z0-9]))?/g) ?? [];
+  return [...new Set(names.map((name) => name.replace(/[{}]/g, "")))];
+}
+
+/** Whether a line brings in variables none of the lines before it had: a formula, not a step. */
+export function bringsInVariables(line: string, before: readonly string[]): boolean {
+  const known = new Set(before.flatMap(variablesOf));
+  return variablesOf(line).some((v) => !known.has(v));
+}
+
+/**
+ * Whether a line is the Your Turn's answer in its final form, not a step on the way to it: an
+ * equation's key needs the line solved for the same variable ("5x = 25" is equivalent to "x = 5"
+ * but isn't the answer yet); an expression's key needs a line that isn't an equation. SymPy
+ * still checks that the two are equal.
+ */
+export function inAnswerForm(line: string, key: string): boolean {
+  if (!key.includes("=")) return !line.includes("=");
+  const variable = solvedFor(key);
+  return variable !== null && solvedFor(line) === variable;
+}
+
 /**
  * The lines SymPy checks, in order: the problem, each step and the final answer, skipping any
  * without LaTeX. `positions[i]` is which solution line check line i is (-1 the problem, steps
@@ -136,7 +187,81 @@ export function solutionChain(solution: Pick<FullSolution, "problem" | "steps" |
     }
   };
   add(solution.problem.latex, -1);
-  solution.steps.forEach((step, i) => add(step.latex, i));
+  solution.steps.forEach((step, i) => {
+    add(step.latex, i);
+  });
   add(solution.finalAnswer.latex, solution.steps.length);
   return { lines, positions };
+}
+
+/**
+ * A physics solution's chain (K7), checked on its numbers: units are left out (`25` and `25 m`
+ * are the same answer), and it starts at the first line whose right side is only numbers (the
+ * formula, e.g. s = ut + ½at², with the problem's values put in), because substituting values
+ * from the problem isn't algebra SymPy can follow. What's checked is that the arithmetic from
+ * there leads to the answer; null when there's no such line before the answer.
+ */
+export function numbersChain(solution: Pick<FullSolution, "problem" | "steps" | "finalAnswer">): {
+  lines: string[];
+  positions: number[];
+} | null {
+  const chain = solutionChain(solution);
+  const lines = chain.lines.map(withoutUnits);
+  // The first line whose right side is only numbers: the formula with its values put in.
+  const start = lines.findIndex((line, i) => {
+    const right = line.split("=").at(-1) ?? "";
+    return i < lines.length - 1 && line.includes("=") && variablesOf(right).length === 0;
+  });
+  if (start === -1) return null;
+  return { lines: lines.slice(start), positions: chain.positions.slice(start) };
+}
+
+/**
+ * Whether a problem is a word problem, written as words: its LaTeX is then only the equation
+ * that answers it (for checking, K7), and writing it would give the method away. "Solve 5x − 4 =
+ * 21" isn't; "A bike accelerates from rest at 3 m/s² for 4 s. How far does it go?" is.
+ */
+export function showsAsWords(problem: string): boolean {
+  return (problem.match(/[A-Za-z]{3,}/g) ?? []).length >= 4;
+}
+
+/** Asking for the answer, on lowercased words without punctuation. */
+const ANSWER_REQUESTS = [
+  /\b(give|tell|show) me (the|its|the final) (answer|solution)\b/,
+  /\b(what's|what is|whats) the (final )?answer\b/,
+  /\bshow (me )?(the )?(full|whole|complete|worked) (solution|working|answer)\b/,
+  /^(please |can you |could you )?(just )?(solve|work out|do) (it|this|that|this one|number \d+)( for me)?( please)?$/,
+  /\bjust (solve|answer) (it|this|that)\b/,
+];
+
+/**
+ * Whether the student asks for the answer itself (§6: "just give me the answer", "solve it",
+ * "what's the answer to number 3"), not for help with it ("how do I solve this?" is a question,
+ * answered hints first). Used on screen, where there's no gate model (K7).
+ */
+export function asksForAnswer(question: string): boolean {
+  const text = question
+    .toLowerCase()
+    .replace(/[’']/g, "'")
+    .replace(/[^a-z0-9' ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return ANSWER_REQUESTS.some((pattern) => pattern.test(text));
+}
+
+/** What's kept with an entry (K7): the verified solution without its figures or concept ids. */
+export function toSavedSolution(solution: VerifiedSolution): SavedSolution {
+  return {
+    problem: solution.problem,
+    steps: solution.steps.map(({ work, latex, why }) => ({ work, latex, why })),
+    finalAnswer: solution.finalAnswer,
+    yourTurn: solution.yourTurnVerified
+      ? {
+          problem: solution.yourTurn.problem,
+          latex: solution.yourTurn.latex,
+          answerKey: solution.yourTurn.answerKey,
+          skill: solution.yourTurn.skill,
+        }
+      : null,
+  };
 }

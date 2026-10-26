@@ -45,7 +45,16 @@ export const DestinationPage = z.discriminatedUnion("kind", [
 ]);
 export type DestinationPage = z.infer<typeof DestinationPage>;
 
-export const DestinationMethod = z.enum(["exact", "fuzzy", "model", "picker", "sticky", "default"]);
+export const DestinationMethod = z.enum([
+  "exact",
+  "fuzzy",
+  "model",
+  "picker",
+  "sticky",
+  "default",
+  /** Filed by what the student studies (K8 §4.6). */
+  "filed",
+]);
 export type DestinationMethod = z.infer<typeof DestinationMethod>;
 
 /** A destination the resolver (or the student) settled on. */
@@ -86,7 +95,13 @@ export type DestinationResolution = z.infer<typeof DestinationResolution>;
 export const SavedDestination = z.object({
   nodeId: z.uuid(),
   page: DestinationPage,
-  create: z.object({ title: z.string().trim().min(1).max(80) }).optional(),
+  /**
+   * Make this first: a chapter under `nodeId`, or with `root` (K8's "+ New notebook: Biology")
+   * a notebook of its own — `nodeId` is then where it stays if that can't be done (Unsorted).
+   */
+  create: z
+    .object({ title: z.string().trim().min(1).max(80), root: z.boolean().optional() })
+    .optional(),
   /** The titles it had when chosen ("Physics › Chapter 5"), for the toast and a sticky default. */
   path: z.array(z.string().min(1).max(200)).min(1).max(3).optional(),
 });

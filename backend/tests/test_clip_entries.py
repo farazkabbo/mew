@@ -169,3 +169,64 @@ def test_supabase_appends_compare_and_set_on_the_revision() -> None:
     assert fields["revision"] == 3
     assert fields["entry"]["strokeSteps"] == [[0, 0], [1, 0]]
     assert len(fields["annotations"]) == 2
+
+
+SOLUTION: dict[str, Any] = {
+    "problem": {"text": "3x + 7 = 19", "latex": "3x + 7 = 19"},
+    "steps": [
+        {"work": "3x = 12", "latex": "3x = 12", "why": "Subtract 7 from both sides."},
+        {"work": "x = 4", "latex": "x = 4", "why": "Divide both sides by 3."},
+    ],
+    "finalAnswer": {"text": "x = 4", "latex": "x = 4"},
+    "yourTurn": {
+        "problem": "5x - 4 = 21",
+        "latex": "5x - 4 = 21",
+        "answerKey": {"text": "x = 5", "latex": "x = 5"},
+        "skill": "two-step linear equations",
+    },
+}
+
+
+def read_entry(client: TestClient, clip_id: str) -> dict[str, Any]:  # noqa: F811
+    view = client.get(
+        f"/v1/clips/{clip_id}", headers={**internal_headers(), "X-Mew-Local-User": "local"}
+    )
+    entry: dict[str, Any] = view.json()["entry"]
+    return entry
+
+
+def test_an_entry_keeps_its_worked_solution(client: TestClient) -> None:  # noqa: F811
+    """K7: "just tell me the answer" on screen saves the verified solution with the entry."""
+    token = link_device(client)
+    clip_id = save(client, token, entry_body(solution=SOLUTION)).json()["clipId"]
+    assert read_entry(client, clip_id)["solution"] == SOLUTION
+
+    # A follow-up keeps it (and its own, if it had one, doesn't replace it).
+    other = {**SOLUTION, "finalAnswer": {"text": "x = 9", "latex": "x = 9"}}
+    client.post("/v1/clips/entries/append", json=append_body(solution=other), headers=device(token))
+    assert read_entry(client, clip_id)["solution"] == SOLUTION
+
+
+def test_a_follow_up_can_bring_the_entry_its_solution(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    clip_id = save(client, token, entry_body()).json()["clipId"]
+    assert read_entry(client, clip_id).get("solution") is None
+    client.post(
+        "/v1/clips/entries/append", json=append_body(solution=SOLUTION), headers=device(token)
+    )
+    assert read_entry(client, clip_id)["solution"] == SOLUTION
+
+
+@pytest.mark.parametrize(
+    "solution",
+    [
+        {**SOLUTION, "steps": []},
+        {**SOLUTION, "steps": SOLUTION["steps"] * 4},
+        {**SOLUTION, "finalAnswer": {"text": "x\u0007", "latex": None}},
+        {**SOLUTION, "yourTurn": {**SOLUTION["yourTurn"], "skill": "s" * 81}},
+        {**SOLUTION, "extra": True},
+    ],
+)
+def test_refuses_malformed_solutions(client: TestClient, solution: dict[str, Any]) -> None:  # noqa: F811
+    token = link_device(client)
+    assert save(client, token, entry_body(solution=solution)).status_code == 422

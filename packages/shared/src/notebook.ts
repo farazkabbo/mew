@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { SavedSolution } from "./saved-solution";
+import { Subject } from "./tutor";
+
 /** [x, y, pressure 0–1, t ms since the stroke started], in page coordinates. */
 export const Point = z.tuple([z.number(), z.number(), z.number().min(0).max(1), z.number().min(0)]);
 export type Point = z.infer<typeof Point>;
@@ -88,6 +91,11 @@ export const ImageBlock = z
         heading: z.string().min(1).max(40).optional(),
         /** The entry's strokes on the page (so it can move to another page whole, K3). */
         strokeIds: z.array(z.uuid()).max(5_000).optional(),
+        /**
+         * "Just tell me the answer" on screen (K7): the verified solution, written folded under
+         * the note (with its Your Turn) when the page is first opened.
+         */
+        solution: SavedSolution.optional(),
       })
       .optional(),
     createdAt: z.number().int().nonnegative(),
@@ -160,6 +168,8 @@ export const Notebook = z.object({
   color: NotebookColor.optional(),
   /** The course this notebook is for (its tutor draws on the course material). */
   courseId: z.uuid().optional(),
+  /** What it's about (K8): suggested from its name, editable; screen moments are filed by it. */
+  subject: Subject.optional(),
   /** In the trash since (purged after 30 days). */
   deletedAt: z.number().int().nonnegative().optional(),
   /** When the student last changed its title, place or settings: the latest edit wins. */

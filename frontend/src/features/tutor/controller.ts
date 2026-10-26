@@ -1,4 +1,4 @@
-import type { PageDocument } from "@mew/ink";
+import type { Line, PageDocument } from "@mew/ink";
 import {
   type BoardAction,
   type ImageBlock,
@@ -43,6 +43,8 @@ export type TutorDeps = {
   doc(): PageDocument | null;
   /** Images on that page (clips saved from the screen). */
   images?: () => readonly ImageBlock[];
+  /** Lines the student just circled (K6 §6.3), taken by the turn about them; null if none. */
+  takeCircled?: () => readonly Line[] | null;
   /** Called when a turn ends, however it ends (starts Mew's cooldown). */
   onFinished(): void;
   now?: () => number;
@@ -108,6 +110,7 @@ export class TutorController {
         recognition: this.deps.recognition,
         courseId: this.deps.courseId?.() ?? null,
         quiz: this.deps.quiz?.() ?? null,
+        circled: this.deps.takeCircled?.() ?? null,
       });
       request.checks = checks;
       for await (const event of streamTutor(request, turn.abort.signal)) {

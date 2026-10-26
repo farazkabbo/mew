@@ -20,7 +20,8 @@
     "eval:tutor": "pnpm --filter @mew/frontend eval:tutor",
     "eval:course": "pnpm --filter @mew/frontend eval:course",
     "eval:quiz": "pnpm --filter @mew/frontend eval:quiz",
-    "eval:notes": "pnpm --filter @mew/frontend eval:notes"
+    "eval:notes": "pnpm --filter @mew/frontend eval:notes",
+    "eval:solution": "pnpm --filter @mew/frontend eval:solution"
   },
   "devDependencies": {
     "@types/node": "^24",

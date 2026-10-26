@@ -348,6 +348,76 @@ describe("POST /api/screen/clips", () => {
   });
 });
 
+describe("filing what's saved without a place (K8)", () => {
+  const PHYSICS_CH3 = "77777777-7777-4777-8777-777777777777";
+  const FILED = {
+    method: "content_match",
+    nodeId: PHYSICS_CH3,
+    path: ["Physics", "Chapter 3 · Kinematics"],
+    score: 0.9,
+    matched: "projectile motion",
+    alternatives: [],
+    newNotebook: null,
+  };
+
+  /** The API, with filing answering `filed` (or failing). */
+  function filingApi(filed: unknown) {
+    const calls = api();
+    const base = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: URL, init: RequestInit) => {
+        if (url.pathname !== "/v1/moments/file") return base(url, init);
+        const body = typeof init.body === "string" ? (JSON.parse(init.body) as unknown) : undefined;
+        calls.push({ path: url.pathname, body, headers: new Headers(init.headers) });
+        return Promise.resolve(
+          filed === null ? new Response(null, { status: 502 }) : Response.json(filed),
+        );
+      }),
+    );
+    return calls;
+  }
+
+  it("files it by what it's about (not whichever notebook is open), with the device's token", async () => {
+    const calls = filingApi(FILED);
+    const { POST } = await import("./screen/clips/route");
+    const youtube = {
+      ...CLIP,
+      source: { ...CLIP.source, url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+    };
+    expect((await POST(request("/api/screen/clips", youtube, bearer()))).status).toBe(201);
+
+    const asked = calls.find((c) => c.path === "/v1/moments/file");
+    expect(asked?.headers.get("x-mew-device-token")).toBe(TOKEN);
+    expect(asked?.body).toEqual({
+      sourceKey: "youtube:dQw4w9WgXcQ",
+      subject: null,
+      hints: [],
+      stickyNodeId: null,
+    });
+    const stored = calls.find((c) => c.path === "/v1/clips")?.body as { destination?: unknown };
+    expect(stored.destination).toEqual({
+      nodeId: PHYSICS_CH3,
+      page: { kind: "from_screen" },
+      path: ["Physics", "Chapter 3 · Kinematics"],
+    });
+  });
+
+  it("keeps a place the student chose, and saves without one if filing fails", async () => {
+    const chosen = { nodeId: PHYSICS_CH3, page: { kind: "from_screen" }, path: ["Physics"] };
+    const calls = filingApi(FILED);
+    const { POST } = await import("./screen/clips/route");
+    await POST(request("/api/screen/clips", { ...CLIP, destination: chosen }, bearer()));
+    expect(calls.some((c) => c.path === "/v1/moments/file")).toBe(false);
+
+    const failing = filingApi(null);
+    const again = await import("./screen/clips/route");
+    expect((await again.POST(request("/api/screen/clips", CLIP, bearer()))).status).toBe(201);
+    const stored = failing.find((c) => c.path === "/v1/clips")?.body as Record<string, unknown>;
+    expect(stored).not.toHaveProperty("destination");
+  });
+});
+
 describe("POST /api/screen/reanchor", () => {
   it("answers with the re-placed ink for a valid device", async () => {
     api();

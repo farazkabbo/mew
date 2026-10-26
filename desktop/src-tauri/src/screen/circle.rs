@@ -105,9 +105,14 @@ pub(super) struct Session {
     pub entry: Option<circle_answer::SavedEntry>,
     /// A question asked before the capture was ready (Enter right after the first mark).
     pub pending: Option<Question>,
-    /// Where this session's entry goes (K3): what the student said, the source's sticky place, or
-    /// what they picked on the card. None: the notebook open in Neb.
+    /// Where this session's entry goes (K3): what the student said, the source's sticky place,
+    /// what they picked on the card, or (K8) where the server filed it. None: the server files it
+    /// when it's saved.
     pub place: Option<super::destination::Place>,
+    /// Why the server filed it there (K8: `matched "projectile motion"`), shown after the place.
+    pub place_note: Option<String>,
+    /// The student picked the place on the card: the server's filing never replaces it.
+    pub place_picked: bool,
     /// What the card offers to choose (K3): close candidates, a chapter to make, or the picker.
     pub place_offer: Option<circle_answer::PlaceOffer>,
     /// "Save this to …" with no explanation: the marks are saved once the place is chosen.
@@ -585,6 +590,8 @@ fn begin_session_if_needed<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindo
             entry: None,
             pending: None,
             place: None,
+            place_note: None,
+            place_picked: false,
             place_offer: None,
             save_only_pending: false,
             paused_for_words: false,

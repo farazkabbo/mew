@@ -34,6 +34,8 @@ export const UserSettings = z.object({
   shortcuts_notice_seen: z.boolean(),
   /** After a full solution, a similar problem to do alone (K6 §6.5: "give me a Your Turn"). */
   your_turn_after_solution: z.boolean(),
+  /** Every saved screen moment brings a check question back later (K8 §4.7, default on). */
+  quiz_saved_moments: z.boolean(),
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   shortcuts: {},
   shortcuts_notice_seen: false,
   your_turn_after_solution: true,
+  quiz_saved_moments: true,
 };
 
 export const SettingsPatch = UserSettings.partial().strict();

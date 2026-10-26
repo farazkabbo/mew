@@ -214,6 +214,16 @@ class MemoryCourseStore:
                 ids.append(cid)
             return ids
 
+    def node_passages(self, user: str) -> dict[UUID, list[str]]:
+        """Course passages by the notebook chapter they were imported into (K8 filing)."""
+        with self._lock:
+            passages: dict[UUID, list[str]] = {}
+            for chunk in self._data(user).chunks.values():
+                if chunk.notebook_node_id is not None:
+                    text = f"{chunk.heading or ''} {chunk.text}"[:1200]
+                    passages.setdefault(chunk.notebook_node_id, []).append(text)
+            return passages
+
     def match_chunks(
         self, user: str, course_id: UUID, embedding: list[float], k: int
     ) -> list[RetrievedChunk]:

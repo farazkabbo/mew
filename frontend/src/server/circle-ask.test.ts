@@ -41,6 +41,8 @@ const ANSWER = {
   summary: "A flat line on a velocity–time graph means constant speed.",
   followUpQuestion: "What's the acceleration on the flat part?",
   conceptHints: ["Acceleration"],
+  subject: "physics",
+  checkQuestion: null,
 };
 
 /** A model whose streamed text arrives in `chunks`; `generate` answers the retry. */

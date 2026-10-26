@@ -1,7 +1,9 @@
 import {
+  ALL_RENDERERS,
   type BoardInput,
   type BoardPlan,
   type Line,
+  planBoard,
   planBoxedAnswer,
   planYourTurn,
 } from "@mew/ink";
@@ -9,15 +11,24 @@ import {
   type BBox,
   type BoardAction,
   type Evidence,
+  inAnswerForm,
   type LineCheck,
   type MathCheckResponse,
   reconcileMarks,
+  type SavedSolution,
   type SolutionRequest,
+  showsAsWords,
+  bringsInVariables,
+  checkBalance,
+  looksLikeReaction,
+  sameReaction,
+  withoutUnits,
   type SolutionResponse,
   type VerifiedSolution,
   type YourTurn,
 } from "@mew/shared";
 
+import { solutionRegion } from "../notebook/clip-page";
 import type { PageEngine } from "../notebook/engine";
 import { studentLines } from "../notebook/export-line";
 import { useNotebookUi } from "../notebook/store";
@@ -35,6 +46,7 @@ export type ShowThenYouDeps = {
         speech?: string;
         groupId?: string;
         plan?: (input: BoardInput) => BoardPlan | Promise<BoardPlan>;
+        instant?: boolean;
       },
     ): Promise<InkResult>;
     written(): Promise<void>;
@@ -52,7 +64,11 @@ export type ShowThenYouDeps = {
   /** A tutor turn writing the next step (the hint step after two misses). */
   hintStep(): void;
   /** Learner evidence (only with a course). */
-  attempt(conceptIds: readonly string[], evidence: Evidence, source: "practice" | "your_turn"): void;
+  attempt(
+    conceptIds: readonly string[],
+    evidence: Evidence,
+    source: "practice" | "your_turn",
+  ): void;
   /** "Skip for now": the concepts join the review queue instead. */
   review(conceptIds: readonly string[]): void;
   save(record: LocalSolution): Promise<void>;
@@ -61,6 +77,9 @@ export type ShowThenYouDeps = {
   newId(): string;
   now(): number;
 };
+
+/** A Your Turn's problem and answer key: from a solution just made, or one saved (K7). */
+type TurnProblem = Pick<YourTurn, "problem" | "latex" | "answerKey" | "skill">;
 
 /** Lines of the student's working that SymPy checks at once (with the problem: 8). */
 const MAX_LINES = 7;
@@ -102,7 +121,9 @@ export class ShowThenYou {
     if (response.type !== "solution") {
       store.set({ phase: "idle" });
       // Never a confident wrong answer: say what's uncertain, and hints take over.
-      await this.deps.say(response.type === "uncertain" ? response.speech : "Let's try that again.");
+      await this.deps.say(
+        response.type === "uncertain" ? response.speech : "Let's try that again.",
+      );
       return;
     }
     await this.show(engine, response.solution);
@@ -167,20 +188,34 @@ export class ShowThenYou {
     await this.persist(record);
   }
 
-  private async writeYourTurn(yourTurn: YourTurn): Promise<LocalYourTurn | null> {
+  /**
+   * Writes the Your Turn box under the work. `within` (K7: an entry saved from the screen) puts it
+   * in that part of the page at once, without saying anything.
+   */
+  private async writeYourTurn(
+    yourTurn: TurnProblem,
+    within?: (input: BoardInput) => BoardInput,
+  ): Promise<LocalYourTurn | null> {
     const groupId = this.deps.newId();
     let region: BBox | null = null;
-    const problem = { text: yourTurn.problem, latex: yourTurn.latex };
+    // A word problem is written as its words; its LaTeX is only for checking (it gives the
+    // method away).
+    const problem = {
+      text: yourTurn.problem,
+      latex: showsAsWords(yourTurn.problem) ? null : yourTurn.latex,
+    };
     const written = this.deps.ink.render([], {
       speech: yourTurn.problem,
       groupId,
+      instant: within !== undefined,
       plan: (input) => {
-        const plan = planYourTurn(problem, input);
+        const plan = planYourTurn(problem, within ? within(input) : input);
         region = plan.region;
         return plan;
       },
     });
-    await Promise.all([written, this.deps.say(`Your turn: try this one on your own.`)]);
+    if (within) await written;
+    else await Promise.all([written, this.deps.say(`Your turn: try this one on your own.`)]);
     await this.deps.ink.written();
     if (!region) {
       useShowThenYou.getState().set({ phase: "idle" });
@@ -200,6 +235,71 @@ export class ShowThenYou {
       ticked: [],
       status: "open",
     };
+  }
+
+  /**
+   * Entries saved from the screen with a worked solution ("just tell me the answer", K7 §6.2)
+   * are written on their page the first time it's open: the solution folded under the note, its
+   * answer boxed, then the Your Turn, all without animation. Once each (by the entry's image).
+   */
+  async adoptEntries(): Promise<void> {
+    const engine = this.deps.engine();
+    if (!engine || this.busy) return;
+    const known = new Set(useShowThenYou.getState().solutions.map((s) => s.id));
+    for (const image of engine.images) {
+      const saved = image.entry?.solution;
+      const id = `entry:${image.id}`;
+      if (!saved || known.has(id)) continue;
+      await this.adopt(engine, id, saved, solutionRegion(image));
+    }
+  }
+
+  private async adopt(
+    engine: PageEngine,
+    id: string,
+    saved: SavedSolution,
+    region: BBox,
+  ): Promise<void> {
+    const within = (input: BoardInput): BoardInput => ({
+      ...input,
+      viewport: region,
+      activeLine: undefined,
+    });
+    const groupId = this.deps.newId();
+    const anchor = { near: "below_active_line" } as const;
+    const steps = saved.steps.map((step): BoardAction =>
+      step.latex
+        ? { type: "write_math", latex: step.latex, anchor }
+        : { type: "write_text", text: step.work, anchor },
+    );
+    const work = await this.deps.ink.render([], {
+      groupId,
+      instant: true,
+      plan: (input) => planBoard(steps, within(input), ALL_RENDERERS),
+    });
+    const answer = await this.deps.ink.render([], {
+      groupId,
+      instant: true,
+      plan: (input) => planBoxedAnswer(saved.finalAnswer, within(input)),
+    });
+    const record: LocalSolution = {
+      id,
+      pageId: engine.pageId,
+      createdAt: this.deps.now(),
+      groupId,
+      bbox: union([work.bbox, answer.bbox].filter((b) => b !== null)) ?? region,
+      folded: true,
+      problem: saved.problem.text,
+      courseId: this.deps.courseId(),
+      // Concepts aren't known from the screen; the Your Turn still checks, without evidence.
+      conceptIds: [],
+      yourTurn: null,
+    };
+    this.fold(record, true);
+    if (saved.yourTurn && this.deps.yourTurnWanted()) {
+      record.yourTurn = await this.writeYourTurn(saved.yourTurn, within);
+    }
+    await this.persist(record);
   }
 
   /** The open Your Turn on the page on screen, if any. */
@@ -243,13 +343,31 @@ export class ShowThenYou {
       if (!quiet) await this.deps.say("I can't read that yet — try writing it a bit larger.");
       return true;
     }
-    const steps = [turn.latex, ...texts.slice(0, count).map((t) => t ?? "")];
+    const key = turn.answerKey.latex ?? turn.answerKey.text;
+    if (looksLikeReaction(key)) {
+      const last = lines[count - 1];
+      const text = texts[count - 1];
+      return last && text ? this.checkReaction(record, last, text, key, quiet) : true;
+    }
+    // Checked on their numbers (units left out); a line that brings in new variables is a formula
+    // the student wrote down ("s = ½at²"), not a step from the line before: it's left alone.
+    const steps = [withoutUnits(turn.latex)];
+    const checked: Line[] = [];
+    lines.slice(0, count).forEach((line, i) => {
+      const text = withoutUnits(texts[i] ?? "");
+      if (bringsInVariables(text, steps)) return;
+      steps.push(text);
+      checked.push(line);
+    });
+    if (checked.length === 0) {
+      if (!quiet) await this.deps.say("Good start. Now put the numbers in.");
+      return true;
+    }
     const results = await this.deps.checkMath(steps);
     if (!results) {
       if (!quiet) await this.deps.say("I can't check right now — try again in a moment.");
       return true;
     }
-    const checked = lines.slice(0, count);
     const last = checked.at(-1);
     const checks: LineCheck[] = results.flatMap((r) => {
       const line = checked[r.index - 1];
@@ -282,10 +400,15 @@ export class ShowThenYou {
     const fresh = checks.filter((c) => c.verdict === "correct" && !turn.ticked.includes(c.lineId));
     if (fresh.length > 0) {
       turn.ticked = [...turn.ticked, ...fresh.map((c) => c.lineId)];
-      await this.deps.ink.render(reconcileMarks([], fresh.map((c) => ({ ...c, target: true }))));
+      await this.deps.ink.render(
+        reconcileMarks(
+          [],
+          fresh.map((c) => ({ ...c, target: true })),
+        ),
+      );
     }
-    const lastText = texts[count - 1];
-    if (lastText && (await this.isAnswer(lastText, turn))) {
+    const lastText = steps.at(-1);
+    if (checked.at(-1) === lines[count - 1] && lastText && (await this.isAnswer(lastText, turn))) {
       await this.finish(record);
       return true;
     }
@@ -294,12 +417,65 @@ export class ShowThenYou {
     return true;
   }
 
-  /** The line is the answer key itself: each follows from the other. */
+  /**
+   * A chemistry Your Turn ("balance Mg + O₂ → MgO"): the latest line is checked by the atom and
+   * charge balance. Balanced and the same reaction: done. Unbalanced: circled with the counts as
+   * the hint. Anything else (another reaction, unreadable) gets no mark.
+   */
+  private async checkReaction(
+    record: LocalSolution,
+    line: Line,
+    text: string,
+    key: string,
+    quiet: boolean,
+  ): Promise<boolean> {
+    const turn = record.yourTurn;
+    if (!turn) return false;
+    const balance = checkBalance(text);
+    if (balance.verdict === "incorrect" && sameReaction(text, key)) {
+      turn.misses = { ...turn.misses, [line.id]: (turn.misses[line.id] ?? 0) + 1 };
+      if ((turn.misses[line.id] ?? 0) >= 2) useShowThenYou.getState().set({ offerHint: true });
+      await this.persist(record);
+      this.deps.hintTurn([
+        {
+          lineId: line.id,
+          checker: "chemistry",
+          verdict: "incorrect",
+          reason: balance.reason,
+          detail: balance.detail,
+          target: true,
+        },
+      ]);
+      return true;
+    }
+    if (balance.verdict === "correct" && sameReaction(text, key)) {
+      const check: LineCheck = {
+        lineId: line.id,
+        checker: "chemistry",
+        verdict: "correct",
+        reason: balance.reason,
+        target: true,
+      };
+      await this.deps.ink.render(reconcileMarks([], [check]));
+      await this.finish(record);
+      return true;
+    }
+    await this.persist(record);
+    if (!quiet) await this.deps.say("Balance the reaction in the box, then ask me again.");
+    return true;
+  }
+
+  /**
+   * The line is the answer, in its final form ("x = 5", not the equivalent "5x = 25" on the way
+   * there), and equal to the key: each follows from the other.
+   */
   private async isAnswer(latex: string, turn: LocalYourTurn): Promise<boolean> {
-    const key = turn.answerKey.latex;
-    if (!key) return false;
+    const key = turn.answerKey.latex && withoutUnits(turn.answerKey.latex);
+    if (!key || !inAnswerForm(latex, key)) return false;
     const results = await this.deps.checkMath([key, latex, key]);
-    return Boolean(results && results.length === 3 && results.slice(1).every((r) => r.verdict === "correct"));
+    return Boolean(
+      results && results.length === 3 && results.slice(1).every((r) => r.verdict === "correct"),
+    );
   }
 
   private async finish(record: LocalSolution): Promise<void> {
@@ -385,7 +561,8 @@ export class ShowThenYou {
       ...done,
       id: this.deps.newId(),
       createdAt: this.deps.now(),
-      conceptIds: response.yourTurn.conceptIds.length > 0 ? response.yourTurn.conceptIds : done.conceptIds,
+      conceptIds:
+        response.yourTurn.conceptIds.length > 0 ? response.yourTurn.conceptIds : done.conceptIds,
       // The variant has no worked solution of its own: nothing to fold or peek.
       groupId: "",
       bbox: [0, 0, 0, 0],
@@ -429,7 +606,9 @@ export class ShowThenYou {
   }
 
   private async persist(record: LocalSolution): Promise<void> {
-    useShowThenYou.getState().upsert({ ...record, ...(record.yourTurn && { yourTurn: { ...record.yourTurn } }) });
+    useShowThenYou
+      .getState()
+      .upsert({ ...record, ...(record.yourTurn && { yourTurn: { ...record.yourTurn } }) });
     await this.deps.save(record).catch(() => undefined);
   }
 }

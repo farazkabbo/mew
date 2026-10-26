@@ -47,6 +47,11 @@ export type TutorInkDeps = {
   clock?: InkClock;
   /** Renderers by action type (M4 text and marks; visuals plug in here). */
   renderers?: Parameters<typeof planBoard>[2];
+  /**
+   * Time (ms) before the first stroke, for the notebook's pointer to glide to where the ink
+   * starts (K6 §6.3); 0 (the default) with reduced motion, when the pointer just appears.
+   */
+  leadInMs?: () => number;
 };
 
 export type InkResult = {
@@ -152,7 +157,8 @@ export class TutorInk implements InkLayer {
         tip ??= first ? [first[0], first[1]] : null;
         break;
       }
-      const points = a.elapsed >= end ? stroke.points : partial(stroke, (a.elapsed - start) * a.rate).points;
+      const points =
+        a.elapsed >= end ? stroke.points : partial(stroke, (a.elapsed - start) * a.rate).points;
       const last = points.at(-1);
       if (last) tip = [last[0], last[1]];
     }
@@ -185,12 +191,15 @@ export class TutorInk implements InkLayer {
       nearStrokes,
       groupId = this.newId(),
       plan: custom,
+      instant = false,
     }: {
       speech?: string;
       onStart?: () => void;
       nearStrokes?: readonly string[];
       groupId?: string;
       plan?: CustomPlan;
+      /** Put it on the page at once, without writing it out (ink made while nobody watches). */
+      instant?: boolean;
     } = {},
   ): Promise<InkResult> {
     this.finish();
@@ -214,6 +223,10 @@ export class TutorInk implements InkLayer {
       bbox: boxes.length > 0 ? boxes.reduce(unionBBox) : null,
     };
     if (strokes === 0) return result;
+    if (instant) {
+      engine.addTutorStrokes(plan.actions.flatMap((a) => a.strokes));
+      return result;
+    }
     if (generation !== this.generation) {
       // Superseded while planning: the ink still belongs on its page, just without animating.
       engine.addTutorStrokes(plan.actions.flatMap((a) => a.strokes));
@@ -223,12 +236,17 @@ export class TutorInk implements InkLayer {
     const { timeline, natural } = schedule(plan.actions);
     const target = clamp(speech.length * SPEECH_MS_PER_CHAR, PACE.minMs, PACE.maxMs);
     const rate = clamp(natural / target, PACE.minRate, PACE.maxRate);
+    const leadIn = Math.max(0, this.deps.leadInMs?.() ?? 0);
     this.animation = {
       engine,
       input,
       actions: plan.actions,
-      timeline: timeline.map((t) => ({ ...t, start: t.start / rate, end: t.end / rate })),
-      total: natural / rate,
+      timeline: timeline.map((t) => ({
+        ...t,
+        start: leadIn + t.start / rate,
+        end: leadIn + t.end / rate,
+      })),
+      total: leadIn + natural / rate,
       rate,
       elapsed: 0,
       lastTick: null,

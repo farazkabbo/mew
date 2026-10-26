@@ -50,6 +50,31 @@ export function looksLikeReaction(input: string): boolean {
   return text.split(ARROW).length === 2 && /[A-Z]/.test(text);
 }
 
+/**
+ * Whether two equations are the same reaction, however they're balanced: the same species on
+ * each side, coefficients aside ("H2 + O2 -> H2O" and "2H2 + O2 → 2H2O"). False if either can't
+ * be read as an equation.
+ */
+export function sameReaction(a: string, b: string): boolean {
+  const left = speciesOf(a);
+  const right = speciesOf(b);
+  return left !== null && right !== null && left === right;
+}
+
+/** "H2+O2>H2O": each side's species without coefficients, sorted; null if not an equation. */
+function speciesOf(input: string): string | null {
+  const sides = normalise(input).split(ARROW);
+  if (sides.length !== 2) return null;
+  const parts = sides.map((side) =>
+    side
+      .split("+")
+      .map((s) => s.trim().replace(/^\d+\s*/, ""))
+      .sort(),
+  );
+  if (parts.some((side) => side.length === 0 || side.some((s) => !s))) return null;
+  return parts.map((side) => side.join("+")).join(">");
+}
+
 type Side = { atoms: Counts; charge: number };
 
 function normalise(input: string): string {

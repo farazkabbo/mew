@@ -1,4 +1,4 @@
-import { type PageDocument, unionBBox } from "@mew/ink";
+import { type Line, type PageDocument, unionBBox } from "@mew/ink";
 import {
   type AnswerStyle,
   type ClippedText,
@@ -36,11 +36,15 @@ type ContextInput = {
   courseId?: string | null;
   /** The quiz question being answered, if a quiz is running. */
   quiz?: QuizContext | null;
+  /** Lines the student circled (K6 §6.3): the turn is about them, not the latest lines. */
+  circled?: readonly Line[] | null;
   fetchImpl?: typeof fetch;
 };
 
 /** Retrieval must not hold up the reply for long (first audio targets ~1.5 s). */
 const RETRIEVAL_TIMEOUT_MS = 2500;
+/** Circled lines not read yet are read now, for at most this long (the question is about them). */
+const CIRCLED_READ_MS = 3000;
 
 /**
  * Builds what the tutor sees: the conversation, a PNG of the student's most recent lines, and
@@ -50,25 +54,39 @@ export async function buildTutorRequest(input: ContextInput): Promise<TutorReque
   // Course passages are fetched while the handwriting is rendered.
   const courseContext = courseExcerpts(input);
   const { doc, recognition } = input;
-  const recent = doc
-    ? [...studentLines(doc)]
-        .sort((a, b) => b.lastCreatedAt - a.lastCreatedAt)
-        .slice(0, RECENT_LINES)
-    : [];
+  const circled = doc && input.circled?.length ? input.circled : null;
+  // Top to bottom: circled lines as they sit on the page, recent ones in writing order.
+  const lines = circled
+    ? [...circled].sort((a, b) => a.bbox[1] - b.bbox[1]).slice(0, TUTOR_LIMITS.recognizedLines)
+    : doc
+      ? [...studentLines(doc)]
+          .sort((a, b) => b.lastCreatedAt - a.lastCreatedAt)
+          .slice(0, RECENT_LINES)
+          .reverse()
+      : [];
 
   let pageImage: string | null = null;
   const recognizedLines: RecognizedLine[] = [];
-  if (doc && recent.length > 0) {
-    const bbox = recent.map((l) => l.bbox).reduce(unionBBox);
-    const raster = await renderStrokesPng(strokesOf(doc, recent), bbox);
+  if (doc && lines.length > 0) {
+    const bbox = lines.map((l) => l.bbox).reduce(unionBBox);
+    const raster = await renderStrokesPng(strokesOf(doc, lines), bbox);
     const base64 = await blobToBase64(raster.blob);
     pageImage = base64.length <= TUTOR_LIMITS.imageBase64Chars ? base64 : null;
 
-    for (const line of [...recent].reverse()) {
-      const known = recognition.cached(doc, line);
+    const read = await Promise.all(
+      lines.map((line) => {
+        const known = recognition.cached(doc, line);
+        if (known || !circled) {
+          if (!known) void recognition.recognize(doc, line); // for next time
+          return known ?? null;
+        }
+        return readWithin(recognition.recognize(doc, line), CIRCLED_READ_MS);
+      }),
+    );
+    lines.forEach((line, i) => {
+      const known = read[i];
       if (known) recognizedLines.push({ lineId: line.id, text: known.text, latex: known.latex });
-      else void recognition.recognize(doc, line);
-    }
+    });
   }
 
   return {
@@ -86,7 +104,16 @@ export async function buildTutorRequest(input: ContextInput): Promise<TutorReque
     courseContext: await courseContext,
     quiz: input.quiz ?? null,
     clippedText: clippedText(input.images ?? []),
+    circled: circled !== null,
   };
+}
+
+/** A recognition, or null if it takes longer than `ms` (or fails). */
+function readWithin<T>(reading: Promise<T | null>, ms: number): Promise<T | null> {
+  return Promise.race([
+    reading.catch(() => null),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
 }
 
 /** The text of the newest clips on the page, with where each came from. */

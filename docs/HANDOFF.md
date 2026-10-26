@@ -216,6 +216,24 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **To verify by hand:** on Windows, circle a benzene diagram in a PDF and ask "explain the
     carbon rings" (a ring drawn in the card before the words); "why is this a right angle?" on a
     triangle question (the square at the right vertex).
+- **K6 (Show-then-You in the notebook)** — NOTEBOOKS_K.md §6, decisions 64–72:
+  - **Server:** `/api/solution` → `server/solution.ts` (solve, verify by SymPy / chemistry balance
+    / rubric, one retry with the failure, else `uncertain`); prompts `full-solution.v1`,
+    `your-turn-variant.v1`, `solution-rubric.v1`; schemas in `packages/shared/src/solution.ts`
+    (`solvedFor` / `inAnswerForm`: a Your Turn ends at a final answer, not an equivalent step).
+  - **Notebook:** `features/solution/` (`flow.ts` ShowThenYou: steps with reasons, boxed answer,
+    fold and peek, the Your Turn box and its line-by-line check, hint step, skip, One more,
+    evidence; `SolutionLayer.tsx` tab and panel; Dexie v6 `solutions`). Ink plans in
+    `packages/ink/src/tutor/solution.ts`; line marks `underline` / `circle_region` / `point_at`.
+  - **Pointer and circling (§6.3):** `tutor/NotebookPointer.tsx` follows `TutorInk.tip()` (a
+    240 ms lead-in to glide there; none with reduced motion); holding Ctrl+Alt on the page shows
+    `notebook/HoldCircle.tsx`, and the circled lines (`notebook/circle.ts`) are the next turn's
+    context (`circled`, prompt `tutor.v8`).
+  - Setting "After a full solution: give me a Your Turn" (`your_turn_after_solution`, default on);
+    attempt source `your_turn`. **The `show_then_you` migration is not applied to the hosted
+    project yet.**
+  - **To verify by hand:** the K6 acceptance with a real voice and model ("just give me the
+    answer" on `3x + 7 = 19`); the pointer at 150 % zoom; circling with a pen and with a finger.
   - **To verify by hand:** the K3 acceptance on a YouTube video in the desktop app ("why is this
     the hypotenuse? save it to my physics notebook chapter 5" → Physics › Chapter 5 › From
     screen with the timestamp; with four chapters, "Create Chapter 5 and save").
@@ -291,6 +309,9 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
 - **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
   then check the RPC's array/jsonb arguments through PostgREST for real).
+
+Tests (after K6): **1,417 unit tests** (frontend 465, backend 320, ink 164, shared 321,
+database 125, desktop overlays 22), the same Rust tests, and **73 Playwright tests**.
 
 Tests (after K5): **1,368 unit tests** (frontend 441, backend 319, ink 164, shared 301,
 database 122, desktop overlays 22), **167 Rust tests** (+5 real-Windows ones) and **71 Playwright

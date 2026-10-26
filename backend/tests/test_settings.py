@@ -40,6 +40,8 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         "onboarded": False,
         "shortcuts": {},
         "shortcuts_notice_seen": False,
+        "your_turn_after_solution": True,
+        "quiz_saved_moments": True,
     }
     changed = client.patch(
         "/v1/me/settings",
@@ -69,6 +71,7 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         {"shortcuts": {"fly": "Alt+K"}},
         {"shortcuts": {"jump": 3}},
         {"shortcuts_notice_seen": "maybe"},
+        {"your_turn_after_solution": "always"},
     ],
     ids=[
         "threshold",
@@ -81,6 +84,7 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         "unknown-action",
         "binding-type",
         "notice-type",
+        "your-turn-type",
     ],
 )
 def test_settings_reject_invalid_changes(client: TestClient, body: dict[str, Any]) -> None:

@@ -18,6 +18,8 @@ from .deps import require_internal_caller
 from .devices.store import MemoryDeviceStore
 from .devices.tokens import LinkCodes
 from .mew_events.store import MemoryMewEventStore
+from .moments.audio import MemoryAudioStore
+from .moments.store import MemoryMomentStore, moment_texts
 from .notebooks.store import MemoryNotebookTreeStore
 from .notes.checks import MemoryCheckStore
 from .notes.store import MemoryNoteLineStore
@@ -32,6 +34,7 @@ from .routes import (
     learner,
     me,
     mew_events,
+    moments,
     notebooks,
     notes,
     pdfs,
@@ -93,6 +96,12 @@ def create_app(
     app.state.local_walkthroughs = MemoryWalkthroughStore()
     app.state.local_notebooks = MemoryNotebookTreeStore()
     app.state.local_pdfs = MemoryPdfStore()
+    # Moments (K8): filing reads the local course passages and filed entries.
+    app.state.local_moments = MemoryMomentStore(
+        app.state.local_courses.node_passages,
+        lambda user: moment_texts(app.state.local_clips.moment_rows(user)),
+    )
+    app.state.local_audio = MemoryAudioStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -110,6 +119,7 @@ def create_app(
     v1.include_router(notebooks.router)
     v1.include_router(notes.router)
     v1.include_router(walkthroughs.router)
+    v1.include_router(moments.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

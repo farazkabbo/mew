@@ -25,9 +25,20 @@ export const RATE_RULES = {
   /** Tutor turns (the expensive model). */
   tutor: { limit: 15, windowMs: MINUTE },
   tutorDaily: { limit: 400, windowMs: DAY },
-  /** Show-then-You (K6): a worked solution is up to 3 model calls and 2 checks. */
+  /**
+   * Show-then-You (K6): a worked solution is up to 4 model calls (two tries, each with a rubric
+   * check for subjects SymPy can't verify) and 4 SymPy checks.
+   */
   solution: { limit: 6, windowMs: MINUTE },
   solutionDaily: { limit: 120, windowMs: DAY },
+  /** K8: answering a moment's check (a grader call when it's words, SymPy when it's maths). */
+  momentAnswer: { limit: 20, windowMs: MINUTE },
+  momentAnswerDaily: { limit: 300, windowMs: DAY },
+  /** K8: reading checks and a moment's voice (no model). */
+  momentRead: { limit: 120, windowMs: MINUTE },
+  /** K8: a moment's voice, uploaded a step at a time after it was played. */
+  momentAudio: { limit: 30, windowMs: MINUTE },
+  momentAudioDaily: { limit: 600, windowMs: DAY },
   /** Handwriting recognition of single lines. */
   recognize: { limit: 30, windowMs: MINUTE },
   recognizeDaily: { limit: 1500, windowMs: DAY },

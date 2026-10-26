@@ -10,6 +10,7 @@ API):
 
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -27,14 +28,20 @@ from ..clips.store import (
     ClipReader,
     ClipWriter,
     EntryFullError,
+    FilingFacts,
     MemoryClipStore,
     SupabaseClipReader,
     SupabaseClipWriter,
 )
 from ..config import Settings
 from ..deps import Caller, CurrentCaller, SettingsDep
+from ..devices.models import VerifiedDevice
+from ..moments.filing import unsorted_node_id
+from ..moments.source import source_key
+from ..profiles.store import ProfileStore, SupabaseProfileStore
 from ..supabase_rest import StoreError
 from .devices import screen_device
+from .moments import service_moments
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +109,7 @@ def create_clip(
         image = body.image_bytes()
     except ValueError as error:
         code = (
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            status.HTTP_413_CONTENT_TOO_LARGE
             if "too large" in str(error)
             else status.HTTP_400_BAD_REQUEST
         )
@@ -113,7 +120,52 @@ def create_clip(
     _call(lambda: writer.create(device.user_id, clip_id, body, image))
     # Ids and sizes only: never titles, links or text.
     logger.info("Saved a clip (%s, %d KB)", clip_id, len(image) // 1024)
+    _remember_and_quiz(request, settings, device, clip_id, body)
     return ClipCreated(clip_id=clip_id)
+
+
+def _remember_and_quiz(
+    request: Request, settings: Settings, device: VerifiedDevice, clip_id: UUID, body: ClipCreate
+) -> None:
+    """K8: a saved moment's place becomes its source's memory, and its check question becomes a
+    review card (when "Quiz me on things I save" is on). Best effort: the clip is saved either
+    way, and a failure is logged without its content."""
+    moments = service_moments(request, settings, device.local)
+    node = body.destination.node_id if body.destination else None
+    key = source_key(body.source.app, body.source.title, body.source.url)
+    try:
+        # Unsorted is where moments wait, not where their source belongs.
+        if key and node and node != unsorted_node_id(device.user_id):
+            moments.remember(device.user_id, key, node, corrected=False)
+        moment = body.entry.moment if body.entry else None
+        question = moment.check_question if moment else None
+        if (
+            body.entry
+            and question
+            and _profiles(request, settings, device).get_settings(device.user_id).quiz_saved_moments
+        ):
+            hints = list(body.entry.concept_hints)
+            now = datetime.now(UTC)
+            try:
+                moments.add_check(device.user_id, clip_id, node, question, hints, now)
+            except StoreError:
+                # The place may not be on the server yet (local-first): the card still goes in.
+                moments.add_check(device.user_id, clip_id, None, question, hints, now)
+    except (StoreError, PermissionError):
+        logger.warning("Couldn't file or quiz a saved moment (%s)", clip_id)
+
+
+def _profiles(request: Request, settings: Settings, device: VerifiedDevice) -> ProfileStore:
+    if device.local:
+        store: ProfileStore = request.app.state.local_profiles
+        return store
+    if not settings.supabase_url or settings.supabase_secret_key is None:
+        raise _unavailable()
+    return SupabaseProfileStore(
+        settings.supabase_url,
+        api_key=settings.supabase_secret_key.get_secret_value(),
+        user_token=None,
+    )
 
 
 @router.post("/entries/append")
@@ -130,7 +182,7 @@ def append_to_entry(
     try:
         clip_id = _call(lambda: writer.append(device.user_id, body))
     except EntryFullError:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "The entry is full") from None
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "The entry is full") from None
     if clip_id is None:
         raise _not_found()
     # Ids and counts only: never the words.
@@ -149,10 +201,29 @@ def move_clip(
     "save it to …" said after it was saved. The notebook moves it when it reads the clip again."""
     device = screen_device(x_mew_device_token, request, settings)
     writer = _writer(request, settings, device.local)
+    before = _call(lambda: writer.filing_facts(device.user_id, body.clip_id))
     if not _call(lambda: writer.set_destination(device.user_id, body.clip_id, body.destination)):
         raise _not_found()
     # Ids only: never the place's title.
     logger.info("Moved a clip (%s)", body.clip_id)
+    if before is not None and before.node_id != body.destination.node_id:
+        _learn_from_move(request, settings, device, before, body.destination.node_id)
+
+
+def _learn_from_move(
+    request: Request, settings: Settings, device: VerifiedDevice, before: FilingFacts, to_node: UUID
+) -> None:
+    """K8 "Change teaches": the source's moments go to the new place from now on, and similar
+    moments aren't filed back where this one was taken from. Stored as data on the account."""
+    moments = service_moments(request, settings, device.local)
+    key = source_key(before.source_app, before.source_title, before.source_url)
+    try:
+        if key:
+            moments.remember(device.user_id, key, to_node, corrected=True)
+        if before.hints:
+            moments.add_correction(device.user_id, before.node_id, to_node, before.hints)
+    except (StoreError, PermissionError):
+        logger.warning("Couldn't learn from a moved moment")
 
 
 # ─── The owner ───────────────────────────────────────────────────────────────────────────────

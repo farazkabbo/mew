@@ -114,6 +114,12 @@ export function SettingsApp() {
             onChange={(auto_check) => void update({ auto_check })}
           />
           <Toggle
+            label="After a full solution: give me a Your Turn"
+            hint="When you ask for the answer, Neb shows every step, then folds it away and gives you a similar problem to do on your own."
+            checked={settings.your_turn_after_solution}
+            onChange={(your_turn_after_solution) => void update({ your_turn_after_solution })}
+          />
+          <Toggle
             label="Let the tutor check my notes"
             hint="Keeps the text of your notes (never your handwriting itself) with your account, so the tutor can compare what's on your screen with what you wrote. Turning this off deletes that copy."
             checked={settings.notes_index}

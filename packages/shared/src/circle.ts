@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 import { DestinationResolution } from "./destinations";
+import { CheckQuestion, FilingNote } from "./moments";
+import { Subject } from "./tutor";
 import {
   AppName,
   type ScreenBox,
@@ -160,6 +162,9 @@ export const CircleAskModelResponse = z.object({
   summary: PlainText(CIRCLE_LIMITS.summaryChars).min(1),
   followUpQuestion: PlainText(CIRCLE_LIMITS.followUpChars).nullable(),
   conceptHints: z.array(PlainText(CIRCLE_LIMITS.conceptChars).min(1)).max(8),
+  /** K8: what it's about, and one question to check the idea later (filed and quizzed). */
+  subject: Subject,
+  checkQuestion: CheckQuestion.nullable(),
 });
 export type CircleAskModelResponse = z.infer<typeof CircleAskModelResponse>;
 export type CircleModelStep = z.infer<typeof CircleModelStep>;
@@ -186,6 +191,8 @@ export const CircleStreamEvent = z.discriminatedUnion("type", [
     type: z.literal("destination"),
     phrase: z.string().max(160).nullable(),
     resolution: DestinationResolution,
+    /** K8: the server filed it itself (nothing was said): why, and what else to offer. */
+    filing: FilingNote.optional(),
   }),
   /** A step, as soon as it's complete and checked. */
   z.object({ type: z.literal("step"), step: CircleStep, latencyMs: z.number() }),

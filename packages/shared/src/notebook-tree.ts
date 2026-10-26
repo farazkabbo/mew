@@ -10,6 +10,7 @@ import {
   type NotebookColor as Color,
   type NotebookIcon as Icon,
 } from "./notebook";
+import { Subject } from "./tutor";
 
 /**
  * The notebook tree's rules (K1, docs/NOTEBOOKS_K.md §2): three levels at most, sibling names
@@ -252,6 +253,26 @@ const STYLES: readonly (readonly [RegExp, Icon, Color])[] = [
   [/\b(account|financ|business|market)/, "calculator", "amber"],
 ];
 
+/** What a notebook's icon says it's about (K8): "Physics" (atom) → physics. */
+const SUBJECT_OF_ICON: Partial<Record<Icon, Subject>> = {
+  atom: "physics",
+  flask: "chemistry",
+  sigma: "math",
+  calculator: "math",
+  dna: "biology",
+  leaf: "biology",
+  code: "programming",
+  landmark: "history",
+  languages: "language",
+};
+
+/** The subject suggested for a notebook's name (K8), or null when the name doesn't say. */
+export function suggestSubject(title: string): Subject | null {
+  const name = title.toLowerCase();
+  const match = STYLES.find(([pattern]) => pattern.test(name));
+  return (match && SUBJECT_OF_ICON[match[1]]) ?? null;
+}
+
 /** The icon and colour suggested for a new notebook's name (the student can change both). */
 export function suggestStyle(title: string): { icon: Icon; color: Color } {
   const name = title.toLowerCase();
@@ -273,6 +294,8 @@ export const NotebookNodeSync = z.object({
   icon: NotebookIcon.nullable(),
   color: NotebookColor.nullable(),
   courseId: z.uuid().nullable(),
+  /** K8 (older devices and servers send none). */
+  subject: Subject.nullable().default(null),
   deletedAt: Millis.nullable(),
   editedAt: Millis,
 });
@@ -316,6 +339,7 @@ export function toNodeSync(node: Notebook): NotebookNodeSync {
     icon: node.icon ?? null,
     color: node.color ?? null,
     courseId: node.courseId ?? null,
+    subject: node.subject ?? null,
     deletedAt: node.deletedAt ?? null,
     editedAt: node.editedAt,
   };
@@ -335,6 +359,7 @@ export function fromNodeSync(node: NotebookNodeSync, local: Notebook | undefined
     ...(node.icon && { icon: node.icon }),
     ...(node.color && { color: node.color }),
     ...(node.courseId && { courseId: node.courseId }),
+    ...(node.subject && { subject: node.subject }),
     ...(node.deletedAt !== null && { deletedAt: node.deletedAt }),
     editedAt: node.editedAt,
     createdAt: local?.createdAt ?? (node.editedAt || now),

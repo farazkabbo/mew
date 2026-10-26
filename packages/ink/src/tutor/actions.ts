@@ -105,7 +105,9 @@ export const underlineLine: ActionRenderer<Of<"underline">> = (action, planner, 
     const t = i / steps;
     return [x + t * w, base + amplitude * Math.sin(signed(rng) + t * 9)];
   });
-  return planner.commitPaths([path], planner.input.colors.ink, action.type, index) ?? "too much ink";
+  return (
+    planner.commitPaths([path], planner.input.colors.ink, action.type, index) ?? "too much ink"
+  );
 };
 
 /** K6 §6.3: a loop round one of the student's lines. */
@@ -113,8 +115,12 @@ export const circleLine: ActionRenderer<Of<"circle_region">> = (action, planner,
   const line = planner.line(action.targetLineId);
   if (!line) return "unknown line";
   return (
-    planner.commitPaths([ellipseAround(line.bbox, planner)], planner.input.colors.ink, action.type, index) ??
-    "too much ink"
+    planner.commitPaths(
+      [ellipseAround(line.bbox, planner)],
+      planner.input.colors.ink,
+      action.type,
+      index,
+    ) ?? "too much ink"
   );
 };
 
@@ -136,7 +142,10 @@ export const pointAtLine: ActionRenderer<Of<"point_at">> = (action, planner, ind
     to[0] - head * Math.cos(angle + side * 0.45),
     to[1] - head * Math.sin(angle + side * 0.45),
   ];
-  const paths = [[from, to], [wing(1), to, wing(-1)]];
+  const paths = [
+    [from, to],
+    [wing(1), to, wing(-1)],
+  ];
   const pieces = note ? [{ box: note, at: planner.origin(note, rect) }] : [];
   return (
     planner.commit({ color: planner.input.colors.ink, pieces, paths }, action.type, index) ??
