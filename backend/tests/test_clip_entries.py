@@ -187,6 +187,10 @@ SOLUTION: dict[str, Any] = {
 }
 
 
+#: As stored and read back: every field the API writes, its nulls included (never dropped).
+STORED_SOLUTION = {**SOLUTION, "yourTurn": {**SOLUTION["yourTurn"], "program": None}}
+
+
 def read_entry(client: TestClient, clip_id: str) -> dict[str, Any]:  # noqa: F811
     view = client.get(
         f"/v1/clips/{clip_id}", headers={**internal_headers(), "X-Mew-Local-User": "local"}
@@ -199,12 +203,12 @@ def test_an_entry_keeps_its_worked_solution(client: TestClient) -> None:  # noqa
     """K7: "just tell me the answer" on screen saves the verified solution with the entry."""
     token = link_device(client)
     clip_id = save(client, token, entry_body(solution=SOLUTION)).json()["clipId"]
-    assert read_entry(client, clip_id)["solution"] == SOLUTION
+    assert read_entry(client, clip_id)["solution"] == STORED_SOLUTION
 
     # A follow-up keeps it (and its own, if it had one, doesn't replace it).
     other = {**SOLUTION, "finalAnswer": {"text": "x = 9", "latex": "x = 9"}}
     client.post("/v1/clips/entries/append", json=append_body(solution=other), headers=device(token))
-    assert read_entry(client, clip_id)["solution"] == SOLUTION
+    assert read_entry(client, clip_id)["solution"] == STORED_SOLUTION
 
 
 def test_an_entry_keeps_a_programming_your_turns_reference_program(client: TestClient) -> None:  # noqa: F811
@@ -229,7 +233,7 @@ def test_a_follow_up_can_bring_the_entry_its_solution(client: TestClient) -> Non
     client.post(
         "/v1/clips/entries/append", json=append_body(solution=SOLUTION), headers=device(token)
     )
-    assert read_entry(client, clip_id)["solution"] == SOLUTION
+    assert read_entry(client, clip_id)["solution"] == STORED_SOLUTION
 
 
 @pytest.mark.parametrize(
@@ -246,3 +250,25 @@ def test_a_follow_up_can_bring_the_entry_its_solution(client: TestClient) -> Non
 def test_refuses_malformed_solutions(client: TestClient, solution: dict[str, Any]) -> None:  # noqa: F811
     token = link_device(client)
     assert save(client, token, entry_body(solution=solution)).status_code == 422
+
+
+def test_an_entrys_extras_keep_their_nulls_when_read_back(client: TestClient) -> None:  # noqa: F811
+    """The clip routes leave empty top-level fields out, but a check question's null
+    `answerLatex` (or a step's null `latex`) is a value: dropping it made the web app refuse the
+    entry, so it never reached the notebook."""
+    token = link_device(client)
+    question: dict[str, Any] = {
+        "kind": "short",
+        "prompt": "How do you price a treasury bill?",
+        "choices": [],
+        "answerKey": "Discount the face value with simple interest.",
+        "answerLatex": None,
+        "problemLatex": None,
+    }
+    body = entry_body(moment={"subject": "math", "checkQuestion": question})
+    clip_id = save(client, token, body).json()["clipId"]
+    view = client.get(
+        f"/v1/clips/{clip_id}", headers={**internal_headers(), "X-Mew-Local-User": "local"}
+    ).json()
+    assert view["entry"]["moment"]["checkQuestion"] == question
+    assert "notebookPageId" not in view  # an empty top-level field is still left out

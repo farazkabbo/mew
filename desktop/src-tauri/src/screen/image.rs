@@ -125,6 +125,27 @@ pub fn crop(source: &Pixels, left: u32, top: u32, right: u32, bottom: u32) -> Pi
     }
 }
 
+/// The share of sampled pixels that are (near) black, in percent: a diagnostic for frames that
+/// come out dark (logged as a number, never the pixels).
+pub fn dark_percent(pixels: &Pixels) -> u32 {
+    let channels = pixels.channels as usize;
+    let data = pixels.data.as_slice();
+    let total = pixels.width as usize * pixels.height as usize;
+    if total == 0 || channels < 3 {
+        return 0;
+    }
+    let step = (total / 4096).max(1);
+    let (mut dark, mut seen) = (0u32, 0u32);
+    for i in (0..total).step_by(step) {
+        let px = &data[i * channels..i * channels + 3];
+        seen += 1;
+        if px.iter().all(|&c| c < 16) {
+            dark += 1;
+        }
+    }
+    dark * 100 / seen.max(1)
+}
+
 /// True when every sampled pixel is (near) black: what exclusive-fullscreen games and protected
 /// (DRM) content look like to Windows.Graphics.Capture. We say so instead of sending it.
 pub fn looks_blank(pixels: &Pixels) -> bool {

@@ -102,6 +102,7 @@ function render(next: CardLayout): void {
   );
   if (next.mode === "place") input.focus();
   startCountdown(next.countdown);
+  fit();
 }
 
 input?.addEventListener("input", () => {
@@ -142,6 +143,30 @@ window.addEventListener("keydown", (event) => {
   if (action !== "stop" && action !== "close") event.preventDefault();
   act(action);
 });
+
+/**
+ * The window fits the card: taller when it shows more (where it's saved, a long caption, the
+ * follow-up box), so nothing is cut off; the desktop app keeps it on the monitor and caps it,
+ * and past that the caption scrolls.
+ */
+let fitted = 0;
+function fit(): void {
+  if (!card) return;
+  const body = getComputedStyle(document.body);
+  // The caption shrinks (and scrolls) in a short window: what it hides is room still wanted.
+  const hidden = text ? text.scrollHeight - text.clientHeight : 0;
+  const wanted = Math.ceil(
+    card.scrollHeight + hidden + parseFloat(body.paddingTop) + parseFloat(body.paddingBottom),
+  );
+  if (Math.abs(wanted - fitted) < 2) return;
+  fitted = wanted;
+  void invoke("screen_circle_card", { action: "fit", text: String(wanted) }).catch(() => undefined);
+}
+if (card) {
+  const watch = new ResizeObserver(fit);
+  watch.observe(card);
+  if (text) watch.observe(text);
+}
 
 on("mew:card-show", (detail) => {
   const next = cardLayout(detail);

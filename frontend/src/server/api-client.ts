@@ -42,6 +42,14 @@ export async function apiFetch<T>(
     response.status === 204 ? undefined : await response.json().catch(() => undefined),
   );
   if (!parsed.success) {
+    // Which fields, never their values: enough to see why a route answered 502.
+    const fields = parsed.error.issues
+      .slice(0, 5)
+      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.code}`);
+    console.warn(
+      `[api] ${path.split("/").slice(0, 3).join("/")} reply refused:`,
+      fields.join("; "),
+    );
     throw new ApiError("API response did not match the expected schema", response.status);
   }
   return parsed.data;

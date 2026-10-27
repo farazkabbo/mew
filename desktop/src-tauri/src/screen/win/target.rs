@@ -17,7 +17,7 @@ use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GetAncestor, GetClassNameW, GetCursorPos, GetForegroundWindow, GetWindowLongW,
     GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, GA_ROOT, GWL_EXSTYLE,
-    WS_EX_TOOLWINDOW,
+    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
 };
 
 use crate::screen::frame::{ScreenRect, TargetKind};
@@ -117,11 +117,14 @@ pub struct VisibleWindow {
     pub bounds: ScreenRect,
     pub app: Option<String>,
     pub title: String,
+    /// It hides what's behind it: not layered (which can be see-through, like a game overlay)
+    /// and not click-through-transparent.
+    pub opaque: bool,
 }
 
 /// Every visible top-level window of other apps that overlaps `area`, including small tool
-/// windows (a password manager's quick-access popup, say). Used to black out blocked apps in
-/// monitor captures.
+/// windows (a password manager's quick-access popup, say), front to back (Windows' Z order).
+/// Used to black out blocked apps in monitor captures, where they show.
 pub fn visible_windows_over(area: ScreenRect) -> Vec<VisibleWindow> {
     let mut handles: Vec<HWND> = Vec::new();
     unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
@@ -153,10 +156,15 @@ pub fn visible_windows_over(area: ScreenRect) -> Vec<VisibleWindow> {
         })
         .filter_map(|hwnd| {
             let bounds = window_bounds(hwnd)?;
-            overlaps(bounds, area).then(|| VisibleWindow {
-                bounds,
-                app: exe_name_of(hwnd),
-                title: window_title(hwnd),
+            overlaps(bounds, area).then(|| {
+                // SAFETY: plain value arguments; Windows validates the handle.
+                let ex_style = unsafe { GetWindowLongW(hwnd, GWL_EXSTYLE) } as u32;
+                VisibleWindow {
+                    bounds,
+                    app: exe_name_of(hwnd),
+                    title: window_title(hwnd),
+                    opaque: ex_style & (WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) == 0,
+                }
             })
         })
         .collect()

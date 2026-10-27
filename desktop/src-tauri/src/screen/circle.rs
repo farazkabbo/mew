@@ -996,6 +996,8 @@ pub enum CardAction {
     CreatePlace,
     PlaceCancel,
     Close,
+    /// The page's content needs this many CSS pixels of height (the text): the window follows.
+    Fit,
 }
 
 /// The card's buttons and its text box.
@@ -1006,6 +1008,14 @@ pub fn screen_circle_card<R: Runtime>(
     text: Option<String>,
 ) -> Result<(), String> {
     require_surface(&window, Surface::Card)?;
+    if action == CardAction::Fit {
+        // Not the student's doing: the card grew or shrank with what it shows.
+        let wanted = text.as_deref().and_then(|t| t.trim().parse::<f64>().ok());
+        if let Some(wanted) = wanted.filter(|h| h.is_finite() && *h > 0.0) {
+            fit_card(&window, wanted);
+        }
+        return Ok(());
+    }
     let app = window.app_handle();
     with_session(app, |s| s.last_input = Instant::now());
     let words = text
@@ -1058,8 +1068,41 @@ pub fn screen_circle_card<R: Runtime>(
         CardAction::CreatePlace => circle_answer::create_place(app),
         CardAction::PlaceCancel => circle_answer::cancel_place(app),
         CardAction::Close => end_session(app),
+        CardAction::Fit => {}
     }
     Ok(())
+}
+
+/// The card fits what it shows: taller for the destination rows and a long caption, back to its
+/// usual size after, always on its monitor.
+fn fit_card<R: Runtime>(window: &WebviewWindow<R>, wanted: f64) {
+    let (Ok(position), Ok(size), Ok(scale)) = (
+        window.outer_position(),
+        window.outer_size(),
+        window.scale_factor(),
+    ) else {
+        return;
+    };
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return;
+    };
+    let (m_pos, m_size) = (monitor.position(), monitor.size());
+    let monitor = ScreenRect {
+        left: m_pos.x,
+        top: m_pos.y,
+        right: m_pos.x + m_size.width as i32,
+        bottom: m_pos.y + m_size.height as i32,
+    };
+    let now = ScreenRect {
+        left: position.x,
+        top: position.y,
+        right: position.x + size.width as i32,
+        bottom: position.y + size.height as i32,
+    };
+    let next = overlay::card_fit(now, monitor, wanted, scale);
+    if next != now {
+        overlay::place(window, next);
+    }
 }
 
 /// The words said while holding the keys during a session are its question (or a follow-up).

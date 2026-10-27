@@ -25,7 +25,9 @@ export type CardAction =
   | "pick_place"
   /** K3: "Create it and save". */
   | "create_place"
-  | "place_cancel";
+  | "place_cancel"
+  /** The page needs this much height (its CSS pixels go as the text): the window follows. */
+  | "fit";
 
 export type CardButton = { action: CardAction; label: string; primary?: boolean };
 

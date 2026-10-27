@@ -13,7 +13,7 @@ import base64
 import binascii
 import re
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import parse_qsl, urlsplit
 from uuid import UUID
 
@@ -23,6 +23,7 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    field_serializer,
     field_validator,
     model_validator,
 )
@@ -237,6 +238,17 @@ class EntryView(_Camel):
     concept_hints: list[str]
     solution: SavedSolution | None = None
     moment: MomentMeta | None = None
+
+    @field_serializer("solution", "moment")
+    def _whole(self, value: BaseModel | None) -> dict[str, Any] | None:
+        """Kept whole, nulls and all: the clip routes leave out empty top-level fields
+        (`response_model_exclude_none`), but inside these a null is a value the web app's schema
+        requires (a check question's `answerLatex`, a step's `latex`). Dropping them made every
+        entry with a check question unreadable (a 502), so it never reached the notebook."""
+        if value is None:
+            return None
+        # What was stored, as stored: explicit nulls kept, fields it never had left out.
+        return value.model_dump(mode="json", by_alias=True, exclude_unset=True)
 
 
 # ─── Where it goes (K3) ──────────────────────────────────────────────────────────────────────

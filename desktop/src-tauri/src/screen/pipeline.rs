@@ -15,9 +15,9 @@
 use std::time::Instant;
 
 use super::config::{CaptureScope, Privacy};
-use super::frame::{FrameDetail, FrameMeta, Timings};
+use super::frame::{FrameDetail, FrameMeta, ScreenRect, Timings};
 use super::image::{
-    downscale_bgra_to_bgr, downscale_bgra_to_gray, looks_blank, Pixels, MAX_LONG_SIDE,
+    dark_percent, downscale_bgra_to_bgr, downscale_bgra_to_gray, looks_blank, Pixels, MAX_LONG_SIDE,
 };
 use super::privacy::blocklist::is_blocked;
 use super::privacy::private_window::is_private_window;
@@ -127,9 +127,11 @@ pub fn run_on(
 
     let started = Instant::now();
     let mut hidden = Vec::new();
+    let mut unidentified = 0;
     if target.kind == super::frame::TargetKind::Monitor {
-        hidden = black_out_blocked_windows(&mut raw, target, privacy);
+        (hidden, unidentified) = black_out_blocked_windows(&mut raw, target, privacy);
     }
+    let blacked_percent = covered_percent(&hidden, raw.width, raw.height);
     let blacked_out = hidden.clone();
     let text = cover_sensitive_text(tools, &mut raw, target, privacy, hidden)?;
     let redact_ms = elapsed_ms(started);
@@ -137,6 +139,12 @@ pub fn run_on(
     let started = Instant::now();
     let small = downscale_bgra_to_bgr(&raw, MAX_LONG_SIDE);
     let downscale_ms = elapsed_ms(started);
+    // Numbers only: how much was blacked out for privacy, and how dark the frame came out.
+    eprintln!(
+        "[screen] frame: blacked out {blacked_percent}% ({} windows, {unidentified} unidentified), dark {}%",
+        blacked_out.len(),
+        dark_percent(&small)
+    );
 
     let started = Instant::now();
     let jpeg = encode_jpeg(&small).map_err(|_| ScreenError::Failed)?;
@@ -228,24 +236,104 @@ fn capture(tools: &mut Tools, target: &Target) -> Result<Pixels, ScreenError> {
 }
 
 /// Monitor captures can include other windows: black out any that belong to a blocked app or
-/// a private browser, or whose app we can't identify (decision 6). Returns what was covered.
+/// a private browser, or whose app we can't identify (decision 6), where they show. A blocked
+/// window behind others (Discord maximised behind the browser) is only blacked out where it
+/// isn't covered: covering all of it hid the whole screen. Only opaque windows count as
+/// covering (a see-through overlay never hides a blocked app). Returns what was covered, and
+/// how many windows couldn't be identified.
 fn black_out_blocked_windows(
     raw: &mut Pixels,
     target: &Target,
     privacy: &Privacy,
-) -> Vec<PixelRect> {
-    let rects: Vec<_> = target::visible_windows_over(target.bounds)
-        .into_iter()
-        .filter(|window| match &window.app {
+) -> (Vec<PixelRect>, usize) {
+    let windows = target::visible_windows_over(target.bounds);
+    let unidentified = windows.iter().filter(|w| w.app.is_none()).count();
+    let mut above: Vec<ScreenRect> = Vec::new();
+    let mut rects = Vec::new();
+    for window in &windows {
+        let hidden = match &window.app {
             Some(app) => {
                 is_blocked(app, &privacy.blocked_apps) || is_private_window(app, &window.title)
             }
             None => true,
-        })
-        .filter_map(|window| screen_to_pixels(window.bounds, target.bounds, raw.width, raw.height))
-        .collect();
+        };
+        if hidden {
+            rects.extend(
+                visible_parts(window.bounds, &above)
+                    .into_iter()
+                    .filter_map(|part| {
+                        screen_to_pixels(part, target.bounds, raw.width, raw.height)
+                    }),
+            );
+        }
+        if window.opaque {
+            above.push(window.bounds);
+        }
+    }
     fill(raw, &rects, BLACKED_OUT);
-    rects
+    (rects, unidentified)
+}
+
+/// What's left of `rect` once every rectangle in `covers` is taken out of it (as up to four
+/// pieces per cover, never overlapping).
+pub fn visible_parts(rect: ScreenRect, covers: &[ScreenRect]) -> Vec<ScreenRect> {
+    let mut parts = vec![rect];
+    for cover in covers {
+        let mut next = Vec::with_capacity(parts.len());
+        for part in parts {
+            if !target::overlaps(part, *cover) {
+                next.push(part);
+                continue;
+            }
+            // Above, below, then left and right of the cover, within the part.
+            if cover.top > part.top {
+                next.push(ScreenRect {
+                    bottom: cover.top,
+                    ..part
+                });
+            }
+            if cover.bottom < part.bottom {
+                next.push(ScreenRect {
+                    top: cover.bottom,
+                    ..part
+                });
+            }
+            let top = part.top.max(cover.top);
+            let bottom = part.bottom.min(cover.bottom);
+            if cover.left > part.left {
+                next.push(ScreenRect {
+                    top,
+                    bottom,
+                    right: cover.left,
+                    ..part
+                });
+            }
+            if cover.right < part.right {
+                next.push(ScreenRect {
+                    top,
+                    bottom,
+                    left: cover.right,
+                    ..part
+                });
+            }
+        }
+        parts = next;
+    }
+    parts
+}
+
+/// How much of a frame some rectangles cover, in percent (an estimate: overlaps count twice,
+/// capped at 100).
+fn covered_percent(rects: &[PixelRect], width: u32, height: u32) -> u64 {
+    let total = u64::from(width) * u64::from(height);
+    if total == 0 {
+        return 0;
+    }
+    let covered: u64 = rects
+        .iter()
+        .map(|r| u64::from(r.right - r.left) * u64::from(r.bottom - r.top))
+        .sum();
+    (covered * 100 / total).min(100)
 }
 
 /// Reads the text on screen, covers what the redaction rules ask for, and returns the text that
@@ -304,6 +392,45 @@ fn elapsed_ms(since: Instant) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rect(left: i32, top: i32, right: i32, bottom: i32) -> ScreenRect {
+        ScreenRect {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    fn area(parts: &[ScreenRect]) -> i64 {
+        parts
+            .iter()
+            .map(|r| i64::from(r.width()) * i64::from(r.height()))
+            .sum()
+    }
+
+    #[test]
+    fn a_blocked_window_behind_another_is_blacked_out_only_where_it_shows() {
+        let screen = rect(0, 0, 1920, 1080);
+        // Discord maximised behind a maximised browser: nothing of it shows.
+        assert!(visible_parts(screen, &[screen]).is_empty());
+        // Behind a window that covers the left half: only the right half shows.
+        let parts = visible_parts(screen, &[rect(0, 0, 960, 1080)]);
+        assert_eq!(parts, vec![rect(960, 0, 1920, 1080)]);
+        // A window in the middle: a frame of four pieces around it, never overlapping.
+        let parts = visible_parts(screen, &[rect(400, 300, 1400, 800)]);
+        assert_eq!(area(&parts), 1920 * 1080 - 1000 * 500);
+        for (i, a) in parts.iter().enumerate() {
+            for b in &parts[i + 1..] {
+                assert!(!target::overlaps(*a, *b), "{a:?} overlaps {b:?}");
+            }
+        }
+        // Nothing in front: all of it.
+        assert_eq!(visible_parts(screen, &[]), vec![screen]);
+        // Two covers: what neither hides.
+        let parts = visible_parts(screen, &[rect(0, 0, 960, 1080), rect(960, 0, 1920, 540)]);
+        assert_eq!(parts, vec![rect(960, 540, 1920, 1080)]);
+    }
 
     #[test]
     fn every_error_reads_as_plain_language() {

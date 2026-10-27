@@ -59,6 +59,24 @@ pub const PILL_SIZE: (f64, f64) = (300.0, 52.0);
 /// Size of the Circle & Ask card, in CSS pixels (room for a caption and its buttons, targets of
 /// at least 44 px: brief §4).
 pub const CARD_SIZE: (f64, f64) = (440.0, 236.0);
+/// The tallest the card grows to fit what it shows (its destination rows, a long caption, the
+/// follow-up box), in CSS pixels; past that the caption scrolls inside it.
+pub const CARD_MAX_HEIGHT: f64 = 560.0;
+
+/// The card's window once it fits a page `wanted` CSS pixels tall: as tall as that (between its
+/// usual height and `CARD_MAX_HEIGHT`), the same width and top, moved up only as far as it must
+/// to stay on the monitor (physical pixels).
+pub fn card_fit(window: ScreenRect, monitor: ScreenRect, wanted: f64, scale: f64) -> ScreenRect {
+    let css = wanted.clamp(CARD_SIZE.1, CARD_MAX_HEIGHT);
+    let height = ((css * scale).round() as i32).min(monitor.height());
+    let top = window.top.min(monitor.bottom - height).max(monitor.top);
+    ScreenRect {
+        left: window.left,
+        top,
+        right: window.right,
+        bottom: top + height,
+    }
+}
 
 impl Surface {
     pub const fn label(self) -> &'static str {
@@ -460,6 +478,37 @@ pub fn pill_spot(ink: ScreenRect, monitor: ScreenRect, scale: f64) -> ScreenRect
 mod tests {
     use super::*;
     use windows::Win32::UI::WindowsAndMessaging::{WS_CLIPSIBLINGS, WS_VISIBLE};
+
+    fn rect(left: i32, top: i32, right: i32, bottom: i32) -> ScreenRect {
+        ScreenRect {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    #[test]
+    fn the_card_grows_to_fit_what_it_shows_and_stays_on_the_monitor() {
+        let monitor = rect(0, 0, 1920, 1080);
+        let card = rect(1000, 300, 1440, 536); // 440 x 236 at 100 %
+                                               // The destination rows and a caption: taller, same top.
+        assert_eq!(
+            card_fit(card, monitor, 330.0, 1.0),
+            rect(1000, 300, 1440, 630)
+        );
+        // Never shorter than usual, never taller than the cap.
+        assert_eq!(card_fit(card, monitor, 100.0, 1.0), card);
+        assert_eq!(card_fit(card, monitor, 2000.0, 1.0).height(), 560);
+        // Near the bottom of the screen it moves up to fit.
+        let low = rect(1000, 900, 1440, 1136);
+        assert_eq!(
+            card_fit(low, monitor, 330.0, 1.0),
+            rect(1000, 750, 1440, 1080)
+        );
+        // At 150 % the CSS pixels are scaled.
+        assert_eq!(card_fit(card, monitor, 300.0, 1.5).height(), 450);
+    }
 
     #[test]
     fn overlays_lose_the_title_bar_and_keep_everything_else() {
