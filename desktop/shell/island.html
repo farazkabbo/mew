@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Neb</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/island.js" defer></script>
+  </head>
+  <body class="island">
+    <svg class="island-shape" aria-hidden="true"><path id="island-shape" /></svg>
+    <div class="island" id="island" data-activity="ready" data-open="false">
+      <div class="island-bar" role="toolbar" aria-label="Neb tools">
+        <p class="island-status" aria-live="polite">
+          <span class="island-dot" aria-hidden="true"></span><span id="island-activity">Neb</span>
+        </p>
+        <span class="island-gap" aria-hidden="true"></span>
+        <button
+          type="button"
+          data-tool="pen"
+          aria-pressed="false"
+          aria-label="Pen"
+          title="Pen: write on the screen"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 20l1.2-4.4L15.6 5.2a2 2 0 0 1 2.8 0l.4.4a2 2 0 0 1 0 2.8L8.4 18.8z" />
+            <path d="M13.8 7l3.2 3.2" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          data-tool="eraser"
+          aria-pressed="false"
+          aria-label="Eraser"
+          title="Eraser: rub out what you wrote"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M8.5 19.5L3.8 14.8a1.5 1.5 0 0 1 0-2.1l8.9-8.9a1.5 1.5 0 0 1 2.1 0l5.3 5.3a1.5 1.5 0 0 1 0 2.1l-8.2 8.3zM20 19.5H8.5"
+            />
+            <path d="M8 10.5l5.5 5.5" />
+          </svg>
+        </button>
+        <span class="island-divider" aria-hidden="true"></span>
+        <span class="island-split">
+          <button
+            type="button"
+            data-tool="select"
+            aria-pressed="false"
+            aria-label="Select what Neb looks at"
+            title="Select: draw round what Neb should look at"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" id="island-shape-icon"></svg>
+          </button>
+          <button
+            type="button"
+            class="island-caret"
+            id="island-caret"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            aria-label="Selection shape"
+            title="Selection shape"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5" /></svg>
+          </button>
+        </span>
+        <span class="island-divider" aria-hidden="true"></span>
+        <button
+          type="button"
+          id="island-mic"
+          class="island-mic"
+          aria-pressed="false"
+          aria-label="Microphone"
+          title="Microphone: click, speak, click again"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="island-clear"
+          aria-label="Clear"
+          title="Clear what's drawn on the screen"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="island-close"
+          aria-label="Close"
+          title="Hide (double-tap Ctrl+Alt)"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" /></svg>
+        </button>
+      </div>
+      <ul class="island-menu" id="island-menu" role="menu" aria-label="Selection shape" hidden></ul>
+      <p class="island-tip" id="island-tip" role="tooltip" hidden></p>
+    </div>
+  </body>
+</html>

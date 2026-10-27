@@ -22,6 +22,7 @@ const placeChips = document.getElementById("card-place-chips");
 const form = document.getElementById("card-ask") as HTMLFormElement | null;
 const input = document.getElementById("card-input") as HTMLInputElement | null;
 const buttons = document.getElementById("card-buttons");
+const mic = document.getElementById("card-mic") as HTMLButtonElement | null;
 
 let layout: CardLayout | null = null;
 let countdown = 0;
@@ -82,6 +83,8 @@ function render(next: CardLayout): void {
     ),
   );
   form.hidden = next.input === null;
+  // The mic is for questions (the ask bar and follow-ups), not the picker's search.
+  if (mic) mic.hidden = next.input?.action !== "ask";
   if (next.input) {
     input.placeholder = next.input.placeholder;
     input.value = next.input.value;
@@ -104,6 +107,21 @@ function render(next: CardLayout): void {
   startCountdown(next.countdown);
   fit();
 }
+
+// Click, speak, click again: the words are asked like typed ones (a follow-up, with the marks).
+mic?.addEventListener("click", () => {
+  void invoke("screen_circle_card", { action: "mic" }).catch(() => undefined);
+});
+
+on("mew:card-mic", (detail) => {
+  const listening = (detail as { on?: unknown } | null)?.on === true;
+  if (!mic || !input) return;
+  mic.setAttribute("aria-pressed", String(listening));
+  mic.setAttribute("aria-label", listening ? "Stop and ask" : "Say it instead");
+  input.placeholder = listening
+    ? "Listening… click the mic again to ask"
+    : (layout?.input?.placeholder ?? "");
+});
 
 input?.addEventListener("input", () => {
   showPlaces(input.value);

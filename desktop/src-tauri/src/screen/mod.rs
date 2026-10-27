@@ -35,10 +35,12 @@
 //!   5" against the student's own notebooks; the card shows where an entry goes, offers chips, a
 //!   picker and "Create it and save", and a saved entry moves when it's changed (`destination.rs`,
 //!   pure; `circle_answer.rs`).
-//! - K2, two-key shortcuts (docs/NOTEBOOKS_K.md §11): one global gesture, holding left Ctrl + left
-//!   Alt to circle and talk (or double-tapping them for draw mode), read by polling (`keys.rs`,
-//!   pure: `hold.rs`). Screen Coach registers no other global hotkey (Esc only while it shows
-//!   something).
+//! - K2, two-key shortcuts (docs/NOTEBOOKS_K.md §11): one global gesture on left Ctrl + left Alt,
+//!   read by polling (`keys.rs`, pure: `hold.rs`). Screen Coach registers no other global hotkey
+//!   (Esc only while it shows something).
+//! - The island (`screen_island.rs`, pure: `island.rs`): a double tap of Ctrl+Alt shows a bar at
+//!   the top of the screen with the pen, the eraser, select (freehand, rectangle, ellipse), the
+//!   microphone, Clear and Close. It replaced holding the keys to circle and talk.
 //!
 //! Where to start reading: `coach.rs` (`on_hold`: what the gesture does), then
 //! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
@@ -55,6 +57,7 @@ pub mod hold;
 pub mod image;
 pub mod ink;
 pub mod intent;
+pub mod island;
 pub mod marks;
 pub mod notes_marks;
 pub mod pointer;
@@ -88,6 +91,8 @@ pub mod coach_mode;
 #[cfg(windows)]
 pub mod keys;
 #[cfg(windows)]
+pub mod note_scroll;
+#[cfg(windows)]
 pub mod notes_check;
 #[cfg(windows)]
 pub mod overlay;
@@ -97,6 +102,8 @@ pub mod page;
 pub mod pipeline;
 #[cfg(windows)]
 pub mod reanchor;
+#[cfg(windows)]
+pub mod screen_island;
 #[cfg(windows)]
 pub mod screen_quiz;
 #[cfg(windows)]

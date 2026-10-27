@@ -26,6 +26,8 @@ export type CardAction =
   /** K3: "Create it and save". */
   | "create_place"
   | "place_cancel"
+  /** The ask box's mic: on to say the question (or follow-up), off to ask it. */
+  | "mic"
   /** The page needs this much height (its CSS pixels go as the text): the window follows. */
   | "fit";
 
@@ -137,7 +139,7 @@ export function cardLayout(detail: unknown): CardLayout | null {
         mode: "ask",
         top:
           note ??
-          (silent ? "Type a question, or just press Enter" : "Hold Ctrl+Alt to ask out loud"),
+          (silent ? "Type a question, or just press Enter" : "Or click the mic to ask out loud"),
         text: followUp ? `To check: ${followUp}` : "",
         chips: [],
         input: askBox("Ask about this…"),

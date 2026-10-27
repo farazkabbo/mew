@@ -1,5 +1,6 @@
 "use client";
 
+import type { Camera } from "@mew/ink";
 import type { ImageBlock } from "@mew/shared";
 import { Fragment, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
@@ -27,7 +28,8 @@ type Props = {
  * the note stays under its picture; only the notes take the pointer.
  */
 export function EntryNotes({ canvas, images }: Props) {
-  const layer = useRef<HTMLDivElement>(null);
+  const layer = useRef<HTMLDivElement | null>(null);
+  const camera = useRef<Camera | null>(null);
   const [replaying, setReplaying] = useState<{ imageId: string; step: ReplayStep | null } | null>(
     null,
   );
@@ -35,11 +37,18 @@ export function EntryNotes({ canvas, images }: Props) {
   const player = useRef<PcmStreamPlayer | null>(null);
 
   useEffect(() => {
-    return canvas.current?.onCamera(({ x, y, zoom }) => {
-      if (layer.current)
-        layer.current.style.transform = `scale(${zoom}) translate(${-x}px, ${-y}px)`;
+    return canvas.current?.onCamera((next) => {
+      camera.current = next;
+      follow(layer.current, next);
     });
   }, [canvas]);
+
+  // The layer only exists while the page has entries: when it appears, it takes the camera the
+  // page already has, or the notes would sit at the screen's origin until the next scroll.
+  const attach = useCallback((element: HTMLDivElement | null) => {
+    layer.current = element;
+    follow(element, camera.current);
+  }, []);
 
   // A replay never outlives the page it's on.
   useEffect(() => () => stop.current?.(), []);
@@ -89,7 +98,7 @@ export function EntryNotes({ canvas, images }: Props) {
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="entry-notes">
-      <div ref={layer} className="absolute top-0 left-0 origin-top-left">
+      <div ref={attach} className="absolute top-0 left-0 origin-top-left">
         {entries.map((image) => {
           const entry = image.entry;
           if (!entry) return null;
@@ -150,4 +159,10 @@ export function EntryNotes({ canvas, images }: Props) {
       </div>
     </div>
   );
+}
+
+/** Moves the notes with the page (one CSS transform, page units inside). */
+function follow(element: HTMLDivElement | null, camera: Camera | null) {
+  if (element && camera)
+    element.style.transform = `scale(${camera.zoom}) translate(${-camera.x}px, ${-camera.y}px)`;
 }

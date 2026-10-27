@@ -71,7 +71,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::annotate::{screen_ink_drawn, screen_ink_pill};
     use screen::ask::screen_coach_ask;
     use screen::circle::{
-        screen_circle_card, screen_draw_erase, screen_draw_mark, screen_draw_select,
+        screen_circle_card, screen_draw_erase, screen_draw_mark, screen_draw_note,
+        screen_draw_select,
     };
     use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
@@ -82,6 +83,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     };
     use screen::coach_mode::screen_coach_pill;
     use screen::notes_check::screen_notes_panel;
+    use screen::screen_island::screen_island;
     use screen::screen_quiz::screen_quiz_card;
     tauri::generate_handler![
         reminders::notify_due,
@@ -109,8 +111,10 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_draw_mark,
         screen_draw_erase,
         screen_draw_select,
+        screen_draw_note,
         screen_circle_card,
-        screen_quiz_card
+        screen_quiz_card,
+        screen_island
     ]
 }
 

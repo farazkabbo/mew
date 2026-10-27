@@ -373,6 +373,47 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     `quiz-view.ts`). The review's Quick check shows "From your screen: …" for these cards.
   - **To verify by hand:** "quiz me on this" on a lecture slide in the desktop app; answer one by
     voice, one typed and one picked; the cards in the next day's Quick check.
+- **The island and fixes** (2026-10-27, branch `fix/dynamic-island-and-fixes`; the owner's
+  request, overriding K2's hold gesture):
+  - **Island:** a black bar at the top centre of the screen (`screen/island.rs` pure,
+    `screen/screen_island.rs`, `Surface::Island`, `shell/island.html`, `overlay-src/island.ts`).
+    A double tap of Ctrl+Alt shows or hides it (during silent mode's keyboard drawing it still
+    ends that drawing). Buttons: status (Listening / Looking / Thinking / Speaking), Pen, Eraser,
+    Select with ▾ (freehand, rectangle, ellipse), Mic (click, speak, click again:
+    `coach::toggle_mic`, the hold's old listen/release path), Clear, Close. Holding Ctrl+Alt no
+    longer draws or talks with Screen Coach on (it still summons Neb when it's off or paused).
+  - **Look:** a black notch flush with the top edge (square top, round bottom corners), drawn by
+    its page as one SVG path (`island-view.ts` `notchPath`) in a transparent window that's always
+    tall enough for the shapes menu (the window never resizes); names show under the buttons on
+    hover (`data-tip`: system tooltips don't show in a never-activated window).
+  - **Every overlay has no non-client area:** `overlay::no_title_bar` subclasses each overlay's
+    window procedure to answer `WM_NCCALCSIZE` with none (tao writes title-bar styles back, and
+    that room showed as a white band, e.g. the draw overlay's over the island as a tool came on).
+    The island is also shown with `show_filled` (strip, resize, show) and Windows 11's border is
+    off (`drop_frame`).
+  - **Pen notes** live only on the draw overlay's page (never sent or captured); the draw overlay
+    shows without a session for them (`CircleState.board`). They follow the view under them as it
+    scrolls: `note_scroll.rs` finds that view in the app window under the note
+    (`target::app_window_at`, UI Automation's scroll pattern, `Automation::scroller_at`) and
+    reads only its scroll position (`island::scroll_offset`). Rectangle and ellipse selections
+    become closed-loop marks, drawn dotted (`island::shape_path`, `draw-view.ts` `shapeStroke`,
+    `Mark.dashed`). Choosing Select straight from the pen starts the session (`set_tool`). A
+    press that starts on the island is a click on it, never a stroke, and Rust passes it to the
+    page (`mew:island-press`), which acts once per press.
+  - The card and island windows are made when the tracker starts, so their pages have loaded
+    before their first view (a card made at the first mark showed empty).
+  - **Card mic:** the ask box (first question and follow-ups) has a mic toggle (`CardAction::Mic`,
+    `mew:card-mic`).
+  - **Ink snapping:** `packages/ink/src/tutor/screen/snap.ts` moves circles, underlines,
+    highlights and arrows aimed at text onto the OCR word boxes (`ScreenInkInput.words`; the
+    overlay passes its word obstacles). Prompt `circle-ask.v6` asks the model to start from the
+    given boxes.
+  - **Notebook:** `EntryNotes` mounts with the page's canvas (keyed by page), so the note under a
+    screen entry scrolls with the page instead of floating over it.
+  - **To verify by hand (Windows):** the island at 150 % and on a second monitor; its buttons
+    while Select is on (the draw overlay must stay under it); pen, eraser and Clear; a rectangle
+    and an ellipse selection, then the mic; the card's mic for a follow-up; an underline landing
+    under (not through) a line of a PDF question.
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
 - **Next:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.

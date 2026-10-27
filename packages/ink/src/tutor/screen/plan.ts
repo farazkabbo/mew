@@ -23,6 +23,7 @@ import type { Box } from "../typeset/box";
 import { typesetLatex } from "../typeset/latex-layout";
 import { typesetText } from "../typeset/text";
 import { RoughPen } from "../visuals/rough";
+import { snapLine, snapPoint, snapRegion } from "./snap";
 
 /**
  * Plans Screen Coach's ink on the student's screen (docs/SCREEN_COACH_S3.md §2): the same
@@ -57,6 +58,11 @@ export type ScreenInkInput = {
   bounds: BBox;
   /** On-screen text and other content to keep notes off. */
   obstacles: readonly BBox[];
+  /**
+   * The on-screen words (OCR boxes): circles, underlines, highlights and arrows aimed at text
+   * snap onto them (`snap.ts`). Leave out to draw exactly where the actions say.
+   */
+  words?: readonly BBox[] | undefined;
   /** Typical height of the text on screen (OCR word height); undefined when unknown. */
   textHeight?: number | undefined;
   /** Physical pixels per CSS pixel (monitor DPI / 96). */
@@ -188,6 +194,18 @@ class ScreenPlanner {
     this.rng = seededRandom(seedFrom(input.seed));
   }
 
+  private snapRegion(box: BBox): BBox {
+    return this.input.words ? snapRegion(box, this.input.words) : box;
+  }
+
+  private snapLine(box: BBox): BBox {
+    return this.input.words ? snapLine(box, this.input.words) : box;
+  }
+
+  private snapPoint(point: [number, number]): [number, number] {
+    return this.input.words ? snapPoint(point, this.input.words) : point;
+  }
+
   /** Keeps notes off a whole area (a video's picture). */
   block(box: BBox): void {
     this.grid.mark(inflateBBox(box, this.gap / 2));
@@ -200,7 +218,7 @@ class ScreenPlanner {
     const { frame, colors } = this.input;
     switch (action.type) {
       case "circle_region": {
-        const box = boxToPixels(action.box, frame);
+        const box = this.snapRegion(boxToPixels(action.box, frame));
         const color = action.tone === "question" ? (colors.question ?? colors.ink) : colors.ink;
         const ellipse = timed(ellipseAround(box, this.xHeight * 0.35, this.rng));
         const strokes = [this.stroke(ellipse, { color })];
@@ -211,7 +229,7 @@ class ScreenPlanner {
         return this.commit(strokes, action.type, index);
       }
       case "underline": {
-        const [x, y, w, h] = boxToPixels(action.box, frame);
+        const [x, y, w, h] = this.snapLine(boxToPixels(action.box, frame));
         return this.commit(
           [this.pen(wavyLine([x, y + h + this.xHeight * 0.2], w, this.xHeight * 0.06, this.rng))],
           action.type,
@@ -219,7 +237,7 @@ class ScreenPlanner {
         );
       }
       case "highlight": {
-        const [x, y, w, h] = boxToPixels(action.box, frame);
+        const [x, y, w, h] = this.snapLine(boxToPixels(action.box, frame));
         const width = Math.max(h * 0.95, this.xHeight);
         const points = wavyLine([x, y + h / 2], w, this.xHeight * 0.03, this.rng);
         return this.commit(
@@ -233,7 +251,10 @@ class ScreenPlanner {
         return this.commit([this.pen(tick)], action.type, index);
       }
       case "point_at": {
-        const arrow = this.arrowTo(pointToPixels(action.point, frame), action.label);
+        const arrow = this.arrowTo(
+          this.snapPoint(pointToPixels(action.point, frame)),
+          action.label,
+        );
         return this.commit(arrow.strokes, action.type, index, arrow.card);
       }
       case "sketch":
@@ -298,7 +319,7 @@ class ScreenPlanner {
       );
     }
     if (pointTo) {
-      const tip = pointToPixels(pointTo, frame);
+      const tip = this.snapPoint(pointToPixels(pointTo, frame));
       strokes.push(...this.arrowLine(nearestPointOn(card, tip), tip));
     }
     return this.commit(strokes, "sketch", index, card);

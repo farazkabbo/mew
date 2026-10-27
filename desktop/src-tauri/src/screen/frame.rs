@@ -33,6 +33,10 @@ impl ScreenRect {
     pub fn height(&self) -> i32 {
         self.bottom - self.top
     }
+    /// The point is inside (the right and bottom edges are outside).
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        (self.left..self.right).contains(&x) && (self.top..self.bottom).contains(&y)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]

@@ -18,6 +18,8 @@
 //!   focus only when clicked, to type. All excluded from captures; none sees pixels.
 //! - The quiz card ("quiz me on this", S6) shows a question, its choices and a box to type the
 //!   answer: like the Circle & Ask card, focused only when clicked, excluded from captures.
+//! - The island (Screen Coach's tools, at the top of the screen) is clickable but never focused,
+//!   like the progress pill, and excluded from captures.
 //! - The preview is an ordinary focused window: the only WebView that ever sees screen pixels,
 //!   and only for a clip the student asked to save (decision 2, S3 §5).
 //!
@@ -52,6 +54,8 @@ pub enum Surface {
     Card,
     /// "Quiz me on this" (S6): the question, its choices, a box to type the answer.
     Quiz,
+    /// The island: Screen Coach's tools in a bar at the top of the screen (`screen_island.rs`).
+    Island,
 }
 
 /// Size of the pill, in CSS pixels.
@@ -90,6 +94,7 @@ impl Surface {
             Surface::Draw => "screen-draw",
             Surface::Card => "screen-circle-card",
             Surface::Quiz => "screen-quiz-card",
+            Surface::Island => "screen-island",
         }
     }
 
@@ -104,6 +109,7 @@ impl Surface {
             Surface::Draw => "draw-overlay.html",
             Surface::Card => "circle-card.html",
             Surface::Quiz => "quiz-card.html",
+            Surface::Island => "island.html",
         }
     }
 }
@@ -159,6 +165,18 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
                 super::walkthrough::PILL_SIZE.0,
                 super::walkthrough::PILL_SIZE.1,
             ),
+        // Like the progress pill: clicked, never focused (the student's app keeps the keyboard).
+        Surface::Island => builder
+            .title("Neb")
+            .transparent(true)
+            .decorations(false)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            .focusable(false)
+            .inner_size(super::island::ISLAND_SIZE.0, super::island::ISLAND_SIZE.1),
         Surface::Pointer | Surface::Draw => builder
             .title("Neb")
             .transparent(true)
@@ -220,14 +238,105 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             return None;
         }
     };
-    // Click-through until told otherwise (the draw overlay, while the student draws).
-    if matches!(surface, Surface::Ink | Surface::Pointer | Surface::Draw) {
+    // Click-through until told otherwise (the draw overlay, while the student draws; the island
+    // once it shows: it's made like the draw overlay so its webview is truly transparent around
+    // its shape, and clicks on those clear pixels reach the app below).
+    if matches!(
+        surface,
+        Surface::Ink | Surface::Pointer | Surface::Draw | Surface::Island
+    ) {
         let _ = window.set_ignore_cursor_events(true);
     }
     if surface != Surface::Clip {
         exclude_from_capture(&window);
     }
+    if surface != Surface::Clip {
+        no_title_bar(&window);
+    }
     Some(window)
+}
+
+/// Each overlay's window procedure before ours (window handle, procedure).
+static PREVIOUS_PROCS: std::sync::Mutex<Vec<(isize, isize)>> = std::sync::Mutex::new(Vec::new());
+
+fn previous_proc(hwnd: HWND) -> isize {
+    let procs = PREVIOUS_PROCS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    procs
+        .iter()
+        .find(|(window, _)| *window == hwnd.0 as isize)
+        .map_or(0, |(_, previous)| *previous)
+}
+
+/// Keeps an overlay's whole area for its page, whatever styles it's given. Windows reserves room
+/// for a title bar and frame (the "non-client area") from the window's styles, which tao writes
+/// back whenever its own settings change; that room showed as a white band along the top (of
+/// the draw overlay, over the island, when a tool came on). Answering WM_NCCALCSIZE with "no
+/// room" means there's never any non-client area, and nothing of it is ever painted.
+fn no_title_bar<R: Runtime>(window: &WebviewWindow<R>) {
+    use windows::Win32::UI::WindowsAndMessaging::GWLP_WNDPROC;
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let raw = hwnd.0 as isize;
+    let _ = window.run_on_main_thread(move || {
+        let hwnd = HWND(raw as *mut _);
+        // SAFETY: a window of this process, on its own thread. The previous procedure is kept
+        // (and called for everything else) before ours is set; it stays valid for the window's
+        // life, which ends with the app.
+        unsafe {
+            if previous_proc(hwnd) != 0 {
+                return;
+            }
+            let previous = GetWindowLongPtrW(hwnd, GWLP_WNDPROC);
+            PREVIOUS_PROCS
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .push((raw, previous));
+            SetWindowLongPtrW(hwnd, GWLP_WNDPROC, overlay_proc as *const () as isize);
+            let _ = SetWindowPos(
+                hwnd,
+                None,
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+        }
+    });
+}
+
+/// An overlay's window procedure: no non-client area, ever; everything else as before.
+unsafe extern "system" fn overlay_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: windows::Win32::Foundation::WPARAM,
+    lparam: windows::Win32::Foundation::LPARAM,
+) -> windows::Win32::Foundation::LRESULT {
+    use windows::Win32::Foundation::LRESULT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CallWindowProcW, DefWindowProcW, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCPAINT, WNDPROC,
+    };
+    match msg {
+        // The client area is the whole window.
+        WM_NCCALCSIZE if wparam.0 != 0 => return LRESULT(0),
+        // Nothing outside it to paint.
+        WM_NCPAINT => return LRESULT(0),
+        WM_NCACTIVATE => return LRESULT(1),
+        _ => {}
+    }
+    let previous = previous_proc(hwnd);
+    // SAFETY: `previous` is the window's own procedure, saved when ours was set; a WNDPROC is
+    // a nullable function pointer the same size as isize.
+    unsafe {
+        if previous == 0 {
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
+        }
+        let previous: WNDPROC = std::mem::transmute::<isize, WNDPROC>(previous);
+        CallWindowProcW(previous, hwnd, msg, wparam, lparam)
+    }
 }
 
 /// Keeps a window out of every screen capture (ours, screen shares, recordings).
@@ -279,6 +388,66 @@ pub fn show_quietly<R: Runtime>(window: &WebviewWindow<R>) {
             );
         }
     });
+}
+
+/// Shows an overlay at `rect` (physical pixels) without activating it, its page filling the
+/// whole window. The title bar tao leaves on undecorated windows is taken off first, and the
+/// window is then sized (one pixel taller, then exact) so its webview is laid out again over
+/// the space the title bar had: otherwise that band stays the window's plain background (seen
+/// as a pale strip along the top of the island).
+pub fn show_filled<R: Runtime>(window: &WebviewWindow<R>, rect: ScreenRect) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let raw = hwnd.0 as isize;
+    let _ = window.run_on_main_thread(move || {
+        let hwnd = HWND(raw as *mut _);
+        strip_frame(hwnd);
+        let (w, h) = (rect.width().max(1), rect.height().max(1));
+        // SAFETY: a window of this process, on its own thread; no pointers.
+        unsafe {
+            let _ = SetWindowPos(
+                hwnd,
+                Some(HWND_TOPMOST),
+                rect.left,
+                rect.top,
+                w,
+                h + 1,
+                SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            );
+            let _ = SetWindowPos(
+                hwnd,
+                Some(HWND_TOPMOST),
+                rect.left,
+                rect.top,
+                w,
+                h,
+                SWP_NOACTIVATE,
+            );
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            log_client_area(hwnd);
+        }
+    });
+}
+
+/// Says whether a window's page has all of it (a title bar's room shows as a band otherwise).
+fn log_client_area(hwnd: HWND) {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::{GetClientRect, GetWindowRect};
+    let (mut window, mut client) = (RECT::default(), RECT::default());
+    // SAFETY: a window of this process; the rects are ours to fill.
+    let read = unsafe {
+        GetWindowRect(hwnd, &raw mut window).is_ok() && GetClientRect(hwnd, &raw mut client).is_ok()
+    };
+    if read {
+        eprintln!(
+            "[screen] overlay window {}x{}, page {}x{}",
+            window.right - window.left,
+            window.bottom - window.top,
+            client.right - client.left,
+            client.bottom - client.top
+        );
+    }
 }
 
 /// The title-bar styles an overlay must never have. tao keeps them on undecorated windows and
@@ -370,6 +539,40 @@ fn set_ex_style<R: Runtime>(window: &WebviewWindow<R>, bits: u32, on: bool) {
                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
                 );
             }
+        }
+    });
+}
+
+/// Turns off Windows 11's own border and rounded corners on an overlay drawn as a shape by its
+/// page (the island): without this a pale frame shows around it.
+pub fn drop_frame<R: Runtime>(window: &WebviewWindow<R>) {
+    use windows::Win32::Graphics::Dwm::{
+        DwmSetWindowAttribute, DWMWA_BORDER_COLOR, DWMWA_COLOR_NONE,
+        DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND,
+    };
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let raw = hwnd.0 as isize;
+    let _ = window.run_on_main_thread(move || {
+        let hwnd = HWND(raw as *mut _);
+        // SAFETY: a window of this process, on its own thread; the attribute values outlive the
+        // calls.
+        unsafe {
+            let corners = DWMWCP_DONOTROUND;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                (&raw const corners).cast(),
+                std::mem::size_of_val(&corners) as u32,
+            );
+            let none = DWMWA_COLOR_NONE;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR,
+                (&raw const none).cast(),
+                std::mem::size_of_val(&none) as u32,
+            );
         }
     });
 }

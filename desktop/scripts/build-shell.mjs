@@ -17,6 +17,7 @@ await build({
     "draw-overlay": "overlay-src/draw-overlay.ts",
     "circle-card": "overlay-src/circle-card.ts",
     "quiz-card": "overlay-src/quiz-card.ts",
+    island: "overlay-src/island.ts",
   },
   outdir: "shell/gen",
   bundle: true,

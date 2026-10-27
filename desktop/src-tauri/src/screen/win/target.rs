@@ -170,6 +170,43 @@ pub fn visible_windows_over(area: ScreenRect) -> Vec<VisibleWindow> {
         .collect()
 }
 
+/// The front-most window of another app at screen point (`x`, `y`): what's under Neb's overlays
+/// there (they're this process's, so they're skipped), even when Neb's card has the focus.
+pub fn app_window_at(x: i32, y: i32) -> Option<HWND> {
+    let mut handles: Vec<HWND> = Vec::new();
+    unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> windows::core::BOOL {
+        // SAFETY: `lparam` is the address of `handles` below, alive for the whole EnumWindows call.
+        let handles = unsafe { &mut *(lparam.0 as *mut Vec<HWND>) };
+        handles.push(hwnd);
+        true.into()
+    }
+    // SAFETY: the callback only runs during this call, while `handles` is alive.
+    let _ = unsafe {
+        EnumWindows(
+            Some(collect),
+            LPARAM(&mut handles as *mut Vec<HWND> as isize),
+        )
+    };
+    // SAFETY: no arguments.
+    let own_pid = unsafe { GetCurrentProcessId() };
+    handles.into_iter().find(|&hwnd| {
+        // SAFETY: plain value arguments; Windows validates the handle.
+        let shown =
+            unsafe { IsWindowVisible(hwnd) }.as_bool() && !unsafe { IsIconic(hwnd) }.as_bool();
+        let mut pid = 0u32;
+        // SAFETY: `pid` is a valid out pointer.
+        unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+        // SAFETY: as above.
+        let ex_style = unsafe { GetWindowLongW(hwnd, GWL_EXSTYLE) } as u32;
+        let see_through = ex_style & (WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0) != 0;
+        shown
+            && pid != own_pid
+            && !see_through
+            && !is_cloaked(hwnd)
+            && window_bounds(hwnd).is_some_and(|b| b.contains(x, y))
+    })
+}
+
 /// The monitor at a screen point (the nearest one), and its DPI.
 pub fn monitor_at(x: i32, y: i32) -> Option<(ScreenRect, u32)> {
     // SAFETY: plain value arguments.

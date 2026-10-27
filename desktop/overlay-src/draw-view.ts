@@ -6,7 +6,8 @@
 
 export type Pt = [number, number];
 export type Rect = [number, number, number, number];
-export type DrawMark = { number: number; points: Pt[] };
+/** `dashed`: a rectangle or ellipse from the island's select shapes (drawn dotted). */
+export type DrawMark = { number: number; points: Pt[]; dashed?: boolean };
 /** "keyboard": silent mode's keyboard drawing (§4): pick text blocks, or grow a box. */
 export type DrawMode = "draw" | "select" | "keyboard";
 export type DrawView = {
@@ -32,7 +33,7 @@ export function parseDrawView(detail: unknown): (Partial<DrawView> & { mode: Dra
     if (!Array.isArray(marks) || marks.length > MAX_MARKS) return null;
     const parsed: DrawMark[] = [];
     for (const mark of marks) {
-      const m = mark as { number?: unknown; points?: unknown };
+      const m = mark as { number?: unknown; points?: unknown; dashed?: unknown };
       if (
         !Number.isInteger(m.number) ||
         (m.number as number) < 1 ||
@@ -46,7 +47,11 @@ export function parseDrawView(detail: unknown): (Partial<DrawView> & { mode: Dra
         if (!Array.isArray(p) || p.length !== 2 || !p.every((v) => Number.isFinite(v))) return null;
         points.push([p[0] as number, p[1] as number]);
       }
-      parsed.push({ number: m.number as number, points });
+      parsed.push({
+        number: m.number as number,
+        points,
+        ...(m.dashed === true && { dashed: true }),
+      });
     }
     out.marks = parsed;
   }
@@ -136,4 +141,54 @@ export function rectPath([x, y, w, h]: Rect): [number, number, number][] {
       });
     })
     .concat([[x, y, 0.5]]);
+}
+
+/** The island's tool and select shape (`mew:draw-tool`). */
+export type DrawTool = "none" | "pen" | "eraser" | "select";
+export type DrawShape = "free" | "rect" | "ellipse";
+
+export function parseTool(detail: unknown): { tool: DrawTool; shape: DrawShape } | null {
+  if (typeof detail !== "object" || detail === null) return null;
+  const { tool, shape } = detail as Record<string, unknown>;
+  const tools: unknown[] = ["none", "pen", "eraser", "select"];
+  const shapes: unknown[] = ["free", "rect", "ellipse"];
+  if (!tools.includes(tool) || !shapes.includes(shape)) return null;
+  return { tool: tool as DrawTool, shape: shape as DrawShape };
+}
+
+/** An ellipse inside a rectangle as a closed path. */
+export function ellipsePath([x, y, w, h]: Rect): [number, number, number][] {
+  const [cx, cy, rx, ry] = [x + w / 2, y + h / 2, w / 2, h / 2];
+  return Array.from({ length: 49 }, (_, k) => {
+    const t = (k / 48) * Math.PI * 2;
+    return [cx + rx * Math.cos(t), cy + ry * Math.sin(t), 0.5] as [number, number, number];
+  });
+}
+
+/** The box between two points. */
+export function boxOf([x0, y0]: Pt, [x1, y1]: Pt): Rect {
+  return [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)];
+}
+
+/**
+ * A select stroke as the mark it makes: freehand as drawn, else the box (or ellipse) from its
+ * first point to its last; null for a shape too small to be one (the same rule as Rust's).
+ */
+export function shapeStroke(
+  shape: DrawShape,
+  stroke: readonly [number, number, number][],
+): [number, number, number][] | null {
+  const first = stroke[0];
+  const last = stroke[stroke.length - 1];
+  if (!first || !last) return null;
+  if (shape === "free") return [...stroke];
+  const box = boxOf([first[0], first[1]], [last[0], last[1]]);
+  if (box[2] < 4 || box[3] < 4) return null;
+  return shape === "rect" ? rectPath(box) : ellipsePath(box);
+}
+
+/** The notes with every stroke the eraser touched (within `radius` of `at`) taken out. */
+export function erase(notes: readonly Pt[][], at: Pt, radius: number): Pt[][] {
+  const near = ([x, y]: Pt) => Math.hypot(x - at[0], y - at[1]) <= radius;
+  return notes.filter((note) => !note.some(near));
 }

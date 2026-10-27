@@ -57,7 +57,7 @@ $("turn-on").addEventListener("click", async () => {
   const ok = await run(() =>
     invoke("screen_coach_set_enabled", { enabled: true, consentVersion: current.consentVersion }),
   );
-  if (ok) showNotice("Screen Coach is on. Hold Ctrl+Alt and ask about your screen.");
+  if (ok) showNotice("Screen Coach is on. Double-tap Ctrl+Alt for its tools.");
 });
 
 $("turn-off").addEventListener("click", async () => {

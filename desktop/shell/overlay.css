@@ -660,6 +660,52 @@ body.card {
 }
 
 .circle-card button:focus-visible,
+.card-ask {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.card-mic {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.card-mic svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.card-mic[aria-pressed="true"] {
+  background: #2e8b57;
+  border-color: #2e8b57;
+  color: #fff;
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+
+.card-ask[hidden],
+.card-mic[hidden] {
+  display: none;
+}
+
+@keyframes mic-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgba(46, 139, 87, 0.25);
+  }
+}
+
 .card-ask input:focus-visible {
   outline: 2px solid var(--violet-strong);
   outline-offset: 2px;
@@ -717,5 +763,234 @@ body.card {
   .mew-pointer .ears,
   .mew-pointer .face {
     fill: CanvasText;
+  }
+}
+
+/* ─── The island: Screen Coach's tools in a black bar at the top of the screen ─────────────── */
+
+/* The window is clipped to the island's shape by Rust (closed: a pill; open: a rounded box), so
+   the island fills it exactly and nothing pale can show at its corners. */
+html:has(body.island),
+body.island {
+  background: transparent;
+}
+
+body.island {
+  overflow: hidden;
+  color: #f5f5f7;
+  user-select: none;
+  color-scheme: dark;
+}
+
+/* The notch itself: one smooth shape filling the window (see notchPath). */
+.island-shape {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  fill: #000;
+}
+
+.island {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 4px;
+}
+
+.island-bar {
+  height: 58px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px 0 22px;
+}
+
+.island-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 96px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.island-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #8e8e93;
+  transition: background 200ms ease-out;
+}
+
+.island[data-activity="listening"] .island-dot {
+  background: #30d158;
+  animation: island-pulse 1.2s ease-in-out infinite;
+}
+.island[data-activity="looking"] .island-dot,
+.island[data-activity="thinking"] .island-dot {
+  background: var(--violet);
+  animation: island-pulse 1.2s ease-in-out infinite;
+}
+.island[data-activity="speaking"] .island-dot {
+  background: #5b8def;
+}
+
+@keyframes island-pulse {
+  50% {
+    transform: scale(1.5);
+    opacity: 0.6;
+  }
+}
+
+.island-gap {
+  flex: 1;
+}
+
+.island button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.island-bar button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  transition: background 120ms ease-out;
+}
+
+.island button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.island-bar button[aria-pressed="true"] {
+  background: #f5f5f7;
+  color: #000;
+}
+
+.island-bar button.island-mic[aria-pressed="true"] {
+  background: #30d158;
+  color: #000;
+}
+
+.island button:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+
+.island-bar svg,
+.island-menu svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.island-split {
+  display: flex;
+  align-items: center;
+}
+
+.island-bar button.island-caret {
+  width: 22px;
+}
+
+.island-caret svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 150ms ease-out;
+}
+
+.island[data-open="true"] .island-caret svg {
+  transform: rotate(180deg);
+}
+
+.island-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 6px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* A button's name, under the island after a moment's hover. */
+.island-tip {
+  position: fixed;
+  top: 64px;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #000;
+  color: #f5f5f7;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.island-tip[hidden] {
+  display: none;
+}
+
+/* The shapes: a row inside the island, under its tools. */
+.island-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 12px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.island-menu[hidden] {
+  display: none;
+}
+
+.island-menu li {
+  flex: 1;
+}
+
+.island-menu button {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.island-menu button[aria-checked="true"] {
+  background: #f5f5f7;
+  color: #000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .island-dot,
+  .card-mic[aria-pressed="true"] {
+    animation: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .island-shape {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .island-bar button[aria-pressed="true"] {
+    outline: 2px solid Highlight;
   }
 }

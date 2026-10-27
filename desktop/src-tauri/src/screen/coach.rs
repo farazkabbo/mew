@@ -29,10 +29,12 @@ use super::coach_mode::{self, CoachCapture, CoachState};
 use super::config::{self, CaptureScope, Loaded, Privacy, ScreenConfig, CONSENT_VERSION};
 use super::frame::{CapturedFrame, FrameMeta, FrameSlot, Timings, FRAME_TTL};
 use super::hold::HoldEvent;
+use super::island::Tool;
 use super::page;
 use super::pipeline::{self, Captured, Request, ScreenError, Tools};
 use super::privacy::blocklist::DEFAULT_BLOCKED_APPS;
 use super::privacy::MicAccess;
+use super::screen_island;
 use super::tray_badge::{with_badge, Status};
 use super::win::{self, credential, indicator, system, ComThread, Unsupported};
 
@@ -291,7 +293,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     if shortcuts_notice {
         notify(
             app,
-            "Shortcuts got simpler: hold Ctrl+Alt to circle and talk, and double-tap Ctrl+Alt              for draw mode. Screen Coach settings lists what changed.",
+            "Shortcuts got simpler: double-tap Ctrl+Alt for Neb's bar at the top of the screen (pen, select and the mic). Screen Coach settings lists what changed.",
         );
     }
     Ok(())
@@ -354,7 +356,8 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .window(Surface::Draw.label())
             .permission("allow-screen-draw-mark")
             .permission("allow-screen-draw-erase")
-            .permission("allow-screen-draw-select"),
+            .permission("allow-screen-draw-select")
+            .permission("allow-screen-draw-note"),
     )?;
     app.add_capability(
         CapabilityBuilder::new("screen-circle-card")
@@ -367,6 +370,12 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .local(true)
             .window(Surface::Quiz.label())
             .permission("allow-screen-quiz-card"),
+    )?;
+    app.add_capability(
+        CapabilityBuilder::new("screen-island")
+            .local(true)
+            .window(Surface::Island.label())
+            .permission("allow-screen-island"),
     )?;
     app.add_capability(
         CapabilityBuilder::new("screen-clip")
@@ -414,75 +423,125 @@ pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed:
     circle::on_shortcut(app, shortcut, pressed);
 }
 
-/// The hold gesture (K2, docs/NOTEBOOKS_K.md §11.1; read by `keys.rs`). Holding left Ctrl + left
-/// Alt draws and listens at the same time; on release, words said over marks ask about them,
-/// marks without words open the ask bar, and words without marks are asked about one capture of
-/// the screen, taken then. A double tap toggles draw mode. With Screen Coach off or paused, the
-/// hold summons Neb's own window instead (nothing on the screen is looked at).
+/// The Ctrl+Alt gesture (K2, docs/NOTEBOOKS_K.md §11.1; read by `keys.rs`). With Screen Coach
+/// on, a double tap shows or hides the island (`screen_island.rs`), whose buttons draw and listen.
+/// With Screen Coach off or paused, holding the keys summons Neb's own window instead (nothing on
+/// the screen is looked at).
 pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
     let coach = app.try_state::<ScreenCoach>();
-    let Some(coach) = coach.filter(|coach| usable(coach)) else {
+    if !coach.is_some_and(|coach| usable(&coach)) {
         if event == HoldEvent::Started {
             crate::summon(app);
         }
         return;
-    };
-    match event {
-        HoldEvent::Started => {
-            circle::set_hold(app, true);
-            let silent = circle_settings(app).silent;
-            let in_session = circle::takes_words(app);
-            if in_session {
-                circle::on_listen(app); // barge-in: the explanation stops
-            }
-            let mut state = coach.lock();
-            // Without a connection there is nothing to ask yet: drawing still works, and the
-            // release says how to connect.
-            if silent || !(state.connected || in_session) {
-                return;
-            }
-            state.talk_held = true;
-            state.hold_active = true;
-            state.hold_refused = false;
-            state.status = Status::Listening;
-            drop(state);
-            circle::set_listening(app, true);
-            page::dispatch(app, page::LISTEN, serde_json::Value::Null);
-            refresh(app);
-        }
-        HoldEvent::Ended | HoldEvent::Cancelled => {
-            circle::set_hold(app, false);
-            circle::set_listening(app, false);
-            let mut state = coach.lock();
-            state.talk_held = false;
-            let was_listening = std::mem::take(&mut state.hold_active);
-            if state.status == Status::Listening {
-                state.status = coach.resting_status(&state);
-            }
-            let connected = state.connected;
-            drop(state);
-            let marked = circle::takes_words(app);
-            if event == HoldEvent::Cancelled {
-                if was_listening {
-                    page::dispatch(app, page::CANCEL, serde_json::Value::Null);
-                }
-                circle::words_cancelled(app);
-            } else if was_listening {
-                // Words without marks are about the screen as it is now: one capture, which
-                // the page's question waits for (`ask.rs`).
-                if !marked && !capture(app, Origin::Hotkey, None) {
-                    coach.lock().hold_refused = true;
-                    page::dispatch(app, page::CANCEL, serde_json::Value::Null);
-                } else {
-                    page::dispatch(app, page::RELEASE, serde_json::Value::Null);
-                }
-            } else if !connected && !marked && !circle_settings(app).silent {
-                notify(app, "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.");
-            }
-            refresh(app);
-        }
-        HoldEvent::DoubleTap => circle::toggle_draw_mode(app),
     }
+    // The island has the tools and the microphone now: a double tap shows or hides it (or, while
+    // silent mode draws with the keyboard, ends that drawing, as it always has). Holding the keys
+    // does nothing with Screen Coach on.
+    if event == HoldEvent::DoubleTap {
+        if circle::keyboard_drawing(app) {
+            circle::set_tool(app, Tool::None);
+            screen_island::refresh(app);
+        } else {
+            screen_island::toggle(app);
+        }
+    }
+}
+
+/// The microphone is on (the island's or the card's mic button): the page is listening.
+pub fn mic_on<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<ScreenCoach>()
+        .is_some_and(|coach| coach.lock().hold_active)
+}
+
+/// The mic button: on to listen, off to ask with what was said (with the marks, if any, or else
+/// about the screen as it is now: one capture). The microphone used to follow the hold of
+/// Ctrl+Alt; it follows these clicks now, the same way.
+pub fn toggle_mic<R: Runtime>(app: &AppHandle<R>) {
+    if mic_on(app) {
+        mic_off(app, false);
+    } else {
+        mic_start(app);
+    }
+    // The card's mic button shows whether the microphone is on.
+    super::overlay::dispatch(
+        app,
+        super::overlay::Surface::Card,
+        "mew:card-mic",
+        &serde_json::json!({ "on": mic_on(app) }),
+    );
+    screen_island::refresh(app);
+}
+
+fn mic_start<R: Runtime>(app: &AppHandle<R>) {
+    let Some(coach) = app.try_state::<ScreenCoach>().filter(|coach| usable(coach)) else {
+        return;
+    };
+    if circle_settings(app).silent {
+        notify(
+            app,
+            "Voice is off in Screen Coach settings: type your question in the card.",
+        );
+        return;
+    }
+    let in_session = circle::takes_words(app);
+    if in_session {
+        circle::on_listen(app); // barge-in: the explanation stops
+    }
+    let mut state = coach.lock();
+    if !(state.connected || in_session) {
+        drop(state);
+        notify(
+            app,
+            "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
+        );
+        return;
+    }
+    state.talk_held = true;
+    state.hold_active = true;
+    state.hold_refused = false;
+    state.status = Status::Listening;
+    drop(state);
+    circle::start_tracker(app); // the pointer shows "listening"
+    circle::set_listening(app, true);
+    page::dispatch(app, page::LISTEN, serde_json::Value::Null);
+    refresh(app);
+}
+
+/// The microphone goes off: ask with the words, or (`cancelled`: the island closed) drop them.
+fn mic_off<R: Runtime>(app: &AppHandle<R>, cancelled: bool) {
+    let Some(coach) = app.try_state::<ScreenCoach>() else {
+        return;
+    };
+    circle::set_listening(app, false);
+    let mut state = coach.lock();
+    state.talk_held = false;
+    let was_listening = std::mem::take(&mut state.hold_active);
+    if state.status == Status::Listening {
+        state.status = coach.resting_status(&state);
+    }
+    drop(state);
+    if !was_listening {
+        return;
+    }
+    let marked = circle::takes_words(app);
+    if cancelled {
+        page::dispatch(app, page::CANCEL, serde_json::Value::Null);
+        circle::words_cancelled(app);
+    } else if !marked && !capture(app, Origin::Hotkey, None) {
+        // Words without marks are about the screen as it is now: one capture, which the page's
+        // question waits for (`ask.rs`).
+        coach.lock().hold_refused = true;
+        page::dispatch(app, page::CANCEL, serde_json::Value::Null);
+    } else {
+        page::dispatch(app, page::RELEASE, serde_json::Value::Null);
+    }
+    refresh(app);
+}
+
+/// The island closed while listening: the words are dropped.
+pub fn mic_cancel<R: Runtime>(app: &AppHandle<R>) {
+    mic_off(app, true);
 }
 
 /// The capture for this hold's words was refused or failed (the student was told why): taken
@@ -830,6 +889,7 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
         let _ = window.eval(CHANGED_SCRIPT);
     }
+    screen_island::refresh(app);
 }
 
 fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView, String> {

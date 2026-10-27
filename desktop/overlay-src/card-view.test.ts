@@ -5,7 +5,7 @@ import { type CardLayout, cardKey, cardLayout, filterPlaces } from "./card-view"
 describe("the Circle & Ask card", () => {
   it("asks, with the voice hint unless silent", () => {
     const ask = cardLayout({ mode: "ask", silent: false });
-    expect(ask?.top).toBe("Hold Ctrl+Alt to ask out loud");
+    expect(ask?.top).toBe("Or click the mic to ask out loud");
     expect(ask?.input).toMatchObject({ placeholder: "Ask about this…", action: "ask" });
     expect(ask?.buttons.map((b) => b.label)).toEqual(["Select question on screen", "Explain ↵"]);
     expect(cardLayout({ mode: "ask", silent: true })?.top).toBe(

@@ -820,7 +820,11 @@ export function NotebookApp({ userId }: { userId: string }) {
           />
         </div>
 
-        {engine && <EntryNotes canvas={canvas} images={engine.images} />}
+        {/* Mounted with the page's canvas (keyed by page), so the notes subscribe to the camera
+            of the canvas that's actually shown and scroll with the page, never over it. */}
+        {engine && view === "page" && engine.pageId === pageId && (
+          <EntryNotes key={engine.pageId} canvas={canvas} images={engine.images} />
+        )}
 
         {engine && view === "page" && <SourceHighlight canvas={canvas} images={engine.images} />}
 

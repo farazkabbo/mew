@@ -1,12 +1,17 @@
 import {
+  type DrawShape,
+  type DrawTool,
   type DrawView,
+  erase,
   MAX_POINTS,
   parseBox,
   parseDrawView,
   parseLive,
+  parseTool,
   type Pt,
   type Rect,
   rectPath,
+  shapeStroke,
 } from "./draw-view";
 import { invoke, on } from "./tauri";
 
@@ -22,6 +27,11 @@ import { invoke, on } from "./tauri";
  * get it), which sends the stroke or box as it's dragged; this page draws pen and touch itself
  * (they report pressure) and ignores the mouse.
  *
+ * The island's tool says what a stroke is: select makes a mark (freehand, or a rectangle or
+ * ellipse from where the drag began to where it ends); the pen writes the student's own notes,
+ * which stay on this page only (never sent, never captured: this window is excluded from
+ * captures); the eraser rubs out the notes it touches.
+ *
  * Keyboard drawing (silent mode, §4): Tab and Shift+Tab move between the screen's text blocks
  * (nearest the pointer first), Space marks the highlighted one; Shift+arrows grow a box from the
  * pointer and Enter marks it. Each change is announced (the hint is a live region).
@@ -29,6 +39,10 @@ import { invoke, on } from "./tauri";
 
 /** Red: stands out from the screen's blue text selection (and from the tutor's ink). */
 const STUDENT_INK = "#e02424";
+/** The student's own notes: blue, like a pen, and unlike the marks Neb looks at. */
+const NOTE_INK = "#1f6feb";
+/** How near the eraser must come to a note to rub it out (CSS px). */
+const ERASE_RADIUS = 14;
 const GREY_INK = "#9a9a9a";
 const FADE_MS = 200;
 
@@ -53,6 +67,17 @@ const GROW = 16;
 let stroke: [number, number, number][] | null = null;
 /** The box being dragged in select mode. */
 let box: { from: Pt; to: Pt } | null = null;
+/** The island's tool and select shape, and the student's notes (pen strokes). */
+let tool: DrawTool = "none";
+let shape: DrawShape = "free";
+let notes: Pt[][] = [];
+/**
+ * How far the page under the notes has scrolled since they were begun (CSS px, from Rust's
+ * `note_scroll.rs`): notes are kept where they'd be with no scrolling and drawn moved by this,
+ * so they stay on what they were written on.
+ */
+let shift: Pt = [0, 0];
+const shifted = (note: readonly Pt[]): Pt[] => note.map(([x, y]) => [x + shift[0], y + shift[1]]);
 
 function resize(): void {
   if (!canvas) return;
@@ -67,15 +92,26 @@ function paint(): void {
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const ink = view.grey ? GREY_INK : STUDENT_INK;
+  for (const note of notes) line(shifted(note), NOTE_INK);
   for (const mark of view.marks) {
-    line(mark.points, ink);
+    line(mark.points, ink, mark.dashed === true);
     badge(mark.number, mark.points[0], ink);
   }
-  if (stroke)
+  if (stroke && tool === "pen")
     line(
       stroke.map(([x, y]) => [x, y] as Pt),
-      ink,
+      NOTE_INK,
     );
+  else if (stroke && tool !== "eraser") {
+    // A rectangle or ellipse shows its shape as it's dragged.
+    const shaped = tool === "select" && shape !== "free";
+    const drawn = shaped ? shapeStroke(shape, stroke) : stroke;
+    line(
+      (drawn ?? stroke).map(([x, y]) => [x, y] as Pt),
+      ink,
+      shaped,
+    );
+  }
   if (view.mode === "keyboard") {
     const block = view.blocks[highlighted];
     ctx.lineWidth = 3;
@@ -120,7 +156,7 @@ window.addEventListener("keydown", (event) => {
     const block = blocks[highlighted];
     if (block) {
       markRect(block);
-      announce("Marked. Tab to another, or double-tap Ctrl+Alt to ask.");
+      announce("Marked. Tab to another, or double-tap Ctrl+Alt to stop drawing and ask.");
     }
   } else if (event.shiftKey && event.key.startsWith("Arrow")) {
     event.preventDefault();
@@ -139,13 +175,17 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     markRect(keyBox);
     keyBox = null;
-    announce("Marked. Double-tap Ctrl+Alt to ask.");
+    announce("Marked. Double-tap Ctrl+Alt to stop drawing and ask.");
   }
   paint();
 });
 
-function line(points: readonly Pt[], color: string): void {
+/** Dots and gaps for a rectangle or ellipse (CSS px). */
+const DOTTED = [2, 7];
+
+function line(points: readonly Pt[], color: string, dotted = false): void {
   if (!ctx || points.length === 0) return;
+  ctx.setLineDash(dotted ? DOTTED : []);
   ctx.lineWidth = 3;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -159,6 +199,7 @@ function line(points: readonly Pt[], color: string): void {
   // A tap is one point: a dot.
   if (points.length === 1 && only) ctx.lineTo(only[0] + 0.1, only[1]);
   ctx.stroke();
+  ctx.setLineDash([]);
 }
 
 /** The mark's number in a small circle by where it starts (brief §2.2). */
@@ -187,15 +228,27 @@ function isEraser(event: PointerEvent): boolean {
   return event.pointerType === "pen" && (event.button === 5 || (event.buttons & 32) !== 0);
 }
 
+/** The eraser passed `at`: the notes it touched go. */
+function rubOut(at: Pt): void {
+  const left = erase(notes, [at[0] - shift[0], at[1] - shift[1]], ERASE_RADIUS);
+  if (left.length !== notes.length) notes = left;
+}
+
 window.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "mouse") return; // Rust reads the mouse
+  if (isEraser(event) && tool === "pen") {
+    rubOut([event.clientX, event.clientY]);
+    paint();
+    return;
+  }
   if (isEraser(event)) {
     void invoke("screen_draw_erase").catch(() => undefined);
     return;
   }
   if (view.mode === "select") {
     box = { from: [event.clientX, event.clientY], to: [event.clientX, event.clientY] };
-  } else if (view.drawing && !view.grey) {
+  } else if (view.drawing && (!view.grey || tool === "pen" || tool === "eraser")) {
+    // Notes are never looked at, so a refused app only stops marks.
     stroke = [point(event)];
   }
   window.addEventListener("pointermove", onMove);
@@ -213,7 +266,10 @@ function onMove(event: PointerEvent): void {
     } catch {
       events = [];
     }
-    for (const each of events.length > 0 ? events : [event]) stroke.push(point(each));
+    for (const each of events.length > 0 ? events : [event]) {
+      stroke.push(point(each));
+      if (tool === "eraser") rubOut([each.clientX, each.clientY]);
+    }
   }
   paint();
 }
@@ -228,12 +284,35 @@ window.addEventListener("pointerup", (event) => {
     box = null;
     const rect = [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)];
     void invoke("screen_draw_select", { rect }).catch(() => undefined);
+  } else if (stroke && (tool === "pen" || tool === "eraser")) {
+    // Rust didn't see this one (pen and touch are the page's): it's told where the note began,
+    // to follow the page under it as it scrolls.
+    const [first] = stroke;
+    if (tool === "pen" && first) {
+      void invoke("screen_draw_note", { at: [first[0], first[1]] }).catch(() => undefined);
+    }
+    endNote();
   } else if (stroke) {
-    void invoke("screen_draw_mark", { stroke: { points: stroke } }).catch(() => undefined);
+    const marked = shapeStroke(tool === "select" ? shape : "free", stroke);
+    if (marked) {
+      const dashed = tool === "select" && shape !== "free";
+      void invoke("screen_draw_mark", { stroke: { points: marked, dashed } }).catch(
+        () => undefined,
+      );
+    }
     // Kept on screen until Rust's view (with the mark understood and numbered) arrives.
+    if (!marked) stroke = null;
   }
   paint();
 });
+
+/** A pen or eraser stroke ended: the pen's becomes a note (on this page only). */
+function endNote(): void {
+  if (stroke && tool === "pen" && stroke.length > 0) {
+    notes = [...notes, stroke.map(([x, y]) => [x - shift[0], y - shift[1]] as Pt)];
+  }
+  stroke = null;
+}
 
 on("mew:draw-show", (detail) => {
   const next = parseDrawView(detail);
@@ -269,7 +348,43 @@ on("mew:draw-live", (detail) => {
   const live = parseLive(detail);
   if (!live) return;
   if (live.start || !stroke) stroke = [];
-  for (const [x, y] of live.points) if (stroke.length < MAX_POINTS) stroke.push([x, y, 0.5]);
+  for (const [x, y] of live.points) {
+    if (stroke.length < MAX_POINTS) stroke.push([x, y, 0.5]);
+    if (tool === "eraser") rubOut([x, y]);
+  }
+  paint();
+});
+
+// The island's tool and select shape.
+on("mew:draw-tool", (detail) => {
+  const next = parseTool(detail);
+  if (!next) return;
+  if (next.tool !== tool) stroke = null;
+  ({ tool, shape } = next);
+  document.body.dataset.tool = tool;
+  paint();
+});
+
+// A mouse stroke of the pen or eraser ended (Rust reads the mouse).
+on("mew:draw-note-end", () => {
+  endNote();
+  paint();
+});
+
+// The page under the notes scrolled: they move with it.
+on("mew:draw-notes-shift", (detail) => {
+  const { dx, dy } = (detail ?? {}) as { dx?: unknown; dy?: unknown };
+  if (typeof dx !== "number" || typeof dy !== "number") return;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  shift = [dx, dy];
+  paint();
+});
+
+// The island's Clear (or Close): the notes go.
+on("mew:draw-clear-notes", () => {
+  notes = [];
+  shift = [0, 0];
+  stroke = null;
   paint();
 });
 
@@ -284,6 +399,7 @@ on("mew:draw-box", (detail) => {
 on("mew:draw-fade", () => {
   canvas?.classList.add("faded");
   window.setTimeout(() => {
+    // Only the marks fade (the content moved); the student's notes stay until cleared.
     view = { ...view, marks: [] };
     stroke = null;
     canvas?.classList.remove("faded");

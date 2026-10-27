@@ -107,6 +107,8 @@ function paint(request: InkRequest): void {
     frame: request.frame,
     bounds: request.bounds,
     obstacles: [...request.obstacles, ...earlier.boxes],
+    // The desktop's obstacles are the on-screen words: the model's targets snap onto them.
+    words: request.obstacles,
     textHeight: request.textHeight,
     scale: request.scale,
     seed: request.seed,

@@ -3,9 +3,10 @@
 //!
 //! This module holds a **session** (one set of marks, its capture, its questions) and everything
 //! up to asking:
-//! 1. A tracker thread (`run_tracker`) follows the cursor with the pointer. The hold gesture
-//!    (left Ctrl + left Alt held, polled by `keys.rs`: decision 11, K2) or a double tap of them
-//!    turns draw mode on: the draw overlay takes the mouse, pen and touch.
+//! 1. A tracker thread (`run_tracker`) follows the cursor with the pointer. A tool on the island
+//!    (`screen_island.rs`: the pen, the eraser or select) turns draw mode on: the draw overlay
+//!    takes the mouse, pen and touch. Select draws marks (freehand, a rectangle or an ellipse);
+//!    the pen and eraser draw the student's own notes, which stay on the overlay's page.
 //! 2. The first mark starts a session: the privacy checks run as drawing begins; when the mark is
 //!    finished, the monitor under it is captured once (the usual pipeline: blocked windows
 //!    blacked out, redaction) and watched, so the marks fade if the content moves.
@@ -30,6 +31,7 @@ use super::coach::{self, ScreenCoach};
 use super::destination::save_to_phrase;
 use super::drag::{Drag, DragLook};
 use super::frame::ScreenRect;
+use super::island::{shape_path, Shape, Tool};
 use super::marks::{self, MarkKind, Pt, WordBox, MAX_MARKS};
 use super::overlay::{self, require_surface, Surface};
 use super::pipeline::Captured;
@@ -44,6 +46,10 @@ const DRAW_FADE: &str = "mew:draw-fade";
 /// The mouse stroke (or question box) being dragged, read by the tracker (`drag.rs`).
 const DRAW_LIVE: &str = "mew:draw-live";
 const DRAW_BOX: &str = "mew:draw-box";
+/// The island's tool and shape; a mouse stroke of the pen or eraser ended; the notes go.
+const DRAW_TOOL: &str = "mew:draw-tool";
+const DRAW_NOTE_END: &str = "mew:draw-note-end";
+const DRAW_CLEAR_NOTES: &str = "mew:draw-clear-notes";
 /// Pointer page events (desktop/overlay-src/pointer.ts).
 const POINTER_LOOK: &str = "mew:pointer-look";
 /// Card page events (desktop/overlay-src/circle-card.ts).
@@ -71,6 +77,8 @@ pub(super) struct Mark {
     /// The words it's about (indexes into the capture's words), once there's a capture.
     pub targets: Vec<usize>,
     pub region: Option<ScreenRect>,
+    /// A select shape (rectangle or ellipse): drawn dotted.
+    pub dashed: bool,
 }
 
 /// Where a session is.
@@ -131,12 +139,19 @@ impl Session {
 
 #[derive(Default)]
 pub struct CircleState {
-    /// The hold gesture is down (K2).
-    hold: bool,
-    /// The hold is listening (voice on): the pointer says so.
+    /// The microphone is listening (voice on): the pointer says so.
     listening: bool,
-    /// A double tap turned draw mode on (pen and touch).
-    draw_toggle: bool,
+    /// The island's tool (draw mode is on for any but None) and the select shape.
+    tool: Tool,
+    shape: Shape,
+    /// The monitor the draw overlay is on, and its DPI (a session's, or the pen's).
+    board: Option<(ScreenRect, u32)>,
+    /// The student's notes (pen) are on the draw overlay: it stays shown.
+    noted: bool,
+    /// Where the island is on screen while it shows: a drag that starts there is a click on it.
+    pub(super) island: Option<ScreenRect>,
+    /// The mouse button was down over the island at the last look (a press there is a click).
+    island_down: bool,
     /// Keyboard drawing (silent mode): the window that had the focus, to give it back.
     keyboard: Option<isize>,
     /// Draw mode is on right now (the keys or the toggle).
@@ -199,6 +214,10 @@ pub fn start_tracker<R: Runtime>(app: &AppHandle<R>) {
 fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
     let pointer = overlay::ensure(app, Surface::Pointer);
     let _ = overlay::ensure(app, Surface::Draw);
+    // Made now, so their pages have loaded by the time they're first shown (a card made at the
+    // first mark missed what it was sent, and showed empty).
+    let _ = overlay::ensure(app, Surface::Card);
+    let _ = overlay::ensure(app, Surface::Island);
     let mut last_cursor = None;
     let mut moved_at = Instant::now() - MOVING_FOR;
     let mut hide = Hide::default();
@@ -209,7 +228,7 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
         let now = Instant::now();
         let drawing = state(app).map(|mut s| {
             // A stroke keeps draw mode on until it ends (the keys often come up first).
-            let drawing = s.hold || s.draw_toggle || s.drag.active();
+            let drawing = s.tool.draws() || s.drag.active();
             let changed = drawing != s.drawing;
             s.drawing = drawing;
             (drawing, changed)
@@ -275,15 +294,16 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
     end_session(app);
     if let Some(mut state) = state(app) {
         state.tracker_running = false;
-        state.hold = false;
         state.listening = false;
         state.drawing = false;
-        state.draw_toggle = false;
+        state.tool = Tool::None;
+        state.island = None;
         state.keyboard = None;
         state.selecting = false;
         state.drag.cancel();
     }
     set_drawing(app, false);
+    overlay::hide_quietly_named(app, Surface::Island);
 }
 
 /// One look at the mouse (`drag.rs`) while draw mode or "select question" is on: shows the stroke
@@ -291,7 +311,33 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
 /// True while a drag is in progress.
 fn track_drag<R: Runtime>(app: &AppHandle<R>, cursor: Option<(i32, i32)>) -> bool {
     let down = input::primary_button_down();
-    let (look, selecting, from) = {
+    // A press on the island while draw mode is on is a click on its buttons, never a stroke.
+    // Its page may not see the click (the draw overlay takes the mouse, and a never-activated
+    // window's webview doesn't reliably get it), so the press is passed on (the page ignores a
+    // second click on the same button).
+    let island_press = {
+        let Some(mut s) = state(app) else {
+            return false;
+        };
+        let listening = (s.drawing && s.keyboard.is_none()) || s.selecting;
+        let over = cursor.filter(|&(x, y)| s.island.is_some_and(|r| r.contains(x, y)));
+        let pressed = down && !s.island_down;
+        s.island_down = down;
+        match over {
+            Some(at) if listening && !s.drag.active() => {
+                s.drag = Drag::new(down);
+                Some(pressed.then_some(at))
+            }
+            _ => None,
+        }
+    };
+    if let Some(press) = island_press {
+        if let Some((x, y)) = press {
+            super::screen_island::press(app, x, y);
+        }
+        return false;
+    }
+    let (look, selecting, from, tool, shape) = {
         let Some(mut s) = state(app) else {
             return false;
         };
@@ -304,12 +350,11 @@ fn track_drag<R: Runtime>(app: &AppHandle<R>, cursor: Option<(i32, i32)>) -> boo
         if look != DragLook::Idle {
             s.dragged_at = Some(Instant::now());
         }
-        (look, s.selecting, s.drag.first())
+        (look, s.selecting, s.drag.first(), s.tool, s.shape)
     };
     let to_css = |points: &[Pt]| {
-        with_session(app, |s| {
-            let scale = s.scale() as f32;
-            let (left, top) = (s.monitor.left as f32, s.monitor.top as f32);
+        board(app).map(|(monitor, scale)| {
+            let (left, top) = (monitor.left as f32, monitor.top as f32);
             points
                 .iter()
                 .map(|(x, y)| [(x - left) / scale, (y - top) / scale])
@@ -330,7 +375,9 @@ fn track_drag<R: Runtime>(app: &AppHandle<R>, cursor: Option<(i32, i32)>) -> boo
             }
         }
         DragLook::Started(at) | DragLook::Moved(at) => {
-            let refused = with_session(app, |s| s.refused.is_some()).unwrap_or(true);
+            // The student's own notes are never looked at: only marks can be refused.
+            let refused =
+                !tool.annotates() && with_session(app, |s| s.refused.is_some()).unwrap_or(true);
             if let (false, Some(css)) = (refused, to_css(&[at])) {
                 overlay::dispatch(
                     app,
@@ -341,9 +388,20 @@ fn track_drag<R: Runtime>(app: &AppHandle<R>, cursor: Option<(i32, i32)>) -> boo
             }
         }
         DragLook::Finished(points) if selecting => select_dragged(app, &points),
+        DragLook::Finished(points) if tool.annotates() => {
+            if let (Tool::Pen, Some(&(x, y))) = (tool, points.first()) {
+                note_written(app, (x as i32, y as i32));
+            }
+            overlay::dispatch(app, Surface::Draw, DRAW_NOTE_END, &json!({}));
+        }
         DragLook::Finished(points) => {
-            if let Some(points) = with_session(app, |s| on_monitor(s.monitor, points)) {
-                add_mark(app, points);
+            let marked = shape_path(shape, &points)
+                .and_then(|points| with_session(app, |s| on_monitor(s.monitor, points)));
+            if let Some(points) = marked {
+                add_mark(app, points, shape != Shape::Free);
+            } else {
+                // A shape too small to be one: what was drawn of it goes.
+                show_marks(app);
             }
         }
     }
@@ -410,40 +468,178 @@ fn update_look<R: Runtime>(app: &AppHandle<R>, drawing: bool) {
 
 // ─── Draw mode ───────────────────────────────────────────────────────────────────────────────
 
-/// The hold gesture went down or up (K2): draw mode follows it (the tracker reads this).
-pub fn set_hold<R: Runtime>(app: &AppHandle<R>, held: bool) {
-    if held {
-        start_tracker(app);
-    }
-    if let Some(mut state) = state(app) {
-        state.hold = held;
-    }
-}
-
-/// The hold is listening for words (the pointer shows "listening").
+/// The microphone is listening for words (the pointer shows "listening").
 pub fn set_listening<R: Runtime>(app: &AppHandle<R>, listening: bool) {
     if let Some(mut state) = state(app) {
         state.listening = listening;
     }
 }
 
-/// A double tap of Ctrl+Alt (K2; it was Ctrl+Alt+D): draw mode on or off, for pen and touch,
-/// which can't hold keys. In silent mode it also draws with the keyboard (§4): the draw overlay
-/// takes the keyboard while it's on.
-pub fn toggle_draw_mode<R: Runtime>(app: &AppHandle<R>) {
+/// The island's tool and select shape now.
+pub fn tool<R: Runtime>(app: &AppHandle<R>) -> (Tool, Shape) {
+    state(app).map_or((Tool::None, Shape::Free), |s| (s.tool, s.shape))
+}
+
+/// Keyboard drawing is on (silent mode's select tool).
+pub fn keyboard_drawing<R: Runtime>(app: &AppHandle<R>) -> bool {
+    state(app).is_some_and(|s| s.keyboard.is_some())
+}
+
+/// The island picked a tool (or none): draw mode follows it (the tracker reads this). Select in
+/// silent mode draws with the keyboard (§4): the draw overlay takes the keyboard while it's on.
+/// The pen and eraser show the draw overlay on the monitor under the cursor without a session:
+/// the student's notes are never captured or sent.
+pub fn set_tool<R: Runtime>(app: &AppHandle<R>, tool: Tool) {
     start_tracker(app);
-    let keyboard = coach::circle_settings(app).silent;
-    let now_on = state(app).map(|mut s| {
-        s.draw_toggle = !s.draw_toggle;
-        if s.draw_toggle && keyboard {
+    let keyboard = tool == Tool::Select && coach::circle_settings(app).silent;
+    let was_keyboard = state(app).map(|mut s| {
+        s.tool = tool;
+        let was = s.keyboard.is_some();
+        if keyboard && !was {
             s.keyboard = Some(input::foreground());
         }
-        s.draw_toggle
+        was
     });
-    match now_on {
-        Some(true) if keyboard => start_keyboard_drawing(app),
-        Some(false) => end_keyboard_drawing(app),
+    match was_keyboard {
+        Some(false) if keyboard => start_keyboard_drawing(app),
+        Some(true) if !keyboard => end_keyboard_drawing(app),
         _ => {}
+    }
+    if tool.annotates() {
+        show_board(app);
+    }
+    // Select marks need a session. Draw mode coming on starts one (`set_drawing`), but not when
+    // it was already on for the pen or eraser: then it starts here.
+    if tool == Tool::Select {
+        if let Some(window) = app.get_webview_window(Surface::Draw.label()) {
+            begin_session_if_needed(app, &window);
+        }
+    }
+    send_tool(app);
+}
+
+/// The select shape (freehand, rectangle, ellipse).
+pub fn set_shape<R: Runtime>(app: &AppHandle<R>, shape: Shape) {
+    if let Some(mut state) = state(app) {
+        state.shape = shape;
+    }
+    send_tool(app);
+}
+
+fn send_tool<R: Runtime>(app: &AppHandle<R>) {
+    let (tool, shape) = tool(app);
+    overlay::dispatch(
+        app,
+        Surface::Draw,
+        DRAW_TOOL,
+        &json!({ "tool": tool, "shape": shape }),
+    );
+}
+
+/// The draw overlay's monitor and scale (physical pixels per CSS pixel), once it's placed.
+fn board<R: Runtime>(app: &AppHandle<R>) -> Option<(ScreenRect, f32)> {
+    let s = state(app)?;
+    s.session
+        .as_ref()
+        .map(|session| (session.monitor, session.scale() as f32))
+        .or_else(|| {
+            s.board
+                .map(|(monitor, dpi)| (monitor, dpi.max(96) as f32 / 96.0))
+        })
+}
+
+/// Shows the draw overlay for the pen: where a session already has it, or else on the monitor
+/// under the cursor (the notes go if it moves to another monitor).
+fn show_board<R: Runtime>(app: &AppHandle<R>) {
+    let Some(window) = app.get_webview_window(Surface::Draw.label()) else {
+        return;
+    };
+    if state(app).is_some_and(|s| s.session.is_some()) {
+        return;
+    }
+    let Some((x, y)) = input::cursor() else {
+        return;
+    };
+    let Some((monitor, dpi)) = target::monitor_at(x, y) else {
+        return;
+    };
+    place_board(app, &window, monitor, dpi);
+}
+
+/// Puts the draw overlay on `monitor` and shows it, under the island.
+fn place_board<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &WebviewWindow<R>,
+    monitor: ScreenRect,
+    dpi: u32,
+) {
+    let moved = state(app).is_some_and(|mut s| {
+        let moved = s.board.is_some_and(|(m, d)| m != monitor || d != dpi);
+        s.board = Some((monitor, dpi));
+        if moved {
+            s.noted = false;
+        }
+        moved
+    });
+    if moved {
+        super::note_scroll::stop();
+        overlay::dispatch(app, Surface::Draw, DRAW_CLEAR_NOTES, &json!({}));
+    }
+    overlay::place(window, monitor);
+    overlay::show_quietly(window);
+    send_tool(app);
+    super::screen_island::raise(app);
+}
+
+/// A pen note was written starting at (`x`, `y`) (screen pixels): the notes now follow the view
+/// under it as it scrolls (`note_scroll.rs`).
+fn note_written<R: Runtime>(app: &AppHandle<R>, at: (i32, i32)) {
+    set_noted(app, true);
+    if let Some((_, scale)) = board(app) {
+        super::note_scroll::follow(app, at, f64::from(scale));
+    }
+}
+
+/// The draw overlay finished a pen or touch note (the page keeps it; only where it began comes
+/// here, CSS pixels of the overlay).
+#[tauri::command(async)]
+pub fn screen_draw_note<R: Runtime>(window: WebviewWindow<R>, at: [f32; 2]) -> Result<(), String> {
+    require_surface(&window, Surface::Draw)?;
+    let app = window.app_handle();
+    let (monitor, scale) = board(app).ok_or("Not allowed.")?;
+    let (x, y) = (at[0] * scale, at[1] * scale);
+    let inside = x.is_finite()
+        && y.is_finite()
+        && (0.0..=monitor.width() as f32).contains(&x)
+        && (0.0..=monitor.height() as f32).contains(&y);
+    if !inside {
+        return Err("Not allowed.".to_owned());
+    }
+    note_written(app, (monitor.left + x as i32, monitor.top + y as i32));
+    Ok(())
+}
+
+/// The student's notes are (or aren't) on the draw overlay.
+fn set_noted<R: Runtime>(app: &AppHandle<R>, noted: bool) {
+    let changed = state(app).is_some_and(|mut s| std::mem::replace(&mut s.noted, noted) != noted);
+    if changed {
+        super::screen_island::refresh(app);
+    }
+}
+
+/// There's something for the island's Clear: notes or marks.
+pub fn clearable<R: Runtime>(app: &AppHandle<R>) -> bool {
+    state(app).is_some_and(|s| s.noted || s.session.as_ref().is_some_and(|s| !s.marks.is_empty()))
+}
+
+/// The island's Clear (and Close): the notes, then the session (marks, ink, card).
+pub fn clear_all<R: Runtime>(app: &AppHandle<R>) {
+    set_noted(app, false);
+    super::note_scroll::stop();
+    overlay::dispatch(app, Surface::Draw, DRAW_CLEAR_NOTES, &json!({}));
+    end_session(app);
+    if !state(app).is_some_and(|s| s.drawing) {
+        overlay::hide_quietly_named(app, Surface::Draw);
     }
 }
 
@@ -550,7 +746,7 @@ fn set_drawing<R: Runtime>(app: &AppHandle<R>, drawing: bool) {
     let Some(window) = app.get_webview_window(Surface::Draw.label()) else {
         return;
     };
-    if drawing {
+    if drawing && tool(app).0 == Tool::Select {
         begin_session_if_needed(app, &window);
     }
     eprintln!("[screen] draw mode {}", if drawing { "on" } else { "off" });
@@ -598,8 +794,7 @@ fn begin_session_if_needed<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindo
             last_view: None,
         });
     }
-    overlay::place(window, monitor);
-    overlay::show_quietly(window);
+    place_board(app, window, monitor, dpi);
 
     let handle = app.clone();
     coach::on_worker(app, move |tools| {
@@ -637,6 +832,9 @@ fn new_session_id() -> String {
 #[derive(Debug, Clone, Deserialize)]
 pub struct DrawnStroke {
     points: Vec<[f32; 3]>,
+    /// A rectangle or ellipse from the select shapes (drawn dotted).
+    #[serde(default)]
+    dashed: bool,
 }
 
 /// The draw overlay reports a finished mark.
@@ -655,7 +853,7 @@ pub fn screen_draw_mark<R: Runtime>(
         return Ok(());
     }
     let points = to_screen_points(app, &stroke.points).ok_or("Not allowed.")?;
-    add_mark(app, points);
+    add_mark(app, points, stroke.dashed);
     Ok(())
 }
 
@@ -694,7 +892,7 @@ fn to_screen_points<R: Runtime>(app: &AppHandle<R>, points: &[[f32; 3]]) -> Opti
 }
 
 /// Understands a finished mark and adds it (up to three); the first one captures the screen.
-fn add_mark<R: Runtime>(app: &AppHandle<R>, points: Vec<Pt>) {
+fn add_mark<R: Runtime>(app: &AppHandle<R>, points: Vec<Pt>, dashed: bool) {
     // A new mark while an explanation plays is barge-in: the explanation stops, the mark adds to
     // the session (a follow-up, §2.4).
     circle_answer::interrupt(app);
@@ -713,6 +911,7 @@ fn add_mark<R: Runtime>(app: &AppHandle<R>, points: Vec<Pt>) {
             points,
             targets: Vec::new(),
             region: None,
+            dashed,
         };
         if let Some(captured) = &session.capture {
             understand(
@@ -853,6 +1052,7 @@ pub(super) fn show_marks<R: Runtime>(app: &AppHandle<R>) {
             .map(|mark| {
                 json!({
                     "number": mark.number,
+                    "dashed": mark.dashed,
                     "points": mark.points.iter().map(|(x, y)| {
                         [(x - monitor.left as f32) / scale, (y - monitor.top as f32) / scale]
                     }).collect::<Vec<_>>(),
@@ -889,9 +1089,10 @@ pub fn end_session<R: Runtime>(app: &AppHandle<R>) {
     overlay::dispatch(app, Surface::Ink, "mew:ink-clear", &json!({}));
     overlay::hide_quietly_named(app, Surface::Ink);
     overlay::hide_quietly_named(app, Surface::Card);
-    if !state(app).is_some_and(|s| s.drawing) {
+    if !state(app).is_some_and(|s| s.drawing || s.noted) {
         overlay::hide_quietly_named(app, Surface::Draw);
     }
+    super::screen_island::refresh(app);
 }
 
 /// The ask bar closes after 20 s without input; the marks go a minute later (§2.3).
@@ -995,6 +1196,8 @@ pub enum CardAction {
     /// K3: "Create it and save".
     CreatePlace,
     PlaceCancel,
+    /// The follow-up box's mic: on to say the next question, off to ask it.
+    Mic,
     Close,
     /// The page's content needs this many CSS pixels of height (the text): the window follows.
     Fit,
@@ -1067,6 +1270,7 @@ pub fn screen_circle_card<R: Runtime>(
         }
         CardAction::CreatePlace => circle_answer::create_place(app),
         CardAction::PlaceCancel => circle_answer::cancel_place(app),
+        CardAction::Mic => coach::toggle_mic(app),
         CardAction::Close => end_session(app),
         CardAction::Fit => {}
     }

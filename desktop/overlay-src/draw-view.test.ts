@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { parseBox, parseDrawView, parseLive, rectPath } from "./draw-view";
+import {
+  erase,
+  parseBox,
+  parseDrawView,
+  parseLive,
+  parseTool,
+  rectPath,
+  shapeStroke,
+} from "./draw-view";
 
 describe("the draw overlay's view", () => {
   it("accepts what Rust sends", () => {
@@ -67,5 +75,62 @@ describe("the mouse stroke and box Rust reads", () => {
     expect(parseLive({ start: false, points: [[1, 2, 3]] })).toBeNull();
     expect(parseBox({ from: [1, 2] })).toBeNull();
     expect(parseBox(null)).toBeNull();
+  });
+});
+
+describe("dotted marks", () => {
+  it("keeps whether a mark is a select shape", () => {
+    const view = parseDrawView({
+      mode: "draw",
+      marks: [
+        { number: 1, points: [[1, 2]], dashed: true },
+        { number: 2, points: [[3, 4]] },
+      ],
+    });
+    expect(view?.marks?.map((m) => m.dashed === true)).toEqual([true, false]);
+  });
+});
+
+describe("the island's tools", () => {
+  it("reads the tool and shape, and refuses others", () => {
+    expect(parseTool({ tool: "pen", shape: "rect" })).toEqual({ tool: "pen", shape: "rect" });
+    expect(parseTool({ tool: "laser", shape: "rect" })).toBeNull();
+    expect(parseTool({ tool: "pen" })).toBeNull();
+  });
+
+  it("makes a rectangle or ellipse from a drag's first and last points", () => {
+    const drag: [number, number, number][] = [
+      [100, 50, 0.5],
+      [10, 10, 0.5],
+      [20, 80, 0.5],
+    ];
+    const rect = shapeStroke("rect", drag);
+    expect(rect?.[0]).toEqual([20, 50, 0.5]);
+    expect(rect?.at(-1)).toEqual([20, 50, 0.5]);
+    const ellipse = shapeStroke("ellipse", drag) ?? [];
+    expect(Math.max(...ellipse.map((p) => p[0]))).toBeCloseTo(100);
+    expect(Math.min(...ellipse.map((p) => p[1]))).toBeCloseTo(50);
+    expect(shapeStroke("free", drag)).toEqual(drag);
+    expect(
+      shapeStroke("rect", [
+        [0, 0, 0.5],
+        [2, 30, 0.5],
+      ]),
+    ).toBeNull();
+  });
+
+  it("rubs out only the strokes the eraser touches", () => {
+    const notes = [
+      [
+        [0, 0],
+        [10, 0],
+      ],
+      [
+        [100, 100],
+        [110, 100],
+      ],
+    ] as [number, number][][];
+    expect(erase(notes, [12, 3], 5)).toEqual([notes[1]]);
+    expect(erase(notes, [50, 50], 5)).toEqual(notes);
   });
 });

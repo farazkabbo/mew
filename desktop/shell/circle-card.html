@@ -22,6 +22,19 @@
       <form class="card-ask" id="card-ask">
         <label class="sr-only" for="card-input">Your question</label>
         <input id="card-input" type="text" maxlength="500" autocomplete="off" />
+        <button
+          type="button"
+          class="card-mic"
+          id="card-mic"
+          aria-pressed="false"
+          aria-label="Say it instead"
+          title="Say it instead: click, speak, click again"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3" />
+            <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+          </svg>
+        </button>
       </form>
       <div class="card-buttons" id="card-buttons"></div>
     </main>
