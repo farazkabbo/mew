@@ -9,7 +9,9 @@
 //! Short commands said while holding the keys aren't questions (decisions 9 and 10): "save this"
 //! clips ("save this to Physics chapter 5": to that place, K3), "show that again" re-places the last ink, "check my notes" compares the screen with
 //! the notes (Notes Check), "Neb, pause" pauses Screen Coach (K2), and coach mode's words ("teach me how to…", "done", "I'm stuck",
-//! "stop"…) go to the walkthrough (`coach_mode.rs`), without asking the tutor anything. A
+//! "stop"…) go to the walkthrough (`coach_mode.rs`), "let me try … on my own" re-checks a skill
+//! (S5), and "quiz me on this" starts a quiz whose answers are the next holds' words (S6,
+//! `screen_quiz.rs`), without asking the tutor anything. A
 //! question asked during a walkthrough is answered in its context.
 
 use std::time::{Duration, Instant};
@@ -48,6 +50,7 @@ pub fn screen_coach_ask<R: Runtime>(
     // (During a walkthrough, the bare gesture means "done": coach mode's own rule.)
     let nothing = transcript.trim().is_empty()
         && !super::circle::takes_words(app)
+        && !super::screen_quiz::takes_words(app)
         && !coach_mode::is_coaching(app);
     if nothing {
         discard_in_background(app);
@@ -96,6 +99,12 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         coach::pause(app);
         return Ok(());
     }
+    // During a quiz (S6), the words are its answer, "skip" or "stop": the capture isn't needed.
+    if super::screen_quiz::takes_words(app) {
+        drop(wait_for_frame(&coach)); // wiped unsent
+        super::screen_quiz::on_words(app, transcript);
+        return Ok(());
+    }
     // During Circle & Ask, the words are about the marks (their capture is already taken).
     if super::circle::takes_words(app) {
         super::circle::on_words(app, transcript);
@@ -124,6 +133,8 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             | Intent::NotesCheck { .. }
             | Intent::CoachStart
             | Intent::CoachResume
+            | Intent::CoachRecheck
+            | Intent::Quiz
             | Intent::Coach(_) => true,
             Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
             Intent::Ask | Intent::Pause => false,
@@ -140,6 +151,8 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             Intent::NotesCheck { all } => notes_check::start(app, captured, all),
             Intent::CoachStart => coach_mode::start(app, transcript.to_owned(), captured),
             Intent::CoachResume => coach_mode::resume(app, captured),
+            Intent::CoachRecheck => coach_mode::recheck(app, transcript.to_owned(), captured),
+            Intent::Quiz => super::screen_quiz::start(app, captured),
             Intent::Coach(word) => coach_mode::on_word(app, word, captured),
             _ => annotate::reannotate(app, captured, false),
         }

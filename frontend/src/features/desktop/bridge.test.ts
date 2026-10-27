@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isDesktop, remindAboutChecks, remindAboutReviews } from "./bridge";
+import { isDesktop, remindAboutChecks, remindAboutReviews, remindAboutSkills } from "./bridge";
 
 const ITEM = {
   courseId: "22222222-2222-4222-8222-222222222222",
@@ -62,6 +62,34 @@ describe("desktop bridge", () => {
     expect(invoke).toHaveBeenCalledWith("notify_checks", { count: 2 });
     invoke.mockClear();
     expect(await remindAboutChecks(checks([check("2026-10-30T09:00:00Z")]), now)).toBe(false);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("reminds about the most overdue skill to try alone (S5)", async () => {
+    const invoke = vi.fn(() => Promise.resolve(true));
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke } } });
+    const now = Date.parse("2026-10-26T12:00:00Z");
+    const skill = (title: string, dueAt: string) => ({
+      id: crypto.randomUUID(),
+      title,
+      app: "excel.exe",
+      conceptTitle: null,
+      dueAt,
+      lastEvidence: "with_hint",
+      lastHints: 2,
+      lastAt: "2026-10-24T09:00:00Z",
+      solo: 0,
+    });
+    const skills = (list: unknown[]) => () => Promise.resolve(Response.json({ skills: list }));
+    const list = [
+      skill("Charts", "2026-10-26T10:00:00Z"),
+      skill("Pivot tables", "2026-10-25T10:00:00Z"),
+      skill("Macros", "2026-10-29T10:00:00Z"),
+    ];
+    expect(await remindAboutSkills(skills(list), now)).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("notify_skills", { count: 2, first: "Pivot tables" });
+    invoke.mockClear();
+    expect(await remindAboutSkills(skills([list[2]]), now)).toBe(false);
     expect(invoke).not.toHaveBeenCalled();
   });
 });

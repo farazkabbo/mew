@@ -363,6 +363,12 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-circle-card"),
     )?;
     app.add_capability(
+        CapabilityBuilder::new("screen-quiz-card")
+            .local(true)
+            .window(Surface::Quiz.label())
+            .permission("allow-screen-quiz-card"),
+    )?;
+    app.add_capability(
         CapabilityBuilder::new("screen-clip")
             .local(true)
             .window(Surface::Clip.label())
@@ -845,6 +851,7 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
         annotate::clear(app);
         clip::discard(app, None);
         coach_mode::end_quietly(app);
+        super::screen_quiz::end_quietly(app);
         circle::end_session(app);
     } else {
         circle::start_tracker(app);
@@ -911,6 +918,7 @@ pub fn screen_coach_set_enabled<R: Runtime>(
         annotate::clear(app);
         clip::discard(app, None);
         coach_mode::end_quietly(app);
+        super::screen_quiz::end_quietly(app);
         circle::end_session(app);
     }
     refresh(app);

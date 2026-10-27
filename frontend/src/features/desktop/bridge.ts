@@ -1,10 +1,11 @@
-import { MomentChecksDue, ReviewQueue } from "@mew/shared";
+import { MomentChecksDue, ReviewQueue, SkillsView } from "@mew/shared";
 
 /**
  * The desktop app (Tauri, desktop/) shows this web app in its own window. Inside it, the page may
  * call three commands, each checked in Rust:
  * - `notify_due`: show a review reminder;
  * - `notify_checks`: saved moments' checks are due (K8; only when the student turned it on);
+ * - `notify_skills`: coach-mode skills are due for a re-check on the computer (S5);
  * - `screen_coach_ask`: ask Screen Coach about the frame the desktop app captured on the hotkey
  *   (the page sends only the words; it never sees the screenshot);
  * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code;
@@ -57,6 +58,28 @@ export async function remindAboutChecks(
   const due = checks.filter((c) => Date.parse(c.dueAt) <= now).length;
   if (due === 0) return false;
   return (await invoke("notify_checks", { count: due })) === true;
+}
+
+/**
+ * Coach mode's skills (S5): "Time to try “Pivot tables” on your own", the most overdue first (the
+ * desktop app shows it at most twice a day).
+ */
+export async function remindAboutSkills(
+  fetchImpl: typeof fetch = (...args) => fetch(...args),
+  now = Date.now(),
+): Promise<boolean> {
+  const response = await fetchImpl("/api/skills", { cache: "no-store" });
+  if (!response.ok) return false;
+  const { skills } = SkillsView.parse(await response.json());
+  const due = skills
+    .filter((s) => Date.parse(s.dueAt) <= now)
+    .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
+  if (due.length === 0) return false;
+  const shown = await invoke("notify_skills", {
+    count: due.length,
+    first: due[0]?.title ?? null,
+  });
+  return shown === true;
 }
 
 /** Asks Screen Coach about the captured screen. The answer arrives as `mew:screen-*` events. */

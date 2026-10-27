@@ -11,12 +11,14 @@ import { type GenerateStructured, ModelBusyError, type StructuredRequest } from 
 import {
   COACH_MESSAGES,
   type CoachDeps,
+  recheckCoaching,
   resumeCoaching,
+  SKILL_SPEECH,
   startCoaching,
   stepCoaching,
   walkthroughContext,
 } from "./run";
-import type { WalkthroughStore } from "./store";
+import type { DeviceSkill, SkillRecord, WalkthroughStore } from "./store";
 
 vi.stubEnv("GEMINI_API_KEY", "test-key");
 
@@ -53,15 +55,19 @@ const VERDICT: CoachVerdict = {
   target: { point: { x: 300, y: 70 }, label: "PivotTable" },
 };
 
-/** A walkthrough store in memory, with the API's compare-and-set on `revision`. */
+/** A walkthrough store in memory, with the API's compare-and-set on `revision`, and skills. */
 function memoryStore() {
   const rows = new Map<string, Walkthrough>();
   const writes: WalkthroughUpdate[] = [];
+  const skills: DeviceSkill[] = [];
+  const records: SkillRecord[] = [];
+  let made = 0;
   const store: WalkthroughStore = {
     create: (body: WalkthroughCreate) => {
+      made++;
       const row = Walkthrough.parse({
         ...body,
-        id: "11111111-1111-4111-8111-111111111111",
+        id: `11111111-1111-4111-8111-${String(made).padStart(12, "1")}`,
         status: "active",
         phase: "awaiting",
         current: 0,
@@ -83,8 +89,25 @@ function memoryStore() {
       rows.set(id, next);
       return Promise.resolve(next);
     },
+    skills: () => Promise.resolve([...skills]),
+    recordSkill: (record) => {
+      records.push(record);
+      const known = skills.find((s) => s.title === record.title && s.app === record.app);
+      const skill: DeviceSkill = {
+        id: known?.id ?? `22222222-2222-4222-8222-${String(skills.length + 1).padStart(12, "2")}`,
+        title: record.title,
+        app: record.app,
+        dueAt: record.dueAt,
+        fsrsState: record.card,
+        lastWalkthroughId:
+          record.kind === "guided" ? record.walkthroughId : (known?.lastWalkthroughId ?? null),
+      };
+      if (known) skills.splice(skills.indexOf(known), 1, skill);
+      else skills.push(skill);
+      return Promise.resolve(skill);
+    },
   };
-  return { store, rows, writes };
+  return { store, rows, writes, skills, records };
 }
 
 /** Deps whose model answers each call with the next of `answers` (by schema, in order). */
@@ -302,5 +325,106 @@ describe("a question in the middle of a walkthrough", () => {
     expect(await walkthroughContext(store, id)).toBeUndefined();
     const failing: WalkthroughStore = { ...store, get: () => Promise.reject(new Error("down")) };
     expect(await walkthroughContext(failing, id)).toBeUndefined();
+  });
+});
+
+describe("skills from walkthroughs (S5)", () => {
+  /** A two-step walkthrough done to the end; `hinted`: "I'm stuck" once on step 1. */
+  async function finished(hinted: boolean) {
+    const memory = memoryStore();
+    const notYet = { ...VERDICT, status: "not_completed" as const };
+    const answers = hinted ? [PLAN, notYet, VERDICT, VERDICT] : [PLAN, VERDICT, VERDICT];
+    const { coach } = deps(memory.store, ...answers);
+    const start = await startCoaching(
+      { goal: "teach me how to make a pivot table", ...SCENE },
+      coach,
+    );
+    const id = start.walkthroughId ?? "";
+    if (hinted) await stepCoaching({ walkthroughId: id, event: "stuck", ...SCENE }, coach);
+    await stepCoaching({ walkthroughId: id, event: "done", ...SCENE }, coach);
+    const last = await stepCoaching({ walkthroughId: id, event: "done", ...SCENE }, coach);
+    return { memory, coach, last };
+  }
+
+  it("finishing a walkthrough makes a skill, guided: never independent, even without a hint", async () => {
+    const { memory, last } = await finished(false);
+    expect(last.status).toBe("completed");
+    expect(memory.records).toEqual([
+      expect.objectContaining({
+        title: "Pivot tables",
+        app: "excel.exe",
+        kind: "guided",
+        evidence: "with_hint",
+        hints: 0,
+      }),
+    ]);
+    expect(last.speech).toContain(SKILL_SPEECH.with_hint);
+    // A re-check is scheduled: about two days later (FSRS "Hard" for a first, guided go).
+    const due = Date.parse(memory.records[0]?.dueAt ?? "") - NOW.getTime();
+    expect(due).toBeGreaterThan(86_400_000);
+    expect(due).toBeLessThan(4 * 86_400_000);
+  });
+
+  it("a re-check done alone is the skill's first independent evidence", async () => {
+    const { memory } = await finished(true);
+    expect(memory.records[0]?.hints).toBe(1);
+
+    const solo = deps(memory.store, VERDICT);
+    const start = await recheckCoaching(
+      { words: "let me try pivot tables on my own", ...SCENE },
+      solo.coach,
+    );
+    expect(start.status).toBe("active");
+    expect(start.total).toBe(1);
+    expect(start.speech).toContain("on your own: Pivot tables");
+    expect(start.actions).toEqual([]); // no arrow: it's the student's turn
+    const re = memory.rows.get(start.walkthroughId ?? "");
+    expect(re).toMatchObject({ kind: "recheck", skillId: memory.skills[0]?.id });
+    // Checked against what the last step looked like done.
+    expect(re?.steps[0]?.successCondition).toBe(PLAN.steps[1]?.successCondition);
+
+    const done = await stepCoaching(
+      { walkthroughId: start.walkthroughId ?? "", event: "done", ...SCENE },
+      solo.coach,
+    );
+    expect(done.status).toBe("completed");
+    expect(done.speech).toContain(SKILL_SPEECH.independent);
+    expect(memory.records.at(-1)).toMatchObject({
+      kind: "recheck",
+      evidence: "independent",
+      title: "Pivot tables",
+    });
+    expect(memory.skills).toHaveLength(1); // the same skill, rescheduled
+  });
+
+  it("a re-check that needed help isn't independent", async () => {
+    const { memory } = await finished(false);
+    const help = deps(memory.store, { ...VERDICT, status: "not_completed" }, VERDICT);
+    const start = await recheckCoaching({ words: "test me on it", ...SCENE }, help.coach);
+    const id = start.walkthroughId ?? "";
+    await stepCoaching({ walkthroughId: id, event: "stuck", ...SCENE }, help.coach);
+    await stepCoaching({ walkthroughId: id, event: "done", ...SCENE }, help.coach);
+    expect(memory.records.at(-1)).toMatchObject({ kind: "recheck", evidence: "with_hint" });
+  });
+
+  it("has nothing to re-check before anything was learned", async () => {
+    const memory = memoryStore();
+    const reply = await recheckCoaching(
+      { words: "let me try it solo", ...SCENE },
+      deps(memory.store).coach,
+    );
+    expect(reply).toMatchObject({ status: "declined", speech: COACH_MESSAGES.noSkills });
+  });
+
+  it("finishes the walkthrough even if the skill can't be saved", async () => {
+    const memory = memoryStore();
+    memory.store.recordSkill = () => Promise.reject(new Error("down"));
+    const { coach } = deps(memory.store, PLAN, VERDICT, VERDICT);
+    const start = await startCoaching({ goal: "teach me pivot tables", ...SCENE }, coach);
+    const id = start.walkthroughId ?? "";
+    await stepCoaching({ walkthroughId: id, event: "done", ...SCENE }, coach);
+    const last = await stepCoaching({ walkthroughId: id, event: "done", ...SCENE }, coach);
+    expect(last.status).toBe("completed");
+    expect(last.speech).not.toContain("skills");
   });
 });

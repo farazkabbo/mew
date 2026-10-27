@@ -165,7 +165,12 @@ export function savedQuizRequest(utterance: string): SavedQuizFilter | null {
 /** A check due for the student, as the review and Quick check show it (no key). */
 export const MomentCheckView = z.object({
   id: z.uuid(),
-  clipId: z.uuid(),
+  /** The saved moment it came from; null for a "quiz me on this" card (S6: nothing was saved). */
+  clipId: z.uuid().nullable(),
+  /** A saved moment's check (K8), or a question from "quiz me on this" on screen (S6). */
+  origin: z.enum(["moment", "screen_quiz"]).default("moment"),
+  /** S6: the window it was about ("Lecture 5 - YouTube"), for "From your screen: …". */
+  sourceTitle: z.string().nullable().default(null),
   /** Other moments about the same concept that week, merged into this card. */
   mergedClipIds: z.array(z.uuid()).max(20).default([]),
   nodeId: z.uuid().nullable(),

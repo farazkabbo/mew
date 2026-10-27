@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   checkScreenReply,
+  type CourseExcerpt,
   renderScreenInput,
   SAFE_FALLBACK,
   SCREEN_LIMITS,
@@ -35,8 +36,14 @@ type ScreenTutorDeps = {
   newTurnId: () => string;
 };
 
-/** A question about the screen, and the walkthrough it was asked in (coach mode, S4), if any. */
-export type ScreenQuestion = ScreenAskRequest & { walkthrough?: WalkthroughContext };
+/**
+ * A question about the screen, the walkthrough it was asked in (coach mode, S4), if any, and the
+ * student's course passages about it (S5), if any.
+ */
+export type ScreenQuestion = ScreenAskRequest & {
+  walkthrough?: WalkthroughContext;
+  courseContext?: readonly CourseExcerpt[];
+};
 
 const defaultDeps: ScreenTutorDeps = {
   stream: streamStructuredText,
@@ -65,7 +72,10 @@ export async function* runScreenTutor(
     model: screenModel(),
     system: SCREEN_TUTOR_PROMPT.system,
     input: [
-      { type: "text" as const, text: renderScreenInput(request, request.walkthrough) },
+      {
+        type: "text" as const,
+        text: renderScreenInput(request, request.walkthrough, request.courseContext),
+      },
       { type: "image" as const, base64: request.image.jpeg, mimeType: "image/jpeg" as const },
     ],
     schema: ScreenTutorResponse,

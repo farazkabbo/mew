@@ -143,6 +143,12 @@ export const RATE_RULES = {
   circleAsk: { limit: 10, windowMs: MINUTE },
   circleAskDaily: { limit: 150, windowMs: DAY },
   circleAskMonthly: { limit: 1500, windowMs: 30 * DAY },
+  /**
+   * "Quiz me on this" (S6): making the questions is a model call with a screenshot (and each
+   * answer is graded like a quiz answer, under quizGrade).
+   */
+  screenQuiz: { limit: 4, windowMs: MINUTE },
+  screenQuizDaily: { limit: 40, windowMs: DAY },
   /** Reading a handwritten question the student selected on screen (one small image). */
   readQuestion: { limit: 10, windowMs: MINUTE },
   readQuestionDaily: { limit: 100, windowMs: DAY },

@@ -118,6 +118,10 @@ export const WalkthroughStep = PlannedStep.extend({
 export type WalkthroughStep = z.infer<typeof WalkthroughStep>;
 
 export const WalkthroughStatus = z.enum(["active", "paused", "stopped", "completed"]);
+
+/** A walkthrough that teaches a task, or a re-check of one learned before (S5). */
+export const WalkthroughKind = z.enum(["guided", "recheck"]);
+export type WalkthroughKind = z.infer<typeof WalkthroughKind>;
 export type WalkthroughStatus = z.infer<typeof WalkthroughStatus>;
 
 /** "awaiting": waiting for the student to do the step; "confirming": asked whether it's done. */
@@ -147,6 +151,9 @@ export const Walkthrough = Progress.extend({
   /** What the student asked, in their words. */
   goal: Text(COACH_LIMITS.goalChars),
   app: AppName.nullable(),
+  kind: WalkthroughKind.default("guided"),
+  /** The skill it built or re-checks (S5), once there is one. */
+  skillId: z.uuid().nullable().default(null),
   /** Bumped by every update: an update names the revision it read (two "done"s can't race). */
   revision: z.number().int().min(0),
   startedAt: z.iso.datetime({ offset: true }),
@@ -161,6 +168,9 @@ export const WalkthroughCreate = z.object({
   goal: Text(COACH_LIMITS.goalChars),
   app: AppName.nullable(),
   steps: Steps,
+  /** S5: a re-check of the skill `skillId`. */
+  kind: WalkthroughKind.optional(),
+  skillId: z.uuid().optional(),
 });
 export type WalkthroughCreate = z.infer<typeof WalkthroughCreate>;
 

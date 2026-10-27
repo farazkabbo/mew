@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DEVICE_TOKEN_PATTERN, DeviceExchangeRequest } from "./devices";
-import { renderScreenInput } from "./prompts/screen";
+import { renderScreenInput, SCREEN_TUTOR_PROMPT } from "./prompts/screen";
 import {
   AppName,
   type ScreenAction,
@@ -90,6 +90,21 @@ describe("screen schemas", () => {
     expect(text).not.toContain("videoPlaying");
     const playing = renderScreenInput(ScreenAskRequest.parse({ ...ASK, videoPlaying: true }));
     expect(playing).toContain('"videoPlaying": true');
+  });
+
+  it("adds the student's course passages only when there are some (S5)", () => {
+    const ask = ScreenAskRequest.parse(ASK);
+    expect(renderScreenInput(ask, undefined, [])).not.toContain("courseContext");
+    const passage = {
+      page: 12,
+      heading: "Chain rule",
+      text: "d/dx f(g(x))…",
+      source: "Calc notes",
+    };
+    const text = renderScreenInput(ask, undefined, [passage]);
+    expect((JSON.parse(text) as { courseContext: unknown }).courseContext).toEqual([passage]);
+    expect(SCREEN_TUTOR_PROMPT.system).toContain("courseContext");
+    expect(SCREEN_TUTOR_PROMPT.id).toBe("screen-tutor.v5");
   });
 });
 

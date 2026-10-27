@@ -7,6 +7,7 @@ import { geminiEnv } from "@/server/env";
 import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { screenCourseContext } from "@/server/screen-course";
 import { runScreenTutor } from "@/server/screen-tutor";
 
 /** The JSON body: a base64 JPEG (~1 MB at most) plus a short question. */
@@ -19,7 +20,8 @@ const MAX_BODY_BYTES = 1_500_000;
  *
  * The screenshot was captured and redacted on the device; here it is checked, forwarded to the
  * model, and dropped with the request. It is never stored or logged. A question asked during a
- * walkthrough (coach mode) is answered in its context.
+ * walkthrough (coach mode) is answered in its context, and the student's own course passages
+ * about the question come with it (S5), so the answer can name the connection.
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
@@ -32,15 +34,19 @@ export const POST = handle(async (request: Request) => {
   assertJpeg(body.image.jpeg);
   geminiEnv(); // fail fast with 503 (before streaming) when the model isn't configured
   // Asked in the middle of a walkthrough: the tutor answers about its current step.
-  const walkthrough = body.walkthroughId
-    ? await walkthroughContext(deviceWalkthroughs(deviceToken(request)), body.walkthroughId)
-    : undefined;
+  const token = deviceToken(request);
+  const [walkthrough, courseContext] = await Promise.all([
+    body.walkthroughId
+      ? walkthroughContext(deviceWalkthroughs(token), body.walkthroughId)
+      : undefined,
+    screenCourseContext(token, body.transcript),
+  ]);
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       for await (const event of runScreenTutor(
-        { ...body, ...(walkthrough && { walkthrough }) },
+        { ...body, ...(walkthrough && { walkthrough }), courseContext },
         request.signal,
       )) {
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));

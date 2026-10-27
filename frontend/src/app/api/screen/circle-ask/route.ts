@@ -11,6 +11,7 @@ import { fileMoment, filingEvent } from "@/server/filing";
 import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { screenCourseContext } from "@/server/screen-course";
 
 /** Two base64 JPEGs (~1 MB each at most), the marks and a little text. */
 const MAX_BODY_BYTES = 3_000_000;
@@ -68,14 +69,26 @@ export const POST = handle(async (request: Request) => {
         },
         request.signal,
       )
-    : runCircleAsk(placed.request, request.signal, undefined, async (answer) => {
-        // The moment's subject and its verified check question wait for the entry (K8).
-        const checkQuestion = await verifiedCheckQuestion(answer.checkQuestion);
-        keepForEntry(device.userId, body.sessionId, {
-          moment: { subject: answer.subject, checkQuestion },
-        });
-        return file(answer.subject, answer.conceptHints);
-      });
+    : runCircleAsk(
+        {
+          ...placed.request,
+          // The student's course passages about what they marked (S5), named when it's the same idea.
+          courseContext: await screenCourseContext(
+            token,
+            [question ?? "", ...placed.request.marks.map((m) => m.text)].join(" "),
+          ),
+        },
+        request.signal,
+        undefined,
+        async (answer) => {
+          // The moment's subject and its verified check question wait for the entry (K8).
+          const checkQuestion = await verifiedCheckQuestion(answer.checkQuestion);
+          keepForEntry(device.userId, body.sessionId, {
+            moment: { subject: answer.subject, checkQuestion },
+          });
+          return file(answer.subject, answer.conceptHints);
+        },
+      );
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({

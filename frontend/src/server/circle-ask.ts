@@ -11,6 +11,7 @@ import {
   circleStepReasons,
   type CircleStep,
   type CircleStreamEvent,
+  type CourseExcerpt,
   marksBox,
   READ_QUESTION_PROMPT,
   type ReadQuestionRequest,
@@ -69,7 +70,7 @@ const defaultDeps: CircleAskDeps = {
 export type OnAnswer = (answer: CircleAskModelResponse) => Promise<readonly CircleStreamEvent[]>;
 
 export async function* runCircleAsk(
-  request: CircleAskRequest,
+  request: CircleAskRequest & { courseContext?: readonly CourseExcerpt[] },
   signal?: AbortSignal,
   deps: CircleAskDeps = defaultDeps,
   onAnswer?: OnAnswer,
@@ -85,7 +86,7 @@ export async function* runCircleAsk(
     model: screenModel(),
     system: CIRCLE_ASK_PROMPT.system,
     input: [
-      { type: "text" as const, text: renderCircleInput(request) },
+      { type: "text" as const, text: renderCircleInput(request, request.courseContext) },
       { type: "image" as const, base64: request.focus.image.jpeg, mimeType: "image/jpeg" as const },
       { type: "image" as const, base64: request.context.jpeg, mimeType: "image/jpeg" as const },
     ],

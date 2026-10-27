@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query, Request, status
 from google import genai
 from starlette.concurrency import run_in_threadpool
 
@@ -30,12 +30,19 @@ from ..courses.pdf import MAX_BYTES
 from ..courses.store import CourseNotFoundError, CourseStore
 from ..courses.supabase_store import StoreError, SupabaseCourseStore
 from ..deps import Caller, CurrentCaller, SettingsDep
+from .devices import screen_device
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/courses", tags=["courses"])
 
 CourseTitle = Annotated[str, Query(min_length=1, max_length=120)]
+
+#: Screen answers (S5): the courses searched (the newest first) and how close a passage must be
+#: (word overlap, used in local mode, scores far lower than embeddings).
+DEVICE_COURSES = 8
+DEVICE_MIN_SIMILARITY = 0.3
+DEVICE_MIN_SIMILARITY_LEXICAL = 0.1
 
 
 # ─── Dependencies ────────────────────────────────────────────────────────────────────────────
@@ -284,6 +291,50 @@ def review_concepts(
         return _detail(store, user, course_id)
 
     return _call(review)
+
+
+@router.post("/device/retrieve")
+def retrieve_for_device(
+    body: RetrieveRequest,
+    request: Request,
+    settings: SettingsDep,
+    x_mew_device_token: Annotated[str | None, Header()] = None,
+) -> RetrieveResponse:
+    """For an answer about the screen (Screen Coach S5): the passages of the student's own
+    courses closest to what they asked, across their ready courses. The device names no course,
+    so the search only ever reads its owner's."""
+    device = screen_device(x_mew_device_token, request, settings)
+    if device.local:
+        store: CourseStore = request.app.state.local_courses
+    elif settings.supabase_url and settings.supabase_secret_key is not None:
+        # The secret key, so every query below is for `user` only (decision 40).
+        store = SupabaseCourseStore(
+            settings.supabase_url,
+            api_key=settings.supabase_secret_key.get_secret_value(),
+            user_token=None,
+        )
+    else:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Courses aren't configured")
+    user = device.user_id
+
+    def search() -> list[RetrievedChunk]:
+        ready = [c for c in store.list_courses(user) if c.status == "ready"]
+        ready.sort(key=lambda c: c.created_at, reverse=True)
+        close: list[RetrievedChunk] = []
+        for course in ready[:DEVICE_COURSES]:
+            sources = store.list_sources(user, course.id)
+            lexical = bool(sources) and sources[0].embedding_model == LEXICAL_MODEL
+            floor = DEVICE_MIN_SIMILARITY_LEXICAL if lexical else DEVICE_MIN_SIMILARITY
+            try:
+                found = _retrieve(request, settings, store, user, course.id, body.query, body.k)
+            except CourseNotFoundError:
+                continue
+            close += [c for c in found if c.similarity >= floor]
+        return sorted(close, key=lambda c: c.similarity, reverse=True)[: body.k]
+
+    chunks = _call(search)
+    logger.info("Found %d course passages for a screen answer", len(chunks))
+    return RetrieveResponse(chunks=chunks)
 
 
 @router.post("/{course_id}/retrieve")

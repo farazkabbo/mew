@@ -36,8 +36,16 @@ from ..moments.models import (
     FiledPlace,
     FilingRequest,
     FilingResponse,
+    QuizCardsRequest,
+    QuizCardsResponse,
 )
-from ..moments.store import CheckRow, MemoryMomentStore, MomentStore, SupabaseMomentStore
+from ..moments.store import (
+    CheckRow,
+    MemoryMomentStore,
+    MomentStore,
+    QuizCard,
+    SupabaseMomentStore,
+)
 from ..notebooks.store import NotebookTreeStore, SupabaseNotebookTreeStore
 from ..supabase_rest import StoreError
 from .devices import screen_device
@@ -165,6 +173,56 @@ def filing_context(request: Request, settings: Settings, local: bool, user: str)
     return FilingContext(user, nodes, _call(lambda: moments.node_texts(user)), moments)
 
 
+# ─── "Quiz me on this" (the desktop app, S6) ───────────────────────────────────────────────
+
+
+@router.post("/device/quiz")
+def add_quiz_cards(
+    body: QuizCardsRequest,
+    request: Request,
+    settings: SettingsDep,
+    x_mew_device_token: Annotated[str | None, Header()] = None,
+) -> QuizCardsResponse:
+    """Keeps each question as a recall card (due tomorrow, within today's 15 new)."""
+    device = screen_device(x_mew_device_token, request, settings)
+    store = service_moments(request, settings, device.local)
+    cards = [QuizCard(q.question, list(q.hints)) for q in body.questions]
+    ids = _call(
+        lambda: store.add_quiz_checks(
+            device.user_id, cards, body.source_title, body.source_app, datetime.now(UTC)
+        )
+    )
+    logger.info("Kept %d quiz cards", len(ids))
+    return QuizCardsResponse(check_ids=ids)
+
+
+@router.get("/device/checks/{check_id}")
+def device_check(
+    check_id: UUID,
+    request: Request,
+    settings: SettingsDep,
+    x_mew_device_token: Annotated[str | None, Header()] = None,
+) -> CheckWithKey:
+    """A quiz card with its key, for the web server to grade an answer given on screen. Only
+    "quiz me on this" cards: a saved moment's check is answered in the review."""
+    device = screen_device(x_mew_device_token, request, settings)
+    store = service_moments(request, settings, device.local)
+    check = _call(lambda: store.get_check(device.user_id, check_id))
+    if check is None or check.origin != "screen_quiz":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
+    return _with_key(check)
+
+
+def _with_key(check: CheckRow) -> CheckWithKey:
+    return CheckWithKey(
+        **_view(check).model_dump(),
+        answer_key=check.answer_key,
+        answer_latex=check.answer_latex,
+        fsrs_state=check.fsrs_state,
+        reps=check.reps,
+    )
+
+
 # ─── Checks (the owner) ──────────────────────────────────────────────────────────────────────
 
 
@@ -172,6 +230,8 @@ def _view(check: CheckRow) -> CheckView:
     return CheckView(
         id=check.id,
         clip_id=check.clip_id,
+        origin="screen_quiz" if check.origin == "screen_quiz" else "moment",
+        source_title=check.source_title,
         merged_clip_ids=check.merged_clip_ids,
         node_id=check.node_id,
         prompt=check.prompt,
@@ -201,13 +261,7 @@ def get_check(
     check = _call(lambda: store.get_check(caller.user_id, check_id))
     if check is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    return CheckWithKey(
-        **_view(check).model_dump(),
-        answer_key=check.answer_key,
-        answer_latex=check.answer_latex,
-        fsrs_state=check.fsrs_state,
-        reps=check.reps,
-    )
+    return _with_key(check)
 
 
 @router.patch("/checks/{check_id}", status_code=status.HTTP_204_NO_CONTENT)

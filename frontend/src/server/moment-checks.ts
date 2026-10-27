@@ -29,13 +29,13 @@ import { userApi } from "./user-api";
  * `independent` (mastery), with one `with_hint`; wrong is logged as an attempt.
  */
 
-const CheckWithKey = MomentChecksDue.shape.checks.element.extend({
+export const CheckWithKey = MomentChecksDue.shape.checks.element.extend({
   answerKey: z.string(),
   answerLatex: z.string().nullable(),
   fsrsState: FsrsCard.nullable(),
   reps: z.number().int().min(0),
 });
-type CheckWithKey = z.infer<typeof CheckWithKey>;
+export type CheckWithKey = z.infer<typeof CheckWithKey>;
 
 export type MomentCheckDeps = {
   checkMath: CheckMath;
@@ -61,7 +61,7 @@ export async function answerCheck(
   deps: MomentCheckDeps = defaultDeps,
 ): Promise<MomentCheckResult> {
   const check = await userApi(`/v1/moments/checks/${checkId}`, CheckWithKey);
-  const graded = await grade(check, answer.answer, deps);
+  const graded = await gradeCheck(check, answer.answer, deps);
   const evidence = checkEvidence({ ...answer, correct: graded.correct });
   const now = deps.now();
   const card = review(
@@ -83,11 +83,17 @@ export async function answerCheck(
   };
 }
 
+/** What grading a check needs from it (a moment's, or a "quiz me on this" card's, S6). */
+export type GradableCheck = Pick<
+  CheckWithKey,
+  "kind" | "prompt" | "answerKey" | "answerLatex" | "conceptHints"
+>;
+
 /** Right or wrong, and a sentence to say after (never before: the key comes with it). */
-async function grade(
-  check: CheckWithKey,
+export async function gradeCheck(
+  check: GradableCheck,
   reply: string,
-  deps: MomentCheckDeps,
+  deps: Pick<MomentCheckDeps, "checkMath" | "grade"> = defaultDeps,
 ): Promise<{ correct: boolean; feedback: string }> {
   const right = { correct: true, feedback: "That's it." };
   const wrong = {

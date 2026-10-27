@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from pydantic.alias_generators import to_camel
 
-from ..clips.models import PlainText, Subject
+from ..clips.models import AppName, CheckQuestion, PlainText, Subject
 
 
 class _Camel(BaseModel):
@@ -48,7 +48,11 @@ class CheckView(_Camel):
     """A due check without its key (the review and Quick check ask it)."""
 
     id: UUID
-    clip_id: UUID
+    #: None for a "quiz me on this" card (S6): nothing was saved.
+    clip_id: UUID | None
+    origin: Literal["moment", "screen_quiz"] = "moment"
+    #: S6: the window it was about, for "From your screen: ...".
+    source_title: str | None = None
     #: Other moments about the same concept that week, merged into this card (K8).
     merged_clip_ids: list[UUID] = Field(default_factory=list, max_length=20)
     node_id: UUID | None
@@ -107,3 +111,23 @@ class MomentMove(_Camel):
     """The student filed a moment from the notebook (moved it, or accepted a suggestion)."""
 
     node_id: UUID
+
+
+class QuizQuestionIn(_Camel):
+    """One verified "quiz me on this" question and what it's about (S6)."""
+
+    question: CheckQuestion
+    hints: list[Hint] = Field(default_factory=list, max_length=5)
+
+
+class QuizCardsRequest(_Camel):
+    """The desktop app's "quiz me on this" (through the web server): its questions, to keep as
+    recall cards. The window title is shown with them in the review."""
+
+    questions: list[QuizQuestionIn] = Field(min_length=1, max_length=3)
+    source_title: Title | None = None
+    source_app: AppName | None = None
+
+
+class QuizCardsResponse(_Camel):
+    check_ids: list[UUID]

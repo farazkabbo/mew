@@ -662,6 +662,39 @@ body.card {
   outline-offset: 2px;
 }
 
+/* The quiz card (S6): choices one per line; the grade under the question. */
+.quiz-choices {
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.quiz-choices button {
+  width: 100%;
+  border: 1px solid var(--line);
+}
+
+.quiz-result {
+  margin: 0;
+  font-size: max(15px, 0.95rem);
+  line-height: 1.35;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border-left: 4px solid var(--violet);
+  background: var(--paper);
+}
+
+.quiz-result[data-correct="true"] {
+  border-left-color: #2e8b57;
+}
+
+.quiz-result:empty {
+  display: none;
+}
+
+.quiz-card form[hidden] {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mew-pointer,
   .mew-pointer .halo,

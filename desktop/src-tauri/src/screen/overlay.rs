@@ -16,6 +16,8 @@
 //!   takes the mouse, pen and touch, still without taking the focus, unless they draw with the
 //!   keyboard); and the **card** (the ask bar, the captions, the save toast), which takes the
 //!   focus only when clicked, to type. All excluded from captures; none sees pixels.
+//! - The quiz card ("quiz me on this", S6) shows a question, its choices and a box to type the
+//!   answer: like the Circle & Ask card, focused only when clicked, excluded from captures.
 //! - The preview is an ordinary focused window: the only WebView that ever sees screen pixels,
 //!   and only for a clip the student asked to save (decision 2, S3 §5).
 //!
@@ -48,6 +50,8 @@ pub enum Surface {
     Pointer,
     Draw,
     Card,
+    /// "Quiz me on this" (S6): the question, its choices, a box to type the answer.
+    Quiz,
 }
 
 /// Size of the pill, in CSS pixels.
@@ -67,6 +71,7 @@ impl Surface {
             Surface::Pointer => "screen-pointer",
             Surface::Draw => "screen-draw",
             Surface::Card => "screen-circle-card",
+            Surface::Quiz => "screen-quiz-card",
         }
     }
 
@@ -80,6 +85,7 @@ impl Surface {
             Surface::Pointer => "pointer.html",
             Surface::Draw => "draw-overlay.html",
             Surface::Card => "circle-card.html",
+            Surface::Quiz => "quiz-card.html",
         }
     }
 }
@@ -158,6 +164,17 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             .resizable(false)
             .focused(false)
             .inner_size(CARD_SIZE.0, CARD_SIZE.1),
+        // Like the Circle & Ask card: takes the focus only when clicked, to type.
+        Surface::Quiz => builder
+            .title("Quiz · Neb")
+            .transparent(true)
+            .decorations(false)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            .inner_size(super::quiz::CARD_SIZE.0, super::quiz::CARD_SIZE.1),
         Surface::Notes => builder
             .title("Notes Check · Neb")
             .transparent(true)

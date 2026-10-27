@@ -1,7 +1,15 @@
 import "server-only";
 
-import { Walkthrough, type WalkthroughCreate, type WalkthroughUpdate } from "@mew/shared";
-import type { z } from "zod";
+import {
+  AppName,
+  FsrsCard,
+  type SkillEvidence,
+  Walkthrough,
+  type WalkthroughCreate,
+  type WalkthroughKind,
+  type WalkthroughUpdate,
+} from "@mew/shared";
+import { z } from "zod";
 
 import { ApiError, apiFetch } from "../api-client";
 import { HttpError } from "../http-error";
@@ -17,6 +25,32 @@ export type WalkthroughStore = {
   latest(): Promise<Walkthrough | null>;
   /** Writes progress made from `update.revision`; null if the walkthrough moved on meanwhile. */
   update(id: string, update: WalkthroughUpdate): Promise<Walkthrough | null>;
+  /** S5: the student's skills (to pick one to re-check, and its card). */
+  skills(): Promise<DeviceSkill[]>;
+  /** S5: a finished walkthrough's skill, evidence and next re-check. */
+  recordSkill(record: SkillRecord): Promise<DeviceSkill>;
+};
+
+/** A skill as coach mode needs it (S5). */
+export const DeviceSkill = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  app: AppName.nullable(),
+  dueAt: z.iso.datetime({ offset: true }),
+  fsrsState: FsrsCard,
+  lastWalkthroughId: z.uuid().nullable(),
+});
+export type DeviceSkill = z.infer<typeof DeviceSkill>;
+
+export type SkillRecord = {
+  walkthroughId: string;
+  title: string;
+  app: string | null;
+  kind: WalkthroughKind;
+  evidence: SkillEvidence;
+  hints: number;
+  card: FsrsCard;
+  dueAt: string;
 };
 
 export function deviceWalkthroughs(token: string): WalkthroughStore {
@@ -41,6 +75,12 @@ export function deviceWalkthroughs(token: string): WalkthroughStore {
         call(`/v1/walkthroughs/device/${id}`, Walkthrough, { method: "PUT", body: update }),
         [409],
       ),
+    skills: () =>
+      guarded(call("/v1/skills/device", z.object({ skills: z.array(DeviceSkill) }))).then(
+        (r) => r.skills,
+      ),
+    recordSkill: (record) =>
+      guarded(call("/v1/skills/device/record", DeviceSkill, { method: "POST", body: record })),
   };
 }
 

@@ -598,3 +598,39 @@ don't ask them again. Where a decision changes the brief above, the decision win
     - **Saved items go where the student says** ("save it to my Physics notebook, chapter 5"),
       or, unsaid, where what they're studying belongs (auto-filing), not only to today's "From
       screen" page (K3, K8). The "From screen" page is one per notebook node, with date headings.
+13. **S5 and S6, learner integration and "quiz me on this"** (built 2026-10-26; the owner asked
+    for both, built to the brief, without further questions):
+    - **Skills** (migration `20261108000000_skills.sql`): one row per student per task, keyed by
+      its title and app (`skillKey`), linked to the course concept whose title names it (titles
+      only), with its FSRS card. `skill_evidence` keeps each walkthrough's outcome: `kind`
+      `guided` or `recheck`, its evidence and hints. Students read and delete their own; only the
+      API service writes. `walkthroughs` gains `kind` and `skill_id`.
+    - **The evidence rule is enforced three times:** the web server works it out
+      (`walkthroughEvidence`: a step needing the shown answer → `after_explanation`, otherwise
+      `with_hint`; a re-check done with no hint → `independent`); FastAPI's `SkillRecord`
+      refuses a guided `independent`; and the database's check constraint does too.
+    - **Finishing a walkthrough records its skill** (best effort: the walkthrough completes even
+      if recording fails) and FSRS schedules the re-check; the reply says when ("I'll ask you to
+      do it on your own in a few days").
+    - **The re-check is a one-step walkthrough** (`kind: "recheck"`): "let me try pivot tables
+      on my own" (or "test my skills": the most overdue skill) starts it with no model call: "Do
+      it on your own: …", checked against the taught walkthrough's last success condition, with
+      coach mode's own hint ladder (a hint makes it `with_hint`). Due skills are listed in the
+      review ("Skills to re-check", with Forget) and get a desktop reminder at most twice a day.
+    - **Course-aware answers:** screen questions and Circle & Ask get up to two passages of the
+      student's own course material (`POST /v1/courses/device/retrieve`: the device names no
+      course; the API searches its owner's ready courses, newest 8, above a similarity floor),
+      best effort within 1.5 s. Prompts `screen-tutor.v5` and `circle-ask.v5` cite them only when
+      they're the same idea ("this is the chain rule from your Calc notes, page 12").
+    - **S3.2's follow-up question as evidence is superseded** by K8's check questions: a saved
+      moment's check is the recall card, graded later and logged as evidence then.
+    - **"Quiz me on this"** (prompt `screen-quiz.v1`): 1–3 questions about the screen, each
+      key verified like a K8 check (`verifiedCheckQuestion`; a question that fails is dropped)
+      and kept at once as a `moment_checks` card with `origin: "screen_quiz"` (migration
+      `20261109000000_screen_quiz.sql`: no clip; the window's title when it holds nothing the
+      redaction rules would cover). They're due the next day under K8's 15-a-day cap, never
+      merged with a moment's card, and answered in the review's Quick check like any other.
+    - **On screen,** the questions are said and shown on the quiz card; the next holds' words
+      are the answer ("skip", "next", "stop" too), or it's typed or picked on the card. The web
+      server grades it with the key (which never reaches the device) and doesn't reschedule the
+      card: the review asks it again later, cold. Rate limits: 4 quizzes a minute, 40 a day.

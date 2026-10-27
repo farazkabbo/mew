@@ -30,6 +30,7 @@ from mew_api.main import create_app
 
 from .conftest import INTERNAL_SECRET, internal_headers
 from .pdfgen import CHAPTER, make_pdf
+from .test_devices import link_device
 
 #: The test PDF font encodes "'" as a typographic apostrophe, which pdfium returns as such.
 CURLY_APOSTROPHE = chr(0x2019)
@@ -401,6 +402,20 @@ def test_upload_review_and_retrieve_in_local_mode(dev_client: TestClient) -> Non
     ).json()["chunks"]
     assert hits[0]["page"] == 3
     assert hits[0]["source_title"] == "Forces and motion"
+
+    # The desktop app's screen answers search every ready course of its owner (S5).
+    token = link_device(dev_client)
+    on_screen = dev_client.post(
+        "/v1/courses/device/retrieve",
+        json={"query": "what opposes sliding?", "k": 2},
+        headers={**internal_headers(), "X-Mew-Device-Token": token},
+    )
+    assert on_screen.status_code == 200
+    assert on_screen.json()["chunks"][0]["page"] == 3
+    no_device = dev_client.post(
+        "/v1/courses/device/retrieve", json={"query": "friction"}, headers=internal_headers()
+    )
+    assert no_device.status_code == 401
 
     lesson = dev_client.get(
         f"/v1/courses/{course_id}/concepts/{first}/lesson", headers=LOCAL

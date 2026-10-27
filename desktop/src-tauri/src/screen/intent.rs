@@ -22,6 +22,10 @@ pub enum Intent {
     CoachStart,
     /// Continue the latest unfinished walkthrough ("continue where we left off").
     CoachResume,
+    /// S5: re-check a skill learned before, solo ("let me try pivot tables on my own").
+    CoachRecheck,
+    /// S6: questions about what's on the screen ("quiz me on this").
+    Quiz,
     /// A word for the walkthrough in progress.
     Coach(CoachWord),
     /// Pause Screen Coach ("Neb, pause"; during a walkthrough, "pause" pauses the walkthrough).
@@ -61,6 +65,12 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     }
     if is_coach_start(&words) {
         return Intent::CoachStart;
+    }
+    if is_recheck(&words) {
+        return Intent::CoachRecheck;
+    }
+    if is_quiz(&words) {
+        return Intent::Quiz;
     }
     // Commands are short; a long sentence is a question even if it mentions saving.
     if words.is_empty() || words.len() > 9 {
@@ -223,6 +233,98 @@ fn is_coach_start(words: &[String]) -> bool {
             .iter()
             .any(|p| text.starts_with(p));
     prefixed || step_by_step
+}
+
+/// The words after any polite lead-in ("hey Neb, can you…"), joined, without apostrophes.
+fn after_lead_in(words: &[String]) -> String {
+    let start = words
+        .iter()
+        .position(|w| !LEAD_IN.contains(&w.as_str()))
+        .unwrap_or(words.len());
+    plain(
+        &words[start..]
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    )
+}
+
+/// S5: "let me try pivot tables on my own", "can I try it myself", "I want to do it solo",
+/// "re-check my skills": a solo re-check of something learned before.
+fn is_recheck(words: &[String]) -> bool {
+    let text = after_lead_in(words);
+    if words.len() > 16 {
+        return false;
+    }
+    if matches!(
+        text.as_str(),
+        "recheck" | "re check" | "recheck my skills" | "re check my skills" | "test my skills"
+    ) {
+        return true;
+    }
+    let tries = [
+        "let me try",
+        "i try",
+        "i want to try",
+        "ill try",
+        "let me do",
+        "i want to do",
+    ]
+    .iter()
+    .any(|p| text.starts_with(p));
+    let alone = [
+        " on my own",
+        " myself",
+        " solo",
+        " without you",
+        " without help",
+        " alone",
+        " by myself",
+    ]
+    .iter()
+    .any(|w| text.ends_with(w) || text.contains(&format!("{w} ")));
+    tries && alone
+}
+
+/// S6: "quiz me on this", "test me on this page", "ask me questions about this", "make me a
+/// quiz": questions about what's on the screen.
+fn is_quiz(words: &[String]) -> bool {
+    let text = after_lead_in(words);
+    if words.len() > 12 {
+        return false;
+    }
+    let about_this = |rest: &str| {
+        rest.is_empty()
+            || matches!(
+                rest,
+                "this"
+                    | "that"
+                    | "it"
+                    | "this page"
+                    | "this one"
+                    | "these"
+                    | "what im looking at"
+                    | "whats on my screen"
+                    | "whats on screen"
+                    | "my screen"
+                    | "the screen"
+            )
+    };
+    for prefix in [
+        "quiz me on ",
+        "test me on ",
+        "ask me questions about ",
+        "ask me about ",
+        "quiz me about ",
+    ] {
+        if let Some(rest) = text.strip_prefix(prefix) {
+            return about_this(rest.trim());
+        }
+    }
+    matches!(
+        text.as_str(),
+        "quiz me" | "make me a quiz" | "give me a quiz" | "quiz me please" | "test me"
+    )
 }
 
 /// "Continue where we left off", "resume", "keep going".
@@ -442,6 +544,50 @@ mod tests {
                 Intent::NotesCheck { all: true },
                 "{said}"
             );
+        }
+    }
+
+    #[test]
+    fn recognises_a_solo_recheck() {
+        for said in [
+            "let me try pivot tables on my own",
+            "Neb, let me try it myself.",
+            "can I try it myself?",
+            "I want to do the chart by myself",
+            "I'll try it without help",
+            "recheck my skills",
+            "test my skills",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::CoachRecheck, "{said}");
+        }
+        for said in [
+            "let me try again",
+            "I tried it myself and it broke, why?",
+            "teach me how to make a pivot table",
+        ] {
+            assert_ne!(intent_of(said, false), Intent::CoachRecheck, "{said}");
+        }
+    }
+
+    #[test]
+    fn recognises_quiz_me_on_this() {
+        for said in [
+            "quiz me on this",
+            "Neb, quiz me on this page.",
+            "test me on this",
+            "ask me questions about what I'm looking at",
+            "make me a quiz",
+            "quiz me please",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::Quiz, "{said}");
+        }
+        for said in [
+            // K8's "quiz me on what I saved" is the notebook's, not the screen's.
+            "quiz me on what I saved today",
+            "what's a quiz?",
+            "test me on the french revolution chapter from last week please",
+        ] {
+            assert_ne!(intent_of(said, false), Intent::Quiz, "{said}");
         }
     }
 

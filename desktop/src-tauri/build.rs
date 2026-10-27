@@ -4,6 +4,7 @@ fn main() {
     let commands = tauri_build::AppManifest::new().commands(&[
         "notify_due",
         "notify_checks",
+        "notify_skills",
         "screen_coach_status",
         "screen_coach_set_enabled",
         "screen_coach_set_paused",
@@ -27,6 +28,7 @@ fn main() {
         "screen_draw_erase",
         "screen_draw_select",
         "screen_circle_card",
+        "screen_quiz_card",
     ]);
     // Our own manifest replaces Tauri's default: the same Common Controls dependency, plus
     // Per-Monitor DPI Awareness V2 (Screen Coach maps screenshot pixels to screen pixels).

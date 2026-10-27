@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Quiz · Neb</title>
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/quiz-card.js" defer></script>
+  </head>
+  <body class="card">
+    <main class="circle-card quiz-card" aria-label="Quiz">
+      <p class="card-top" id="quiz-top"></p>
+      <p class="card-text" id="quiz-prompt" aria-live="polite"></p>
+      <ul class="card-chips quiz-choices" id="quiz-choices"></ul>
+      <p class="quiz-result" id="quiz-result" aria-live="polite"></p>
+      <form class="card-ask" id="quiz-form">
+        <label class="sr-only" for="quiz-input">Your answer</label>
+        <input
+          id="quiz-input"
+          type="text"
+          maxlength="500"
+          autocomplete="off"
+          placeholder="Type your answer, or hold Ctrl+Alt and say it"
+        />
+      </form>
+      <div class="card-buttons" id="quiz-buttons"></div>
+    </main>
+  </body>
+</html>

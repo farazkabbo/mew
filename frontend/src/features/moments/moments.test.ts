@@ -143,6 +143,8 @@ describe("checks due per chapter (K8 §4.7)", () => {
   const check = (nodeId: string | null, dueAt: string): MomentCheckView => ({
     id: crypto.randomUUID(),
     clipId: crypto.randomUUID(),
+    origin: "moment",
+    sourceTitle: null,
     mergedClipIds: [],
     nodeId,
     prompt: "Why?",

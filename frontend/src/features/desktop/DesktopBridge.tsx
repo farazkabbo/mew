@@ -5,7 +5,13 @@ import { useEffect } from "react";
 
 import { ScreenCoachBridge } from "../screen/ScreenCoachBridge";
 import { useSettings } from "../settings/store";
-import { isDesktop, remindAboutChecks, remindAboutReviews, SUMMON_EVENT } from "./bridge";
+import {
+  isDesktop,
+  remindAboutChecks,
+  remindAboutReviews,
+  remindAboutSkills,
+  SUMMON_EVENT,
+} from "./bridge";
 
 /** First check shortly after opening, then every half hour (the app shows at most one per 30 min). */
 const FIRST_CHECK_MS = 60_000;
@@ -23,6 +29,7 @@ export function DesktopBridge() {
     if (!isDesktop()) return;
     const check = () => {
       void remindAboutReviews().catch(() => undefined);
+      void remindAboutSkills().catch(() => undefined);
       if (useSettings.getState().settings.notify_moment_checks)
         void remindAboutChecks().catch(() => undefined);
     };

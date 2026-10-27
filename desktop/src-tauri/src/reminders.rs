@@ -15,6 +15,8 @@ pub struct Reminders {
     last: Mutex<Option<Instant>>,
     /// Saved moments' checks (K8), reminded apart from concepts: opt-in, at most twice a day.
     last_checks: Mutex<Option<Instant>>,
+    /// Coach mode's skills due for a re-check (S5): at most twice a day too.
+    last_skills: Mutex<Option<Instant>>,
 }
 
 /// Saved moments' check reminders (K8 §4.7: desktop notifications are opt-in) come this rarely.
@@ -56,20 +58,71 @@ pub fn notify_checks(
     Ok(true)
 }
 
-/// The text of a reminder, or None when there's nothing to say. `first` comes from a web page,
-/// so it is treated as data: control characters dropped, length capped.
-pub fn reminder_text(count: u32, first: Option<&str>) -> Option<String> {
+/// Skills due for a re-check (S5) come as rarely as saved moments' checks.
+const SKILLS_GAP: Duration = Duration::from_secs(12 * 60 * 60);
+
+/// "Time to try “Pivot tables” on your own", or None when none is due. `first` comes from a web
+/// page: data, cleaned like a concept's title.
+pub fn skills_text(count: u32, first: Option<&str>) -> Option<String> {
     if count == 0 {
         return None;
     }
-    let first: String = first
+    let first = clean_title(first);
+    Some(match (count.min(999), first.is_empty()) {
+        (1, false) => format!("Time to try “{first}” on your own."),
+        (1, true) => "A skill is ready to try on your own.".to_owned(),
+        (n, false) => format!("{n} skills are ready to try on your own, starting with “{first}”."),
+        (n, true) => format!("{n} skills are ready to try on your own."),
+    })
+}
+
+/// Called by the web app (only its origin may) with the coach-mode skills due for a re-check.
+#[tauri::command]
+pub fn notify_skills(
+    app: AppHandle,
+    reminders: State<'_, Reminders>,
+    count: u32,
+    first: Option<String>,
+) -> Result<bool, String> {
+    let Some(body) = skills_text(count, first.as_deref()) else {
+        return Ok(false);
+    };
+    let mut last = reminders
+        .last_skills
+        .lock()
+        .map_err(|_| "reminder state unavailable")?;
+    if last.is_some_and(|at| at.elapsed() < SKILLS_GAP) {
+        return Ok(false);
+    }
+    app.notification()
+        .builder()
+        .title("Try it on your own")
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())?;
+    *last = Some(Instant::now());
+    Ok(true)
+}
+
+/// A title from a web page, as data: control characters dropped, length capped.
+fn clean_title(title: Option<&str>) -> String {
+    title
         .unwrap_or("")
         .chars()
         .filter(|c| !c.is_control())
         .take(MAX_TITLE_CHARS)
         .collect::<String>()
         .trim()
-        .to_owned();
+        .to_owned()
+}
+
+/// The text of a reminder, or None when there's nothing to say. `first` comes from a web page,
+/// so it is treated as data: control characters dropped, length capped.
+pub fn reminder_text(count: u32, first: Option<&str>) -> Option<String> {
+    if count == 0 {
+        return None;
+    }
+    let first = clean_title(first);
     Some(match (count.min(999), first.is_empty()) {
         (1, false) => format!("“{first}” is ready for review."),
         (1, true) => "A concept is ready for review.".to_owned(),
@@ -120,6 +173,23 @@ mod tests {
         assert_eq!(
             checks_text(4).as_deref(),
             Some("4 checks from things you saved are due.")
+        );
+    }
+
+    #[test]
+    fn says_which_skill_to_try_alone() {
+        assert_eq!(skills_text(0, Some("Pivot tables")), None);
+        assert_eq!(
+            skills_text(1, Some("Pivot tables")).as_deref(),
+            Some("Time to try “Pivot tables” on your own.")
+        );
+        assert_eq!(
+            skills_text(2, Some("Pivot\ntables")).as_deref(),
+            Some("2 skills are ready to try on your own, starting with “Pivottables”.")
+        );
+        assert_eq!(
+            skills_text(3, None).as_deref(),
+            Some("3 skills are ready to try on your own.")
         );
     }
 

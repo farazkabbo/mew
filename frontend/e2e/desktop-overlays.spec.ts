@@ -668,3 +668,71 @@ test("the ink overlay draws a sketch card beside the marks: benzene, bond by bon
   if (process.env.SHOT_SKETCH) await page.screenshot({ path: process.env.SHOT_SKETCH });
   expect(shell.violations).toEqual([]);
 });
+
+test("the quiz card asks, takes a typed answer or a choice, and shows the grade (S6)", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "quiz-card.html");
+  const question = {
+    step: 1,
+    total: 2,
+    prompt: "Why is a thrown ball's path curved?",
+    kind: "short",
+    choices: [],
+    phase: "asking",
+    correct: null,
+    said: null,
+    last: false,
+  };
+  await shell.dispatch("mew:quiz-show", question);
+  await expect(page.getByText("Quiz · question 1 of 2")).toBeVisible();
+  await page.getByLabel("Your answer").fill("gravity pulls it down");
+  await page.keyboard.press("Enter");
+  await expect.poll(async () => (await shell.calls()).length).toBe(1);
+  expect((await shell.calls())[0]).toEqual({
+    cmd: "screen_quiz_card",
+    args: { action: "answer", text: "gravity pulls it down" },
+  });
+
+  await shell.dispatch("mew:quiz-show", { ...question, phase: "checking" });
+  await expect(page.getByText("checking…")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Skip" })).toBeDisabled();
+
+  await shell.dispatch("mew:quiz-show", {
+    ...question,
+    phase: "answered",
+    correct: true,
+    said: "That's it.",
+  });
+  await expect(page.getByText("That's it.")).toBeVisible();
+  await page.getByRole("button", { name: "Next ↵" }).click();
+  expect((await shell.calls()).at(-1)).toEqual({
+    cmd: "screen_quiz_card",
+    args: { action: "next" },
+  });
+
+  // A multiple choice: one tap (or its number key) answers; its text is text, never markup.
+  await shell.dispatch("mew:quiz-show", {
+    ...question,
+    step: 2,
+    kind: "mcq",
+    choices: ["<b>0</b>", "9.8 m/s²"],
+    last: true,
+  });
+  await expect(page.getByLabel("Your answer")).toBeHidden();
+  await page.getByRole("button", { name: "1. <b>0</b>" }).click();
+  expect((await shell.calls()).at(-1)).toEqual({
+    cmd: "screen_quiz_card",
+    args: { action: "answer", text: "<b>0</b>" },
+  });
+  expect(await page.locator("b").count()).toBe(0);
+  await page.keyboard.press("Escape");
+  expect((await shell.calls()).at(-1)).toEqual({
+    cmd: "screen_quiz_card",
+    args: { action: "stop" },
+  });
+  // A malformed view changes nothing.
+  await shell.dispatch("mew:quiz-show", { ...question, total: 9 });
+  await expect(page.getByText("Quiz · question 2 of 2")).toBeVisible();
+  expect(shell.violations).toEqual([]);
+});

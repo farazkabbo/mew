@@ -74,6 +74,22 @@ pub fn start_body(goal: &str, meta: &FrameMeta, jpeg: &[u8]) -> SecretBytes {
     with_image(&head, jpeg, meta.width, meta.height)
 }
 
+/// `POST /api/screen/coach/recheck` (S5): the student's words (naming the skill, or not) and the
+/// screen.
+pub fn recheck_body(words: &str, meta: &FrameMeta, jpeg: &[u8]) -> SecretBytes {
+    #[derive(Serialize)]
+    struct Head<'a> {
+        words: &'a str,
+        #[serde(flatten)]
+        scene: Scene<'a>,
+    }
+    let head = Head {
+        words,
+        scene: scene(meta),
+    };
+    with_image(&head, jpeg, meta.width, meta.height)
+}
+
 /// `POST /api/screen/coach/resume`: the screen to continue on.
 pub fn resume_body(meta: &FrameMeta, jpeg: &[u8]) -> SecretBytes {
     with_image(&scene(meta), jpeg, meta.width, meta.height)

@@ -64,11 +64,17 @@ class WalkthroughStep(_Camel):
 Steps = Annotated[list[WalkthroughStep], Field(min_length=1, max_length=MAX_STEPS)]
 
 
+Kind = Literal["guided", "recheck"]
+
+
 class WalkthroughCreate(_Camel):
     title: Line = Field(max_length=60)
     goal: Line = Field(max_length=200)
     app: AppName | None
     steps: Steps
+    #: S5: a re-check of the skill `skill_id`.
+    kind: Kind = "guided"
+    skill_id: UUID | None = None
 
 
 class WalkthroughUpdate(_Camel):
@@ -92,6 +98,8 @@ class WalkthroughView(_Camel):
     title: str
     goal: str
     app: str | None
+    kind: Kind = "guided"
+    skill_id: UUID | None = None
     status: Status
     phase: Phase
     current: int

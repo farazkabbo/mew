@@ -26,6 +26,10 @@ class WalkthroughStore(Protocol):
 
     def get(self, user: str, walkthrough_id: UUID) -> WalkthroughView | None: ...
 
+    def set_skill(self, user: str, walkthrough_id: UUID, skill_id: UUID) -> None:
+        """The skill the walkthrough built or re-checked (S5)."""
+        ...
+
     def latest_resumable(self, user: str, since: datetime) -> WalkthroughView | None:
         """The most recently touched walkthrough that isn't finished, if touched since `since`."""
         ...
@@ -60,6 +64,8 @@ def _view(row: dict[str, Any]) -> WalkthroughView:
             "title": row["title"],
             "goal": row["goal"],
             "app": row.get("app_exe_name"),
+            "kind": row.get("kind") or "guided",
+            "skill_id": row.get("skill_id"),
             "status": row["status"],
             "phase": row["phase"],
             "current": row["current_step"],
@@ -77,6 +83,8 @@ def _new_row(walkthrough: WalkthroughCreate) -> dict[str, Any]:
         "title": walkthrough.title,
         "goal": walkthrough.goal,
         "app_exe_name": walkthrough.app,
+        "kind": walkthrough.kind,
+        "skill_id": str(walkthrough.skill_id) if walkthrough.skill_id else None,
         "steps": [step.model_dump(mode="json", by_alias=True) for step in walkthrough.steps],
         "hints_used": sum(step.hints for step in walkthrough.steps),
         **_row(None, datetime.now(UTC)),
@@ -126,6 +134,12 @@ class MemoryWalkthroughStore:
             latest = max(rows, key=lambda row: (row["updated_at"], row["write"]), default=None)
             return _view(latest) if latest else None
 
+    def set_skill(self, user: str, walkthrough_id: UUID, skill_id: UUID) -> None:
+        with self._lock:
+            row = self._rows.get(user, {}).get(walkthrough_id)
+            if row is not None:
+                row["skill_id"] = str(skill_id)
+
     def update(
         self, user: str, walkthrough_id: UUID, update: WalkthroughUpdate
     ) -> WalkthroughView | None:
@@ -152,6 +166,13 @@ class SupabaseWalkthroughStore(SupabaseRest):
     def get(self, user: str, walkthrough_id: UUID) -> WalkthroughView | None:
         rows = self._get("walkthroughs", {"user_id": f"eq.{user}", "id": f"eq.{walkthrough_id}"})
         return _view(rows[0]) if rows else None
+
+    def set_skill(self, user: str, walkthrough_id: UUID, skill_id: UUID) -> None:
+        self._patch(
+            "walkthroughs",
+            {"user_id": f"eq.{user}", "id": f"eq.{walkthrough_id}"},
+            {"skill_id": str(skill_id)},
+        )
 
     def latest_resumable(self, user: str, since: datetime) -> WalkthroughView | None:
         rows = self._get(

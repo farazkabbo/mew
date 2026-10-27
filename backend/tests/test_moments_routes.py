@@ -294,3 +294,67 @@ def test_a_merged_card_lists_every_moment_it_holds(client: TestClient) -> None: 
     assert len(due) == 1
     assert due[0]["clipId"] == first
     assert due[0]["mergedClipIds"] == [second]
+
+
+def quiz(client: TestClient, token: str, **body: Any) -> Any:  # noqa: F811
+    return client.post("/v1/moments/device/quiz", json=body, headers=device(token))
+
+
+def test_quiz_me_on_this_keeps_each_question_as_its_own_card(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    questions = [
+        {"question": QUESTION, "hints": ["projectile motion"]},
+        {"question": {**QUESTION, "prompt": "What is the horizontal acceleration?"}, "hints": []},
+    ]
+    response = quiz(
+        client, token, questions=questions, sourceTitle="Lecture 5", sourceApp="chrome.exe"
+    )
+    assert response.status_code == 200
+    ids = response.json()["checkIds"]
+    assert len(ids) == 2
+
+    due = client.get("/v1/moments/checks/due", headers=LOCAL).json()["checks"]
+    assert {c["id"] for c in due} == set(ids)
+    assert all(c["origin"] == "screen_quiz" for c in due)
+    assert all(c["clipId"] is None and c["sourceTitle"] == "Lecture 5" for c in due)
+    assert all("answerKey" not in c for c in due)
+
+    # A saved moment about the same concept starts its own card: quiz cards never merge.
+    body = entry_body(moment={"subject": "physics", "checkQuestion": QUESTION})
+    assert save(client, token, body).status_code == 201
+    assert len(client.get("/v1/moments/checks/due", headers=LOCAL).json()["checks"]) == 3
+
+    # The device reads a quiz card's key (to grade on screen), never a moment's check.
+    full = client.get(f"/v1/moments/device/checks/{ids[0]}", headers=device(token))
+    assert full.status_code == 200
+    assert full.json()["answerKey"] == QUESTION["answerKey"]
+    moment_check = next(
+        c["id"]
+        for c in client.get("/v1/moments/checks/due", headers=LOCAL).json()["checks"]
+        if c["origin"] == "moment"
+    )
+    other = client.get(f"/v1/moments/device/checks/{moment_check}", headers=device(token))
+    assert other.status_code == 404
+
+
+def test_quiz_cards_need_a_device_and_at_most_three_questions(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    no_device = client.post(
+        "/v1/moments/device/quiz",
+        json={"questions": [{"question": QUESTION}]},
+        headers=internal_headers(),
+    )
+    assert no_device.status_code == 401
+    four = [{"question": QUESTION}] * 4
+    assert quiz(client, token, questions=four).status_code == 422
+    assert quiz(client, token, questions=[]).status_code == 422
+    missing = client.get(f"/v1/moments/device/checks/{uuid.uuid4()}", headers=device(token))
+    assert missing.status_code == 404
+
+
+def test_quiz_cards_respect_the_15_new_a_day(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    for _ in range(6):
+        assert quiz(client, token, questions=[{"question": QUESTION}] * 3).status_code == 200
+    due = client.get("/v1/moments/checks/due", headers=LOCAL).json()["checks"]
+    assert len(due) == 15

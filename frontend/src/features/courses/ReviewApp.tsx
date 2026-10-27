@@ -10,10 +10,12 @@ import { QuickCheck } from "../moments/QuickCheck";
 import { useMomentChecks } from "../moments/store";
 import { coursesApi, CourseApiError, formatDue, quizHref } from "./api";
 import { CourseShell } from "./CourseShell";
+import { SkillsToRecheck } from "./SkillsToRecheck";
 
 /**
  * What's due for review across all courses (FSRS), grouped by course, with a quiz per course;
- * and (K8 §4.7) the check questions of moments saved from the screen, as a Quick check.
+ * the check questions of moments saved from the screen (K8 §4.7) and of "quiz me on this" (S6),
+ * as a Quick check; and the skills learned in coach mode, with their re-checks (S5).
  */
 export function ReviewApp() {
   const router = useRouter();
@@ -38,8 +40,8 @@ export function ReviewApp() {
       <span>
         <span className="font-serif text-2xl">From what you saved</span>
         <span className="block text-sm text-ink-muted">
-          {momentsDue === 1 ? "1 check" : `${momentsDue} checks`} due from moments you saved from
-          your screen.
+          {momentsDue === 1 ? "1 check" : `${momentsDue} checks`} due from moments you saved and
+          quizzes on your screen.
           {exam &&
             ` Your ${exam.title} exam is ${exam.daysLeft === 0 ? "today" : exam.daysLeft === 1 ? "tomorrow" : `in ${exam.daysLeft} days`}, so its reviews come first.`}
         </span>
@@ -90,6 +92,7 @@ export function ReviewApp() {
       {!items && !error && <p className="text-ink-muted">Loading…</p>}
       {momentsDue > 0 && !exam && moments}
       <QuickCheck onReplay={(clipId) => router.push(`/notebook?moment=${clipId}`)} />
+      <SkillsToRecheck now={now} />
       {items?.length === 0 && momentsDue === 0 && (
         <p className="rounded-2xl border border-rule bg-paper-raised p-6">
           Nothing is due right now. Open a lesson or{" "}

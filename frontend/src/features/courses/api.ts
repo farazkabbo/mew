@@ -9,6 +9,7 @@ import {
   type CourseUpdate,
   Lesson,
   ReviewQueue,
+  SkillsView,
 } from "@mew/shared";
 import { z } from "zod";
 
@@ -69,6 +70,9 @@ export const coursesApi = {
     call(`/api/courses/${id}/concepts/${conceptId}/explored`, z.undefined(), json("POST", {})),
   /** Concepts due for review across all courses. */
   dueReviews: () => call("/api/review", ReviewQueue),
+  /** Skills learned in coach mode on the desktop (S5), with their re-check dates. */
+  skills: () => call("/api/skills", SkillsView),
+  forgetSkill: (id: string) => call(`/api/skills/${id}`, z.undefined(), { method: "DELETE" }),
 };
 
 /** "/notebook" for this course: opens (or creates) the course's own notebook. */

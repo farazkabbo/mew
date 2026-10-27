@@ -40,9 +40,11 @@ from .routes import (
     notebooks,
     notes,
     pdfs,
+    skills,
     walkthroughs,
 )
 from .routes import settings as user_settings
+from .skills.store import MemorySkillStore
 from .walkthroughs.store import MemoryWalkthroughStore
 
 logger = logging.getLogger(__name__)
@@ -104,6 +106,15 @@ def create_app(
         lambda user: moment_texts(app.state.local_clips.moment_rows(user)),
     )
     app.state.local_audio = MemoryAudioStore()
+    # Skills (S5): a skill links to a concept of the student's local courses by title.
+    local_courses = app.state.local_courses
+    app.state.local_skills = MemorySkillStore(
+        lambda user: [
+            c
+            for co in local_courses.list_courses(user)
+            for c in local_courses.list_concepts(user, co.id)
+        ]
+    )
     app.state.local_annotations = MemoryAnnotationStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
@@ -123,6 +134,7 @@ def create_app(
     v1.include_router(notes.router)
     v1.include_router(walkthroughs.router)
     v1.include_router(moments.router)
+    v1.include_router(skills.router)
     v1.include_router(annotations.router)
     app.include_router(health.router)
     app.include_router(v1)

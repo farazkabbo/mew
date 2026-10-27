@@ -164,6 +164,8 @@ function QuickCheckBody({
   };
   const result = phase.kind === "answered" ? phase.result : null;
   const showMoment = peeked || result !== null;
+  // A "quiz me on this" card (S6) has no saved moment: only the window it was about.
+  const clips = [check.clipId, ...check.mergedClipIds].filter((id): id is string => id !== null);
 
   return (
     <Shell onClose={close} progress={`${index + 1} of ${picked.length}`}>
@@ -287,9 +289,14 @@ function QuickCheckBody({
         </div>
       )}
 
-      {showMoment && (
+      {showMoment && clips.length === 0 && check.sourceTitle && (
+        <p data-testid="quick-check-source" className="mt-4 text-xs text-ink-muted">
+          From your screen: {check.sourceTitle}
+        </p>
+      )}
+      {showMoment && clips.length > 0 && (
         <ul data-testid="quick-check-moments" className="mt-4 flex flex-col gap-2">
-          {[check.clipId, ...check.mergedClipIds].slice(0, SHOWN_MOMENTS).map((clipId) => (
+          {clips.slice(0, SHOWN_MOMENTS).map((clipId) => (
             <MomentRow
               key={clipId}
               clipId={clipId}
@@ -310,9 +317,9 @@ function QuickCheckBody({
               }}
             />
           ))}
-          {check.mergedClipIds.length + 1 > SHOWN_MOMENTS && (
+          {clips.length > SHOWN_MOMENTS && (
             <li className="text-xs text-ink-muted">
-              and {check.mergedClipIds.length + 1 - SHOWN_MOMENTS} more moments about this
+              and {clips.length - SHOWN_MOMENTS} more moments about this
             </li>
           )}
         </ul>
@@ -325,7 +332,7 @@ function QuickCheckBody({
             Hint
           </button>
         )}
-        {!result && !peeked && (
+        {!result && !peeked && clips.length > 0 && (
           <button type="button" onClick={() => setPeeked(true)} className={SECONDARY}>
             Show the moment
           </button>

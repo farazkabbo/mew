@@ -31,8 +31,8 @@ use super::page;
 use super::pipeline::Captured;
 use super::walkthrough::{
     self, arrow_on_screen, check_body, event_body, finished_view, move_for, parse_coach_reply,
-    pill_spot, pill_view, resume_body, start_body, CoachReply, CoachStatus, Move, PillView,
-    Session, StepEvent,
+    pill_spot, pill_view, recheck_body, resume_body, start_body, CoachReply, CoachStatus, Move,
+    PillView, Session, StepEvent,
 };
 use super::win::{credential, http};
 
@@ -113,6 +113,24 @@ pub fn on_word<R: Runtime>(app: &AppHandle<R>, word: CoachWord, captured: Captur
             send_event(app, event);
         }
     }
+}
+
+/// S5: "let me try pivot tables on my own": a solo re-check of a skill learned before. Its
+/// reply is a walkthrough like any other (one step, no arrow), checked the same way.
+pub fn recheck<R: Runtime>(app: &AppHandle<R>, words: String, captured: Captured) {
+    let Some(generation) = claim(app) else {
+        return;
+    };
+    show_notice_once(app);
+    let handle = app.clone();
+    in_background(app, move || {
+        let Captured { jpeg, meta, detail } = captured;
+        let body = recheck_body(&words, &meta, jpeg.as_slice());
+        drop(jpeg);
+        let reply = send(&handle, "api/screen/coach/recheck", body.as_slice());
+        drop(body);
+        finish(&handle, generation, reply, Some((meta, detail)));
+    });
 }
 
 /// "Continue where we left off" (or a word to a paused walkthrough): the latest unfinished

@@ -34,7 +34,8 @@ MAX_DUE = 200
 @dataclass
 class CheckRow:
     id: UUID
-    clip_id: UUID
+    #: The saved moment it came from; None for a "quiz me on this" card (S6).
+    clip_id: UUID | None
     node_id: UUID | None
     prompt: str
     kind: str
@@ -49,6 +50,17 @@ class CheckRow:
     fsrs_state: dict[str, Any] | None = None
     merged_clip_ids: list[UUID] = field(default_factory=list)
     activated_at: datetime | None = None
+    origin: str = "moment"
+    source_title: str | None = None
+    source_app: str | None = None
+
+
+@dataclass(frozen=True)
+class QuizCard:
+    """A "quiz me on this" question to keep as a recall card (S6): verified, with its key."""
+
+    question: CheckQuestion
+    hints: list[str]
 
 
 class MomentStore(Protocol):
@@ -69,6 +81,14 @@ class MomentStore(Protocol):
         hints: list[str],
         now: datetime,
     ) -> UUID | None: ...
+    def add_quiz_checks(
+        self,
+        user: str,
+        cards: list[QuizCard],
+        source_title: str | None,
+        source_app: str | None,
+        now: datetime,
+    ) -> list[UUID]: ...
     def due_checks(self, user: str, now: datetime) -> list[CheckRow]: ...
     def get_check(self, user: str, check_id: UUID) -> CheckRow | None: ...
     def schedule(
@@ -175,6 +195,7 @@ class MemoryMomentStore:
             recent = [
                 RecentCard(c.id, tuple(c.concept_hints), c.created_at, len(c.merged_clip_ids))
                 for c in data.checks.values()
+                if c.origin == "moment"
             ]
             plan = plan_new_check(hints, now, recent, made_today)
             if plan.action == "merge" and plan.card_id in data.checks:
@@ -199,6 +220,52 @@ class MemoryMomentStore:
             )
             data.checks[check.id] = check
             return check.id
+
+    def add_quiz_checks(
+        self,
+        user: str,
+        cards: list[QuizCard],
+        source_title: str | None,
+        source_app: str | None,
+        now: datetime,
+    ) -> list[UUID]:
+        """Each question is its own card (never merged: the student asked for these), due
+        tomorrow, or queued once the day has 15 new."""
+        with self._lock:
+            data = self._data(user)
+            today = _day_start(now)
+            made_today = sum(
+                1
+                for c in data.checks.values()
+                if (c.activated_at or c.created_at) >= today and c.status == "active"
+            )
+            ids: list[UUID] = []
+            for card in cards:
+                plan = plan_new_check(card.hints, now, [], made_today)
+                active = plan.action == "active"
+                made_today += 1 if active else 0
+                check = CheckRow(
+                    id=uuid.uuid4(),
+                    clip_id=None,
+                    node_id=None,
+                    prompt=card.question.prompt,
+                    kind=card.question.kind,
+                    choices=list(card.question.choices),
+                    answer_key=card.question.answer_key,
+                    answer_latex=card.question.answer_latex,
+                    concept_hints=list(card.hints[:5]),
+                    status="active" if active else "queued",
+                    due_at=plan.due_at,
+                    reps=0,
+                    created_at=now,
+                    activated_at=now if active else None,
+                    origin="screen_quiz",
+                    source_title=source_title,
+                    source_app=source_app,
+                )
+                data.checks[check.id] = check
+                ids.append(check.id)
+            return ids
 
     def due_checks(self, user: str, now: datetime) -> list[CheckRow]:
         with self._lock:
@@ -244,7 +311,7 @@ class MemoryMomentStore:
     def move_checks(self, user: str, clip_id: UUID, node_id: UUID) -> None:
         with self._lock:
             for check in self._data(user).checks.values():
-                if check.clip_id == clip_id:
+                if check.clip_id is not None and check.clip_id == clip_id:
                     check.node_id = node_id
 
 
@@ -252,7 +319,8 @@ class MemoryMomentStore:
 
 _CHECK_FIELDS = (
     "id,clip_id,merged_clip_ids,node_id,prompt,kind,choices,answer_key,answer_latex,"
-    "concept_hints,status,fsrs_state,due_at,reps,activated_at,created_at"
+    "concept_hints,status,fsrs_state,due_at,reps,activated_at,created_at,origin,source_title,"
+    "source_app"
 )
 
 
@@ -265,7 +333,7 @@ def _check(row: Mapping[str, Any]) -> CheckRow:
         raise StoreError("unexpected response from Supabase")
     return CheckRow(
         id=UUID(row["id"]),
-        clip_id=UUID(row["clip_id"]),
+        clip_id=UUID(row["clip_id"]) if row.get("clip_id") else None,
         node_id=UUID(row["node_id"]) if row.get("node_id") else None,
         prompt=row["prompt"],
         kind=row["kind"],
@@ -280,6 +348,9 @@ def _check(row: Mapping[str, Any]) -> CheckRow:
         fsrs_state=row.get("fsrs_state"),
         merged_clip_ids=[UUID(c) for c in row.get("merged_clip_ids") or []],
         activated_at=when(row.get("activated_at")),
+        origin=row.get("origin") or "moment",
+        source_title=row.get("source_title"),
+        source_app=row.get("source_app"),
     )
 
 
@@ -427,6 +498,7 @@ class SupabaseMomentStore(SupabaseRest):
                 **self._mine(user),
                 "select": "id,concept_hints,created_at,merged_clip_ids",
                 "created_at": f"gte.{week}",
+                "origin": "eq.moment",
             },
         )
         recent = [
@@ -471,6 +543,46 @@ class SupabaseMomentStore(SupabaseRest):
             select="id",
         )
         return UUID(rows[0]["id"]) if rows else None
+
+    def add_quiz_checks(
+        self,
+        user: str,
+        cards: list[QuizCard],
+        source_title: str | None,
+        source_app: str | None,
+        now: datetime,
+    ) -> list[UUID]:
+        made_today = self._made_today(user, now)
+        payload: list[dict[str, Any]] = []
+        for card in cards:
+            plan = plan_new_check(card.hints, now, [], made_today)
+            active = plan.action == "active"
+            made_today += 1 if active else 0
+            payload.append(
+                self._owned(
+                    user,
+                    {
+                        "clip_id": None,
+                        "node_id": None,
+                        "origin": "screen_quiz",
+                        "source_title": source_title,
+                        "source_app": source_app,
+                        "prompt": card.question.prompt,
+                        "kind": card.question.kind,
+                        "choices": list(card.question.choices),
+                        "answer_key": card.question.answer_key,
+                        "answer_latex": card.question.answer_latex,
+                        "concept_hints": card.hints[:5],
+                        "status": "active" if active else "queued",
+                        "due_at": plan.due_at.isoformat() if plan.due_at else None,
+                        "activated_at": now.isoformat() if active else None,
+                    },
+                )
+            )
+        if not payload:
+            return []
+        rows = self._insert("moment_checks", payload, select="id")
+        return [UUID(r["id"]) for r in rows]
 
     def due_checks(self, user: str, now: datetime) -> list[CheckRow]:
         room = room_today(self._made_today(user, now))

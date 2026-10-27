@@ -25,6 +25,12 @@
 //!   it's saved to the notebook (`circle.rs`, `circle_answer.rs`; pure: `marks.rs`, `pointer.rs`,
 //!   `circle_steps.rs`, `circle_protocol.rs`, `raster.rs`).
 //!
+//! - S5, learner integration: a finished walkthrough becomes a skill with a re-check ("let me try
+//!   pivot tables on my own", `coach_mode.rs`); answers about the screen cite the student's own
+//!   course material (on the server).
+//! - S6, "quiz me on this": 1–3 questions about the screen, answered by voice or on the quiz card,
+//!   each kept as a review card (`screen_quiz.rs`; pure: `quiz.rs`).
+//!
 //! - K3, save where I say (docs/NOTEBOOKS_K.md §4): the server resolves "save it to Physics chapter
 //!   5" against the student's own notebooks; the card shows where an entry goes, offers chips, a
 //!   picker and "Create it and save", and a saved entry moves when it's changed (`destination.rs`,
@@ -54,6 +60,7 @@ pub mod notes_marks;
 pub mod pointer;
 pub mod privacy;
 pub mod protocol;
+pub mod quiz;
 pub mod raster;
 pub mod screen_text;
 pub mod secret;
@@ -90,6 +97,8 @@ pub mod page;
 pub mod pipeline;
 #[cfg(windows)]
 pub mod reanchor;
+#[cfg(windows)]
+pub mod screen_quiz;
 #[cfg(windows)]
 pub mod win;
 

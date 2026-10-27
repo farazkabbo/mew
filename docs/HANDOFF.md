@@ -101,8 +101,7 @@ binding): **S0–S3 built** (2026-10-22), **S4 built** (2026-10-23). Desktop cod
     one-time notice says coach mode sees the whole monitor.
   - A question asked mid-walkthrough is answered in its context (screen tutor prompt v3).
   - Rate limits: `coachStart*` (4/min, 30/day), `coachStep*` (20/min, 400/day, 4,000/month).
-  - **The `walkthroughs` migration is not applied to the hosted project yet** (needs the owner's
-    go).
+  - The `walkthroughs` migration is applied to the hosted project (2026-10-25).
   - **To verify by hand:** the acceptance check, a 5+ step walkthrough in Excel or Word (e.g.
     "teach me how to make a pivot table"), saying "done" once without doing the step (it must be
     caught and hinted), "I'm stuck" (an arrow with the control's name), the pill's buttons and
@@ -132,7 +131,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     `note_lines`.
   - Consent version 4 (the settings page explains the pointer, drawing and auto-saving); its
     Circle & Ask section has the pointer, saving and silent-mode settings.
-  - **The `clip_entries` migration is not applied to the hosted project yet.**
+  - The `clip_entries` migration is applied to the hosted project (2026-10-25).
 - **K1 (notebook tree)** — brief [NOTEBOOKS_K.md](NOTEBOOKS_K.md) (the K series, K1–K11; its
   0.1 and Decisions are binding):
   - **Data:** `notebooks` is a tree (migration `notebook_tree`: `parent_id` with a composite
@@ -159,7 +158,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **Notes Check through the tree:** a notebook scope is the node and everything under it; a
     course scope is every notebook linked to it with its chapters. The widest scope is searched
     and the open chapter's lines rank first (×1.5), then its notebook's (×1.2).
-  - **The `notebook_tree` migration is not applied to the hosted project yet.**
+  - The `notebook_tree` migration is applied to the hosted project (2026-10-26).
 - **K2 (two-key shortcuts)** — NOTEBOOKS_K.md §11, decisions 26–36:
   - **Desktop:** one global gesture. `screen/keys.rs` polls left Ctrl + left Alt (no hook) into the
     pure `hold.rs` (300 ms AltGr guard, any other key cancels, double tap); `coach::on_hold`
@@ -174,7 +173,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     Alt+C check my work; redo is Ctrl+Y only), tooltips and Settings → Shortcuts (recorder, Reset).
     Settings `shortcuts` and `shortcuts_notice_seen` (migration `shortcut_settings`). Holding
     Ctrl+Alt on the notebook page talks to Neb (`features/shortcuts/hold.ts`).
-  - **The `shortcut_settings` migration is not applied to the hosted project yet.**
+  - The `shortcut_settings` migration is applied to the hosted project (2026-10-26).
 - **K3 (save where I say)** — NOTEBOOKS_K.md §4, decisions 37–47:
   - **Resolver** `packages/shared/src/destinations.ts` (normalise, split by level words and of/in,
     score, decide: a place, chips, "Create it and save", or none; `splitDestination`;
@@ -192,7 +191,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     pauses, never stops, the explanation.
   - **Notebook:** entries go to their node's "From screen" page (date headings, a new page after
     30), made on the device after "Create it and save", moved (never copied) when changed.
-  - **The `clip_destinations` migration is not applied to the hosted project yet.**
+  - The `clip_destinations` migration is applied to the hosted project (2026-10-26).
 - **K4 (PDFs into chapters)** — NOTEBOOKS_K.md §5, decisions 48–56:
   - **API:** `mew_api/pdfs/` (sandboxed `reader.py`: inspect, draw a page as PNG, words with
     boxes; `store.py`; `routes/pdfs.py`: import, page image, page text, course material).
@@ -201,7 +200,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **Web:** `/api/pdfs/**`; `features/pdfs/` (upload, import plan, `carryOutImport`, the import
     dialog, the offline page cache); Ctrl+O, "Import PDF", PDFs dropped on the sidebar or a page,
     "Chapters from a PDF…", "Make available offline", "Review topics".
-  - **The `notebook_pdfs` migration is not applied to the hosted project yet.**
+  - The `notebook_pdfs` migration is applied to the hosted project (2026-10-26).
   - **To verify by hand:** the K4 acceptance with a real 120-page textbook (split, writing on a
     page, asking about it, the course and "Review topics", pages offline after viewing).
 - **K5 (explaining by drawing)** — NOTEBOOKS_K.md §3, decisions 57–63:
@@ -230,8 +229,8 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     `notebook/HoldCircle.tsx`, and the circled lines (`notebook/circle.ts`) are the next turn's
     context (`circled`, prompt `tutor.v8`).
   - Setting "After a full solution: give me a Your Turn" (`your_turn_after_solution`, default on);
-    attempt source `your_turn`. **The `show_then_you` migration is not applied to the hosted
-    project yet.**
+    attempt source `your_turn`. The `show_then_you` migration is applied to the hosted project
+    (2026-10-26).
   - **To verify by hand:** the K6 acceptance with a real voice and model ("just give me the
     answer" on `3x + 7 = 19`); the pointer at 150 % zoom; circling with a pen and with a finger.
 - **K7 (Show-then-You on screen)** — NOTEBOOKS_K.md §6.2, decisions 73–81:
@@ -294,8 +293,8 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
 
   - **Server:** `PUT /api/annotations` → FastAPI `PUT /v1/annotations` (`routes/annotations.py`,
     RLS upsert); `POST /api/annotate/mark` (margin notes, `server/live-mark.ts`, `liveMark` limits).
-  - **The `annotations` migration (`20261105000000_annotations.sql`) is not applied to the
-    hosted project yet.**
+  - The `annotations` migration (`20261105000000_annotations.sql`) is applied to the hosted
+    project (2026-10-26).
 - **K8 and K9 follow-ups** — NOTEBOOKS_K.md decisions 108–119:
   - Quick check by voice ("Say it") and in writing (`moments/WritePad.tsx`); "Open in neb" for
     moments from an imported PDF; exam dates first (`examSoon`); opt-in check reminders in the
@@ -326,8 +325,9 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     clicks while the keys aren't held, the overlays absent from a Teams share, AltGr typing never
     drawing, scrolling fading the marks, a v–t graph on YouTube (Enter → steps with ink before
     words), the toast (Undo leaves nothing; Open shows the entry), "Select question on screen"
-    on handwriting, and silent mode with only the keyboard. Not done (left for S5, decision 11):
-    course context in the answer, and evidence from the follow-up question.
+    on handwriting, and silent mode with only the keyboard. Course context in the answer came
+    with S5; the follow-up question's evidence was superseded by K8's check questions
+    (SCREEN_COACH.md decision 13).
 - **K1–K9 left-for-later, built** (2026-10-26) — NOTEBOOKS_K.md decisions 120–130:
   - **Show-then-You:** the offer after two wrong tries (`ShowThenYou.tried`, fed by the live
     annotator's `onTry`); a code Your Turn (reference `program` proved in Pyodide before it's
@@ -346,8 +346,36 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **To verify by hand:** "save this to Physics chapter 5" on a plain hold in the desktop app;
     Open in neb on a moment from an imported PDF (the highlight); "Recognize text" on a scanned
     page with a real key; the code Your Turn with real handwriting; two wrong lines → the offer.
-- **Next:** S5 (learner integration: skills from walkthroughs, evidence, FSRS re-checks).
-  Notes Check (S3.5) N1–N5 are built; see below.
+- **S5, learner integration, built** (2026-10-26) — SCREEN_COACH.md decision 13:
+  - **Skills:** migration `skills` (`skills`, `skill_evidence`; `walkthroughs.kind`, `skill_id`);
+    FastAPI `routes/skills.py` + `skills/` (device: list, record; owner: list, delete); shared
+    `skills.ts` (`walkthroughEvidence`, `recheckSteps`, `pickSkill`).
+  - **Recording:** `learnSkill` in `server/coach/run.ts` when a walkthrough completes (FSRS via
+    `server/learner.ts`); a guided walkthrough is never `independent` (server, FastAPI and the
+    database each refuse it).
+  - **Re-checks:** "let me try … on my own" (`Intent::CoachRecheck`) → `/api/screen/coach/recheck`
+    (`recheckCoaching`): a one-step walkthrough of kind `recheck`. The review lists due skills
+    (`SkillsToRecheck`, `/api/skills`), and the desktop reminds at most twice a day
+    (`notify_skills`).
+  - **Course-aware answers:** `POST /v1/courses/device/retrieve` → `server/screen-course.ts`;
+    prompts `screen-tutor.v5` and `circle-ask.v5`.
+  - **To verify by hand:** finish a real walkthrough (the skill and its re-check date in the
+    review), "let me try pivot tables on my own" the next time, and a screen question about a
+    page of an imported course (the answer names the course and page).
+- **S6, "quiz me on this", built** (2026-10-26) — SCREEN_COACH.md decision 13:
+  - Migration `screen_quiz` (`moment_checks.origin`, `source_title`, `source_app`; `clip_id`
+    nullable for quiz cards); FastAPI `POST /v1/moments/device/quiz`,
+    `GET /v1/moments/device/checks/{id}` (quiz cards only).
+  - Next: `/api/screen/quiz` and `/api/screen/quiz/answer` (`server/screen-quiz.ts`, prompt
+    `screen-quiz.v1`, `gradeCheck` shared with K8's checks; `screenQuiz*` rate limits).
+  - Desktop: `Intent::Quiz`, `screen_quiz.rs` (the next holds' words are the answer) and pure
+    `quiz.rs`; the quiz card (`Surface::Quiz`, `shell/quiz-card.html`, `overlay-src/quiz-card.ts`,
+    `quiz-view.ts`). The review's Quick check shows "From your screen: …" for these cards.
+  - **To verify by hand:** "quiz me on this" on a lecture slide in the desktop app; answer one by
+    voice, one typed and one picked; the cards in the next day's Quick check.
+- **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
+  need the owner's go).
+- **Next:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in
 [SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1–N5 built** (2026-10-23). The
@@ -383,8 +411,8 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
     `notes_resolution`).
 - Rate limits: `notesCheck*` (6/min; `NOTES_CHECKS_PER_DAY`, default 60) and `notesResolve*`
   (20/min, 300/day).
-- **Not applied to the hosted project yet:** migrations `note_lines`, `note_search`,
-  `notes_checks`, `notes_resolution` (the owner's go is needed).
+- Migrations `note_lines`, `note_search`, `notes_checks` and `notes_resolution` are applied to the
+  hosted project (2026-10-25).
 - **To verify by hand:** a real lecture video in the desktop app (Ctrl+Alt+N, the panel, marks
   beside the right text, "Open in notebook").
 - **Needs billing:** embeddings and evals hit the Gemini free tier's 1,000 embedded texts a day.
@@ -406,8 +434,13 @@ and in the notebook (N4) → **follow-ups** that feed the learner model (N5).
 - Client: `frontend/src/features/notes/` (planner, sync plan, indexer, backfill; pure parts tested
   without a browser). Server: `backend/src/mew_api/notes/`, `routes/notes.py`; Next routes
   `/api/notes/pages/[pageId]/lines` and `/api/recognize/batch` (new rate rules).
-- **The `note_lines` migration is not applied to the hosted project yet** (needs the owner's go;
-  then check the RPC's array/jsonb arguments through PostgREST for real).
+- The `note_lines` migration is applied to the hosted project (2026-10-25); its RPC's array/jsonb
+  arguments are still worth checking through PostgREST for real.
+
+Tests (after S5 and S6, 2026-10-26): **1,686 unit tests** (frontend 562, backend 375, ink 169,
+shared 396, database 157, desktop overlays 27), **182 Rust tests** (+5 real-Windows ones; fmt and
+clippy `-D warnings` clean) and **83 Playwright tests**, all passing (`notes.spec.ts`'s sync
+timing test failed once in the full run and passed alone, as before).
 
 Tests (after K1–K9's left-for-later, 2026-10-26): **1,653 unit tests** (frontend 552, backend 367,
 ink 169, shared 395, database 147, desktop overlays 23), **171 Rust tests** (+5 real-Windows ones;
