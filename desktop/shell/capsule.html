@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; font-src 'self'"
+    />
+    <title>Neb</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="overlay.css" />
+  </head>
+  <!-- NEB_APP_UI §5.4: the status capsule, top-right, while the frame is on. No script. -->
+  <body class="capsule">
+    <p class="capsule-pill" role="status">
+      <span class="capsule-dot" aria-hidden="true"></span>neb sees your screen only while this frame
+      is on
+    </p>
+  </body>
+</html>

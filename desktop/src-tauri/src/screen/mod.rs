@@ -112,6 +112,8 @@ pub mod screen_music;
 #[cfg(windows)]
 pub mod screen_quiz;
 #[cfg(windows)]
+pub mod status;
+#[cfg(windows)]
 pub mod win;
 
 use tauri::Url;

@@ -464,7 +464,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     character read right on a later line; Reset and turning learning off (the count goes to 0).
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
-- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U21:
+- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U22:
   - **U1 built** (2026-10-28, branch `feat/ui-u1-tokens`): design tokens (`shared/src/ui/tokens.ts`
     → `pnpm build:tokens`), the old colour names migrated and linted out, the four fonts vendored
     (`packages/shared/fonts`), Appearance and Text size (Settings → Appearance; `lib/display.ts`),
@@ -487,8 +487,10 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     the island's neb dot, the sketch card and saved stamp, the lasso cursor, keytips and the
     shortcuts sheet, the restyled palette and picker, onboarding in steps, "Pause for 1 hour".
     What's left of U7 is listed at the end of decision U21.
-  - **The U series is built through U7.** Branches: … → `feat/ui-u6-checks` →
-    `feat/ui-u7-overlays`.
+  - **U8 built** (2026-10-28, `feat/ui-u8-coach-overlays`): the frame's inner glow, the status
+    capsule, the hold's keys indicator, the sketch card's pointer line (decision U22).
+  - **The U series is built through U8.** Branches: … → `feat/ui-u6-checks` →
+    `feat/ui-u7-overlays` → `feat/ui-u8-coach-overlays`.
   - **To verify by hand (U7):** in the desktop app, the frame comes on with Select, the mic and a
     walkthrough and fades when they end; the island and the circle card in light and night;
     "Pause for 1 hour" from the tray.

@@ -40,6 +40,10 @@ const FADE: Duration = Duration::from_millis(450);
 /// A held frame fades within this when it's let go (§5.4).
 const HELD_FADE: Duration = Duration::from_millis(150);
 const HELD_FADE_STEPS: u32 = 6;
+/// The held frame's inner glow: this deep at 100 % scaling, at most this alpha (33 %), in bands.
+const GLOW_AT_100: i32 = 40;
+const GLOW_ALPHA: u8 = 84;
+const GLOW_BANDS: u32 = 4;
 /// How long `Frame::hold` waits for the edges to be on screen before giving up.
 const SHOW_TIMEOUT: Duration = Duration::from_millis(300);
 
@@ -122,13 +126,35 @@ fn spawn(monitor: ScreenRect, dpi: u32, keep: Keep, shown: Option<mpsc::Sender<b
 
 /// Edge strips for a monitor: top, bottom, left, right (left/right between the other two).
 pub fn edge_strips(monitor: ScreenRect, dpi: u32) -> [ScreenRect; 4] {
-    let t = (THICKNESS_AT_100 * dpi.max(96) as i32 / 96).max(2);
-    let ScreenRect {
-        left,
-        top,
-        right,
-        bottom,
-    } = monitor;
+    ring(monitor, 0, scaled(THICKNESS_AT_100, dpi))
+}
+
+/// The held frame's inner glow (§5.4: 40 px of violet at 33 % inside the edge, fading inwards),
+/// as bands inside the edge strips, each with its own alpha.
+pub fn glow_strips(monitor: ScreenRect, dpi: u32) -> Vec<(ScreenRect, u8)> {
+    let edge = scaled(THICKNESS_AT_100, dpi);
+    let band = scaled(GLOW_AT_100 / GLOW_BANDS as i32, dpi);
+    (0..GLOW_BANDS)
+        .flat_map(|i| {
+            let alpha = (u32::from(GLOW_ALPHA) * (GLOW_BANDS - i) / GLOW_BANDS) as u8;
+            ring(monitor, edge + band * i as i32, band).map(|strip| (strip, alpha))
+        })
+        .collect()
+}
+
+/// A length at 100 % scaling, in this monitor's pixels (at least 2).
+fn scaled(length: i32, dpi: u32) -> i32 {
+    (length * dpi.max(96) as i32 / 96).max(2)
+}
+
+/// Four strips `t` thick, `inset` in from the monitor's edges.
+fn ring(monitor: ScreenRect, inset: i32, t: i32) -> [ScreenRect; 4] {
+    let (left, top, right, bottom) = (
+        monitor.left + inset,
+        monitor.top + inset,
+        monitor.right - inset,
+        monitor.bottom - inset,
+    );
     [
         ScreenRect {
             left,
@@ -159,9 +185,12 @@ pub fn edge_strips(monitor: ScreenRect, dpi: u32) -> [ScreenRect; 4] {
 
 /// Alpha for each fade step, from the peak down to zero.
 pub fn fade_alphas(steps: u32) -> Vec<u8> {
-    (1..=steps)
-        .map(|i| (u32::from(PEAK_ALPHA) * (steps - i) / steps) as u8)
-        .collect()
+    (1..=steps).map(|i| faded(PEAK_ALPHA, i, steps)).collect()
+}
+
+/// `peak` after `step` of `steps` fade steps.
+fn faded(peak: u8, step: u32, steps: u32) -> u8 {
+    (u32::from(peak) * steps.saturating_sub(step) / steps.max(1)) as u8
 }
 
 fn run(
@@ -196,8 +225,15 @@ fn run(
     // object reclaimed at process exit (one per capture is negligible but we still free it).
     let brush = unsafe { CreateSolidBrush(colour) };
 
-    let mut windows = Vec::with_capacity(4);
-    for strip in edge_strips(monitor, dpi) {
+    let mut strips: Vec<(ScreenRect, u8)> = edge_strips(monitor, dpi)
+        .into_iter()
+        .map(|strip| (strip, PEAK_ALPHA))
+        .collect();
+    if matches!(keep, Keep::Until(_)) {
+        strips.extend(glow_strips(monitor, dpi));
+    }
+    let mut windows = Vec::with_capacity(strips.len());
+    for (strip, peak) in strips {
         // SAFETY: creating a top-level popup on this thread with a registered class; the
         // handle is destroyed at the end of this function on the same thread.
         let hwnd = unsafe {
@@ -220,13 +256,13 @@ fn run(
                 None,
             )
         }?;
-        windows.push(hwnd);
+        windows.push((hwnd, peak));
         // SAFETY: `hwnd` is a top-level window this process owns, as both calls require.
         unsafe {
             // Never in any capture: ours or the user's screen share (Windows 10 2004+).
             SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)?;
             SetClassBackground(hwnd, brush);
-            SetLayeredWindowAttributes(hwnd, COLORREF(0), PEAK_ALPHA, LWA_ALPHA)?;
+            SetLayeredWindowAttributes(hwnd, COLORREF(0), peak, LWA_ALPHA)?;
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
     }
@@ -248,8 +284,9 @@ fn run(
         }
     };
     if system::animations_enabled() {
-        for alpha in fade_alphas(steps) {
-            for &hwnd in &windows {
+        for step in 1..=steps {
+            for &(hwnd, peak) in &windows {
+                let alpha = faded(peak, step, steps);
                 // SAFETY: windows created above, still alive.
                 let _ = unsafe { SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA) };
             }
@@ -259,7 +296,7 @@ fn run(
         // "Show animations" is off: no fade, just a steady glow for the same total time.
         pump_for(fade);
     }
-    for hwnd in windows {
+    for (hwnd, _) in windows {
         // SAFETY: windows created above on this thread, destroyed once.
         let _ = unsafe { DestroyWindow(hwnd) };
     }
@@ -359,6 +396,26 @@ mod tests {
         );
         assert_eq!(edge_strips(monitor, 96)[0].height(), 4);
         assert_eq!(edge_strips(monitor, 192)[0].height(), 8);
+    }
+
+    #[test]
+    fn the_glow_fades_inwards_inside_the_edge() {
+        let monitor = ScreenRect {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1080,
+        };
+        let glow = glow_strips(monitor, 96);
+        assert_eq!(glow.len(), 16);
+        // Just inside the 4 px edge, 10 px bands down to 40 px in, fainter each band.
+        assert_eq!(glow[0].0.top, 4);
+        assert_eq!(glow[0].0.height(), 10);
+        assert_eq!(glow[12].0.top, 34);
+        let alphas: Vec<u8> = glow.iter().step_by(4).map(|(_, a)| *a).collect();
+        assert_eq!(alphas, vec![84, 63, 42, 21]);
+        // At 150 % it's deeper in pixels, the same in look.
+        assert_eq!(glow_strips(monitor, 144)[0].0.height(), 15);
     }
 
     #[test]

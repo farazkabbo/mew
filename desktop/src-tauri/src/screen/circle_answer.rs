@@ -1314,6 +1314,35 @@ fn show_card<R: Runtime>(app: &AppHandle<R>, mut view: serde_json::Value) {
     overlay::place(&window, rect);
     overlay::dispatch(app, Surface::Card, CARD_SHOW, &view);
     overlay::show_quietly(&window);
+    // §5.4: a violet line from the card into the circle (on the draw overlay, in its CSS px).
+    let line = marks.map(|marks| {
+        let (from, to) = pointer_line(rect, marks);
+        let css = |(x, y): (i32, i32)| {
+            [
+                f64::from(x - monitor.left) / scale,
+                f64::from(y - monitor.top) / scale,
+            ]
+        };
+        serde_json::json!({ "from": css(from), "to": css(to) })
+    });
+    overlay::dispatch(
+        app,
+        Surface::Draw,
+        DRAW_POINTER,
+        &line.unwrap_or(serde_json::Value::Null),
+    );
+}
+
+/// The draw overlay's pointer line from the card to the marks (null: none).
+pub(super) const DRAW_POINTER: &str = "mew:draw-pointer";
+
+/// The card's pointer line (§5.4): from the point of the card's edge nearest the marks to the
+/// point of the marks' box nearest the card (physical pixels).
+pub fn pointer_line(card: ScreenRect, marks: ScreenRect) -> ((i32, i32), (i32, i32)) {
+    let nearest =
+        |r: ScreenRect, (x, y): (i32, i32)| (x.clamp(r.left, r.right), y.clamp(r.top, r.bottom));
+    let centre = |r: ScreenRect| ((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+    (nearest(card, centre(marks)), nearest(marks, centre(card)))
 }
 
 /// Beside the marks: to the right if there's room, else to the left, else below them (or above);
@@ -1819,6 +1848,22 @@ mod tests {
                 bottom: 750
             }
         );
+    }
+
+    #[test]
+    fn the_pointer_line_runs_from_the_cards_edge_to_the_marks() {
+        let marks = ScreenRect {
+            left: 100,
+            top: 100,
+            right: 300,
+            bottom: 200,
+        };
+        let card = card_spot(marks, MONITOR, 1.0);
+        let (from, to) = pointer_line(card, marks);
+        // The card is to the right: the line leaves its left edge, level with the marks, and
+        // ends on their right edge, as near the card's middle as the marks reach.
+        assert_eq!(from, (card.left, 150));
+        assert_eq!(to, (300, ((card.top + card.bottom) / 2).clamp(100, 200)));
     }
 
     #[test]

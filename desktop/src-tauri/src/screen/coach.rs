@@ -440,8 +440,14 @@ pub fn on_shortcut<R: Runtime>(app: &AppHandle<R>, shortcut: &Shortcut, pressed:
 pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
     let coach = app.try_state::<ScreenCoach>();
     if !coach.is_some_and(|coach| usable(&coach)) {
-        if event == HoldEvent::Started {
-            crate::summon(app);
+        match event {
+            HoldEvent::Started => {
+                // §5.4: the held keys show bottom-left while they're down.
+                super::status::show_keys(app);
+                crate::summon(app);
+            }
+            HoldEvent::Ended | HoldEvent::Cancelled => super::status::hide_keys(app),
+            HoldEvent::DoubleTap => {}
         }
         return;
     }
@@ -792,7 +798,10 @@ pub fn refresh_frame<R: Runtime>(app: &AppHandle<R>) {
         return;
     };
     if !reach.wants_frame() {
-        *frame = None; // dropped: the edges fade within 150 ms
+        if frame.take().is_some() {
+            // Dropped: the edges fade within 150 ms, and the capsule goes with them.
+            super::status::hide_capsule(app);
+        }
         return;
     }
     if frame.is_some() {
@@ -805,6 +814,9 @@ pub fn refresh_frame<R: Runtime>(app: &AppHandle<R>) {
         .or_else(win::input::cursor);
     if let Some((monitor, dpi)) = at.and_then(|(x, y)| win::target::monitor_at(x, y)) {
         *frame = indicator::Frame::hold(monitor, dpi);
+        if frame.is_some() {
+            super::status::show_capsule(app, monitor, dpi);
+        }
     }
 }
 

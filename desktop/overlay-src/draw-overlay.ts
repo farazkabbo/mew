@@ -67,6 +67,10 @@ const GROW = 16;
 let stroke: [number, number, number][] | null = null;
 /** The box being dragged in select mode. */
 let box: { from: Pt; to: Pt } | null = null;
+/** The answer card's pointer line into the circle (NEB_APP_UI §5.4), while the card shows. */
+let pointerLine: { from: Pt; to: Pt } | null = null;
+/** neb's violet (`--neb`): the line is neb's, not the student's ink. */
+const NEB = "#6b4ee6";
 /** The island's tool and select shape, and the student's notes (pen strokes). */
 let tool: DrawTool = "none";
 let shape: DrawShape = "free";
@@ -122,6 +126,15 @@ function paint(): void {
       ctx.strokeRect(...keyBox);
       ctx.setLineDash([]);
     }
+  }
+  if (pointerLine) {
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = NEB;
+    ctx.beginPath();
+    ctx.moveTo(...pointerLine.from);
+    ctx.lineTo(...pointerLine.to);
+    ctx.stroke();
   }
   if (box) {
     const [x0, y0] = box.from;
@@ -393,6 +406,12 @@ on("mew:draw-box", (detail) => {
   const next = parseBox(detail);
   if (!next) return;
   box = next;
+  paint();
+});
+
+// The answer card's pointer line (null when the card goes).
+on("mew:draw-pointer", (detail) => {
+  pointerLine = detail === null ? null : parseBox(detail);
   paint();
 });
 

@@ -1316,3 +1316,72 @@ body.island {
     border: 1px solid CanvasText;
   }
 }
+
+/* ─── The status capsule and the hold's keys (NEB_APP_UI §5.4, U8) ───────────────────────── */
+
+body.capsule,
+body.keys-hint {
+  background: transparent;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+}
+
+body.capsule {
+  justify-content: flex-end;
+}
+
+.capsule-pill,
+.keys-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--paper-hi);
+  color: var(--ink);
+  box-shadow: var(--sh-2);
+  white-space: nowrap;
+}
+
+.capsule-pill {
+  font-size: 13px;
+}
+
+.capsule-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--neb);
+  box-shadow: 0 0 0 3px var(--neb-wash);
+}
+
+.keys-pill {
+  gap: 6px;
+  font-size: 14px;
+}
+
+.keys-pill kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-bottom-width: 3px;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--paper-hi);
+  font: 600 13px var(--font-ui);
+  transform: translateY(1px);
+}
+
+.keys-text {
+  margin-left: 6px;
+  font-family: var(--font-neb);
+  font-variant-ligatures: none;
+  text-transform: lowercase;
+  color: var(--neb-ink);
+}

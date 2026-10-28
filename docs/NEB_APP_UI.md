@@ -925,7 +925,20 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       notebook is named on the desk's first-run cover (U4).
     - **Tray:** "Pause for 1 hour" pauses now and resumes in an hour unless the pause changed
       meanwhile; a restart in between keeps it paused.
-    - **Not built:** the status capsule and the hold's keys indicator (new overlay windows), the
-      sketch card's pointer line into the circle, onboarding's desktop "Try it" step, the
-      palette's "> " commands, the picker's "+ New chapter here" and "suggested: matched …",
-      and "what can I say?" (it needs a new voice intent).
+    - **Not built in U7** (U8 and U9 build them): the status capsule and the hold's keys
+      indicator, the sketch card's pointer line, the frame's inner glow, onboarding's desktop
+      "Try it" step, the palette's "> " commands, the picker's "+ New chapter here" and
+      "suggested: matched …", and "what can I say?".
+22. **U22. Built in U8 (2026-10-28, `feat/ui-u8-coach-overlays`): what U7 left on the desktop.**
+    - **The frame's glow:** a held frame adds four 10 px bands inside its 4 px edge, from 33 %
+      violet fading inwards (40 px at 100 % scaling), each its own layered window; they fade
+      out with the edge. A capture's flash has no glow.
+    - **The status capsule** (`capsule.html`, `status.rs`): top-right of the frame's monitor,
+      48 px in (clear of the glow), shown and hidden with the held frame.
+    - **The keys indicator** (`keys-hint.html`): bottom-left of the pointer's monitor while
+      Ctrl + Alt is held with Screen Coach off or paused; it goes when the keys come up or the
+      hold is spoiled. Both pages have no script, call no commands, and are click-through,
+      never focused and excluded from captures.
+    - **The pointer line:** when the card shows beside the marks, the draw overlay draws a 3 px
+      violet line from the card's nearest edge into the marks' box (`pointer_line`); it goes
+      when the card does. It's set when the card is placed (the card doesn't move after).

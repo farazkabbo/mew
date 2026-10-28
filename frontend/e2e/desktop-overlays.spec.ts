@@ -748,3 +748,45 @@ test("the quiz card asks, takes a typed answer or a choice, and shows the grade 
   await expect(page.getByText("Quiz · question 2 of 2")).toBeVisible();
   expect(shell.violations).toEqual([]);
 });
+
+test("the status capsule and the held keys say what they mean, with no script (U8)", async ({
+  page,
+}) => {
+  const capsule = await openShellPage(page, "capsule.html");
+  const said = page.getByRole("status");
+  await expect(said).toContainText("neb sees your screen only while");
+  await expect(said).toContainText("frame is on");
+  expect(capsule.violations).toEqual([]);
+  const keys = await openShellPage(page, "keys-hint.html");
+  await expect(page.getByRole("status")).toContainText("Ctrl");
+  await expect(page.getByRole("status")).toContainText("held · circle anything");
+  expect(keys.violations).toEqual([]);
+});
+
+test("the draw overlay draws the card's pointer line in neb's violet, and clears it (U8)", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "draw-overlay.html");
+  await shell.dispatch("mew:draw-show", { marks: [], grey: false, drawing: false, mode: "draw" });
+  const violetAt = (x: number, y: number) =>
+    page.evaluate(
+      ([px, py]) => {
+        const canvas = document.querySelector("canvas");
+        if (!canvas) return false;
+        const ratio = window.devicePixelRatio;
+        const d = canvas
+          .getContext("2d")
+          ?.getImageData(Math.round(px! * ratio), Math.round(py! * ratio), 1, 1).data;
+        return !!d && d[3]! > 0 && d[2]! > d[1]! + 60;
+      },
+      [x, y],
+    );
+  await shell.dispatch("mew:draw-pointer", { from: [100, 100], to: [300, 100] });
+  await expect.poll(() => violetAt(200, 100)).toBe(true);
+  await shell.dispatch("mew:draw-pointer", null);
+  await expect.poll(() => violetAt(200, 100)).toBe(false);
+  // Anything but two points is ignored.
+  await shell.dispatch("mew:draw-pointer", { from: "<x>", to: [1, 2] });
+  await expect.poll(() => violetAt(200, 100)).toBe(false);
+  expect(shell.violations).toEqual([]);
+});

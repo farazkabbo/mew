@@ -1088,11 +1088,22 @@ pub fn end_session<R: Runtime>(app: &AppHandle<R>) {
     );
     overlay::dispatch(app, Surface::Ink, "mew:ink-clear", &json!({}));
     overlay::hide_quietly_named(app, Surface::Ink);
-    overlay::hide_quietly_named(app, Surface::Card);
+    hide_card(app);
     if !state(app).is_some_and(|s| s.drawing || s.noted) {
         overlay::hide_quietly_named(app, Surface::Draw);
     }
     super::screen_island::refresh(app);
+}
+
+/// Hides the card, and its pointer line on the draw overlay (§5.4).
+fn hide_card<R: Runtime>(app: &AppHandle<R>) {
+    overlay::hide_quietly_named(app, Surface::Card);
+    overlay::dispatch(
+        app,
+        Surface::Draw,
+        super::circle_answer::DRAW_POINTER,
+        &serde_json::Value::Null,
+    );
 }
 
 /// The ask bar closes after 20 s without input; the marks go a minute later (§2.3).
@@ -1104,7 +1115,7 @@ fn expire_session<R: Runtime>(app: &AppHandle<R>, now: Instant) {
     });
     match idle {
         Some(idle) if idle >= ASK_IDLE + MARKS_KEPT => end_session(app),
-        Some(idle) if idle >= ASK_IDLE => overlay::hide_quietly_named(app, Surface::Card),
+        Some(idle) if idle >= ASK_IDLE => hide_card(app),
         _ => {}
     }
 }

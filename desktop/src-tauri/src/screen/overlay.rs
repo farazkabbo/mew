@@ -56,6 +56,10 @@ pub enum Surface {
     Quiz,
     /// The island: Screen Coach's tools in a bar at the top of the screen (`screen_island.rs`).
     Island,
+    /// "neb sees your screen only while this frame is on" (`status.rs`, U8).
+    Capsule,
+    /// The held Ctrl+Alt keys, with Screen Coach off or paused (`status.rs`, U8).
+    Keys,
 }
 
 /// Size of the pill, in CSS pixels.
@@ -95,6 +99,8 @@ impl Surface {
             Surface::Card => "screen-circle-card",
             Surface::Quiz => "screen-quiz-card",
             Surface::Island => "screen-island",
+            Surface::Capsule => "screen-capsule",
+            Surface::Keys => "screen-keys",
         }
     }
 
@@ -110,6 +116,8 @@ impl Surface {
             Surface::Card => "circle-card.html",
             Surface::Quiz => "quiz-card.html",
             Surface::Island => "island.html",
+            Surface::Capsule => "capsule.html",
+            Surface::Keys => "keys-hint.html",
         }
     }
 }
@@ -177,6 +185,29 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             .focused(false)
             .focusable(false)
             .inner_size(super::island::ISLAND_SIZE.0, super::island::ISLAND_SIZE.1),
+        // Notices: shown, never clicked or focused (`status.rs`).
+        Surface::Capsule | Surface::Keys => builder
+            .title("Neb")
+            .transparent(true)
+            .decorations(false)
+            .shadow(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .resizable(false)
+            .focused(false)
+            .focusable(false)
+            .inner_size(
+                if surface == Surface::Capsule {
+                    super::status::CAPSULE_SIZE.0
+                } else {
+                    super::status::KEYS_SIZE.0
+                },
+                if surface == Surface::Capsule {
+                    super::status::CAPSULE_SIZE.1
+                } else {
+                    super::status::KEYS_SIZE.1
+                },
+            ),
         Surface::Pointer | Surface::Draw => builder
             .title("Neb")
             .transparent(true)
@@ -243,7 +274,12 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
     // its shape, and clicks on those clear pixels reach the app below).
     if matches!(
         surface,
-        Surface::Ink | Surface::Pointer | Surface::Draw | Surface::Island
+        Surface::Ink
+            | Surface::Pointer
+            | Surface::Draw
+            | Surface::Island
+            | Surface::Capsule
+            | Surface::Keys
     ) {
         let _ = window.set_ignore_cursor_events(true);
     }
