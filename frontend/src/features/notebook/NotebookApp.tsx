@@ -79,11 +79,15 @@ import { type TreeNoticeView, useTreeActions } from "./tree/useTreeActions";
 import { useNotebookTree } from "./tree/useNotebookTree";
 import { useNotebookVoice } from "./tree/useNotebookVoice";
 import { useTreeShortcuts } from "./tree/useTreeShortcuts";
+import { Desk } from "../desk/Desk";
 
 type Notice = TreeNoticeView;
 
-/** What the main area shows for the open node: its home (cards), or one of its pages. */
-type View = "home" | "page";
+/**
+ * What the main area shows: the desk (nothing open, NEB_APP_UI §5.1), a node's home (cards), or
+ * one of its pages.
+ */
+type View = "desk" | "home" | "page";
 
 /** A node being written in is marked as edited at most this often. */
 const TOUCH_EVERY_MS = 60_000;
@@ -92,12 +96,22 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Screen width the quiz card covers on the left (its width plus margins), kept free of ink. */
 const QUIZ_CARD_INSET = 352;
 
-export function NotebookApp({ userId }: { userId: string }) {
+export function NotebookApp({
+  userId,
+  start = "latest",
+  name = null,
+}: {
+  userId: string;
+  /** /desk starts on the desk; /notebook opens the latest notebook (and its page). */
+  start?: "desk" | "latest";
+  /** The student's first name, for the desk's greeting. */
+  name?: string | null;
+}) {
   const db = useMemo(() => new NotebookDb(userId), [userId]);
   const repo = useMemo(() => new NotebookRepository(db), [db]);
   /** The open node: a notebook, chapter or section (its pages are `pages`). */
   const [notebookId, setNotebookId] = useState<string | null>(null);
-  const [view, setView] = useState<View>("page");
+  const [view, setView] = useState<View>(start === "desk" ? "desk" : "page");
   /** The page to open once the node's pages are read (a jump, a new page). */
   const wantedPage = useRef<string | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
@@ -182,6 +196,7 @@ export function NotebookApp({ userId }: { userId: string }) {
         const server = await pullTree();
         if (server) await repo.tree.applyServerTree(server);
       }
+      if (start === "desk" && !(course && UUID.test(course))) return;
       const latest =
         course && UUID.test(course)
           ? await repo.notebookForCourse(course, title)
@@ -191,7 +206,7 @@ export function NotebookApp({ userId }: { userId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [repo, report, openNode]);
+  }, [repo, report, openNode, start]);
 
   // The open node's pages; a page view always has one (a node from another device may have
   // none here yet).
@@ -357,13 +372,19 @@ export function NotebookApp({ userId }: { userId: string }) {
   const loadChecks = useMomentChecks((s) => s.load);
   // Read where they're shown (a home's badges and Quick check card), not on every page open.
   useEffect(() => {
-    if (view !== "home") return;
+    if (view !== "home" && view !== "desk") return;
     void loadChecks();
     const again = () => void loadChecks();
     window.addEventListener("focus", again);
     return () => window.removeEventListener("focus", again);
   }, [loadChecks, momentsVersion, view]);
   const dueCounts = useMemo(() => dueByNode(checks ?? [], tree, now), [checks, tree, now]);
+  /** Every check due now, anywhere (the desk's Tonight card). */
+  const dueTotal = useMemo(
+    () => (checks ?? []).filter((c) => Date.parse(c.dueAt) <= now).length,
+    [checks, now],
+  );
+  const exam = useMomentChecks((s) => s.exam);
   const unsortedCount = useMemo(() => {
     const unsorted = unsortedNodeId(userId);
     return new Map([[unsorted, moments.filter((m) => m.nodeId === unsorted).length]]);
@@ -744,34 +765,59 @@ export function NotebookApp({ userId }: { userId: string }) {
 
   return (
     <div className="flex h-dvh w-full overflow-hidden">
-      <Sidebar
-        notebooks={
-          <TreeNav
-            tree={tree}
-            currentId={notebookId}
-            renamingId={treeActions.renamingId}
-            draft={treeActions.draft}
-            trashCount={tree.trash().length}
-            counts={unsortedCount}
-            newNotebookShortcut={keys.shown("new_notebook")}
-            onOpen={openNode}
-            onCreateNotebook={treeActions.startCreating}
-            onAddChild={treeActions.addChild}
-            onAddPage={treeActions.addPage}
-            onStartRename={treeActions.setRenamingId}
-            onRename={treeActions.rename}
-            onMove={treeActions.move}
-            onReorder={treeActions.reorder}
-            onMoveTo={treeActions.setMovingId}
-            onKeepOffline={treeActions.keepOffline}
-            onDelete={treeActions.requestDelete}
-            onOpenTrash={() => treeActions.setTrashOpen(true)}
-          />
-        }
-        onQuiz={courseId ? () => void quiz.start(courseId) : null}
-      />
+      {view !== "desk" && (
+        <Sidebar
+          notebooks={
+            <TreeNav
+              tree={tree}
+              currentId={notebookId}
+              renamingId={treeActions.renamingId}
+              draft={treeActions.draft}
+              trashCount={tree.trash().length}
+              counts={unsortedCount}
+              newNotebookShortcut={keys.shown("new_notebook")}
+              onOpen={openNode}
+              onCreateNotebook={treeActions.startCreating}
+              onAddChild={treeActions.addChild}
+              onAddPage={treeActions.addPage}
+              onStartRename={treeActions.setRenamingId}
+              onRename={treeActions.rename}
+              onMove={treeActions.move}
+              onReorder={treeActions.reorder}
+              onMoveTo={treeActions.setMovingId}
+              onKeepOffline={treeActions.keepOffline}
+              onDelete={treeActions.requestDelete}
+              onOpenTrash={() => treeActions.setTrashOpen(true)}
+            />
+          }
+          onQuiz={courseId ? () => void quiz.start(courseId) : null}
+        />
+      )}
       <main className="relative min-w-0 flex-1">
-        {view === "home" && node ? (
+        {view === "desk" ? (
+          nodes ? (
+            <Desk
+              tree={tree}
+              unsortedId={unsortedNodeId(userId)}
+              now={now}
+              name={name}
+              moments={moments}
+              dueCounts={dueCounts}
+              dueTotal={dueTotal}
+              exam={exam ? { title: exam.title, days: exam.daysLeft } : null}
+              loadCounts={loadCounts}
+              keys={{ jump: keys.shown("jump"), newNotebook: keys.shown("new_notebook") }}
+              onOpen={openNode}
+              onOpenMoment={(moment) => openMoment(moment, true)}
+              onQuickCheck={() => openQuickCheck()}
+              onJump={() => treeActions.setPaletteOpen(true)}
+              onNewNotebook={treeActions.startCreating}
+              onDropPdf={(nodeId, file) => setImporting({ nodeId, file })}
+            />
+          ) : (
+            <div className="h-full bg-desk" aria-busy="true" />
+          )
+        ) : view === "home" && node ? (
           <NodeHome
             node={node}
             tree={tree}
@@ -821,18 +867,20 @@ export function NotebookApp({ userId }: { userId: string }) {
           </div>
         )}
 
-        <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center px-4">
-          <Toolbar
-            onUndo={actions.undo}
-            onRedo={actions.redo}
-            onZoom={actions.zoom}
-            onResetView={actions.resetView}
-            onExportLine={() => void exportLine().catch(report)}
-            marks={<MarksMenu notebookId={rootId} pageId={view === "page" ? pageId : null} />}
-            {...(view === "page" && engine && { onReplayPage: togglePageReplay })}
-            replayingPage={replayingPage}
-          />
-        </div>
+        {view !== "desk" && (
+          <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center px-4">
+            <Toolbar
+              onUndo={actions.undo}
+              onRedo={actions.redo}
+              onZoom={actions.zoom}
+              onResetView={actions.resetView}
+              onExportLine={() => void exportLine().catch(report)}
+              marks={<MarksMenu notebookId={rootId} pageId={view === "page" ? pageId : null} />}
+              {...(view === "page" && engine && { onReplayPage: togglePageReplay })}
+              replayingPage={replayingPage}
+            />
+          </div>
+        )}
 
         {/* Mounted with the page's canvas (keyed by page), so the notes subscribe to the camera
             of the canvas that's actually shown and scroll with the page, never over it. */}
@@ -935,13 +983,15 @@ export function NotebookApp({ userId }: { userId: string }) {
           <ShortcutsNotice hidden={app.showIntro || quizActive} />
         </div>
 
-        <div className="pointer-events-none absolute right-4 bottom-4">
-          <MewDock
-            onSummon={mew.summon}
-            onStartListening={mew.startListening}
-            onStopListening={mew.stopListening}
-          />
-        </div>
+        {view !== "desk" && (
+          <div className="pointer-events-none absolute right-4 bottom-4">
+            <MewDock
+              onSummon={mew.summon}
+              onStartListening={mew.startListening}
+              onStopListening={mew.stopListening}
+            />
+          </div>
+        )}
 
         {debugOpen && (
           <div className="pointer-events-none absolute top-20 right-4 bottom-24">

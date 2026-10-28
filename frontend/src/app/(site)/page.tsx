@@ -7,7 +7,7 @@ const primaryButton = "rounded-full bg-ink px-5 py-2.5 text-sm text-paper hover:
 
 export default function Home() {
   const openNotebook = (
-    <Link href="/notebook" className={primaryButton}>
+    <Link href="/desk" className={primaryButton}>
       Open notebook
     </Link>
   );

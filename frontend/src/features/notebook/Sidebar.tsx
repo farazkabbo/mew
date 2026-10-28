@@ -20,8 +20,8 @@ const LINK =
 export function Sidebar({ notebooks, onQuiz }: Props) {
   return (
     <aside className="hidden w-60 shrink-0 flex-col bg-paper text-ink md:flex">
-      <Link href="/" className="px-5 pt-5 pb-6 font-serif text-2xl tracking-tight">
-        mew
+      <Link href="/desk" className="px-5 pt-5 pb-6 font-serif text-2xl tracking-tight">
+        neb
       </Link>
 
       <nav
