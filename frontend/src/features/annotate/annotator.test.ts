@@ -317,6 +317,36 @@ describe("live annotations (K9 §7)", () => {
     expect(useNotebookUi.getState().unrevealedMarks.size).toBe(0);
   });
 
+  it("says what it read on any line, and a fix checks it again and teaches (K10)", async () => {
+    const t = setup();
+    t.readings.set(100, { text: "3x + 7 = 19" });
+    t.readings.set(170, { text: "3x = 1Z" }); // read wrong, nothing to check: no mark
+    const first = line(100, 6, 0);
+    const second = line(170, 4, 100);
+    t.write(first);
+    await t.wait(1300);
+    t.write(second);
+    await t.wait(1300);
+    expect(t.live.open).toEqual([]);
+    expect((await t.live.readingOf(second.map((s) => s.id)))?.text).toBe("3x = 1Z");
+    // A selection mostly of one line reads that line; strokes that aren't a line read nothing.
+    expect((await t.live.readingOf([first[0]?.id ?? ""]))?.text).toBe("3x + 7 = 19");
+    expect(await t.live.readingOf(["not-a-stroke"])).toBeNull();
+
+    // "It says 3x = 12": kept as certain, checked again (a tick), and taught.
+    t.readings.set(170, { text: "3x = 12", verdict: "correct" });
+    expect(
+      await t.live.fixLine(
+        second.map((s) => s.id),
+        "3x = 12",
+      ),
+    ).toBe(true);
+    expect(t.live.open.map((a) => a.markKind)).toEqual(["tick"]);
+    expect(t.taught).toEqual([
+      expect.objectContaining({ text: "3x = 12", readAs: "3x = 1Z", source: "fix" }),
+    ]);
+  });
+
   it("takes a mark off for 'Not wrong' and keeps it as a correction", async () => {
     const t = setup();
     t.readings.set(100, { text: "3x + 7 = 19" });

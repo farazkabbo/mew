@@ -27,6 +27,8 @@ export type ToolContext = {
   /** Current zoom, for converting screen-pixel sizes to page units. */
   zoom(): number;
   invalidate(layers: { ink?: boolean; live?: boolean }): void;
+  /** The lasso's selection changed (null: none), e.g. to show "neb read:" for a line. */
+  selected?(strokes: readonly Stroke[] | null): void;
 };
 
 /** One drawing tool's handling of a pointer gesture. */

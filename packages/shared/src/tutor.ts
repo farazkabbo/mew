@@ -223,7 +223,7 @@ export const Recognition = z.object({
     .max(2)
     .optional(),
   /** K10: what chose this reading over the model's first (SymPy, a formula, code that parses). */
-  chosenBy: z.enum(["model", "math", "chemistry", "code"]).optional(),
+  chosenBy: z.enum(["model", "math", "chemistry", "code", "profile"]).optional(),
 });
 export type Recognition = z.infer<typeof Recognition>;
 

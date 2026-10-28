@@ -274,6 +274,48 @@ export class LiveAnnotator {
     });
   }
 
+  /**
+   * What neb read on the line made of these strokes (K10 §8.2 "neb read:"), reading it if it
+   * hasn't been yet. Null when the strokes aren't one line, or it can't be read.
+   */
+  async readingOf(strokeIds: readonly string[]): Promise<Recognition | null> {
+    const engine = this.engine;
+    const line = engine ? this.lineOfStrokes(engine, strokeIds) : undefined;
+    if (!engine || !line) return null;
+    return this.deps.known(engine, line) ?? (await this.deps.recognize(engine, line));
+  }
+
+  /**
+   * The student typed what a line really says (K10 §8.2): kept as certain, taught to their
+   * handwriting profile (§8.3), and the line checked again.
+   */
+  async fixLine(strokeIds: readonly string[], typed: string): Promise<boolean> {
+    const engine = this.engine;
+    const line = engine ? this.lineOfStrokes(engine, strokeIds) : undefined;
+    const text = typed.trim().slice(0, 300);
+    if (!engine || !line || !text) return false;
+    const known = this.deps.known(engine, line);
+    const recognition: Recognition = {
+      text,
+      latex: text,
+      subject: known?.subject ?? "math",
+      confidence: 1,
+    };
+    this.deps.remember(engine, line, recognition);
+    const readAs = known?.text.trim() ?? null;
+    this.deps.teach?.(engine, line, {
+      text,
+      latex: text,
+      readAs: readAs && readAs !== text ? readAs : null,
+      source: "fix",
+    });
+    this.checked.delete(line.id);
+    await this.enqueue(async () => {
+      await this.finish(engine, line, recognition);
+    });
+    return true;
+  }
+
   // ─── Watching the page ────────────────────────────────────────────────────────────────────
 
   private detach(): void {
@@ -337,7 +379,12 @@ export class LiveAnnotator {
 
   /** The line a mark is on now: the one holding at least half its strokes. */
   private lineFor(engine: PageEngine, mark: Annotation): Line | undefined {
-    const strokes = new Set(mark.lineStrokeIds);
+    return this.lineOfStrokes(engine, mark.lineStrokeIds);
+  }
+
+  /** The line most of these strokes belong to (at least half of them), if any. */
+  private lineOfStrokes(engine: PageEngine, strokeIds: readonly string[]): Line | undefined {
+    const strokes = new Set(strokeIds);
     const lines = studentLines(engine.doc);
     let best: { line: Line; shared: number } | null = null;
     for (const line of lines) {

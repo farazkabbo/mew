@@ -18,6 +18,7 @@ import {
   sameFormula,
   sameLatex,
   substitutions,
+  swapped,
   toRecognition,
   validChemistry,
   wordErrorRate,
@@ -68,8 +69,11 @@ describe("chooseReading", () => {
     );
     expect(chosen.reading.text).toBe("3x = 12");
     expect(chosen.chosenBy).toBe("math");
-    // One SymPy call, each reading after the line above.
-    expect(sympy.calls).toEqual([["3x + 7 = 19", "3x = 1Z", "3x + 7 = 19", "3x = 12"]]);
+    // Each reading checked after the line above.
+    expect(sympy.calls).toEqual([
+      ["3x + 7 = 19", "3x = 1Z"],
+      ["3x + 7 = 19", "3x = 12"],
+    ]);
   });
 
   it("keeps a real mistake when no close reading fixes it", async () => {
@@ -113,6 +117,42 @@ describe("chooseReading", () => {
       sympy,
     );
     expect(chosen.reading.text).toBe("x = 4");
+  });
+
+  it("swaps the student's own look-alikes back when that makes the line correct", async () => {
+    // Writer whose 7 reads as 1: "17 + 7 = 24" read "11 + 1 = 24" (false on its own).
+    const sympy = fakeSympy([" → 17 + 7 = 24", " → 11 + 7 = 24"]);
+    const chosen = await chooseReading(
+      math(reading("11 + 1 = 24", 0.8)),
+      { ...EMPTY_CONTEXT, subject: "math" },
+      { ...sympy, confusions: [{ read: "1", meant: "7", count: 3 }] },
+    );
+    // Fewest swaps first: "71 + 1", "17 + 1", "11 + 7" (correct here) before "17 + 7".
+    expect(chosen.reading.text).toBe("11 + 7 = 24");
+    expect(chosen.chosenBy).toBe("profile");
+    expect(chosen.alternatives.map((a) => a.text)).toEqual(["11 + 1 = 24"]);
+  });
+
+  it("never swaps without a profile, nor a line that's already correct", async () => {
+    const sympy = fakeSympy([" → 21 - 1 = 20"]);
+    const kept = await chooseReading(
+      math(reading("21 - 1 = 20", 0.8)),
+      { ...EMPTY_CONTEXT, subject: "math" },
+      { ...sympy, confusions: [{ read: "1", meant: "7", count: 3 }] },
+    );
+    expect(kept.reading.text).toBe("21 - 1 = 20");
+    const none = fakeSympy([" → 17 + 7 = 24"]);
+    const plainChoice = await chooseReading(math(reading("11 + 1 = 24", 0.8)), EMPTY_CONTEXT, none);
+    expect(plainChoice.reading.text).toBe("11 + 1 = 24");
+    expect(none.calls).toHaveLength(0);
+  });
+
+  it("swaps only digits and signs, never letters (they're in LaTeX commands)", () => {
+    const swaps = swapped({ text: "1/2", latex: "\\frac{1}{2}", confidence: 0.9 }, [
+      { read: "1", meant: "7", count: 2 },
+      { read: "a", meant: "o", count: 2 },
+    ]);
+    expect(swaps.map((s) => s.latex)).toEqual(["\\frac{7}{2}"]);
   });
 
   it("falls back to the model when SymPy is unreachable", async () => {
@@ -195,11 +235,14 @@ describe("the profile", () => {
 
   it("writes a note only for confusions seen enough", () => {
     const c = confusionsOf([sample("7", "1"), sample("77", "11"), sample("z", "2")]);
-    expect(confusionNote(c)).toBe(`- This student's "7" can look like "1".`);
+    const note = confusionNote(c);
+    expect(note).toContain(`This student's "7" can look like "1"`);
+    expect(note).toContain(`their own "7" and "1"`);
+    expect(note).not.toContain(`"z"`);
     expect(confusionNote([])).toBeNull();
   });
 
-  it("picks corrections showing the student's look-alikes first, each text once", () => {
+  it("picks the student's own look-alike shapes, then corrections showing them, each once", () => {
     const samples = [
       sample("hello", null, "confirm", 9),
       sample("7", null, "calibration", 1),
@@ -208,7 +251,8 @@ describe("the profile", () => {
       sample("abc", "abd", "fix", 4),
     ];
     const picked = pickExamples(samples, 3);
-    expect(picked.map((s) => s.text)).toEqual(["x = 7", "abc", "7"]);
+    // Their own calibration "7" first (to compare shapes), then the corrections showing it.
+    expect(picked.map((s) => s.text)).toEqual(["7", "x = 7", "abc"]);
   });
 
   it("validates samples: a real PNG and no control characters", () => {

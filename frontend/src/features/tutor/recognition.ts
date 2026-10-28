@@ -38,12 +38,18 @@ export class RecognitionService {
   private pausedUntil = 0;
 
   private reading: ReadingContext = { subject: null, vocabulary: [] };
+  private courseTerms: readonly string[] = [];
 
   constructor(private readonly fetchImpl: typeof fetch = (...args) => fetch(...args)) {}
 
   /** The notebook on screen changed (K10 §8.2: its subject and chapter words help reading). */
   setReadingContext(next: ReadingContext): void {
     this.reading = next;
+  }
+
+  /** The notebook's course topics (K10 §8.2), after its own titles in the vocabulary. */
+  setCourseTerms(terms: readonly string[]): void {
+    this.courseTerms = terms;
   }
 
   /**
@@ -64,7 +70,9 @@ export class RecognitionService {
     const first = lines[0];
     const problem = first && first.id !== line.id ? textOf(first) : null;
     const vocabulary = [
-      ...new Set(this.reading.vocabulary.map((w) => clip(w, 40)).filter(Boolean)),
+      ...new Set(
+        [...this.reading.vocabulary, ...this.courseTerms].map((w) => clip(w, 40)).filter(Boolean),
+      ),
     ].slice(0, HANDWRITING_LIMITS.vocabulary);
     return { previous, problem, subject: this.reading.subject, vocabulary };
   }
@@ -203,5 +211,8 @@ export async function strokesImage(
 }
 
 function clip(text: string, max: number): string {
-  return text.replace(/[ -]/g, " ").trim().slice(0, max);
+  return text
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .trim()
+    .slice(0, max);
 }

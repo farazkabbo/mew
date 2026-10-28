@@ -1609,7 +1609,26 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
       on 25 held-out lines went from 39 % to 73 % read as 7 (exact lines 48 % → 64 %) after a
       calibration 7 and 5 corrections: better, not yet "read correctly"; the remaining 7→1 errors
       are all that writer's.
-138.  **Still left after K10:** real samples (the team, then opt-in beta users) and the §8.1
-      targets judged on them; trying stroke order as text; chapter vocabulary from course chunks;
-      a stronger personalization for a quirk as strong as w03's (more examples of that character,
-      or K11's own model); K11 itself (the owner's go-ahead).
+138.  **K10 follow-ups (2026-10-28, same day).**
+      - **Personalization that works on the hard case.** Examples now start with the student's own
+        calibration sample of _both_ sides of each look-alike (their "7" and their "1") so the
+        model can compare shapes, and the note says to. And `chooseReading` swaps the student's
+        known look-alikes back (digits and signs only, at most 6 tries, fewest swaps first) when
+        a maths line isn't a correct step or a true statement and a swapped one is
+        (`chosenBy: "profile"`; SymPy checks a line on its own as a statement). Writer w03, 25
+        held-out lines, after calibrating 0–9 and 5 corrections: 7s read as 7 39 % → 78 %, exact
+        lines 48 % → 84 %. The 4 lines still wrong are true either way ("21 − 1 = 20" for
+        "27 − 7 = 20"), so only the shapes can settle them.
+      - **Course topics as vocabulary:** the notebook's course concept titles join its titles in
+        the context block (`setCourseTerms`).
+      - **"neb read:" on any line:** selecting a line with the lasso shows "neb read: … · Fix"
+        under it (`ReadAsChip`, `LiveAnnotator.readingOf` / `fixLine`), marked or not.
+      - **Stroke order as text (§8.2):** built as an eval mode (`--mode=k10-order`,
+        `strokeOrderText`); the app doesn't send it. The run stopped at the Gemini free tier's
+        500 requests a day; it's `pnpm eval:handwriting --mode=k10,k10-order --no-personalize`
+        once the quota allows, and the app sends it only if it wins.
+      - The `handwriting` migration is applied to the hosted project (the owner, SQL editor).
+139.  **Still left after K10:** real samples (the team, then opt-in beta users) and the §8.1
+      targets judged on them; the stroke-order run; K11 (the owner's go-ahead). The eval and live
+      recognition share the free tier's 500 requests a day: billing on the key is needed for
+      regular eval runs.

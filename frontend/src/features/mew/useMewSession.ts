@@ -409,7 +409,19 @@ function createPipeline() {
     },
     /** The course of the notebook on screen (the tutor draws on its material). */
     setCourse(next: string | null) {
+      if (next === courseId) return;
       courseId = next;
+      // K10 §8.2: the course's topics are words the chapter uses (they help reading).
+      recognition.setCourseTerms([]);
+      if (next) {
+        void coursesApi.get(next).then(
+          (detail) => {
+            if (courseId === next)
+              recognition.setCourseTerms(conceptsOf(detail).map((c) => c.title));
+          },
+          () => undefined,
+        );
+      }
     },
     /** Who handles Mew's notebook labels (the notebook screen, K3). */
     setNotebookVoice(handler: NotebookVoiceHandler | null) {

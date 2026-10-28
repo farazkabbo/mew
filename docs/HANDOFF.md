@@ -455,8 +455,11 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     FastAPI `routes/handwriting.py`, Next `/api/handwriting/samples`,
     `features/handwriting/` (teacher, calibration, Settings → Handwriting, capture page).
   - **Results (synthetic):** maths equivalence messy 88 % → 98 %, neat 93 % → 98 %; the 7-like-1
-    writer 39 % → 73 % after 5 corrections.
-  - **The `handwriting` migration is not applied to the hosted project yet.**
+    writer 39 % → 78 % of 7s (exact lines 48 % → 84 %) after calibration and 5 corrections.
+  - **Also:** "neb read: … · Fix" on any lasso-selected line; course topics as vocabulary; the
+    stroke-order experiment is built but not run (the free tier's 500 requests a day ran out).
+  - The `handwriting` migration is applied to the hosted project (the owner ran it in the SQL
+    editor on 2026-10-28; the security advisor reports nothing).
   - **To verify by hand:** the calibration with a real pen; fixing a reading, then the same
     character read right on a later line; Reset and turning learning off (the count goes to 0).
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they

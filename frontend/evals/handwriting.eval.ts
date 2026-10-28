@@ -24,7 +24,15 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import path from "node:path";
 import { deflateSync } from "node:zlib";
 
-import { bytesToBase64, encodePng, prepareLineAsDrawn, rasterize, recognitionPng } from "@mew/ink";
+import {
+  bytesToBase64,
+  encodePng,
+  prepareLine,
+  prepareLineAsDrawn,
+  rasterize,
+  recognitionPng,
+  strokeOrderText,
+} from "@mew/ink";
 import {
   characterErrorRate,
   CONFUSION_PAIRS,
@@ -65,7 +73,10 @@ const flag = (name: string) => argv.find((a) => a.startsWith(`--${name}=`))?.spl
 const LIMIT = argv.includes("--all") ? Infinity : Number(flag("limit") ?? "180");
 const MODES = (flag("mode")?.split(",") ?? ["baseline", "k10"]) as Mode[];
 const PERSONALIZE = !argv.includes("--no-personalize");
-type Mode = "baseline" | "k10";
+/** Only the personalization experiment (no per-category run). */
+const ONLY_PERSONALIZE = argv.includes("--only-personalize");
+/** k10-order: k10 plus the stroke order as text (the §8.2 experiment). */
+type Mode = "baseline" | "k10" | "k10-order";
 
 // ─── The corpus and its writers ─────────────────────────────────────────────────────────────
 
@@ -271,9 +282,14 @@ async function read(
   if (!png) return null;
   try {
     if (mode === "baseline") return await recognizeHandwriting(png, cachedGenerate);
+    const prepared = mode === "k10-order" ? prepareLine(sample.strokes) : null;
     return await recognizeLine(
       png,
-      { context: sample.context, ...(profile ?? {}) },
+      {
+        context: sample.context,
+        ...(profile ?? {}),
+        ...(prepared ? { strokeOrder: strokeOrderText(prepared) } : {}),
+      },
       { generate: cachedGenerate, checkMath },
     );
   } catch (error) {
@@ -447,18 +463,18 @@ async function personalization() {
   const deflate = (b: Uint8Array) => new Uint8Array(deflateSync(b));
   const samples: HandwritingSample[] = [];
   let t = 0;
-  // Calibration: the writer's own "7" on its own.
   const writer = WRITERS.find((w) => w.id === "w03");
   if (!writer) throw new Error("writer w03 is missing");
-  const calibration = {
+  // Calibration: the writer's own digits, each on its own (as the 60-second calibration asks).
+  const calibration = "0123456789".split("").map((d) => ({
     ...(lines[0] as Sample),
-    id: "calibration-7",
-    text: "7",
-    latex: "7",
+    id: `calibration-${d}`,
+    text: d,
+    latex: d,
     context: { previous: [], problem: null, subject: null, vocabulary: [] },
-    strokes: writeLine({ text: "7", latex: "7" }, writer, "neat", 7),
-  };
-  for (const s of [calibration, ...train]) {
+    strokes: writeLine({ text: d, latex: d }, writer, "neat", 700 + Number(d)),
+  }));
+  for (const s of [...calibration, ...train]) {
     const r = await read(s, "k10");
     const made = await recognitionPng(s.strokes, deflate);
     if (!made) continue;
@@ -467,7 +483,7 @@ async function personalization() {
       text: s.text,
       latex: s.latex,
       readAs: r && plain(r.text) !== plain(s.text) ? r.text : null,
-      source: s.id === "calibration-7" ? "calibration" : "fix",
+      source: s.id.startsWith("calibration-") ? "calibration" : "fix",
       image: bytesToBase64(made.png),
       createdAt: ++t,
     });
@@ -477,14 +493,21 @@ async function personalization() {
     let right = 0;
     let total = 0;
     let exact = 0;
+    const lines: { truth: string; read: string }[] = [];
     for (const s of heldOut) {
       const r = await read(s, "k10", withProfile ? profile : undefined);
       const counted = sevensRight(s.text, r?.text ?? "");
       right += counted.right;
       total += counted.total;
       if (r && plain(r.text) === plain(s.text)) exact++;
+      lines.push({ truth: s.text, read: r?.text ?? "" });
     }
-    return { sevens: total ? right / total : 0, sevenCount: total, exact: exact / heldOut.length };
+    return {
+      sevens: total ? right / total : 0,
+      sevenCount: total,
+      exact: exact / heldOut.length,
+      lines,
+    };
   };
   return {
     corrections: samples.map((s) => ({ text: s.text, readAs: s.readAs, source: s.source })),
@@ -505,7 +528,7 @@ console.log(
 );
 
 const scored: Scored[] = [];
-for (const mode of MODES) {
+for (const mode of ONLY_PERSONALIZE ? [] : MODES) {
   let done = 0;
   for (const sample of chosen) {
     scored.push(score(sample, mode, await read(sample, mode)));
@@ -515,7 +538,7 @@ for (const mode of MODES) {
 await settleEquivalence(scored);
 
 const categories = Category.options;
-const table: Record<Mode, Record<string, Row>> = { baseline: {}, k10: {} };
+const table: Record<Mode, Record<string, Row>> = { baseline: {}, k10: {}, "k10-order": {} };
 for (const mode of MODES) {
   const rows = scored.filter((s) => s.mode === mode);
   table[mode].all = summarize(rows);
@@ -531,7 +554,11 @@ for (const mode of MODES) {
     }
   }
 }
-const confusion: Record<Mode, Record<string, number>> = { baseline: {}, k10: {} };
+const confusion: Record<Mode, Record<string, number>> = {
+  baseline: {},
+  k10: {},
+  "k10-order": {},
+};
 for (const s of scored) {
   for (const c of s.confusions) confusion[s.mode][c] = (confusion[s.mode][c] ?? 0) + 1;
 }
@@ -594,7 +621,7 @@ if (personal) {
     "",
     "## Personalization: writer w03 (their 7 looks like a 1)",
     "",
-    `Profile: ${personal.corrections.length} samples (1 calibration "7" and 5 corrected lines).`,
+    `Profile: ${personal.corrections.length} samples (a calibration of the digits 0–9 and 5 corrected lines).`,
     `Note sent: ${personal.note ? `\`${personal.note}\`` : "none"}.`,
     "",
     `| Held-out lines (${personal.heldOut}) | 7s read as 7 | Exact lines |`,

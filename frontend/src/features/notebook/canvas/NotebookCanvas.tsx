@@ -1,6 +1,6 @@
 "use client";
 
-import type { BBox } from "@mew/shared";
+import type { BBox, Stroke } from "@mew/shared";
 import {
   bboxesIntersect,
   type Camera,
@@ -52,10 +52,12 @@ type CanvasProps = {
   tutorInk?: InkLayer & { attachViewport(viewport: () => BBox): () => void };
   /** Extra screen width (CSS px) covered on the left by a floating panel (e.g. the quiz card). */
   leftInset?: number;
+  /** The lasso selected some strokes (null: the selection went). */
+  onSelection?: (strokes: readonly Stroke[] | null) => void;
 };
 
 export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function NotebookCanvas(
-  { engine, onPenDown, tutorInk, leftInset = 0 },
+  { engine, onPenDown, tutorInk, leftInset = 0, onSelection },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -67,10 +69,12 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
   const latestCamera = useRef<Camera>(DEFAULT_CAMERA);
   const penDown = useRef(onPenDown);
   const inset = useRef(leftInset);
+  const selectionChanged = useRef(onSelection);
   useEffect(() => {
     penDown.current = onPenDown;
     inset.current = leftInset;
-  }, [onPenDown, leftInset]);
+    selectionChanged.current = onSelection;
+  }, [onPenDown, leftInset, onSelection]);
 
   useImperativeHandle(ref, () => ({
     zoomBy: (factor) => controls.current?.zoomBy(factor),
@@ -189,7 +193,13 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     };
 
     // --- Tools.
-    const ctx: ToolContext = { engine, overlay, zoom: () => camera.zoom, invalidate: schedule };
+    const ctx: ToolContext = {
+      engine,
+      overlay,
+      zoom: () => camera.zoom,
+      invalidate: schedule,
+      selected: (strokes) => selectionChanged.current?.(strokes),
+    };
     const tools: Record<Tool, ToolController> = {
       pen: new PenTool(ctx),
       highlighter: new PenTool(ctx),

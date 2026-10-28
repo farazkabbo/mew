@@ -32,7 +32,7 @@ describe("the handwriting profile on the server", () => {
   it("still recognises when the profile can't be read", async () => {
     const samples = await samplesFor("u2", () => Promise.reject(new Error("down")), 0);
     expect(samples).toEqual([]);
-    expect(profileForRecognition(samples)).toEqual({ examples: [], note: null });
+    expect(profileForRecognition(samples)).toEqual({ examples: [], note: null, confusions: [] });
   });
 
   it("gives examples, and a note once a look-alike is seen twice", () => {

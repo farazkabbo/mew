@@ -1,6 +1,6 @@
 # Handwriting eval report
 
-Run 2026-10-28T04:56Z · model `gemini-3.5-flash-lite` · 180 lines per mode (of 1510; 0 real) · 0 model calls (the rest cached) · SymPy up.
+Run 2026-10-28T05:20Z · model `gemini-3.5-flash-lite` · 180 lines per mode (of 1510; 0 real) · 0 model calls (the rest cached) · SymPy up.
 
 Synthetic writers only, unless real samples are counted above: these numbers measure the
 pipeline, not real students (see evals/handwriting/README.md).
@@ -51,10 +51,10 @@ K10 readings chosen by: {"model":180}.
 
 ## Personalization: writer w03 (their 7 looks like a 1)
 
-Profile: 6 samples (1 calibration "7" and 5 corrected lines).
-Note sent: `- This student's "7" can look like "1".`.
+Profile: 15 samples (a calibration of the digits 0–9 and 5 corrected lines).
+Note sent: `- This student's "7" can look like "1": compare it with their own "7" and "1" in the examples, and read "7" when it matches theirs.`.
 
 | Held-out lines (25) | 7s read as 7 | Exact lines |
 | ------------------- | ------------ | ----------- |
 | without the profile | 39.0% of 41  | 48.0%       |
-| with the profile    | 73.2% of 41  | 64.0%       |
+| with the profile    | 78.0% of 41  | 84.0%       |

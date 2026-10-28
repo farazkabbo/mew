@@ -110,5 +110,6 @@ export class LassoTool implements ToolController {
     this.ctx.overlay.selection =
       strokes && bbox ? { strokes, bbox: bbox as BBox, dx: 0, dy: 0 } : null;
     this.ctx.invalidate({ ink: true, live: true });
+    if (this.mode !== "dragging") this.ctx.selected?.(this.ctx.overlay.selection ? strokes : null);
   }
 }

@@ -5,11 +5,13 @@ import {
   type Page,
   type PdfInfo,
   type SavedQuizFilter,
+  type Stroke,
   unsortedNodeId,
 } from "@mew/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { MarkLayer } from "../annotate/MarkLayer";
+import { ReadAsChip } from "../annotate/ReadAsChip";
 import { MarksMenu } from "../annotate/MarksMenu";
 import { useMarkPrefs } from "../annotate/prefs";
 import { AnnotationRecords } from "../annotate/records";
@@ -663,15 +665,17 @@ export function NotebookApp({ userId }: { userId: string }) {
   useEffect(() => {
     setLiveNotebook(rootId);
   }, [setLiveNotebook, rootId]);
+  // K10 §8.2: the lasso's selection, for "neb read:" on that line.
+  const [lassoed, setLassoed] = useState<readonly Stroke[] | null>(null);
   // K10 §8.2: what helps read a line here (the notebook's subject, its chapter's words).
   const { setReadingContext } = mew;
   const readingPath = notebookId ? tree.path(notebookId) : [];
   const readingSubject = readingPath[0]?.subject ?? null;
-  const readingTitles = readingPath.map((n) => n.title).join(" ");
+  const readingTitles = readingPath.map((n) => n.title).join("\u0000");
   useEffect(() => {
     setReadingContext({
       subject: readingSubject,
-      vocabulary: readingTitles ? readingTitles.split(" ") : [],
+      vocabulary: readingTitles ? readingTitles.split("\u0000") : [],
     });
   }, [setReadingContext, readingSubject, readingTitles]);
   // The day's budget for live marking spent (§7.5): Quiet until tomorrow, and the student is told.
@@ -800,6 +804,7 @@ export function NotebookApp({ userId }: { userId: string }) {
             onPenDown={mew.penDown}
             tutorInk={mew.ink}
             leftInset={quizActive ? QUIZ_CARD_INSET : 0}
+            onSelection={setLassoed}
           />
         ) : (
           <div className="grid h-full place-items-center text-sm text-ink-muted">
@@ -847,6 +852,9 @@ export function NotebookApp({ userId }: { userId: string }) {
             live={mew.live}
             onWhy={(mark) => mew.askAboutLine(mark.lineStrokeIds)}
           />
+        )}
+        {engine && view === "page" && (
+          <ReadAsChip canvas={canvas} live={mew.live} selection={lassoed} />
         )}
 
         {engine && view === "page" && (

@@ -95,27 +95,39 @@ export const RecognitionReadings = z.object({
 export type RecognitionReadings = z.infer<typeof RecognitionReadings>;
 
 /** How the reading used was picked (§8.2 "choose with logic"). */
-export const ChosenBy = z.enum(["model", "math", "chemistry", "code"]);
+export const ChosenBy = z.enum(["model", "math", "chemistry", "code", "profile"]);
 export type ChosenBy = z.infer<typeof ChosenBy>;
 
 export type ReadingChecks = {
   /**
    * SymPy's verdicts on consecutive LaTeX lines (`/v1/check/math`), or null when it can't be
-   * reached. Each line is checked against the one before it.
+   * reached. Each line is checked against the one before it; a line on its own is checked as a
+   * statement ("17 + 7 = 24" is correct, "11 + 1 = 24" isn't).
    */
-  checkMath?(steps: string[]): Promise<{ index: number; verdict: string; reason: string }[] | null>;
+  checkMath?: (
+    steps: string[],
+  ) => Promise<{ index: number; verdict: string; reason: string }[] | null>;
+  /**
+   * The student's own look-alikes (their handwriting profile, §8.3): "their 7 reads as 1". A
+   * maths reading that isn't a correct step is tried again with those characters swapped back.
+   */
+  confusions?: readonly Confusion[];
 };
 
 const MATH_SUBJECTS = new Set<Subject>(["math", "physics"]);
+/** Swapped readings tried at most, fewest swaps first. */
+const MAX_SWAPS = 6;
 
 /**
  * Picks a reading with logic, not only the model's first choice (§8.2):
- * - maths: the reading that's a correct step from the line before (SymPy), else one SymPy can
- *   parse when the first can't;
+ * - maths: the reading that's a correct step from the line before, or a true statement on its own
+ *   (SymPy), else one SymPy can parse when the first can't; then, with the student's profile,
+ *   their own look-alikes swapped back (their "1" that is really a 7) when that makes it correct;
  * - chemistry: a reading that's a valid formula or equation;
  * - code: a reading whose brackets and quotes balance.
- * Only readings close to the first in confidence are considered, so logic settles look-alikes
- * (1 / 7, x / ×) without talking a real mistake away. Otherwise the model's first reading.
+ * Only readings close to the first in confidence are considered, and only the student's known
+ * look-alikes are swapped, so logic settles look-alikes without talking a real mistake away.
+ * Otherwise the model's first reading.
  */
 export async function chooseReading(
   output: RecognitionReadings,
@@ -139,39 +151,100 @@ export async function chooseReading(
       r.confidence >=
         Math.max(HANDWRITING_LIMITS.choiceFloor, top.confidence - HANDWRITING_LIMITS.choiceMargin),
   );
-  if (close.length < 2) return pick(top, "model");
 
   const subject = context.subject ?? output.subject;
-  if (subject === "chemistry") {
-    const valid = close.find((r) => validChemistry(r.latex ?? r.text));
-    if (valid && !validChemistry(top.latex ?? top.text)) return pick(valid, "chemistry");
+  if (subject === "chemistry" || subject === "programming") {
+    if (close.length < 2) return pick(top, "model");
+    const ok =
+      subject === "chemistry"
+        ? (r: RecognitionReading) => validChemistry(r.latex ?? r.text)
+        : (r: RecognitionReading) => balanced(r.text);
+    const valid = close.find(ok);
+    if (valid && !ok(top)) return pick(valid, subject === "chemistry" ? "chemistry" : "code");
     return pick(top, "model");
   }
-  if (subject === "programming") {
-    const parses = close.find((r) => balanced(r.text));
-    if (parses && !balanced(top.text)) return pick(parses, "code");
-    return pick(top, "model");
-  }
+
+  const checkMath = checks.checkMath;
+  const isMaths = MATH_SUBJECTS.has(subject) || close.some((r) => r.latex);
+  const confusions = checks.confusions ?? [];
+  // Nothing to choose between: no SymPy call (the line's own check happens after).
+  if (!checkMath || !isMaths || close.length === 0) return pick(top, "model");
+  if (close.length < 2 && confusions.length === 0) return pick(top, "model");
   const previous = context.previous.at(-1);
-  if ((MATH_SUBJECTS.has(subject) || close.some((r) => r.latex)) && checks.checkMath) {
-    const lines = close.map((r) => r.latex ?? r.text);
-    // One call: [previous, a, previous, b, …] checks each reading against the line above, and
-    // each reading's own parse ([a] alone when there's no line above).
-    const steps = previous ? lines.flatMap((l) => [previous, l]) : lines;
-    const results = await checks.checkMath(steps.slice(0, 8));
-    if (results) {
-      const verdict = (i: number) => results.find((r) => r.index === (previous ? 2 * i + 1 : i));
-      const correct = close.findIndex((_, i) => verdict(i)?.verdict === "correct");
-      if (correct > 0) return pick(close[correct] as RecognitionReading, "math");
-      if (correct === 0) return pick(top, "model");
-      const unparseable = (i: number) => verdict(i)?.reason === "unparseable";
-      if (unparseable(0)) {
-        const parses = close.findIndex((_, i) => i > 0 && verdict(i) && !unparseable(i));
-        if (parses > 0) return pick(close[parses] as RecognitionReading, "math");
-      }
+  const verdict = async (line: string) => {
+    const results = await checkMath(previous ? [previous, line] : [line]);
+    return results?.find((r) => r.index === (previous ? 1 : 0)) ?? null;
+  };
+
+  let chosen = top;
+  let chosenBy: ChosenBy = "model";
+  const verdicts = await Promise.all(close.map((r) => verdict(r.latex ?? r.text)));
+  const correct = verdicts.findIndex((v) => v?.verdict === "correct");
+  if (correct > 0) {
+    chosen = close[correct] as RecognitionReading;
+    chosenBy = "math";
+  } else if (correct === -1 && verdicts[0]?.reason === "unparseable") {
+    const parses = verdicts.findIndex((v, i) => i > 0 && v && v.reason !== "unparseable");
+    if (parses > 0) {
+      chosen = close[parses] as RecognitionReading;
+      chosenBy = "math";
     }
   }
-  return pick(top, "model");
+  if (correct !== -1 || confusions.length === 0) return pick(chosen, chosenBy);
+
+  // The student's own look-alikes, swapped back: the fewest swaps that make it correct.
+  const swaps = swapped(chosen, confusions);
+  const swapVerdicts = await Promise.all(swaps.map((r) => verdict(r.latex ?? r.text)));
+  const fixed = swapVerdicts.findIndex((v) => v?.verdict === "correct");
+  if (fixed === -1) return pick(chosen, chosenBy);
+  return { reading: swaps[fixed] as RecognitionReading, alternatives: sorted, chosenBy: "profile" };
+}
+
+/**
+ * A reading with some of the student's look-alikes swapped back (occurrences of the character
+ * neb reads, replaced by the one they mean), fewest swaps first. Only digits and signs are
+ * swapped: a letter could be part of a LaTeX command.
+ */
+export function swapped(
+  reading: RecognitionReading,
+  confusions: readonly Confusion[],
+): RecognitionReading[] {
+  const out: RecognitionReading[] = [];
+  const positions = (s: string, ch: string) =>
+    Array.from(s)
+      .flatMap((c, i) => (c === ch ? [i] : []))
+      .slice(0, 4);
+  for (const c of confusions) {
+    if (!/^[0-9+=×÷-]$/.test(c.read) || Array.from(c.meant).length !== 1) continue;
+    const latex = reading.latex ?? reading.text;
+    const inLatex = positions(latex, c.read);
+    const inText = positions(reading.text, c.read);
+    const masks = Array.from({ length: 2 ** inLatex.length - 1 }, (_, m) => m + 1).sort(
+      (a, b) => bits(a) - bits(b) || a - b,
+    );
+    for (const mask of masks) {
+      const swap = (s: string, at: readonly number[]) => {
+        const chars = Array.from(s);
+        at.forEach((p, k) => {
+          if (mask & (1 << k)) chars[p] = c.meant;
+        });
+        return chars.join("");
+      };
+      const newLatex = swap(latex, inLatex);
+      out.push({
+        text: inText.length === inLatex.length ? swap(reading.text, inText) : newLatex,
+        latex: reading.latex === null ? null : newLatex,
+        confidence: reading.confidence,
+      });
+    }
+  }
+  return out.slice(0, MAX_SWAPS);
+}
+
+function bits(n: number): number {
+  let count = 0;
+  for (let v = n; v; v >>= 1) count += v & 1;
+  return count;
 }
 
 /** The chosen reading as the rest of the app knows a recognition. */
@@ -315,47 +388,64 @@ export function confusionNote(confusions: readonly Confusion[], min = 2): string
   const lines = confusions
     .filter((c) => c.count >= min)
     .slice(0, HANDWRITING_LIMITS.confusionNotes)
-    .map((c) => `- This student's "${c.meant}" can look like "${c.read}".`);
+    .map(
+      (c) =>
+        `- This student's "${c.meant}" can look like "${c.read}": compare it with their own ` +
+        `"${c.meant}" and "${c.read}" in the examples, and read "${c.meant}" when it matches theirs.`,
+    );
   return lines.length > 0 ? lines.join("\n") : null;
 }
 
 /**
- * The few-shot examples for a recognition call (§8.3): corrections that show the student's own
- * look-alikes first (the confusions seen most), then calibration samples of those characters,
- * then the most recent corrections. At most HANDWRITING_LIMITS.fewShot, each text once.
+ * The few-shot examples for a recognition call (§8.3), at most HANDWRITING_LIMITS.fewShot, each
+ * text once:
+ * 1. for the student's most frequent look-alikes, their own calibration sample of each side (their
+ *    "7" and their "1"), so the model can compare the two shapes;
+ * 2. corrections that show those characters;
+ * 3. other corrections, then other calibration samples, newest first.
  */
 export function pickExamples<
   S extends Pick<HandwritingSample, "text" | "readAs" | "source" | "createdAt">,
 >(samples: readonly S[], limit: number = HANDWRITING_LIMITS.fewShot): S[] {
-  const confusions = confusionsOf(samples);
-  const chars = confusions.map((c) => c.meant);
-  const weight = (s: S): number => {
-    const corrected = s.readAs !== null && s.readAs !== s.text;
-    const shows = chars.findIndex((c) => s.text.includes(c));
-    const base = corrected ? 3 : s.source === "calibration" ? 2 : 1;
-    return base * 100 + (shows === -1 ? 0 : 50 - shows);
-  };
-  const ranked = [...samples].sort((a, b) => weight(b) - weight(a) || b.createdAt - a.createdAt);
+  const confusions = confusionsOf(samples).slice(0, 2);
   const out: S[] = [];
   const texts = new Set<string>();
-  for (const s of ranked) {
-    if (texts.has(s.text)) continue;
+  const take = (s: S | undefined) => {
+    if (!s || texts.has(s.text) || out.length >= limit) return;
     texts.add(s.text);
     out.push(s);
-    if (out.length >= limit) break;
+  };
+  const newest = [...samples].sort((a, b) => b.createdAt - a.createdAt);
+  const calibration = (text: string) =>
+    newest.find((s) => s.source === "calibration" && s.text.trim() === text);
+  const corrected = (s: S) => s.readAs !== null && s.readAs !== s.text;
+  for (const c of confusions) {
+    take(calibration(c.meant));
+    take(calibration(c.read));
   }
+  for (const c of confusions) {
+    for (const s of newest.filter((x) => corrected(x) && x.text.includes(c.meant))) take(s);
+  }
+  for (const s of newest.filter(corrected)) take(s);
+  for (const s of newest.filter((x) => x.source === "calibration")) take(s);
+  for (const s of newest) take(s);
   return out;
 }
 
 /** What a recognition call gets from a profile (§8.3): the examples and the confusion note. */
 export function profileForRecognition(
   samples: readonly Pick<HandwritingSample, "text" | "readAs" | "source" | "createdAt" | "image">[],
-): { examples: { image: string; text: string }[]; note: string | null } {
-  if (samples.length === 0) return { examples: [], note: null };
-  const calibrated = samples.some((s) => s.source === "calibration");
+): { examples: { image: string; text: string }[]; note: string | null; confusions: Confusion[] } {
+  if (samples.length === 0) return { examples: [], note: null, confusions: [] };
+  // A look-alike counts once seen twice, or once after a calibration.
+  const min = samples.some((s) => s.source === "calibration") ? 1 : 2;
+  const confusions = confusionsOf(samples)
+    .filter((c) => c.count >= min)
+    .slice(0, HANDWRITING_LIMITS.confusionNotes);
   return {
     examples: pickExamples(samples).map((s) => ({ image: s.image, text: s.text })),
-    note: confusionNote(confusionsOf(samples), calibrated ? 1 : 2),
+    note: confusionNote(confusions, min),
+    confusions,
   };
 }
 

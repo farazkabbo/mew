@@ -545,7 +545,8 @@
         "equivalenceUnknown": 0,
         "formula": null
       }
-    }
+    },
+    "k10-order": {}
   },
   "confusion": {
     "baseline": {
@@ -553,7 +554,8 @@
     },
     "k10": {
       "7→1": 6
-    }
+    },
+    "k10-order": {}
   },
   "chosenBy": {
     "model": 180
@@ -561,8 +563,53 @@
   "personalization": {
     "corrections": [
       {
+        "text": "0",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
+        "text": "1",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
+        "text": "2",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
+        "text": "3",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
+        "text": "4",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
+        "text": "5",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
+        "text": "6",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
         "text": "7",
         "readAs": "1",
+        "source": "calibration"
+      },
+      {
+        "text": "8",
+        "readAs": null,
+        "source": "calibration"
+      },
+      {
+        "text": "9",
+        "readAs": null,
         "source": "calibration"
       },
       {
@@ -591,17 +638,221 @@
         "source": "fix"
       }
     ],
-    "note": "- This student's \"7\" can look like \"1\".",
+    "note": "- This student's \"7\" can look like \"1\": compare it with their own \"7\" and \"1\" in the examples, and read \"7\" when it matches theirs.",
     "heldOut": 25,
     "without": {
       "sevens": 0.3902439024390244,
       "sevenCount": 41,
-      "exact": 0.48
+      "exact": 0.48,
+      "lines": [
+        {
+          "truth": "2(z + 7) = 24",
+          "read": "2(z+7) = 24"
+        },
+        {
+          "truth": "z + 7 = 12",
+          "read": "z + 7 = 12"
+        },
+        {
+          "truth": "4t - 7 = 17",
+          "read": "4t - 7 = 17"
+        },
+        {
+          "truth": "x^2 + 7x + 12 = 0",
+          "read": "x^2 + 7x + 12 = 0"
+        },
+        {
+          "truth": "x + y = 7",
+          "read": "x + y = 1"
+        },
+        {
+          "truth": "f(t) = 5t^2 - 7t",
+          "read": "f(t) = 5t^2 - 7t"
+        },
+        {
+          "truth": "f'(t) = 10t - 7",
+          "read": "f'(t) = 10t - 7"
+        },
+        {
+          "truth": "x^3 * x^4 = x^7",
+          "read": "x^3 * x^4 = x^7"
+        },
+        {
+          "truth": "E = 1/2 x 2 x 7^2",
+          "read": "E = 1/2 x 2 x 1^2"
+        },
+        {
+          "truth": "7 x 7 = 49",
+          "read": "7 x 7 = 49"
+        },
+        {
+          "truth": "17 + 7 = 24",
+          "read": "11 + 1 = 24"
+        },
+        {
+          "truth": "77 / 7 = 11",
+          "read": "11/1 = 11"
+        },
+        {
+          "truth": "27 - 7 = 20",
+          "read": "21 - 1 = 20"
+        },
+        {
+          "truth": "7a = 56",
+          "read": "7a = 56"
+        },
+        {
+          "truth": "a = 56 / 7",
+          "read": "a = 56/1"
+        },
+        {
+          "truth": "b - 17 = 70",
+          "read": "b - 11 = 10"
+        },
+        {
+          "truth": "b = 87",
+          "read": "b = 81"
+        },
+        {
+          "truth": "3c + 7 = 37",
+          "read": "3c + 7 = 37"
+        },
+        {
+          "truth": "7(d - 1) = 70",
+          "read": "1(d - 1) = 10"
+        },
+        {
+          "truth": "70 + 7 = 77",
+          "read": "10 + 1 = 11"
+        },
+        {
+          "truth": "7^2 = 49",
+          "read": "7^2 = 49"
+        },
+        {
+          "truth": "147 / 7 = 21",
+          "read": "141 / 1 = 21"
+        },
+        {
+          "truth": "7 + 71 = 78",
+          "read": "1 + 11 = 18"
+        },
+        {
+          "truth": "e + 27 = 74",
+          "read": "e + 27 = 74"
+        },
+        {
+          "truth": "e = 47",
+          "read": "e = 41"
+        }
+      ]
     },
     "with": {
-      "sevens": 0.7317073170731707,
+      "sevens": 0.7804878048780488,
       "sevenCount": 41,
-      "exact": 0.64
+      "exact": 0.84,
+      "lines": [
+        {
+          "truth": "2(z + 7) = 24",
+          "read": "2(z + 7) = 24"
+        },
+        {
+          "truth": "z + 7 = 12",
+          "read": "z + 7 = 12"
+        },
+        {
+          "truth": "4t - 7 = 17",
+          "read": "4t - 7 = 17"
+        },
+        {
+          "truth": "x^2 + 7x + 12 = 0",
+          "read": "x^2 + 7x + 12 = 0"
+        },
+        {
+          "truth": "x + y = 7",
+          "read": "x + y = 1"
+        },
+        {
+          "truth": "f(t) = 5t^2 - 7t",
+          "read": "f(t) = 5t^2 - 7t"
+        },
+        {
+          "truth": "f'(t) = 10t - 7",
+          "read": "f'(t) = 10t - 7"
+        },
+        {
+          "truth": "x^3 * x^4 = x^7",
+          "read": "x^3 * x^4 = x^7"
+        },
+        {
+          "truth": "E = 1/2 x 2 x 7^2",
+          "read": "E = 1/2 x 2 x 7^2"
+        },
+        {
+          "truth": "7 x 7 = 49",
+          "read": "7x7 = 49"
+        },
+        {
+          "truth": "17 + 7 = 24",
+          "read": "17 + 7 = 24"
+        },
+        {
+          "truth": "77 / 7 = 11",
+          "read": "77/7 = 11"
+        },
+        {
+          "truth": "27 - 7 = 20",
+          "read": "21 - 1 = 20"
+        },
+        {
+          "truth": "7a = 56",
+          "read": "7a = 56"
+        },
+        {
+          "truth": "a = 56 / 7",
+          "read": "a = 56/7"
+        },
+        {
+          "truth": "b - 17 = 70",
+          "read": "b - 11 = 10"
+        },
+        {
+          "truth": "b = 87",
+          "read": "b = 87"
+        },
+        {
+          "truth": "3c + 7 = 37",
+          "read": "3c + 7 = 37"
+        },
+        {
+          "truth": "7(d - 1) = 70",
+          "read": "7(d - 1) = 70"
+        },
+        {
+          "truth": "70 + 7 = 77",
+          "read": "10 + 1 = 11"
+        },
+        {
+          "truth": "7^2 = 49",
+          "read": "7^2 = 49"
+        },
+        {
+          "truth": "147 / 7 = 21",
+          "read": "147/7 = 21"
+        },
+        {
+          "truth": "7 + 71 = 78",
+          "read": "7 + 71 = 78"
+        },
+        {
+          "truth": "e + 27 = 74",
+          "read": "e + 27 = 74"
+        },
+        {
+          "truth": "e = 47",
+          "read": "e = 47"
+        }
+      ]
     }
   },
   "misses": [

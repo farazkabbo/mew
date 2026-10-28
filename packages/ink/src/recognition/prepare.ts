@@ -160,3 +160,21 @@ function bounds(lines: readonly Pts[]): { x: number; y: number; w: number; h: nu
   }
   return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
 }
+
+/**
+ * The order the strokes were written in, as compact text (§8.2: "test whether also sending stroke
+ * order helps"): each stroke's start and end in the prepared picture, in tenths of a letter
+ * height, "1:(3,9)>(3,0) 2:…". At most `max` strokes.
+ */
+export function strokeOrderText(line: PreparedLine, max = 60): string {
+  const unit = RECOGNITION_RENDER.letterPx / 10;
+  const at = (x: number, y: number) =>
+    `(${Math.round((x - RECOGNITION_RENDER.padPx) / unit)},${Math.round((y - RECOGNITION_RENDER.padPx) / unit)})`;
+  return line.polylines
+    .slice(0, max)
+    .map((poly, i) => {
+      const n = poly.length;
+      return `${i + 1}:${at(poly[0] ?? 0, poly[1] ?? 0)}>${at(poly[n - 2] ?? 0, poly[n - 1] ?? 0)}`;
+    })
+    .join(" ");
+}
