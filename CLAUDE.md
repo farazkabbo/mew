@@ -13,3 +13,6 @@
 - **The K series** (notebook tree, save where I say, PDFs, drawn explanations, Show-then-You,
   two-key shortcuts, auto-filing, live annotations, handwriting; milestones K1–K11) is specified in
   [docs/NOTEBOOKS_K.md](docs/NOTEBOOKS_K.md). Its 0.1 and **Decisions** sections are binding.
+- **The U series** (the UI overhaul, "the desk": tokens, page anatomy, desk, checks, overlays;
+  milestones U1–U7) is specified in [docs/NEB_APP_UI.md](docs/NEB_APP_UI.md), with the design
+  boards in [design/u/](design/u/). Its 0.2 and **Decisions** sections are binding.

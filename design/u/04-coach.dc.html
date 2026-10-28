@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Screen coach</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&amp;family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.k{display:inline-flex;align-items:center;height:26px;padding:0 9px;border:1px solid #C9C1AF;border-bottom-width:3px;border-radius:6px;background:#FBF8F0;font:600 12px Inter,sans-serif;color:#4A463E}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: linear-gradient(#7DA4AF, #98BCC4 42%, #C4D4D2 72%, #E4DED4); font-family: Inter, sans-serif; color: #1E1D1A; position: relative; overflow: hidden">
+
+  <div style="position: absolute; left: 50px; top: 56px; width: 860px; height: 540px; border-radius: 10px; overflow: hidden; background: #111518; box-shadow: 0 30px 60px -30px #1E1D1A">
+    <div style="height: 38px; padding: 0 16px; display: flex; align-items: center; background: #2A2E33; color: #D9D4C7; font-size: 13px">Projectile motion in 10 minutes · lecture video</div>
+    <svg width="860" height="430" viewBox="0 0 860 430" role="img" aria-label="Lecture slide: a launched ball's path with its velocity arrow at angle theta">
+      <rect width="860" height="430" fill="#0F2430"></rect>
+      <text x="40" y="58" font-family="Inter" font-size="26" font-weight="600" fill="#E9F0F2">Launching at an angle</text>
+      <path d="M90 360 Q 400 -40 760 360" fill="none" stroke="#7DA4AF" stroke-width="3" stroke-dasharray="8 8"></path>
+      <path d="M90 360 L 610 360" stroke="#5E7680" stroke-width="2"></path>
+      <path d="M90 360 L 230 200" stroke="#F1E5AE" stroke-width="5" stroke-linecap="round"></path>
+      <path d="M230 200 l -20 4 l 12 14 z" fill="#F1E5AE"></path>
+      <path d="M150 360 A 60 60 0 0 0 132 318" fill="none" stroke="#E9F0F2" stroke-width="2"></path>
+      <text x="160" y="345" font-family="Inter" font-size="20" fill="#E9F0F2">θ</text>
+      <text x="200" y="190" font-family="Inter" font-size="20" fill="#F1E5AE">v₀</text>
+      <circle cx="90" cy="360" r="9" fill="#E9F0F2"></circle>
+      <rect x="0" y="410" width="860" height="20" fill="#1C2A31"></rect><rect x="0" y="416" width="290" height="8" fill="#C2453A"></rect>
+    </svg>
+  </div>
+
+  <div style="position: absolute; left: 62px; top: 236px; width: 260px; height: 230px; border: 3px dashed {{neb}}; border-radius: 50%; transform: rotate(-12deg)"></div>
+
+  <div style="position: absolute; left: 330px; top: 300px; width: 600px; height: 3px; background: {{neb}}; transform-origin: 0 50%; transform: rotate(-11deg)"></div>
+
+  <section aria-label="neb's sketch card" style="position: absolute; left: 900px; top: 150px; width: 330px; height: 290px; box-sizing: border-box; padding: 16px 18px; background: #FBF8F0; border-radius: 6px; box-shadow: 0 20px 40px -20px #1E1D1A; border-top: 4px solid {{neb}}; display: flex; flex-direction: column; gap: 6px">
+    <span style="font: 500 12px 'Pixelify Sans', monospace; color: #3F2BA0">neb · sketch</span>
+    <svg width="294" height="150" viewBox="0 0 294 150" role="img" aria-label="Arrow split into an across part and an up part"><path d="M40 130 L230 130" stroke="#6B4EE6" stroke-width="3" stroke-dasharray="7 6"></path><path d="M230 130 L230 30" stroke="#6B4EE6" stroke-width="3" stroke-dasharray="7 6"></path><path d="M40 130 L230 30" stroke="#26292E" stroke-width="4" stroke-linecap="round"></path><path d="M230 30 l -18 2 l 9 14 z" fill="#26292E"></path><text x="96" y="148" font-family="Caveat" font-size="22" fill="#3F2BA0">v cos θ</text><text x="238" y="86" font-family="Caveat" font-size="22" fill="#3F2BA0">v sin θ</text><text x="100" y="72" font-family="Caveat" font-size="22" fill="#26292E">v</text></svg>
+    <p style="margin: 0; font: 500 14px/1.35 'Pixelify Sans', monospace; color: #3F2BA0">split the arrow in two: one part goes across, one goes up.</p>
+  </section>
+
+  <div style="position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; width: 640px; height: 56px; padding: 0 8px 0 18px; box-sizing: border-box; border-radius: 28px; background: #FFFFFF; box-shadow: 0 18px 40px -18px #1E1D1A">
+    <svg width="40" height="22" viewBox="0 0 40 22" aria-hidden="true"><g stroke="{{neb}}" stroke-width="3" stroke-linecap="round"><path d="M3 9v4M9 5v12M15 2v18M21 7v8M27 4v14M33 8v6"></path></g></svg>
+    <span style="flex: 1; font-size: 16px">why do we split it?</span>
+    <button style="display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border: 1px solid #D3CAB7; border-radius: 20px; background: #F7F3EA; font-size: 12px; color: #4A463E">→ Physics › Ch 3 <span class="k" style="height: 20px; font-size: 11px">Ctrl</span><span class="k" style="height: 20px; font-size: 11px">D</span></button>
+  </div>
+
+  <div style="position: absolute; left: 40px; bottom: 40px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1E1D1A">
+    <span class="k" style="border-bottom-width: 1px; transform: translateY(2px); background: #E7E1FB; border-color: {{neb}}">Ctrl</span><span>+</span><span class="k" style="border-bottom-width: 1px; transform: translateY(2px); background: #E7E1FB; border-color: {{neb}}">Alt</span>
+    <span style="margin-left: 6px">held · circle anything, then talk or type</span>
+  </div>
+
+  <div role="status" style="position: absolute; right: 40px; bottom: 34px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: #FBF8F0; border: 2px dashed #C9C1AF; outline: 6px solid #FBF8F0; box-shadow: 0 16px 30px -16px #1E1D1A; font-size: 13px">
+    <span style="width: 34px; height: 34px; border-radius: 17px; background: {{neb}}; color: #fff; display: grid; place-items: center; font-weight: 700">✓</span>
+    <span>Saved to <b>Physics › Ch 3</b><br><span style="color: #5F5A50">matched “vectors” · quiz in 1 day</span></span>
+    <button style="height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: #E1D9C8; font-size: 12px">Undo</button>
+    <button style="height: 32px; padding: 0 10px; border: 0; border-radius: 16px; background: #E1D9C8; font-size: 12px">Open</button>
+  </div>
+
+  <div style="position: absolute; right: 24px; top: 20px; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px 0 8px; border-radius: 17px; background: #1E1D1Ae6; color: #F7F3EA; font-size: 12px">
+    <span style="width: 20px; height: 20px; border-radius: 10px; background: {{neb}}; box-shadow: 0 0 0 4px #6B4EE655"></span>neb sees your screen only while you hold the keys
+  </div>
+
+  <div style="position: absolute; inset: 0; border: 4px solid {{neb}}; border-radius: 2px; pointer-events: none; box-shadow: inset 0 0 40px #6B4EE655"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"neb":{"editor":"color","default":"#6B4EE6","options":["#6B4EE6","#5A49C9","#7A5CF0"]},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { neb: this.props.neb ?? '#6B4EE6' };
+  }
+}
+</script>
+</body>
+</html>

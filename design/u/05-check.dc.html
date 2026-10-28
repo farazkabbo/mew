@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Moments and checks</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&amp;family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #ECE6D8; font-family: Inter, sans-serif; color: #1E1D1A; padding: 40px; display: grid; grid-template-columns: 520px minmax(0, 1fr); gap: 40px">
+
+  <section aria-label="The saved moment" style="display: flex; flex-direction: column; gap: 16px">
+    <div style="font: 600 12px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #5F5A50">The moment this check came from</div>
+    <article style="background: #FFFEFB; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 0 #D3CAB7, 0 20px 40px -28px #1E1D1A">
+      <div style="position: relative; height: 270px; background: #0F2430">
+        <svg width="520" height="270" viewBox="0 0 520 270" aria-hidden="true"><path d="M50 230 Q 250 -20 480 230" fill="none" stroke="#7DA4AF" stroke-width="3" stroke-dasharray="7 7"></path><path d="M50 230 L140 130" stroke="#F1E5AE" stroke-width="5" stroke-linecap="round"></path><path d="M50 230 L 400 230" stroke="#5E7680" stroke-width="2"></path></svg>
+        <div style="position: absolute; left: 22px; top: 96px; width: 170px; height: 150px; border: 3px solid {{neb}}; border-radius: 50%; transform: rotate(-12deg)"></div>
+        <div style="position: absolute; right: 18px; top: 18px; width: 170px; padding: 10px; background: #FBF8F0; border-radius: 6px; border-top: 3px solid {{neb}}; font: 500 12px/1.35 'Pixelify Sans', monospace; color: #3F2BA0">split the arrow in two: one part across, one part up.</div>
+        <button style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 20px; border: 0; border-radius: 24px; background: #FFFFFF; font-size: 14px; font-weight: 600; box-shadow: 0 10px 20px -8px #000">▶ Replay with voice</button>
+      </div>
+      <div style="padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font: 400 28px/1.1 'Instrument Serif', serif">“Why do we split the arrow?”</h2>
+        <div style="font-size: 13px; color: #5F5A50">Oct 24 · lecture video at 4:12 · filed in Physics › Ch 3</div>
+        <div style="display: flex; gap: 10px; margin-top: 4px">
+          <button style="height: 44px; padding: 0 16px; border: 1px solid #1E1D1A; border-radius: 22px; background: transparent; font-size: 13px; font-weight: 600">Open the video at 4:12</button>
+          <button style="height: 44px; padding: 0 16px; border: 1px solid #C9C1AF; border-radius: 22px; background: transparent; font-size: 13px; color: #4A463E">Move to…</button>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section aria-label="Quick check" style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <span style="font: 600 12px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #5F5A50">Quick check · 1 of 2</span>
+      <span style="width: 22px; height: 6px; border-radius: 3px; background: #1E1D1A"></span><span style="width: 22px; height: 6px; border-radius: 3px; background: #D3CAB7"></span>
+    </div>
+    <article style="position: relative; flex: 1; background: #FFFEFB; border-radius: 6px; padding: 30px 36px; box-shadow: 0 1px 0 #D3CAB7, 0 20px 40px -28px #1E1D1A; background-image: linear-gradient(#FFFEFB 120px, #E58E80 120px, #E58E80 121px, transparent 121px), repeating-linear-gradient(transparent 0 51px, #D6E2E6 51px 52px); background-position: 0 0, 0 121px; display: flex; flex-direction: column">
+      <p style="margin: 0; font: 400 32px/1.15 'Instrument Serif', serif; text-wrap: balance">A ball is kicked at 15 m/s, 53° up. How fast is it moving sideways?</p>
+      <div style="margin-top: 52px; display: flex; align-items: center; gap: 16px">
+        <span style="font: 500 36px/1 Caveat, cursive; color: #26292E">15 cos 53° ≈ 9 m/s</span>
+        <span style="font: 600 30px 'Pixelify Sans', monospace; color: {{neb}}">✓</span>
+      </div>
+      <div style="margin-top: 14px; align-self: flex-start; padding: 8px 12px; border-radius: 10px; background: #F1EDFF; border: 1.5px solid {{neb}}; font: 500 14px 'Pixelify Sans', monospace; color: #3F2BA0">that one stayed. 3 days ago you circled it in a video.</div>
+
+      <div style="margin-top: auto; display: flex; flex-direction: column; gap: 12px">
+        <div style="font-size: 13px; color: #5F5A50">When it comes back</div>
+        <div style="position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); text-align: center; font-size: 12px; color: #4A463E">
+          <div style="position: absolute; left: 10%; right: 10%; top: 9px; height: 2px; background: #D3CAB7"></div>
+          <div style="position: absolute; left: 10%; width: 40%; top: 9px; height: 2px; background: {{neb}}"></div>
+          <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+            <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px">
+              <span style="width: 20px; height: 20px; border-radius: 10px; box-sizing: border-box; background: {{s.fill}}; border: 2px solid {{s.ring}}"></span>
+              <span style="font-weight: {{s.fw}}">{{s.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px">
+          <button style="height: 46px; padding: 0 20px; border: 0; border-radius: 23px; background: {{neb}}; color: #fff; font-size: 14px; font-weight: 600">Next check</button>
+          <button style="height: 46px; padding: 0 18px; border: 1px solid #C9C1AF; border-radius: 23px; background: transparent; font-size: 14px; color: #4A463E">I don't know yet</button>
+          <span style="font-size: 12px; color: #5F5A50">that's fine. it comes back sooner.</span>
+          <span style="margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px">Physics stayed <b style="padding: 3px 9px; border-radius: 10px; background: #1E1D1A; color: #fff">34 → 35</b></span>
+        </div>
+      </div>
+    </article>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"neb":{"editor":"color","default":"#6B4EE6","options":["#6B4EE6","#5A49C9","#7A5CF0"]},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const neb = this.props.neb ?? '#6B4EE6';
+    const steps = [
+      { label: 'saved', done: true },
+      { label: '1 day ✓', done: true },
+      { label: '3 days · now', done: true, now: true },
+      { label: '1 week', done: false },
+      { label: '3 weeks', done: false }
+    ].map((s) => ({
+      label: s.label,
+      fill: s.done ? neb : '#FFFEFB',
+      ring: s.done ? neb : '#C9C1AF',
+      fw: s.now ? 600 : 400
+    }));
+    return { neb, steps };
+  }
+}
+</script>
+</body>
+</html>

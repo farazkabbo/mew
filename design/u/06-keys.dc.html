@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two keys, max</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&amp;family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.k{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:44px;padding:0 12px;box-sizing:border-box;border:1px solid #C9C1AF;border-bottom-width:4px;border-radius:9px;background:#FFFEFB;font:600 16px Inter,sans-serif;color:#1E1D1A}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #ECE6D8; font-family: Inter, sans-serif; color: #1E1D1A; padding: 56px 64px; display: flex; flex-direction: column; gap: 32px">
+  <div style="display: flex; align-items: flex-end; gap: 32px">
+    <h1 style="margin: 0; font: 400 72px/0.95 'Instrument Serif', serif">Two keys, max.</h1>
+    <p style="margin: 0 0 8px; max-width: 520px; font-size: 16px; line-height: 1.5; color: #4A463E">Every action fits one hand, so the other one keeps the pencil. Or skip the keys and just say it.</p>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+    <sc-for list="{{keys}}" as="k" hint-placeholder-count="8">
+      <article style="display: flex; flex-direction: column; gap: 14px; min-height: 196px; padding: 20px; box-sizing: border-box; border-radius: 14px; background: {{k.bg}}; box-shadow: 0 1px 0 #D3CAB7">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="k">{{k.a}}</span><span style="color: #9A927F">+</span><span class="k">{{k.b}}</span>
+          <sc-if value="{{k.hold}}" hint-placeholder-val="{{false}}"><span style="margin-left: 4px; padding: 3px 8px; border-radius: 9px; background: {{neb}}; color: #fff; font-size: 11px; font-weight: 600">hold</span></sc-if>
+        </div>
+        <div style="font: 400 26px/1.1 'Instrument Serif', serif">{{k.what}}</div>
+        <div style="margin-top: auto; font: 500 13px/1.35 'Pixelify Sans', monospace; color: #3F2BA0">{{k.say}}</div>
+      </article>
+    </sc-for>
+  </div>
+  <div style="display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 14px; background: #1E1D1A; color: #F7F3EA; font-size: 15px">
+    <span class="k" style="background: #3A3833; border-color: #55524A; color: #F7F3EA">Alt</span>
+    Hold Alt anywhere in neb and every button shows its key. Let go and they disappear.
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"neb":{"editor":"color","default":"#6B4EE6","options":["#6B4EE6","#5A49C9","#7A5CF0"]},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const keys = [
+      { a: 'Ctrl', b: 'Alt', hold: true, what: 'Circle and ask, anywhere on screen', say: 'or say “what’s this?”', bg: '#F1EDFF' },
+      { a: 'Alt', b: 'C', what: 'Check my work', say: 'or say “check this”' },
+      { a: 'Ctrl', b: 'K', what: 'Jump to any page or moment', say: 'or say “open physics chapter 3”' },
+      { a: 'Ctrl', b: 'D', what: 'Choose where it’s saved', say: 'or say “save it to physics chapter 5”' },
+      { a: 'Alt', b: 'B', what: 'New notebook, named first', say: 'or say “new notebook called chemistry”' },
+      { a: 'Alt', b: 'N', what: 'New chapter here', say: 'or say “add a chapter called optics”' },
+      { a: 'Alt', b: 'P', what: 'New page here', say: 'or say “new page”' },
+      { a: 'Ctrl', b: 'O', what: 'Bring in a PDF', say: 'or drop it on a notebook' }
+    ].map((k) => ({ ...k, hold: !!k.hold, bg: k.bg || '#FBF8F0' }));
+    return { neb: this.props.neb ?? '#6B4EE6', keys };
+  }
+}
+</script>
+</body>
+</html>

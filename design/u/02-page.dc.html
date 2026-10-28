@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>neb page with margin</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&amp;family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+.k{display:inline-flex;align-items:center;height:20px;padding:0 6px;border:1px solid #C9C1AF;border-bottom-width:2px;border-radius:5px;background:#FBF8F0;font:500 11px Inter,sans-serif;color:#4A463E}
+button{font:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #ECE6D8; font-family: Inter, sans-serif; color: #1E1D1A; position: relative; overflow: hidden">
+
+  <header style="height: 64px; padding: 0 28px; display: flex; align-items: center; gap: 16px">
+    <button aria-label="Back to desk" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; display: grid; place-items: center">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E1D1A" stroke-width="2" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+    </button>
+    <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; font-size: 15px">
+      <a href="Main.dc.html" style="color: #5F5A50; text-decoration: none">Physics</a><span style="color: #9A927F">›</span>
+      <a href="#" style="color: #5F5A50; text-decoration: none">Ch 3 · Projectiles</a><span style="color: #9A927F">›</span>
+      <span style="font: 400 22px 'Instrument Serif', serif">Page 4</span>
+    </nav>
+    <div style="flex: 1"></div>
+    <div role="group" aria-label="How much neb marks" style="display: flex; padding: 3px; border-radius: 22px; background: #E1D9C8">
+      <sc-for list="{{levels}}" as="l" hint-placeholder-count="3">
+        <button style="height: 38px; padding: 0 16px; border: 0; border-radius: 19px; background: {{l.bg}}; color: {{l.fg}}; font-size: 13px; font-weight: 600">{{l.name}}</button>
+      </sc-for>
+    </div>
+    <button style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border: 1px solid #C9C1AF; border-radius: 22px; background: #F7F3EA; font-size: 13px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1E1D1A" stroke-width="1.8" aria-hidden="true"><path d="M4 4h10l6 6v10H4z"></path><path d="M14 4v6h6"></path></svg>
+      Fold the margin<span class="k">Alt</span><span class="k">C</span>
+    </button>
+  </header>
+
+  <div role="toolbar" aria-label="Pencil case" style="position: absolute; left: 24px; top: 150px; width: 60px; padding: 10px 0; border-radius: 30px; background: #1E1D1A; display: flex; flex-direction: column; align-items: center; gap: 6px; box-shadow: 0 12px 30px -12px #1E1D1A">
+    <button aria-label="Pencil" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: #F7F3EA; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1E1D1A" stroke-width="1.8" aria-hidden="true"><path d="M4 20l1-5L16 4l4 4L9 19z"></path></svg></button>
+    <button aria-label="Highlighter" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F7F3EA" stroke-width="1.8" aria-hidden="true"><path d="M9 15l-3 5h6l1-2"></path><path d="M9 15L18 4l3 3-10 10z"></path></svg></button>
+    <button aria-label="Eraser" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: transparent; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F7F3EA" stroke-width="1.8" aria-hidden="true"><path d="M8 20h12"></path><path d="M4 15l9-9 6 6-8 8H8z"></path></svg></button>
+    <button aria-label="Circle and ask neb" style="width: 44px; height: 44px; border: 0; border-radius: 22px; background: {{neb}}; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-dasharray="3 2.4" aria-hidden="true"><ellipse cx="12" cy="11" rx="8" ry="6"></ellipse></svg></button>
+    <div style="width: 28px; height: 1px; background: #55524A; margin: 4px 0"></div>
+    <button aria-label="Graphite" style="width: 30px; height: 30px; border-radius: 15px; border: 2px solid #F7F3EA; background: #26292E"></button>
+    <button aria-label="Blue" style="width: 30px; height: 30px; border-radius: 15px; border: 0; background: #3E6DB5"></button>
+    <button aria-label="Red" style="width: 30px; height: 30px; border-radius: 15px; border: 0; background: #C2453A"></button>
+    <div style="width: 28px; height: 1px; background: #55524A; margin: 4px 0"></div>
+    <button aria-label="Writing hand: right. Toolbar sits on the left." style="width: 44px; height: 32px; border: 0; background: transparent; color: #C9C1AF; font: 600 11px Inter, sans-serif">R hand</button>
+  </div>
+
+  <div style="position: absolute; left: 112px; top: 76px; width: 1010px; height: 612px; background: #FBF8F0; border-radius: 6px; box-shadow: 0 1px 0 #D3CAB7, 0 24px 50px -30px #1E1D1A99; background-image: linear-gradient(to right, transparent 186px, #E9B9B2 186px, #E9B9B2 188px, transparent 188px), repeating-linear-gradient(transparent 0 55px, #D6E2E6 55px 56px); background-position: 0 0, 0 30px">
+
+    <div style="position: absolute; left: 18px; top: 18px; width: 152px; display: flex; align-items: center; gap: 8px">
+      <span style="width: 30px; height: 30px; border-radius: 15px; background: {{neb}}; display: grid; place-items: center; box-shadow: 0 0 0 5px #6B4EE622"><svg width="16" height="12" viewBox="12 34 190 146" aria-hidden="true"><path d="M36 150 V104 C36 74 56 58 80 58 C104 58 122 74 122 104 V136 L142 156 L178 106" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"></path></svg></span>
+      <span style="font: 500 13px 'Pixelify Sans', monospace; color: #4B33C4">watching</span>
+    </div>
+
+    <div style="position: absolute; left: 210px; top: 36px; display: flex; flex-direction: column; font: 500 31px/56px Caveat, cursive; color: #26292E; white-space: nowrap">
+      <div>A ball is thrown at 20 m/s, 30° up. How far does it land?</div>
+      <div>vx = 20 cos 30° = 17.3 m/s</div>
+      <div>vy = 20 sin 30° = 10 m/s</div>
+      <div>t = <span style="padding: 0 6px; border: 2.5px solid {{neb}}; border-radius: 18px 22px 16px 24px">vy / g</span> = 10 / 9.8 = 1.02 s</div>
+      <div>R = vx · t = 17.3 × 1.02 = 17.6 m</div>
+      <div style="display: flex; align-items: center">t = 2 vy / g = 2.0<span style="display: inline-block; width: 26px; height: 26px; margin-left: 6px; transform: translateY(-8px)"><svg width="26" height="26" viewBox="0 0 30 30" aria-hidden="true"><path d="M4 26 L7 18 L22 3 L27 8 L12 23 Z" fill="#F1E5AE" stroke="#1E1D1A" stroke-width="1.4" stroke-linejoin="round"></path><path d="M4 26 L7 18 L12 23 Z" fill="#26292E"></path></svg></span></div>
+    </div>
+
+    <div style="position: absolute; left: 150px; top: 102px; font: 600 20px 'Pixelify Sans', monospace; color: {{neb}}">✓</div>
+    <div style="position: absolute; left: 150px; top: 158px; font: 600 20px 'Pixelify Sans', monospace; color: {{neb}}">✓</div>
+
+    <sc-if value="{{showNote}}" hint-placeholder-val="{{true}}">
+      <div style="position: absolute; left: 14px; top: 200px; width: 158px; padding: 10px 10px 10px; border-radius: 10px; background: #F1EDFF; border: 1.5px solid {{neb}}; display: flex; flex-direction: column; gap: 8px">
+        <div style="font: 500 14px/1.3 'Pixelify Sans', monospace; color: #3F2BA0">that's only the way up.</div>
+        <div style="display: flex; gap: 6px">
+          <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 15px; background: {{neb}}; color: #fff; font: 500 12px Inter, sans-serif">why?</button>
+          <button style="height: 30px; padding: 0 10px; border: 1px solid {{neb}}; border-radius: 15px; background: transparent; color: #3F2BA0; font: 500 12px Inter, sans-serif">got it</button>
+        </div>
+      </div>
+      <div style="position: absolute; left: 172px; top: 224px; width: 66px; height: 2px; background: {{neb}}"></div>
+      <div style="position: absolute; left: 150px; top: 326px; font: 500 18px 'Pixelify Sans', monospace; color: #8A80B8">⋯</div>
+    </sc-if>
+
+    <div style="position: absolute; left: 1010px; top: 40px; display: flex; flex-direction: column; gap: 6px">
+      <sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+        <button style="width: {{t.w}}; height: 48px; margin-left: {{t.ml}}; padding: 0 12px; border: 0; border-radius: 0 10px 10px 0; background: {{t.bg}}; color: #1E1D1A; text-align: left; font-size: 13px; font-weight: {{t.fw}}; box-shadow: 2px 2px 0 #00000014">{{t.label}}</button>
+      </sc-for>
+    </div>
+
+    <div style="position: absolute; right: 22px; bottom: 18px; display: flex; align-items: center; gap: 10px; height: 46px; padding: 0 6px 0 16px; border-radius: 23px; background: #FFFFFF; box-shadow: 0 6px 18px -8px #1E1D1A66; font-size: 13px; color: #4A463E">
+      Hold <span class="k">Ctrl</span><span class="k">Alt</span> and circle anything, or just ask
+      <button aria-label="Talk to neb" style="width: 36px; height: 36px; border: 0; border-radius: 18px; background: {{neb}}; display: grid; place-items: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3"></path></svg></button>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 112px; top: 712px; width: 1010px; display: flex; align-items: center; gap: 16px">
+    <button style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border: 0; border-radius: 22px; background: #1E1D1A; color: #F7F3EA; font-size: 13px; font-weight: 600">◀◀ Replay this page</button>
+    <div style="position: relative; flex: 1; height: 8px; border-radius: 4px; background: #D9D0BD">
+      <div style="position: absolute; left: 0; top: 0; width: 88%; height: 8px; border-radius: 4px; background: #9A927F"></div>
+      <div style="position: absolute; left: 31%; top: -6px; width: 4px; height: 20px; border-radius: 2px; background: {{neb}}"></div>
+      <div style="position: absolute; left: 47%; top: -6px; width: 4px; height: 20px; border-radius: 2px; background: {{neb}}"></div>
+      <div style="position: absolute; left: 72%; top: -6px; width: 4px; height: 20px; border-radius: 2px; background: {{neb}}"></div>
+      <div style="position: absolute; left: 88%; top: -7px; width: 22px; height: 22px; margin-left: -11px; border-radius: 11px; background: #1E1D1A; border: 3px solid #ECE6D8; box-sizing: border-box"></div>
+    </div>
+    <span style="font-size: 13px; color: #5F5A50; font-variant-numeric: tabular-nums">6:41 of writing · 3 neb marks</span>
+  </div>
+
+  <div role="status" style="position: absolute; left: 322px; top: 548px; display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; border-radius: 12px; background: #1E1D1A; color: #F7F3EA; font-size: 13px; box-shadow: 0 10px 24px -10px #1E1D1A">
+    <span style="color: #B9A8FF">✓</span><span>Filed in <b>Physics › Ch 3</b> · matched “projectile motion”</span>
+    <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 15px; background: #3A3833; color: #F7F3EA; font-size: 12px">Undo</button>
+    <button style="height: 30px; padding: 0 10px; border: 0; border-radius: 15px; background: #3A3833; color: #F7F3EA; font-size: 12px">Change</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"neb":{"editor":"color","default":"#6B4EE6","options":["#6B4EE6","#5A49C9","#7A5CF0"]},"level":{"editor":"enum","options":["Quiet","Hint","Coach"],"default":"Hint"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const level = this.props.level ?? 'Hint';
+    const neb = this.props.neb ?? '#6B4EE6';
+    const levels = ['Quiet', 'Hint', 'Coach'].map((name) => ({
+      name,
+      bg: name === level ? '#FBF8F0' : 'transparent',
+      fg: name === level ? '#1E1D1A' : '#5F5A50'
+    }));
+    const tabs = [
+      { label: '1 · Motion', active: false },
+      { label: '2 · Forces', active: false },
+      { label: '3 · Projectiles', active: true },
+      { label: '4 · Energy', active: false },
+      { label: '+ chapter  Alt N', active: false }
+    ].map((t, i) => ({
+      label: t.label,
+      w: t.active ? '150px' : '128px',
+      ml: t.active ? '-4px' : '0px',
+      fw: t.active ? 600 : 500,
+      bg: t.active ? '#FBF8F0' : ['#C9D9DD', '#F1E5AE', '#FBF8F0', '#E4D3C6', '#E1D9C8'][i]
+    }));
+    return { neb, levels, tabs, showNote: level !== 'Quiet' };
+  }
+}
+</script>
+</body>
+</html>
