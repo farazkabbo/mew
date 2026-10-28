@@ -43,6 +43,7 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         "your_turn_after_solution": True,
         "quiz_saved_moments": True,
         "notify_moment_checks": False,
+        "learn_handwriting": True,
     }
     changed = client.patch(
         "/v1/me/settings",

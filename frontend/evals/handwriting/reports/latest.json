@@ -1,0 +1,717 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "lines": 180,
+  "table": {
+    "baseline": {
+      "all": {
+        "n": 180,
+        "exact": 0.9166666666666666,
+        "cer": 0.06879738362581496,
+        "wer": 0.19285714285714287,
+        "equivalence": 0.9083333333333333,
+        "equivalenceUnknown": 11,
+        "formula": 0.95
+      },
+      "neat": {
+        "n": 92,
+        "exact": 0.9456521739130435,
+        "cer": 0.05835298546295989,
+        "wer": 0.18509316770186332,
+        "equivalence": 0.9344262295081968,
+        "equivalenceUnknown": 4,
+        "formula": 1
+      },
+      "messy": {
+        "n": 88,
+        "exact": 0.8863636363636364,
+        "cer": 0.07971652715970895,
+        "wer": 0.20097402597402594,
+        "equivalence": 0.8813559322033898,
+        "equivalenceUnknown": 7,
+        "formula": 0.9090909090909091
+      },
+      "algebra": {
+        "n": 20,
+        "exact": 0.9,
+        "cer": 0.10151515151515152,
+        "wer": 0.25,
+        "equivalence": 0.9,
+        "equivalenceUnknown": 2,
+        "formula": null
+      },
+      "algebra/neat": {
+        "n": 11,
+        "exact": 0.9090909090909091,
+        "cer": 0.07162534435261708,
+        "wer": 0.14545454545454548,
+        "equivalence": 0.9090909090909091,
+        "equivalenceUnknown": 1,
+        "formula": null
+      },
+      "algebra/messy": {
+        "n": 9,
+        "exact": 0.8888888888888888,
+        "cer": 0.13804713804713803,
+        "wer": 0.37777777777777777,
+        "equivalence": 0.8888888888888888,
+        "equivalenceUnknown": 1,
+        "formula": null
+      },
+      "fractions": {
+        "n": 20,
+        "exact": 0.75,
+        "cer": 0.1731313131313131,
+        "wer": 0.2766666666666667,
+        "equivalence": 0.75,
+        "equivalenceUnknown": 5,
+        "formula": null
+      },
+      "fractions/neat": {
+        "n": 10,
+        "exact": 0.9,
+        "cer": 0.06363636363636363,
+        "wer": 0.15999999999999998,
+        "equivalence": 0.9,
+        "equivalenceUnknown": 1,
+        "formula": null
+      },
+      "fractions/messy": {
+        "n": 10,
+        "exact": 0.6,
+        "cer": 0.28262626262626267,
+        "wer": 0.39333333333333337,
+        "equivalence": 0.6,
+        "equivalenceUnknown": 4,
+        "formula": null
+      },
+      "exponents": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "exponents/neat": {
+        "n": 11,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "exponents/messy": {
+        "n": 9,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "calculus": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0.02,
+        "wer": 0.05,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "calculus/neat": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0.04,
+        "wer": 0.1,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "calculus/messy": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-units": {
+        "n": 20,
+        "exact": 0.8,
+        "cer": 0.1419642857142857,
+        "wer": 0.4119047619047619,
+        "equivalence": 0.8,
+        "equivalenceUnknown": 4,
+        "formula": null
+      },
+      "physics-units/neat": {
+        "n": 9,
+        "exact": 0.7777777777777778,
+        "cer": 0.1349206349206349,
+        "wer": 0.42063492063492064,
+        "equivalence": 0.7777777777777778,
+        "equivalenceUnknown": 2,
+        "formula": null
+      },
+      "physics-units/messy": {
+        "n": 11,
+        "exact": 0.8181818181818182,
+        "cer": 0.1477272727272727,
+        "wer": 0.4047619047619047,
+        "equivalence": 0.8181818181818182,
+        "equivalenceUnknown": 2,
+        "formula": null
+      },
+      "physics-vectors": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0.0703030303030303,
+        "wer": 0.24499999999999997,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-vectors/neat": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0.08727272727272728,
+        "wer": 0.27,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-vectors/messy": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0.05333333333333333,
+        "wer": 0.22000000000000003,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "chemistry": {
+        "n": 20,
+        "exact": 0.95,
+        "cer": 0.10058823529411764,
+        "wer": 0.45714285714285713,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": 0.95
+      },
+      "chemistry/neat": {
+        "n": 9,
+        "exact": 1,
+        "cer": 0.1568627450980392,
+        "wer": 0.6825396825396824,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": 1
+      },
+      "chemistry/messy": {
+        "n": 11,
+        "exact": 0.9090909090909091,
+        "cer": 0.05454545454545456,
+        "wer": 0.2727272727272727,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": 0.9090909090909091
+      },
+      "code": {
+        "n": 20,
+        "exact": 0.9,
+        "cer": 0.007828282828282828,
+        "wer": 0.02,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "code/neat": {
+        "n": 10,
+        "exact": 0.9,
+        "cer": 0.004545454545454545,
+        "wer": 0.02,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "code/messy": {
+        "n": 10,
+        "exact": 0.9,
+        "cer": 0.01111111111111111,
+        "wer": 0.02,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "prose": {
+        "n": 20,
+        "exact": 0.95,
+        "cer": 0.0038461538461538464,
+        "wer": 0.025,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "prose/neat": {
+        "n": 12,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "prose/messy": {
+        "n": 8,
+        "exact": 0.875,
+        "cer": 0.009615384615384616,
+        "wer": 0.0625,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      }
+    },
+    "k10": {
+      "all": {
+        "n": 180,
+        "exact": 0.9833333333333333,
+        "cer": 0.04842140158316628,
+        "wer": 0.1396296296296297,
+        "equivalence": 0.9833333333333333,
+        "equivalenceUnknown": 2,
+        "formula": 1
+      },
+      "neat": {
+        "n": 92,
+        "exact": 0.9782608695652174,
+        "cer": 0.0573548095127379,
+        "wer": 0.1400879917184265,
+        "equivalence": 0.9836065573770492,
+        "equivalenceUnknown": 1,
+        "formula": 1
+      },
+      "messy": {
+        "n": 88,
+        "exact": 0.9886363636363636,
+        "cer": 0.03908192965679596,
+        "wer": 0.13915043290043289,
+        "equivalence": 0.9830508474576272,
+        "equivalenceUnknown": 1,
+        "formula": 1
+      },
+      "algebra": {
+        "n": 20,
+        "exact": 0.9,
+        "cer": 0.04090909090909091,
+        "wer": 0.08,
+        "equivalence": 0.9,
+        "equivalenceUnknown": 2,
+        "formula": null
+      },
+      "algebra/neat": {
+        "n": 11,
+        "exact": 0.9090909090909091,
+        "cer": 0.05785123966942149,
+        "wer": 0.10909090909090909,
+        "equivalence": 0.9090909090909091,
+        "equivalenceUnknown": 1,
+        "formula": null
+      },
+      "algebra/messy": {
+        "n": 9,
+        "exact": 0.8888888888888888,
+        "cer": 0.020202020202020204,
+        "wer": 0.044444444444444446,
+        "equivalence": 0.8888888888888888,
+        "equivalenceUnknown": 1,
+        "formula": null
+      },
+      "fractions": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0.10909090909090909,
+        "wer": 0.08,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "fractions/neat": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0.16363636363636364,
+        "wer": 0.12000000000000002,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "fractions/messy": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0.05454545454545454,
+        "wer": 0.04,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "exponents": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "exponents/neat": {
+        "n": 11,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "exponents/messy": {
+        "n": 9,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "calculus": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "calculus/neat": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "calculus/messy": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-units": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0.14910714285714283,
+        "wer": 0.5178571428571429,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-units/neat": {
+        "n": 9,
+        "exact": 1,
+        "cer": 0.1726190476190476,
+        "wer": 0.5634920634920635,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-units/messy": {
+        "n": 11,
+        "exact": 1,
+        "cer": 0.12987012987012986,
+        "wer": 0.4805194805194805,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-vectors": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0.08997835497835498,
+        "wer": 0.36999999999999994,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-vectors/neat": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0.0951948051948052,
+        "wer": 0.35500000000000004,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "physics-vectors/messy": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0.08476190476190475,
+        "wer": 0.385,
+        "equivalence": 1,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "chemistry": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0.040588235294117654,
+        "wer": 0.1738095238095238,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": 1
+      },
+      "chemistry/neat": {
+        "n": 9,
+        "exact": 1,
+        "cer": 0.050326797385620924,
+        "wer": 0.18518518518518517,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": 1
+      },
+      "chemistry/messy": {
+        "n": 11,
+        "exact": 1,
+        "cer": 0.032620320855614976,
+        "wer": 0.16450216450216448,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": 1
+      },
+      "code": {
+        "n": 20,
+        "exact": 0.95,
+        "cer": 0.0022727272727272726,
+        "wer": 0.01,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "code/neat": {
+        "n": 10,
+        "exact": 0.9,
+        "cer": 0.004545454545454545,
+        "wer": 0.02,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "code/messy": {
+        "n": 10,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "prose": {
+        "n": 20,
+        "exact": 1,
+        "cer": 0.0038461538461538464,
+        "wer": 0.025,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "prose/neat": {
+        "n": 12,
+        "exact": 1,
+        "cer": 0,
+        "wer": 0,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      },
+      "prose/messy": {
+        "n": 8,
+        "exact": 1,
+        "cer": 0.009615384615384616,
+        "wer": 0.0625,
+        "equivalence": null,
+        "equivalenceUnknown": 0,
+        "formula": null
+      }
+    }
+  },
+  "confusion": {
+    "baseline": {
+      "7→1": 6
+    },
+    "k10": {
+      "7→1": 6
+    }
+  },
+  "chosenBy": {
+    "model": 180
+  },
+  "personalization": {
+    "corrections": [
+      {
+        "text": "7",
+        "readAs": "1",
+        "source": "calibration"
+      },
+      {
+        "text": "3x + 7 = 19",
+        "readAs": null,
+        "source": "fix"
+      },
+      {
+        "text": "6n + 5 = 47",
+        "readAs": "6n + 5 = 41",
+        "source": "fix"
+      },
+      {
+        "text": "n = 7",
+        "readAs": "n = 1",
+        "source": "fix"
+      },
+      {
+        "text": "7y + 14 = 35",
+        "readAs": "1y + 14 = 35",
+        "source": "fix"
+      },
+      {
+        "text": "7y = 21",
+        "readAs": null,
+        "source": "fix"
+      }
+    ],
+    "note": "- This student's \"7\" can look like \"1\".",
+    "heldOut": 25,
+    "without": {
+      "sevens": 0.3902439024390244,
+      "sevenCount": 41,
+      "exact": 0.48
+    },
+    "with": {
+      "sevens": 0.7317073170731707,
+      "sevenCount": 41,
+      "exact": 0.64
+    }
+  },
+  "misses": [
+    {
+      "id": "cod-3#0@w03",
+      "mode": "baseline",
+      "truth": "total = sum([3, 5, 7])",
+      "read": "total = sum([3, 5, 1])"
+    },
+    {
+      "id": "fra-3#2@w10",
+      "mode": "baseline",
+      "truth": "x = 6",
+      "read": "x \\approx 6"
+    },
+    {
+      "id": "fra-3#1@w10",
+      "mode": "baseline",
+      "truth": "x = 4 * 3/2",
+      "read": "x = 4^3/2"
+    },
+    {
+      "id": "fra-3#1@w02",
+      "mode": "baseline",
+      "truth": "x = 4 * 3/2",
+      "read": "x = 4^(3/2)"
+    },
+    {
+      "id": "phy-5#1@w03",
+      "mode": "baseline",
+      "truth": "I = 12 V / 6 Ω",
+      "read": "I = 12V / 6Γ"
+    },
+    {
+      "id": "sev-1#3@w03",
+      "mode": "baseline",
+      "truth": "27 - 7 = 20",
+      "read": "21 - 1 = 20"
+    },
+    {
+      "id": "phy-5#0@w10",
+      "mode": "baseline",
+      "truth": "I = V/R",
+      "read": "= IR"
+    },
+    {
+      "id": "phy-5#1@w02",
+      "mode": "baseline",
+      "truth": "I = 12 V / 6 Ω",
+      "read": "I = 12V / 6Γ"
+    },
+    {
+      "id": "sev-1#2@w03",
+      "mode": "baseline",
+      "truth": "77 / 7 = 11",
+      "read": "11/1 = 11"
+    },
+    {
+      "id": "fra-3#1@w06",
+      "mode": "baseline",
+      "truth": "x = 4 * 3/2",
+      "read": "x = 4^(3/2)"
+    },
+    {
+      "id": "phy-5#1@w09",
+      "mode": "baseline",
+      "truth": "I = 12 V / 6 Ω",
+      "read": "I = 12V / 6Γ"
+    },
+    {
+      "id": "cod-6#1@w04",
+      "mode": "baseline",
+      "truth": "n = n - 1",
+      "read": "r = n - 1"
+    },
+    {
+      "id": "che-6#1@w06",
+      "mode": "baseline",
+      "truth": "= 44 g/mol",
+      "read": "≈ 44 g/mol"
+    },
+    {
+      "id": "fra-3#1@w04",
+      "mode": "baseline",
+      "truth": "x = 4 * 3/2",
+      "read": "x = 4 / t^(3/2)"
+    },
+    {
+      "id": "pro-2#0@w04",
+      "mode": "baseline",
+      "truth": "The alliance system pulled",
+      "read": "The aliance system pulled"
+    },
+    {
+      "id": "cod-3#0@w03",
+      "mode": "k10",
+      "truth": "total = sum([3, 5, 7])",
+      "read": "total = sum([3, 5, 1])"
+    },
+    {
+      "id": "sev-1#3@w03",
+      "mode": "k10",
+      "truth": "27 - 7 = 20",
+      "read": "21 - 1 = 20"
+    },
+    {
+      "id": "sev-1#2@w03",
+      "mode": "k10",
+      "truth": "77 / 7 = 11",
+      "read": "11/1 = 11"
+    }
+  ]
+}

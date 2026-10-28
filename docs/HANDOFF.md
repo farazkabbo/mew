@@ -442,6 +442,23 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     with and without the Spotify app; unpin; pinning with something else on the clipboard; the
     panel's height with 0 and 6 pins, and the island's buttons while Select is on. The live
     media session test: `cargo test --lib reads_what_is_playing -- --ignored --nocapture`.
+- **K10 (handwriting: measure, read better, personalize)** — NOTEBOOKS_K.md §8, decisions
+  131–138 (2026-10-28, branch `feat/notebooks-k10`):
+  - **Eval:** `frontend/evals/handwriting/` (corpus, 10 synthetic writers = 1,510 lines, real
+    samples from `/dev/handwriting`, `LICENSES.md`), `pnpm eval:handwriting`, CI job in
+    `evals.yml`. Report: `evals/handwriting/reports/latest.md`.
+  - **Reading:** `packages/ink/src/recognition` (one renderer for app and eval), prompt
+    `recognition.v3` (context, top 3, the student's examples), `chooseReading` and the profile
+    logic in `packages/shared/src/handwriting.ts`, `recognizeLine` in `server/recognition.ts`.
+    `Subject` now lives in `shared/src/subject.ts` (a cycle through `tutor.ts` crashed Turbopack).
+  - **Profile:** migration `handwriting` (`handwriting_samples`, setting `learn_handwriting`),
+    FastAPI `routes/handwriting.py`, Next `/api/handwriting/samples`,
+    `features/handwriting/` (teacher, calibration, Settings → Handwriting, capture page).
+  - **Results (synthetic):** maths equivalence messy 88 % → 98 %, neat 93 % → 98 %; the 7-like-1
+    writer 39 % → 73 % after 5 corrections.
+  - **The `handwriting` migration is not applied to the hosted project yet.**
+  - **To verify by hand:** the calibration with a real pen; fixing a reading, then the same
+    character read right on a later line; Reset and turning learning off (the count goes to 0).
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
 - **Next:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.

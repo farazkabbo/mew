@@ -28,6 +28,7 @@ import { WorkChecker } from "../check/checker";
 import { PyodideCodeRunner } from "../check/code-runner";
 import { gradeRemote } from "../quiz/grade-client";
 import { QuizSession } from "../quiz/session";
+import { HandwritingTeacher } from "../handwriting/teach";
 import { useSettings } from "../settings/store";
 import { checkMathSteps, conceptsOf, requestSolution } from "../solution/api";
 import { ShowThenYou } from "../solution/flow";
@@ -37,7 +38,7 @@ import { TutorController } from "../tutor/controller";
 import { TutorInk } from "../tutor/ink";
 import { pointerLeadIn } from "../tutor/NotebookPointer";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
-import { RecognitionService } from "../tutor/recognition";
+import { type ReadingContext, RecognitionService } from "../tutor/recognition";
 import { useTutor } from "../tutor/store";
 import { useVoice } from "../voice/store";
 import { VoiceSession } from "../voice/voice-session";
@@ -107,6 +108,8 @@ function createPipeline() {
     return taken && Date.now() - taken.at <= CIRCLED_FRESH_MS ? taken : null;
   };
   const recognition = new RecognitionService();
+  // K10 §8.3: corrections teach the student's handwriting profile (unless they turned it off).
+  const teacher = new HandwritingTeacher(() => useSettings.getState().settings.learn_handwriting);
   const ink = new TutorInk({
     engine: () => engine,
     colors: () => ({
@@ -302,6 +305,7 @@ function createPipeline() {
     // Two wrong tries in a row: Show-then-You offers the answer (K6 §6).
     onTry: (pageId, correct) => solutions?.tried(pageId, correct),
     onChanged: () => liveSync?.soon(),
+    teach: (page, line, correction) => void teacher.teach(page.doc, line, correction),
   });
   markOf = (line) => live.markFor(line);
   // Show-then-You (K6): "just give me the answer" is worked, verified, folded, then a Your Turn.
@@ -419,6 +423,10 @@ function createPipeline() {
     },
     setLiveNotebook(id: string | null) {
       liveNotebook = id;
+    },
+    /** What helps read the notebook's lines (K10 §8.2): its subject and chapter words. */
+    setReadingContext(next: ReadingContext) {
+      recognition.setReadingContext(next);
     },
     /** "Why?" on a mark (K9 §7.1): the tutor explains that line (it's the turn's circled line). */
     askAboutLine(strokeIds: readonly string[]) {
@@ -657,6 +665,7 @@ export function useMewSession(
     live: pipeline.live,
     setLiveAnnotations: pipeline.setLiveAnnotations,
     setLiveNotebook: pipeline.setLiveNotebook,
+    setReadingContext: pipeline.setReadingContext,
     askAboutLine: pipeline.askAboutLine,
   };
 }

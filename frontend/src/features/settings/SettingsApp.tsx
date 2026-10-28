@@ -14,6 +14,7 @@ import { PcmStreamPlayer } from "../tutor/pcm-player";
 import { Section, Toggle } from "./controls";
 import { DevicesSection } from "./DevicesSection";
 import { LatencyTable } from "./LatencyTable";
+import { HandwritingSection } from "../handwriting/HandwritingSection";
 import { PrivacySection } from "./PrivacySection";
 import { useSettings } from "./store";
 
@@ -184,6 +185,8 @@ export function SettingsApp() {
             onChange={(notes_index) => void update({ notes_index })}
           />
         </Section>
+
+        <HandwritingSection />
 
         <Section title="Voice">
           {voices.length === 0 ? (

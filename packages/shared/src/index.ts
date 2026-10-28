@@ -10,6 +10,7 @@ export * from "./course";
 export * from "./destinations";
 export * from "./devices";
 export * from "./figures";
+export * from "./handwriting";
 export * from "./health";
 export * from "./learner";
 export * from "./mew";

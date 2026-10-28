@@ -18,6 +18,7 @@ from .courses.store import MemoryCourseStore
 from .deps import require_internal_caller
 from .devices.store import MemoryDeviceStore
 from .devices.tokens import LinkCodes
+from .handwriting.store import MemoryHandwritingStore
 from .mew_events.store import MemoryMewEventStore
 from .moments.audio import MemoryAudioStore
 from .moments.store import MemoryMomentStore, moment_texts
@@ -32,6 +33,7 @@ from .routes import (
     clips,
     courses,
     devices,
+    handwriting,
     health,
     learner,
     me,
@@ -116,6 +118,7 @@ def create_app(
         ]
     )
     app.state.local_annotations = MemoryAnnotationStore()
+    app.state.local_handwriting = MemoryHandwritingStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -136,6 +139,7 @@ def create_app(
     v1.include_router(moments.router)
     v1.include_router(skills.router)
     v1.include_router(annotations.router)
+    v1.include_router(handwriting.router)
     app.include_router(health.router)
     app.include_router(v1)
     return app

@@ -50,10 +50,27 @@ const ALIASES: Record<string, string> = {
 };
 
 const cache = new Map<string, Glyph | null>();
+let overrides: ReadonlyMap<string, Glyph> | null = null;
+
+/**
+ * Runs `draw` with some characters drawn differently (the handwriting eval's writers: a 7 that
+ * looks like a 1). Synchronous, so nothing else ever sees the overrides.
+ */
+export function withGlyphOverrides<T>(replacements: ReadonlyMap<string, Glyph>, draw: () => T): T {
+  const before = overrides;
+  overrides = replacements;
+  try {
+    return draw();
+  } finally {
+    overrides = before;
+  }
+}
 
 /** The glyph for one character, or undefined when the font can't draw it. */
 export function glyph(ch: string): Glyph | undefined {
   const key = ch === " " ? " " : (ALIASES[ch] ?? ch);
+  const replaced = overrides?.get(key);
+  if (replaced) return replaced;
   let found = cache.get(key);
   if (found === undefined) {
     const source = raw.glyphs[key];

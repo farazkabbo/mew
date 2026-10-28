@@ -1,16 +1,21 @@
-import { RecognizeRequest } from "@mew/shared";
+import { RecognizeLineRequest } from "@mew/shared";
 import { NextResponse } from "next/server";
 
 import { geminiEnv } from "@/server/env";
 import { ModelBusyError } from "@/server/gemini";
+import { profileForRecognition, samplesFor } from "@/server/handwriting-profile";
 import { assertSameOrigin, handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { assertPng } from "@/server/png";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
-import { recognizeHandwriting } from "@/server/recognition";
+import { recognizeLine } from "@/server/recognition";
 
-const MAX_BODY_BYTES = 1_700_000;
+const MAX_BODY_BYTES = 1_720_000;
 
-/** Transcribes a cropped line of handwriting (text, LaTeX, subject). */
+/**
+ * Reads a line of handwriting (K10): its picture made from the strokes, its context, and the
+ * student's own examples from their handwriting profile. Returns the chosen reading (text,
+ * LaTeX, subject, confidence) and the other readings.
+ */
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
@@ -18,12 +23,13 @@ export const POST = handle(async (request: Request) => {
     recognize: RATE_RULES.recognize,
     recognizeDaily: RATE_RULES.recognizeDaily,
   });
-  const { image } = await readJson(request, RecognizeRequest, MAX_BODY_BYTES);
+  const { image, context } = await readJson(request, RecognizeLineRequest, MAX_BODY_BYTES);
   assertPng(image);
   geminiEnv();
 
   try {
-    const recognition = await recognizeHandwriting(image);
+    const profile = profileForRecognition(await samplesFor(userId));
+    const recognition = await recognizeLine(image, { ...(context && { context }), ...profile });
     return NextResponse.json(recognition, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof ModelBusyError) {

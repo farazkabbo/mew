@@ -53,6 +53,8 @@ export const RATE_RULES = {
   liveConceptDaily: { limit: 150, windowMs: DAY },
   /** K9: sending live annotations (batched by the device; a database write, no model). */
   annotationsSync: { limit: 60, windowMs: MINUTE },
+  // K10: corrections and calibration (a calibration sends one batch).
+  handwritingSamples: { limit: 20, windowMs: MINUTE },
   /** Handwriting recognition of single lines. */
   recognize: { limit: 30, windowMs: MINUTE },
   recognizeDaily: { limit: 1500, windowMs: DAY },

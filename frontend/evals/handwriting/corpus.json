@@ -1,0 +1,738 @@
+[
+  {
+    "id": "alg-1",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Linear equations",
+    "problem": "Solve 3x + 7 = 19",
+    "lines": [
+      { "text": "3x + 7 = 19", "latex": "3x + 7 = 19" },
+      { "text": "3x = 12", "latex": "3x = 12" },
+      { "text": "x = 4", "latex": "x = 4" }
+    ]
+  },
+  {
+    "id": "alg-2",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Linear equations",
+    "problem": "Solve 5x - 2 = 3x + 10",
+    "lines": [
+      { "text": "5x - 2 = 3x + 10", "latex": "5x - 2 = 3x + 10" },
+      { "text": "2x - 2 = 10", "latex": "2x - 2 = 10" },
+      { "text": "2x = 12", "latex": "2x = 12" },
+      { "text": "x = 6", "latex": "x = 6" }
+    ]
+  },
+  {
+    "id": "alg-3",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Linear equations",
+    "problem": "Solve 7y + 14 = 35",
+    "lines": [
+      { "text": "7y + 14 = 35", "latex": "7y + 14 = 35" },
+      { "text": "7y = 21", "latex": "7y = 21" },
+      { "text": "y = 3", "latex": "y = 3" }
+    ]
+  },
+  {
+    "id": "alg-4",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Linear equations",
+    "problem": "Solve 2(z + 7) = 24",
+    "lines": [
+      { "text": "2(z + 7) = 24", "latex": "2(z + 7) = 24" },
+      { "text": "z + 7 = 12", "latex": "z + 7 = 12" },
+      { "text": "z = 5", "latex": "z = 5" }
+    ]
+  },
+  {
+    "id": "alg-5",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Linear equations",
+    "problem": "Solve 4t - 7 = 17",
+    "lines": [
+      { "text": "4t - 7 = 17", "latex": "4t - 7 = 17" },
+      { "text": "4t = 24", "latex": "4t = 24" },
+      { "text": "t = 6", "latex": "t = 6" }
+    ]
+  },
+  {
+    "id": "alg-6",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Quadratics",
+    "problem": "Solve x^2 - 5x + 6 = 0",
+    "lines": [
+      { "text": "x^2 - 5x + 6 = 0", "latex": "x^2 - 5x + 6 = 0" },
+      { "text": "(x - 2)(x - 3) = 0", "latex": "(x - 2)(x - 3) = 0" },
+      { "text": "x = 2 or x = 3", "latex": "x = 2 \\text{ or } x = 3" }
+    ]
+  },
+  {
+    "id": "alg-7",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Quadratics",
+    "problem": "Solve x^2 + 7x + 12 = 0",
+    "lines": [
+      { "text": "x^2 + 7x + 12 = 0", "latex": "x^2 + 7x + 12 = 0" },
+      { "text": "(x + 3)(x + 4) = 0", "latex": "(x + 3)(x + 4) = 0" },
+      { "text": "x = -3 or x = -4", "latex": "x = -3 \\text{ or } x = -4" }
+    ]
+  },
+  {
+    "id": "alg-8",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Simultaneous equations",
+    "problem": "Solve x + y = 7 and x - y = 1",
+    "lines": [
+      { "text": "x + y = 7", "latex": "x + y = 7" },
+      { "text": "2x = 8", "latex": "2x = 8" },
+      { "text": "x = 4, y = 3", "latex": "x = 4, y = 3" }
+    ]
+  },
+  {
+    "id": "alg-9",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Linear equations",
+    "problem": "Solve 9 - 2x = 1",
+    "lines": [
+      { "text": "9 - 2x = 1", "latex": "9 - 2x = 1" },
+      { "text": "-2x = -8", "latex": "-2x = -8" },
+      { "text": "x = 4", "latex": "x = 4" }
+    ]
+  },
+  {
+    "id": "alg-10",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Linear equations",
+    "problem": "Solve 6n + 5 = 47",
+    "lines": [
+      { "text": "6n + 5 = 47", "latex": "6n + 5 = 47" },
+      { "text": "6n = 42", "latex": "6n = 42" },
+      { "text": "n = 7", "latex": "n = 7" }
+    ]
+  },
+  {
+    "id": "sev-1",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Work these out",
+    "lines": [
+      { "text": "7 x 7 = 49", "latex": "7 \\times 7 = 49" },
+      { "text": "17 + 7 = 24", "latex": "17 + 7 = 24" },
+      { "text": "77 / 7 = 11", "latex": "\\frac{77}{7} = 11" },
+      { "text": "27 - 7 = 20", "latex": "27 - 7 = 20" }
+    ]
+  },
+  {
+    "id": "sev-2",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Solve 7a = 56",
+    "lines": [
+      { "text": "7a = 56", "latex": "7a = 56" },
+      { "text": "a = 56 / 7", "latex": "a = \\frac{56}{7}" },
+      { "text": "a = 8", "latex": "a = 8" }
+    ]
+  },
+  {
+    "id": "sev-3",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Solve b - 17 = 70",
+    "lines": [
+      { "text": "b - 17 = 70", "latex": "b - 17 = 70" },
+      { "text": "b = 87", "latex": "b = 87" }
+    ]
+  },
+  {
+    "id": "sev-4",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Solve 3c + 7 = 37",
+    "lines": [
+      { "text": "3c + 7 = 37", "latex": "3c + 7 = 37" },
+      { "text": "3c = 30", "latex": "3c = 30" },
+      { "text": "c = 10", "latex": "c = 10" }
+    ]
+  },
+  {
+    "id": "sev-5",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Solve 7(d - 1) = 70",
+    "lines": [
+      { "text": "7(d - 1) = 70", "latex": "7(d - 1) = 70" },
+      { "text": "d - 1 = 10", "latex": "d - 1 = 10" },
+      { "text": "d = 11", "latex": "d = 11" }
+    ]
+  },
+  {
+    "id": "sev-6",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Work these out",
+    "lines": [
+      { "text": "70 + 7 = 77", "latex": "70 + 7 = 77" },
+      { "text": "7^2 = 49", "latex": "7^2 = 49" },
+      { "text": "147 / 7 = 21", "latex": "\\frac{147}{7} = 21" },
+      { "text": "7 + 71 = 78", "latex": "7 + 71 = 78" }
+    ]
+  },
+  {
+    "id": "sev-7",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Solve e + 27 = 74",
+    "lines": [
+      { "text": "e + 27 = 74", "latex": "e + 27 = 74" },
+      { "text": "e = 47", "latex": "e = 47" }
+    ]
+  },
+  {
+    "id": "sev-8",
+    "category": "algebra",
+    "subject": "math",
+    "chapter": "Number",
+    "problem": "Solve 17f = 170",
+    "lines": [
+      { "text": "17f = 170", "latex": "17f = 170" },
+      { "text": "f = 10", "latex": "f = 10" }
+    ]
+  },
+  {
+    "id": "fra-1",
+    "category": "fractions",
+    "subject": "math",
+    "chapter": "Fractions",
+    "problem": "Add 1/2 + 1/3",
+    "lines": [
+      { "text": "1/2 + 1/3", "latex": "\\frac{1}{2} + \\frac{1}{3}" },
+      { "text": "= 3/6 + 2/6", "latex": "= \\frac{3}{6} + \\frac{2}{6}" },
+      { "text": "= 5/6", "latex": "= \\frac{5}{6}" }
+    ]
+  },
+  {
+    "id": "fra-2",
+    "category": "fractions",
+    "subject": "math",
+    "chapter": "Fractions",
+    "problem": "Simplify 12/18",
+    "lines": [{ "text": "12/18 = 2/3", "latex": "\\frac{12}{18} = \\frac{2}{3}" }]
+  },
+  {
+    "id": "fra-3",
+    "category": "fractions",
+    "subject": "math",
+    "chapter": "Fractions",
+    "problem": "Solve x/4 = 3/2",
+    "lines": [
+      { "text": "x/4 = 3/2", "latex": "\\frac{x}{4} = \\frac{3}{2}" },
+      { "text": "x = 4 * 3/2", "latex": "x = 4 \\cdot \\frac{3}{2}" },
+      { "text": "x = 6", "latex": "x = 6" }
+    ]
+  },
+  {
+    "id": "fra-4",
+    "category": "fractions",
+    "subject": "math",
+    "chapter": "Fractions",
+    "problem": "Multiply 2/5 by 15",
+    "lines": [
+      { "text": "2/5 x 15 = 30/5", "latex": "\\frac{2}{5} \\times 15 = \\frac{30}{5}" },
+      { "text": "= 6", "latex": "= 6" }
+    ]
+  },
+  {
+    "id": "fra-5",
+    "category": "fractions",
+    "subject": "math",
+    "chapter": "Fractions",
+    "problem": "Solve (x + 1)/3 = 2",
+    "lines": [
+      { "text": "(x + 1)/3 = 2", "latex": "\\frac{x + 1}{3} = 2" },
+      { "text": "x + 1 = 6", "latex": "x + 1 = 6" },
+      { "text": "x = 5", "latex": "x = 5" }
+    ]
+  },
+  {
+    "id": "fra-6",
+    "category": "fractions",
+    "subject": "math",
+    "chapter": "Fractions",
+    "problem": "Subtract 3/4 - 1/8",
+    "lines": [
+      {
+        "text": "3/4 - 1/8 = 6/8 - 1/8",
+        "latex": "\\frac{3}{4} - \\frac{1}{8} = \\frac{6}{8} - \\frac{1}{8}"
+      },
+      { "text": "= 5/8", "latex": "= \\frac{5}{8}" }
+    ]
+  },
+  {
+    "id": "exp-1",
+    "category": "exponents",
+    "subject": "math",
+    "chapter": "Indices",
+    "problem": "Simplify x^3 * x^4",
+    "lines": [{ "text": "x^3 * x^4 = x^7", "latex": "x^3 \\cdot x^4 = x^7" }]
+  },
+  {
+    "id": "exp-2",
+    "category": "exponents",
+    "subject": "math",
+    "chapter": "Indices",
+    "problem": "Solve 2^x = 32",
+    "lines": [
+      { "text": "2^x = 32", "latex": "2^x = 32" },
+      { "text": "2^x = 2^5", "latex": "2^x = 2^5" },
+      { "text": "x = 5", "latex": "x = 5" }
+    ]
+  },
+  {
+    "id": "exp-3",
+    "category": "exponents",
+    "subject": "math",
+    "chapter": "Indices",
+    "problem": "Simplify (a^2)^3",
+    "lines": [{ "text": "(a^2)^3 = a^6", "latex": "(a^2)^3 = a^6" }]
+  },
+  {
+    "id": "exp-4",
+    "category": "exponents",
+    "subject": "math",
+    "chapter": "Indices",
+    "problem": "Expand (x + 2)^2",
+    "lines": [{ "text": "(x + 2)^2 = x^2 + 4x + 4", "latex": "(x + 2)^2 = x^2 + 4x + 4" }]
+  },
+  {
+    "id": "exp-5",
+    "category": "exponents",
+    "subject": "math",
+    "chapter": "Surds",
+    "problem": "Simplify sqrt(50)",
+    "lines": [
+      { "text": "sqrt(50) = sqrt(25 * 2)", "latex": "\\sqrt{50} = \\sqrt{25 \\cdot 2}" },
+      { "text": "= 5 sqrt(2)", "latex": "= 5\\sqrt{2}" }
+    ]
+  },
+  {
+    "id": "exp-6",
+    "category": "exponents",
+    "subject": "math",
+    "chapter": "Indices",
+    "problem": "Simplify y^5 / y^2",
+    "lines": [{ "text": "y^5 / y^2 = y^3", "latex": "\\frac{y^5}{y^2} = y^3" }]
+  },
+  {
+    "id": "exp-7",
+    "category": "exponents",
+    "subject": "math",
+    "chapter": "Indices",
+    "problem": "Evaluate 3^4",
+    "lines": [{ "text": "3^4 = 81", "latex": "3^4 = 81" }]
+  },
+  {
+    "id": "cal-1",
+    "category": "calculus",
+    "subject": "math",
+    "chapter": "Differentiation",
+    "problem": "Differentiate y = x^3 + 2x",
+    "lines": [
+      { "text": "y = x^3 + 2x", "latex": "y = x^3 + 2x" },
+      { "text": "dy/dx = 3x^2 + 2", "latex": "\\frac{dy}{dx} = 3x^2 + 2" }
+    ]
+  },
+  {
+    "id": "cal-2",
+    "category": "calculus",
+    "subject": "math",
+    "chapter": "Integration",
+    "problem": "Integrate x^2",
+    "lines": [{ "text": "∫ x^2 dx = x^3/3 + C", "latex": "\\int x^2 \\, dx = \\frac{x^3}{3} + C" }]
+  },
+  {
+    "id": "cal-3",
+    "category": "calculus",
+    "subject": "math",
+    "chapter": "Differentiation",
+    "problem": "Differentiate f(t) = 5t^2 - 7t",
+    "lines": [
+      { "text": "f(t) = 5t^2 - 7t", "latex": "f(t) = 5t^2 - 7t" },
+      { "text": "f'(t) = 10t - 7", "latex": "f'(t) = 10t - 7" }
+    ]
+  },
+  {
+    "id": "cal-4",
+    "category": "calculus",
+    "subject": "math",
+    "chapter": "Integration",
+    "problem": "Integrate 6x from 0 to 2",
+    "lines": [
+      { "text": "∫ 6x dx = 3x^2", "latex": "\\int 6x \\, dx = 3x^2" },
+      { "text": "= 3(2)^2 - 0 = 12", "latex": "= 3(2)^2 - 0 = 12" }
+    ]
+  },
+  {
+    "id": "cal-5",
+    "category": "calculus",
+    "subject": "math",
+    "chapter": "Differentiation",
+    "problem": "Find the stationary point of y = x^2 - 4x",
+    "lines": [
+      { "text": "dy/dx = 2x - 4", "latex": "\\frac{dy}{dx} = 2x - 4" },
+      { "text": "2x - 4 = 0", "latex": "2x - 4 = 0" },
+      { "text": "x = 2", "latex": "x = 2" }
+    ]
+  },
+  {
+    "id": "phy-1",
+    "category": "physics-units",
+    "subject": "physics",
+    "chapter": "Kinematics",
+    "problem": "A car goes 120 m in 6 s. Find its speed.",
+    "lines": [
+      { "text": "v = d/t", "latex": "v = \\frac{d}{t}" },
+      { "text": "v = 120 m / 6 s", "latex": "v = \\frac{120 m}{6 s}" },
+      { "text": "v = 20 m/s", "latex": "v = 20 m/s" }
+    ]
+  },
+  {
+    "id": "phy-2",
+    "category": "physics-units",
+    "subject": "physics",
+    "chapter": "Forces",
+    "problem": "Find the force on a 4 kg mass accelerating at 3 m/s^2",
+    "lines": [
+      { "text": "F = ma", "latex": "F = ma" },
+      { "text": "F = 4 kg x 3 m/s^2", "latex": "F = 4 kg \\times 3 m/s^2" },
+      { "text": "F = 12 N", "latex": "F = 12 N" }
+    ]
+  },
+  {
+    "id": "phy-3",
+    "category": "physics-units",
+    "subject": "physics",
+    "chapter": "Energy",
+    "problem": "Kinetic energy of 2 kg at 7 m/s",
+    "lines": [
+      { "text": "E = 1/2 m v^2", "latex": "E = \\frac{1}{2} m v^2" },
+      { "text": "E = 1/2 x 2 x 7^2", "latex": "E = \\frac{1}{2} \\times 2 \\times 7^2" },
+      { "text": "E = 49 J", "latex": "E = 49 J" }
+    ]
+  },
+  {
+    "id": "phy-4",
+    "category": "physics-units",
+    "subject": "physics",
+    "chapter": "Kinematics",
+    "problem": "From rest, a = 4 m/s^2 for 5 s. Find v.",
+    "lines": [
+      { "text": "v = u + at", "latex": "v = u + at" },
+      { "text": "v = 0 + 4 x 5", "latex": "v = 0 + 4 \\times 5" },
+      { "text": "v = 20 m/s", "latex": "v = 20 m/s" }
+    ]
+  },
+  {
+    "id": "phy-5",
+    "category": "physics-units",
+    "subject": "physics",
+    "chapter": "Electricity",
+    "problem": "Current through 6 Ω at 12 V",
+    "lines": [
+      { "text": "I = V/R", "latex": "I = \\frac{V}{R}" },
+      { "text": "I = 12 V / 6 Ω", "latex": "I = \\frac{12 V}{6 \\Omega}" },
+      { "text": "I = 2 A", "latex": "I = 2 A" }
+    ]
+  },
+  {
+    "id": "phy-6",
+    "category": "physics-units",
+    "subject": "physics",
+    "chapter": "Density",
+    "problem": "Density of 300 g in 150 cm^3",
+    "lines": [
+      {
+        "text": "ρ = m/V = 300 g / 150 cm^3",
+        "latex": "\\rho = \\frac{m}{V} = \\frac{300 g}{150 cm^3}"
+      },
+      { "text": "ρ = 2 g/cm^3", "latex": "\\rho = 2 g/cm^3" }
+    ]
+  },
+  {
+    "id": "vec-1",
+    "category": "physics-vectors",
+    "subject": "physics",
+    "chapter": "Vectors",
+    "problem": "Find the size of v = (3, 4)",
+    "lines": [
+      { "text": "|v| = sqrt(3^2 + 4^2)", "latex": "|\\vec{v}| = \\sqrt{3^2 + 4^2}" },
+      { "text": "|v| = 5", "latex": "|\\vec{v}| = 5" }
+    ]
+  },
+  {
+    "id": "vec-2",
+    "category": "physics-vectors",
+    "subject": "physics",
+    "chapter": "Vectors",
+    "problem": "Split 10 N at 30° into components",
+    "lines": [
+      { "text": "Fx = 10 cos 30°", "latex": "F_x = 10 \\cos 30°" },
+      { "text": "Fy = 10 sin 30° = 5 N", "latex": "F_y = 10 \\sin 30° = 5 N" }
+    ]
+  },
+  {
+    "id": "vec-3",
+    "category": "physics-vectors",
+    "subject": "physics",
+    "chapter": "Vectors",
+    "problem": "Add a = (2, 1) and b = (1, 5)",
+    "lines": [
+      { "text": "a + b = (2 + 1, 1 + 5)", "latex": "\\vec{a} + \\vec{b} = (2 + 1, 1 + 5)" },
+      { "text": "= (3, 6)", "latex": "= (3, 6)" }
+    ]
+  },
+  {
+    "id": "vec-4",
+    "category": "physics-vectors",
+    "subject": "physics",
+    "chapter": "Vectors",
+    "problem": "Resultant of 6 N east and 8 N north",
+    "lines": [
+      { "text": "R^2 = 6^2 + 8^2 = 100", "latex": "R^2 = 6^2 + 8^2 = 100" },
+      { "text": "R = 10 N", "latex": "R = 10 N" },
+      { "text": "θ = tan^-1(8/6)", "latex": "\\theta = \\tan^{-1}(\\frac{8}{6})" }
+    ]
+  },
+  {
+    "id": "che-1",
+    "category": "chemistry",
+    "subject": "chemistry",
+    "chapter": "Reactions",
+    "problem": "Balance hydrogen burning",
+    "lines": [{ "text": "2H2 + O2 -> 2H2O", "latex": "2H_2 + O_2 \\rightarrow 2H_2O" }]
+  },
+  {
+    "id": "che-2",
+    "category": "chemistry",
+    "subject": "chemistry",
+    "chapter": "Reactions",
+    "problem": "Methane burning",
+    "lines": [
+      { "text": "CH4 + 2O2 -> CO2 + 2H2O", "latex": "CH_4 + 2O_2 \\rightarrow CO_2 + 2H_2O" }
+    ]
+  },
+  {
+    "id": "che-3",
+    "category": "chemistry",
+    "subject": "chemistry",
+    "chapter": "Formulas",
+    "problem": "Write the formulas",
+    "lines": [
+      { "text": "H2SO4", "latex": "H_2SO_4" },
+      { "text": "NaCl", "latex": "NaCl" },
+      { "text": "CaCO3", "latex": "CaCO_3" },
+      { "text": "C6H12O6", "latex": "C_6H_{12}O_6" }
+    ]
+  },
+  {
+    "id": "che-4",
+    "category": "chemistry",
+    "subject": "chemistry",
+    "chapter": "Reactions",
+    "problem": "Neutralisation",
+    "lines": [
+      { "text": "HCl + NaOH -> NaCl + H2O", "latex": "HCl + NaOH \\rightarrow NaCl + H_2O" }
+    ]
+  },
+  {
+    "id": "che-5",
+    "category": "chemistry",
+    "subject": "chemistry",
+    "chapter": "Reactions",
+    "problem": "Making ammonia",
+    "lines": [{ "text": "N2 + 3H2 -> 2NH3", "latex": "N_2 + 3H_2 \\rightarrow 2NH_3" }]
+  },
+  {
+    "id": "che-6",
+    "category": "chemistry",
+    "subject": "chemistry",
+    "chapter": "Moles",
+    "problem": "Molar mass of CO2",
+    "lines": [
+      { "text": "CO2 = 12 + 2 x 16", "latex": "CO_2 = 12 + 2 \\times 16" },
+      { "text": "= 44 g/mol", "latex": "= 44 g/mol" }
+    ]
+  },
+  {
+    "id": "che-7",
+    "category": "chemistry",
+    "subject": "chemistry",
+    "chapter": "Reactions",
+    "problem": "Limestone",
+    "lines": [{ "text": "CaCO3 -> CaO + CO2", "latex": "CaCO_3 \\rightarrow CaO + CO_2" }]
+  },
+  {
+    "id": "cod-1",
+    "category": "code",
+    "subject": "programming",
+    "chapter": "Loops",
+    "problem": "Print 1 to 10",
+    "lines": [
+      { "text": "for i in range(1, 11):", "latex": null },
+      { "text": "print(i)", "latex": null }
+    ]
+  },
+  {
+    "id": "cod-2",
+    "category": "code",
+    "subject": "programming",
+    "chapter": "Functions",
+    "problem": "A function that squares",
+    "lines": [
+      { "text": "def square(x):", "latex": null },
+      { "text": "return x * x", "latex": null }
+    ]
+  },
+  {
+    "id": "cod-3",
+    "category": "code",
+    "subject": "programming",
+    "chapter": "Lists",
+    "problem": "Sum a list",
+    "lines": [
+      { "text": "total = sum([3, 5, 7])", "latex": null },
+      { "text": "print(total)", "latex": null }
+    ]
+  },
+  {
+    "id": "cod-4",
+    "category": "code",
+    "subject": "programming",
+    "chapter": "Conditions",
+    "problem": "Even or odd",
+    "lines": [
+      { "text": "if n % 2 == 0:", "latex": null },
+      { "text": "print(\"even\")", "latex": null }
+    ]
+  },
+  {
+    "id": "cod-5",
+    "category": "code",
+    "subject": "programming",
+    "chapter": "Variables",
+    "problem": "Swap two values",
+    "lines": [{ "text": "a, b = b, a", "latex": null }]
+  },
+  {
+    "id": "cod-6",
+    "category": "code",
+    "subject": "programming",
+    "chapter": "Loops",
+    "problem": "Count down",
+    "lines": [
+      { "text": "while n > 0:", "latex": null },
+      { "text": "n = n - 1", "latex": null }
+    ]
+  },
+  {
+    "id": "pro-1",
+    "category": "prose",
+    "subject": "biology",
+    "chapter": "Cells",
+    "problem": "What do mitochondria do?",
+    "lines": [
+      { "text": "Mitochondria release energy", "latex": null },
+      { "text": "by aerobic respiration.", "latex": null }
+    ]
+  },
+  {
+    "id": "pro-2",
+    "category": "prose",
+    "subject": "history",
+    "chapter": "World War One",
+    "problem": "Causes of the war",
+    "lines": [
+      { "text": "The alliance system pulled", "latex": null },
+      { "text": "many countries into the war.", "latex": null }
+    ]
+  },
+  {
+    "id": "pro-3",
+    "category": "prose",
+    "subject": "biology",
+    "chapter": "Plants",
+    "problem": "Photosynthesis",
+    "lines": [
+      { "text": "Plants use light to make glucose", "latex": null },
+      { "text": "from carbon dioxide and water.", "latex": null }
+    ]
+  },
+  {
+    "id": "pro-4",
+    "category": "prose",
+    "subject": "language",
+    "chapter": "Poetry",
+    "problem": "Effect of the metaphor",
+    "lines": [
+      { "text": "The metaphor makes the city", "latex": null },
+      { "text": "feel alive and dangerous.", "latex": null }
+    ]
+  },
+  {
+    "id": "pro-5",
+    "category": "prose",
+    "subject": "history",
+    "chapter": "Industrial Revolution",
+    "problem": "Why did towns grow?",
+    "lines": [
+      { "text": "Factories needed many workers", "latex": null },
+      { "text": "so people moved to towns.", "latex": null }
+    ]
+  },
+  {
+    "id": "pro-6",
+    "category": "prose",
+    "subject": "biology",
+    "chapter": "Genetics",
+    "problem": "Define an allele",
+    "lines": [{ "text": "An allele is a version of a gene.", "latex": null }]
+  },
+  {
+    "id": "pro-7",
+    "category": "prose",
+    "subject": "other",
+    "chapter": "Geography",
+    "problem": "Why do rivers meander?",
+    "lines": [
+      { "text": "Erosion on the outer bend", "latex": null },
+      { "text": "and deposition on the inner bend.", "latex": null }
+    ]
+  },
+  {
+    "id": "pro-8",
+    "category": "prose",
+    "subject": "language",
+    "chapter": "Persuasive writing",
+    "problem": "Open a speech",
+    "lines": [
+      { "text": "Imagine a town with no trees.", "latex": null },
+      { "text": "Would you want to live there?", "latex": null }
+    ]
+  }
+]

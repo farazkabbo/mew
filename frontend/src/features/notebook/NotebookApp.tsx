@@ -663,6 +663,17 @@ export function NotebookApp({ userId }: { userId: string }) {
   useEffect(() => {
     setLiveNotebook(rootId);
   }, [setLiveNotebook, rootId]);
+  // K10 §8.2: what helps read a line here (the notebook's subject, its chapter's words).
+  const { setReadingContext } = mew;
+  const readingPath = notebookId ? tree.path(notebookId) : [];
+  const readingSubject = readingPath[0]?.subject ?? null;
+  const readingTitles = readingPath.map((n) => n.title).join(" ");
+  useEffect(() => {
+    setReadingContext({
+      subject: readingSubject,
+      vocabulary: readingTitles ? readingTitles.split(" ") : [],
+    });
+  }, [setReadingContext, readingSubject, readingTitles]);
   // The day's budget for live marking spent (§7.5): Quiet until tomorrow, and the student is told.
   useEffect(
     () =>

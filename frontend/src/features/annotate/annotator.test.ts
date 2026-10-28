@@ -80,6 +80,7 @@ function setup(options: { level?: MarkLevel; hide?: boolean } = {}) {
   const saved: Annotation[] = [];
   const evidence: Evidence[] = [];
   const tries: boolean[] = [];
+  const taught: { text: string; readAs: string | null; source: string }[] = [];
   const check = vi.fn(async (_: PageEngine, l: Line): Promise<LineCheck[]> => {
     const reading = readingOf(l);
     if (!reading?.verdict) return [];
@@ -127,6 +128,7 @@ function setup(options: { level?: MarkLevel; hide?: boolean } = {}) {
     viewport: () => [0, 0, 1200, 900],
     onEvidence: (e) => evidence.push(e),
     onTry: (_, correct) => tries.push(correct),
+    teach: (_, __, correction) => taught.push(correction),
     now: () => now,
     timeout: (run, ms) => {
       const timer = { at: now + ms, run, live: true };
@@ -172,6 +174,7 @@ function setup(options: { level?: MarkLevel; hide?: boolean } = {}) {
     live,
     doc,
     readings,
+    taught,
     write,
     erase,
     wait,
@@ -271,6 +274,10 @@ describe("live annotations (K9 §7)", () => {
     const [unsure] = t.live.open;
     await t.live.reread(unsure?.id ?? "", "3x = 12");
     expect(t.live.open.map((a) => a.markKind)).toEqual(["tick"]);
+    // K10: the fix teaches neb this student's handwriting.
+    expect(t.taught).toEqual([
+      expect.objectContaining({ text: "3x = 12", readAs: "3x = 2b", source: "fix" }),
+    ]);
   });
 
   it("ticks a right first try (independent), and Quiet shows errors only", async () => {
@@ -323,6 +330,10 @@ describe("live annotations (K9 §7)", () => {
     expect(t.live.open).toEqual([]);
     expect(t.marks()).toEqual([]);
     expect(t.saved.at(-1)).toMatchObject({ id: mark?.id, dismissedAs: "not_wrong" });
+    // K10: the reading was right (the mark wasn't): a confirmed sample.
+    expect(t.taught).toEqual([
+      expect.objectContaining({ text: "3x = 26", readAs: null, source: "not_wrong" }),
+    ]);
   });
 
   it("waits for a pause before drawing while the student keeps writing, and caps open marks", async () => {

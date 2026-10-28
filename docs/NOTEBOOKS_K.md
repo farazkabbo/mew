@@ -1559,3 +1559,57 @@ pageIndex}` (instead of a clip id), as wide as a clip and in the page's proporti
       - the real-model runs: `pnpm eval:mew` (gate v2) and `pnpm eval:solution` (now including the
         code Your Turn) need the keys;
       - a licences page for the bundled packages (K5).
+131.  **K10: the eval set (§8.1).** `frontend/evals/handwriting/`: 151 lines of working in 9
+      categories (algebra, fractions, exponents, calculus, physics units, physics vectors,
+      chemistry, code, prose), grouped by problem so each line has its context, written by 10
+      seeded synthetic writers (the tutor's Hershey glyphs with slant, size, wobble, pen or mouse,
+      neat or messy; one writes 7 like 1, one z like 2): 1,510 lines. MathWriting (CC BY-NC-SA),
+      CROHME and IAM are non-commercial, so they're recorded in `LICENSES.md` and not used. Real
+      samples come from the team through `/dev/handwriting` (development only) into `samples/`;
+      beta users' wait for K11's consent. `pnpm eval:handwriting` reports per category and
+      neat/messy (exact, CER, WER, SymPy equivalence, formula match), a confusion table and the
+      personalization before/after; CI runs it when the prompt, pipeline or eval changes.
+      Synthetic numbers measure the pipeline, not students: the §8.1 targets are for real samples.
+132.  **K10: clean input (§8.2).** One renderer in `packages/ink/src/recognition` (`prepareLine`,
+      `rasterize`, `encodePng`, no canvas) for the notebook, the Quick check pad, calibration and
+      the eval: the line drawn from its strokes, deskewed (a baseline through each stroke's lowest
+      point, at most 15°), letters scaled to 42 px, one 4 px pen, a 24 px white margin, at most
+      2048 × 640. Sending stroke order as text isn't tried yet.
+133.  **K10: context, top 3 and the choice (§8.2).** Prompt `recognition.v3`: the student's
+      examples, then the context block (the 2 lines above as read, the page's first line as the
+      problem, the notebook's subject, its and its chapter's titles as vocabulary), then the line;
+      up to 3 readings. `chooseReading` only considers readings within 0.35 of the first (and
+      ≥ 0.2), so logic settles look-alikes without talking a real mistake away: maths by one SymPy
+      call (a correct step from the line above, else one SymPy can parse), chemistry by real
+      elements that parse, code by balanced brackets; otherwise the model's first. The 0.75
+      confidence gate is K9's, unchanged. Course-chunk vocabulary isn't sent yet.
+134.  **K10: "neb read:" (§8.2).** The mark menu shows "neb read: …" and **Fix what neb read**
+      on every mark with a reading (a "?" keeps "I read: … right?"). A fix checks the line again,
+      as certain. Lines without a mark have no tap target yet: the U series' margin lane brings one.
+135.  **K10: the handwriting profile (§8.3).** Migration `handwriting` (`handwriting_samples`:
+      text, LaTeX, what neb read, source, a ≤ 90 KB PNG made by the same renderer; RLS, the newest
+      300 per student) and setting `learn_handwriting` (default on; off deletes them). FastAPI
+      `/v1/handwriting/samples` (list, add, delete all), Next `/api/handwriting/samples`
+      (`handwritingSamples`, 20 a minute). Fixing a reading, confirming a "?" and "not wrong" (the
+      reading was right, the mark wasn't) each add a sample. Every recognition call gets up to 6
+      examples (`pickExamples`: corrections showing the student's look-alikes first, then
+      calibration, then recent; chosen by known confusions rather than a visual embedding) and a
+      note for look-alikes seen twice (once after calibration). The server reads a student's
+      samples at most every 5 minutes; recognition still works when it can't.
+136.  **K10: calibration (§8.3).** 28 boxes (0–9, x y z t n, + − × ÷ = ( ) √ ∫ π θ Δ, one
+      sentence), in Settings → Handwriting and on onboarding's last card ("skip, neb will learn as
+      you go"). The boxes are read in batches first, so what neb misreads is a look-alike from day
+      one. Settings → Handwriting shows "neb has learned N things", the look-alikes, Calibrate and
+      Reset.
+137.  **K10 results (2026-10-28, `gemini-3.5-flash-lite`, 180 synthetic lines per mode,
+      `evals/handwriting/reports/latest.md`).** Exact lines 91.7 % → 98.3 %; SymPy equivalence neat
+      93.4 % → 98.4 %, messy 88.1 % → 98.3 %; chemistry formulas 95 % → 100 %; prose CER 0.4 % both.
+      The logic choice never changed a reading in this run (the model rarely gave close second
+      readings); the gain is the clean input and the context. Personalization: writer w03's 7s
+      on 25 held-out lines went from 39 % to 73 % read as 7 (exact lines 48 % → 64 %) after a
+      calibration 7 and 5 corrections: better, not yet "read correctly"; the remaining 7→1 errors
+      are all that writer's.
+138.  **Still left after K10:** real samples (the team, then opt-in beta users) and the §8.1
+      targets judged on them; trying stroke order as text; chapter vocabulary from course chunks;
+      a stronger personalization for a quirk as strong as w03's (more examples of that character,
+      or K11's own model); K11 itself (the owner's go-ahead).

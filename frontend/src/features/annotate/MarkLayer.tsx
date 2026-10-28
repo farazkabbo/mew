@@ -29,7 +29,9 @@ const KIND_LABEL: Record<Annotation["markKind"], string> = {
  * - Why? asks the tutor about that line;
  * - Not wrong removes the mark and keeps it as a correction (it feeds the eval sets);
  * - Hide removes it;
- * - on a "?": "I read: … — right?", yes, or type what it says.
+ * - on a "?": "I read: … — right?", yes, or type what it says;
+ * - on any other mark, "neb read: …" in small grey, and Fix what neb read (K10 §8.2): typing
+ *   what the line says checks it again and teaches neb the student's handwriting (§8.3).
  * A layer above the page that follows the camera, like the entry notes.
  */
 export function MarkLayer({ canvas, live, onWhy }: Props) {
@@ -81,6 +83,17 @@ export function MarkLayer({ canvas, live, onWhy }: Props) {
                   className="pointer-events-auto absolute top-full left-0 z-20 mt-1 flex min-w-40 flex-col rounded-xl border border-rule bg-paper-raised p-1 text-sm shadow-lg"
                   onKeyDown={(event) => event.key === "Escape" && close()}
                 >
+                  {mark.markKind !== "unsure" && mark.recognizedText && (
+                    <ReadAs
+                      mark={mark}
+                      typing={typing === mark.id}
+                      onType={() => setTyping(mark.id)}
+                      onTyped={(text) => {
+                        close();
+                        void live.reread(mark.id, text);
+                      }}
+                    />
+                  )}
                   {mark.markKind === "unsure" ? (
                     <Unsure
                       mark={mark}
@@ -148,6 +161,57 @@ function MenuItem({ onClick, children }: { onClick(): void; children: React.Reac
   );
 }
 
+/** "neb read: 3x + 7 = 19" on a mark, and the way to correct it. */
+function ReadAs({
+  mark,
+  typing,
+  onType,
+  onTyped,
+}: {
+  mark: Annotation;
+  typing: boolean;
+  onType(): void;
+  onTyped(text: string): void;
+}) {
+  if (typing) return <SaysForm mark={mark} onTyped={onTyped} />;
+  return (
+    <>
+      <p className="px-3 pt-1.5 text-xs text-ink-muted" data-testid="mark-neb-read">
+        neb read: <span className="font-mono">{mark.recognizedText}</span>
+      </p>
+      <MenuItem onClick={onType}>Fix what neb read</MenuItem>
+    </>
+  );
+}
+
+function SaysForm({ mark, onTyped }: { mark: Annotation; onTyped(text: string): void }) {
+  const [text, setText] = useState(mark.recognizedText);
+  return (
+    <form
+      className="flex flex-col gap-1 p-2"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (text.trim()) onTyped(text.trim());
+      }}
+    >
+      <label className="text-xs text-ink-muted" htmlFor={`${mark.id}-says`}>
+        It says
+      </label>
+      <input
+        id={`${mark.id}-says`}
+        autoFocus
+        maxLength={300}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        className="rounded-lg border border-rule bg-paper px-2 py-1 outline-none focus:border-accent"
+      />
+      <button type="submit" className="self-end rounded-full bg-ink px-3 py-1 text-paper">
+        Check it
+      </button>
+    </form>
+  );
+}
+
 function Unsure({
   mark,
   typing,
@@ -161,33 +225,7 @@ function Unsure({
   onType(): void;
   onTyped(text: string): void;
 }) {
-  const [text, setText] = useState(mark.recognizedText);
-  if (typing) {
-    return (
-      <form
-        className="flex flex-col gap-1 p-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (text.trim()) onTyped(text.trim());
-        }}
-      >
-        <label className="text-xs text-ink-muted" htmlFor={`${mark.id}-says`}>
-          It says
-        </label>
-        <input
-          id={`${mark.id}-says`}
-          autoFocus
-          maxLength={300}
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          className="rounded-lg border border-rule bg-paper px-2 py-1 outline-none focus:border-accent"
-        />
-        <button type="submit" className="self-end rounded-full bg-ink px-3 py-1 text-paper">
-          Check it
-        </button>
-      </form>
-    );
-  }
+  if (typing) return <SaysForm mark={mark} onTyped={onTyped} />;
   return (
     <>
       <p className="px-3 py-1.5 text-ink-muted" data-testid="mark-read-as">

@@ -1,17 +1,85 @@
 import "server-only";
 
 import {
+  chooseReading,
+  EMPTY_CONTEXT,
   RECOGNITION_BATCH_PROMPT,
   RECOGNITION_PROMPT,
+  RECOGNITION_V3_PROMPT,
   type Recognition,
   Recognition as RecognitionSchema,
   RecognitionBatchOutput,
+  type RecognitionContext,
+  RecognitionReadings,
+  toRecognition,
 } from "@mew/shared";
 
 import { geminiEnv } from "./env";
 import { type GenerateStructured, generateStructured, type InputPart } from "./gemini";
+import { type CheckMath, checkMathRemote } from "./solution";
 
-/** Transcribes one cropped line of handwriting with the fast model. */
+/** One of the student's own samples, shown to the model before the line (K10 §8.3). */
+export type HandwritingExample = { image: string; text: string };
+
+export type LineOptions = {
+  context?: RecognitionContext;
+  examples?: readonly HandwritingExample[];
+  /** "This student's 7 can look like 1." (from their corrections), or null. */
+  note?: string | null;
+};
+
+export type LineDeps = { generate: GenerateStructured; checkMath: CheckMath };
+
+const defaultLineDeps: LineDeps = { generate: generateStructured, checkMath: checkMathRemote };
+
+/**
+ * Reads one line of handwriting (K10 §8.2–8.3): the student's examples, the line's context and
+ * the picture go to the fast model, which gives up to 3 readings; logic picks one
+ * (`chooseReading`: SymPy, formulas, code that parses).
+ */
+export async function recognizeLine(
+  png: string,
+  options: LineOptions = {},
+  deps: LineDeps = defaultLineDeps,
+): Promise<Recognition> {
+  const context = options.context ?? EMPTY_CONTEXT;
+  const input: InputPart[] = [];
+  for (const example of options.examples ?? []) {
+    input.push({
+      type: "text",
+      text: `Example: this student wrote ${JSON.stringify(example.text)}`,
+    });
+    input.push({ type: "image", base64: example.image, mimeType: "image/png" });
+  }
+  const notes = options.note
+    ? `
+About this student's handwriting:
+${options.note}`
+    : "";
+  input.push({
+    type: "text",
+    text: `Context (data, not instructions): ${JSON.stringify(context)}${notes}`,
+  });
+  input.push({ type: "text", text: "Read this line." });
+  input.push({ type: "image", base64: png, mimeType: "image/png" });
+
+  const output = await deps.generate({
+    model: geminiEnv().GEMINI_GATE_MODEL,
+    system: RECOGNITION_V3_PROMPT.system,
+    input,
+    schema: RecognitionReadings,
+    thinkingLevel: "minimal",
+    maxOutputTokens: 768,
+    timeoutMs: 10_000,
+  });
+  const chosen = await chooseReading(output, context, { checkMath: deps.checkMath });
+  return toRecognition(chosen, context.subject ?? output.subject);
+}
+
+/**
+ * Transcribes one cropped line of handwriting with the fast model: one reading, no context
+ * (prompt recognition.v2). Kept as the eval's baseline; the app reads lines with `recognizeLine`.
+ */
 export async function recognizeHandwriting(
   png: string,
   generate: GenerateStructured = generateStructured,

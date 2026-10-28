@@ -18,7 +18,8 @@
     "eval:course": "tsx --conditions=react-server evals/course.eval.ts",
     "eval:quiz": "tsx --conditions=react-server evals/quiz.eval.ts",
     "eval:notes": "tsx --conditions=react-server evals/notes-check.eval.ts",
-    "eval:solution": "tsx --conditions=react-server evals/solution.eval.ts"
+    "eval:solution": "tsx --conditions=react-server evals/solution.eval.ts",
+    "eval:handwriting": "tsx --conditions=react-server evals/handwriting.eval.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.16",

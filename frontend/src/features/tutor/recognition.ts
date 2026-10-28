@@ -1,7 +1,25 @@
-import { currentLine, type Line, type PageDocument, strokeGroupHash } from "@mew/ink";
-import { RECOGNIZE_BATCH_MAX, Recognition, RecognizeBatchResponse } from "@mew/shared";
+import {
+  bytesToBase64,
+  currentLine,
+  type Line,
+  type PageDocument,
+  recognitionPng,
+  strokeGroupHash,
+} from "@mew/ink";
+import {
+  HANDWRITING_LIMITS,
+  RECOGNIZE_BATCH_MAX,
+  Recognition,
+  type RecognitionContext,
+  RecognizeBatchResponse,
+  type Subject,
+} from "@mew/shared";
 
-import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
+import { strokesOf, studentLines } from "../notebook/export-line";
+import { browserDeflate } from "./deflate";
+
+/** What the page itself can't say about a line: the notebook's subject and its words (K10). */
+export type ReadingContext = { subject: Subject | null; vocabulary: readonly string[] };
 
 const MAX_CACHED = 200;
 
@@ -19,7 +37,37 @@ export class RecognitionService {
   /** After a 429 (our limit or the model's): no requests until then. */
   private pausedUntil = 0;
 
+  private reading: ReadingContext = { subject: null, vocabulary: [] };
+
   constructor(private readonly fetchImpl: typeof fetch = (...args) => fetch(...args)) {}
+
+  /** The notebook on screen changed (K10 §8.2: its subject and chapter words help reading). */
+  setReadingContext(next: ReadingContext): void {
+    this.reading = next;
+  }
+
+  /**
+   * A line's context (K10 §8.2): the 2 lines above it and the page's first line, as already
+   * read, plus the notebook's subject and words. Lines not read yet are left out.
+   */
+  contextFor(doc: PageDocument, line: Line): RecognitionContext {
+    const lines = studentLines(doc).sort((a, b) => a.bbox[1] - b.bbox[1]);
+    const textOf = (l: Line | undefined) => {
+      const known = l ? this.cached(doc, l) : undefined;
+      return known && known.confidence > 0 ? clip(known.latex ?? known.text, 300) : null;
+    };
+    const above = lines.filter((l) => l.id !== line.id && l.bbox[1] < line.bbox[1]);
+    const previous = above
+      .slice(-HANDWRITING_LIMITS.previousLines)
+      .map(textOf)
+      .filter((t): t is string => !!t);
+    const first = lines[0];
+    const problem = first && first.id !== line.id ? textOf(first) : null;
+    const vocabulary = [
+      ...new Set(this.reading.vocabulary.map((w) => clip(w, 40)).filter(Boolean)),
+    ].slice(0, HANDWRITING_LIMITS.vocabulary);
+    return { previous, problem, subject: this.reading.subject, vocabulary };
+  }
 
   /** Recognition of a line if already known (no network). */
   cached(doc: PageDocument, line: Line): Recognition | undefined {
@@ -76,10 +124,12 @@ export class RecognitionService {
   }
 
   private async request(doc: PageDocument, line: Line, key: string): Promise<Recognition | null> {
-    const raster = await renderStrokesPng(strokesOf(doc, [line]), line.bbox);
+    const image = await lineImage(doc, line);
+    if (!image) return null;
     try {
       const response = await this.post("/api/recognize", {
-        image: await blobToBase64(raster.blob),
+        image,
+        context: this.contextFor(doc, line),
       });
       if (response.status === 503) this.unavailable = true;
       if (!response.ok) return null;
@@ -96,12 +146,8 @@ export class RecognitionService {
     lines: readonly { line: Line; key: string }[],
   ): Promise<void> {
     try {
-      const images = await Promise.all(
-        lines.map(async ({ line }) => {
-          const raster = await renderStrokesPng(strokesOf(doc, [line]), line.bbox);
-          return blobToBase64(raster.blob);
-        }),
-      );
+      const images = await Promise.all(lines.map(({ line }) => lineImage(doc, line)));
+      if (images.some((image) => !image)) return;
       const response = await this.post("/api/recognize/batch", { images }, 20_000);
       if (response.status === 503) this.batchUnavailable = true;
       if (!response.ok) return;
@@ -138,4 +184,24 @@ export class RecognitionService {
   private key(doc: PageDocument, line: Line): string {
     return strokeGroupHash(strokesOf(doc, [line]));
   }
+}
+
+/**
+ * The picture recognition reads (K10 §8.2): the line drawn from its strokes, deskewed, at a fixed
+ * letter size with an even pen, on white. Null for a line without ink.
+ */
+export async function lineImage(doc: PageDocument, line: Line): Promise<string | null> {
+  return strokesImage(strokesOf(doc, [line]));
+}
+
+/** The same picture for strokes that aren't on a page (the Quick check pad). */
+export async function strokesImage(
+  strokes: readonly { points: readonly (readonly number[])[] }[],
+): Promise<string | null> {
+  const made = await recognitionPng(strokes, browserDeflate);
+  return made ? bytesToBase64(made.png) : null;
+}
+
+function clip(text: string, max: number): string {
+  return text.replace(/[ -]/g, " ").trim().slice(0, max);
 }

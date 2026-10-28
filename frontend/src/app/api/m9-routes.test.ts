@@ -45,6 +45,7 @@ describe("/api/settings", () => {
     your_turn_after_solution: true,
     quiz_saved_moments: true,
     notify_moment_checks: false,
+    learn_handwriting: true,
   };
 
   it("passes a valid change to the API service as the user", async () => {

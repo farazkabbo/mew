@@ -38,6 +38,11 @@ export const UserSettings = z.object({
   quiz_saved_moments: z.boolean(),
   /** A Windows notification when saved moments' checks are due (K8 §4.7: opt-in, default off). */
   notify_moment_checks: z.boolean(),
+  /**
+   * neb learns this student's handwriting from their corrections and calibration (K10 §8.3,
+   * default on). Turning it off deletes what it learned.
+   */
+  learn_handwriting: z.boolean(),
 });
 export type UserSettings = z.infer<typeof UserSettings>;
 
@@ -56,6 +61,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   your_turn_after_solution: true,
   quiz_saved_moments: true,
   notify_moment_checks: false,
+  learn_handwriting: true,
 };
 
 export const SettingsPatch = UserSettings.partial().strict();

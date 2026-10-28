@@ -3,6 +3,8 @@
 import { GraduationCap, Mic, PenLine } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import { Calibration } from "../handwriting/Calibration";
+
 const STEPS: { icon: ReactNode; title: string; body: string }[] = [
   {
     icon: <PenLine className="size-6 text-accent" aria-hidden />,
@@ -22,9 +24,9 @@ const STEPS: { icon: ReactNode; title: string; body: string }[] = [
 ];
 
 /**
- * First-run introduction (M9): three short cards, then the choice to start listening (a real
- * click, so the browser allows audio and the microphone prompt). A native modal dialog, so focus
- * stays inside and Escape closes it.
+ * First-run introduction (M9): three short cards, the optional 60-second handwriting calibration
+ * (K10 §8.3), then the choice to start listening (a real click, so the browser allows audio and
+ * the microphone prompt). A native modal dialog, so focus stays inside and Escape closes it.
  */
 export function Onboarding({
   onDone,
@@ -35,6 +37,7 @@ export function Onboarding({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [step, setStep] = useState(0);
+  const [calibrating, setCalibrating] = useState(false);
   const last = step === STEPS.length - 1;
   const current = STEPS[step] ?? STEPS[0];
 
@@ -58,59 +61,85 @@ export function Onboarding({
         e.preventDefault(); // Escape: same as "Skip"
         finish(false);
       }}
-      className="m-auto w-[min(28rem,calc(100vw-2rem))] rounded-3xl border border-rule bg-paper-raised p-0 text-ink shadow-2xl backdrop:bg-ink/30"
+      className={`m-auto ${calibrating ? "w-[min(34rem,calc(100vw-2rem))]" : "w-[min(28rem,calc(100vw-2rem))]"} rounded-3xl border border-rule bg-paper-raised p-0 text-ink shadow-2xl backdrop:bg-ink/30`}
     >
-      <div className="p-7">
-        <div className="flex items-center justify-between">
-          {current?.icon}
-          <span className="text-xs text-ink-muted" aria-live="polite">
-            {step + 1} of {STEPS.length}
-          </span>
-        </div>
-        <h2 id="onboarding-title" className="mt-4 font-serif text-3xl">
-          {current?.title}
-        </h2>
-        <p className="mt-3 leading-relaxed text-ink-muted">{current?.body}</p>
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => finish(false)}
-            className="text-sm text-ink-muted hover:text-ink"
-          >
-            {last ? "Not now" : "Skip"}
-          </button>
-          <div className="flex gap-2">
-            {step > 0 && (
-              <button
-                type="button"
-                onClick={() => setStep(step - 1)}
-                className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent"
-              >
-                Back
-              </button>
-            )}
-            {last ? (
-              <button
-                type="button"
-                autoFocus
-                onClick={() => finish(true)}
-                className="rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-paper"
-              >
-                Start listening
-              </button>
-            ) : (
-              <button
-                type="button"
-                autoFocus
-                onClick={() => setStep(step + 1)}
-                className="rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-paper"
-              >
-                Next
-              </button>
-            )}
+      {calibrating ? (
+        <div className="p-7">
+          <h2 id="onboarding-title" className="font-serif text-3xl">
+            Teach neb your handwriting
+          </h2>
+          <div className="mt-4">
+            <Calibration
+              skipLabel="Skip, neb will learn as you go"
+              onDone={() => {
+                setCalibrating(false);
+                setStep(STEPS.length - 1);
+              }}
+            />
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-7">
+          <div className="flex items-center justify-between">
+            {current?.icon}
+            <span className="text-xs text-ink-muted" aria-live="polite">
+              {step + 1} of {STEPS.length}
+            </span>
+          </div>
+          <h2 id="onboarding-title" className="mt-4 font-serif text-3xl">
+            {current?.title}
+          </h2>
+          <p className="mt-3 leading-relaxed text-ink-muted">{current?.body}</p>
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => finish(false)}
+              className="text-sm text-ink-muted hover:text-ink"
+            >
+              {last ? "Not now" : "Skip"}
+            </button>
+            <div className="flex gap-2">
+              {step > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStep(step - 1)}
+                  className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent"
+                >
+                  Back
+                </button>
+              )}
+              {last && (
+                <button
+                  type="button"
+                  onClick={() => setCalibrating(true)}
+                  className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent"
+                >
+                  Teach neb my handwriting (60 s)
+                </button>
+              )}
+              {last ? (
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => finish(true)}
+                  className="rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-paper"
+                >
+                  Start listening
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setStep(step + 1)}
+                  className="rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-paper"
+                >
+                  Next
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </dialog>
   );
 }

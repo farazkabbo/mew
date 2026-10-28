@@ -1,12 +1,12 @@
 "use client";
 
-import type { BBox, Point, Recognition, Stroke } from "@mew/shared";
-import { Recognition as RecognitionSchema } from "@mew/shared";
 import { strokeBBox } from "@mew/ink";
+import type { Point, Recognition, Stroke } from "@mew/shared";
+import { Recognition as RecognitionSchema } from "@mew/shared";
 import { Loader2 } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { blobToBase64, renderStrokesPng } from "../notebook/export-line";
+import { strokesImage } from "../tutor/recognition";
 
 const PAD_ID = "00000000-0000-4000-8000-000000000000";
 
@@ -52,20 +52,14 @@ export function WritePad({ onRead }: { onRead(text: string): void }) {
     const all = strokes.current;
     if (all.length === 0) return;
     setState("reading");
-    const xs = all.flatMap((s) => s.points.map((p) => p[0]));
-    const ys = all.flatMap((s) => s.points.map((p) => p[1]));
-    const bbox: BBox = [
-      Math.min(...xs),
-      Math.min(...ys),
-      Math.max(...xs) - Math.min(...xs) + 1,
-      Math.max(...ys) - Math.min(...ys) + 1,
-    ];
     try {
-      const raster = await renderStrokesPng(all, bbox);
+      // The same picture as a notebook line (K10 §8.2).
+      const image = await strokesImage(all);
+      if (!image) throw new Error("no ink");
       const response = await fetch("/api/recognize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: await blobToBase64(raster.blob) }),
+        body: JSON.stringify({ image }),
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`recognize ${response.status}`);

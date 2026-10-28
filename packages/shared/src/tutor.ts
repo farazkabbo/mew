@@ -5,6 +5,7 @@ import { COURSE_LIMITS, CourseExcerpt } from "./course";
 import { GeometrySpec, MoleculeFigure } from "./figures";
 import { MEW_LIMITS, MewLabel } from "./mew";
 import { QuizContext } from "./quiz";
+import { Subject } from "./subject";
 
 export const TUTOR_LIMITS = {
   speechChars: 400,
@@ -198,17 +199,7 @@ export const RecognizeRequest = z.object({
 });
 export type RecognizeRequest = z.infer<typeof RecognizeRequest>;
 
-export const Subject = z.enum([
-  "math",
-  "physics",
-  "chemistry",
-  "biology",
-  "history",
-  "language",
-  "programming",
-  "other",
-]);
-export type Subject = z.infer<typeof Subject>;
+export { Subject } from "./subject";
 
 /** Handwriting recognition of one cropped line. */
 export const Recognition = z.object({
@@ -220,6 +211,19 @@ export const Recognition = z.object({
    * no token probabilities). Notes Check treats lines under 0.6 as "can't tell".
    */
   confidence: z.number().min(0).max(1),
+  /** K10: the model's other readings of the line (at most 2), most likely first. */
+  alternatives: z
+    .array(
+      z.object({
+        text: z.string().max(300),
+        latex: z.string().max(300).nullable(),
+        confidence: z.number().min(0).max(1),
+      }),
+    )
+    .max(2)
+    .optional(),
+  /** K10: what chose this reading over the model's first (SymPy, a formula, code that parses). */
+  chosenBy: z.enum(["model", "math", "chemistry", "code"]).optional(),
 });
 export type Recognition = z.infer<typeof Recognition>;
 

@@ -73,6 +73,20 @@ export type AnnotatorDeps = {
   onTry?(pageId: string, correct: boolean): void;
   /** A mark changed (the device's copy should reach the server). */
   onChanged?(): void;
+  /**
+   * The student said what a line really says (K10 §8.3: every correction teaches): a fix, a "?"
+   * confirmed, or "not wrong" (the reading was right; the mark wasn't).
+   */
+  teach?(
+    engine: PageEngine,
+    line: Line,
+    correction: {
+      text: string;
+      latex: string | null;
+      readAs: string | null;
+      source: "fix" | "confirm" | "not_wrong";
+    },
+  ): void;
   now?: () => number;
   timeout?: (run: () => void, ms: number) => () => void;
   newId?: () => string;
@@ -202,6 +216,19 @@ export class LiveAnnotator {
     if (!engine || !mark || !isOpen(mark)) return;
     const done = { ...mark, dismissedAs: as, synced: false };
     this.takeOff(engine, [done]);
+    if (as === "not_wrong") {
+      const line = this.lineFor(engine, mark);
+      const known = line ? this.deps.known(engine, line) : undefined;
+      const text = (known?.text ?? mark.recognizedText).trim();
+      if (line && text) {
+        this.deps.teach?.(engine, line, {
+          text,
+          latex: known?.latex ?? null,
+          readAs: null,
+          source: "not_wrong",
+        });
+      }
+    }
   }
 
   /** "Why?" was asked about a mark (fixing it after counts as `after_explanation`). */
@@ -234,6 +261,13 @@ export class LiveAnnotator {
       confidence: 1,
     };
     this.deps.remember(engine, line, recognition);
+    const readAs = (known?.text ?? mark.recognizedText).trim();
+    this.deps.teach?.(engine, line, {
+      text,
+      latex: recognition.latex,
+      readAs: typed === null || readAs === text ? null : readAs,
+      source: typed === null ? "confirm" : "fix",
+    });
     this.checked.delete(line.id);
     await this.enqueue(async () => {
       await this.finish(engine, line, recognition);

@@ -61,6 +61,8 @@ class UserSettings(BaseModel):
     quiz_saved_moments: bool = True
     #: A desktop notification when saved moments' checks are due (K8: opt-in).
     notify_moment_checks: bool = False
+    #: neb learns the student's handwriting from their corrections (K10). On unless turned off.
+    learn_handwriting: bool = True
 
     @field_validator("shortcuts", mode="before")
     @classmethod
@@ -96,3 +98,4 @@ class SettingsPatch(BaseModel):
     your_turn_after_solution: bool | None = None
     quiz_saved_moments: bool | None = None
     notify_moment_checks: bool | None = None
+    learn_handwriting: bool | None = None

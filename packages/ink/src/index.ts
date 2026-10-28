@@ -11,3 +11,4 @@ export * from "./segmentation";
 export * from "./spatial-index";
 export * from "./viewport";
 export * from "./tutor";
+export * from "./recognition";
