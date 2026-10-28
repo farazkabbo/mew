@@ -184,6 +184,9 @@ export class ShowThenYou {
       bbox: union(boxes) ?? [0, 0, 0, 0],
       folded: true,
       problem: solution.problem.text,
+      steps: solution.steps.map(({ work, latex, why }) => ({ work, latex, why })),
+      finalAnswer: solution.finalAnswer.text,
+      ...(solution.verification.passed && { verifiedBy: solution.verification.method }),
       courseId: this.deps.courseId(),
       conceptIds,
       yourTurn: null,
@@ -308,6 +311,8 @@ export class ShowThenYou {
       bbox: union([work.bbox, answer.bbox].filter((b) => b !== null)) ?? region,
       folded: true,
       problem: saved.problem.text,
+      steps: saved.steps.map(({ work, latex, why }) => ({ work, latex, why })),
+      finalAnswer: saved.finalAnswer.text,
       courseId: this.deps.courseId(),
       // Concepts aren't known from the screen; the Your Turn still checks, without evidence.
       conceptIds: [],

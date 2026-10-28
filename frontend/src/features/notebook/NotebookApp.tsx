@@ -1027,6 +1027,7 @@ export function NotebookApp({
                     flow={mew.showThenYou}
                     records={solutionRecords}
                     checkShortcut={keys.shown("check_work")}
+                    writing={writing}
                   />
                 )}
 

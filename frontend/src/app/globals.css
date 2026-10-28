@@ -57,6 +57,8 @@ body {
   font-weight: 500;
   color: var(--neb-ink);
   text-transform: lowercase;
+  /* Pixelify's "fi" ligature draws as a block: letters stay letters. */
+  font-variant-ligatures: none;
 }
 
 /* The neb dot (§3.8). Only under motion-safe. */

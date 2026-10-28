@@ -1,10 +1,13 @@
 "use client";
 
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
+
+import { buttonClass } from "@/components/ui/Button";
 
 import type { CanvasHandle } from "../notebook/canvas/NotebookCanvas";
 import type { ShowThenYou } from "./flow";
 import type { SolutionRecords } from "./record";
+import { SolutionStrip } from "./SolutionStrip";
 import { useShowThenYou } from "./store";
 
 type Props = {
@@ -14,13 +17,15 @@ type Props = {
   records: SolutionRecords;
   /** How the check shortcut is shown (Alt+C, or the student's own). */
   checkShortcut: string | null;
+  /** When the student last wrote (the strip folds at the first stroke of their turn). */
+  writing: number;
 };
 
 /**
  * Show-then-You on the page (K6 §6.1): each folded solution as a "Solution · tap to peek" tab at
  * its place (following the camera, like Notes Check's marks), and the Your Turn's controls.
  */
-export function SolutionLayer({ canvas, pageId, flow, records, checkShortcut }: Props) {
+export function SolutionLayer({ canvas, pageId, flow, records, checkShortcut, writing }: Props) {
   const layer = useRef<HTMLDivElement>(null);
   const solutions = useShowThenYou((s) => s.solutions);
   const peeking = useShowThenYou((s) => s.peeking);
@@ -60,7 +65,7 @@ export function SolutionLayer({ canvas, pageId, flow, records, checkShortcut }: 
                 data-testid="solution-tab"
                 aria-expanded={open}
                 onClick={() => void flow.peek(solution.id)}
-                className="pointer-events-auto absolute rounded-full border border-line bg-paper-hi px-3 py-1 text-sm whitespace-nowrap text-ink shadow-sm"
+                className="pointer-events-auto absolute rounded-full border border-neb bg-neb-wash px-3 py-1 text-sm whitespace-nowrap text-neb-ink shadow-sh-2"
                 style={{ left: x, top: y - 34 }}
               >
                 {open ? "Solution · tap to fold" : "Solution · tap to peek"}
@@ -69,94 +74,139 @@ export function SolutionLayer({ canvas, pageId, flow, records, checkShortcut }: 
           })}
         </div>
       </div>
-      <YourTurnPanel flow={flow} checkShortcut={checkShortcut} />
+      <YourTurnPanel flow={flow} checkShortcut={checkShortcut} writing={writing} />
     </>
   );
 }
 
-function YourTurnPanel({ flow, checkShortcut }: Pick<Props, "flow" | "checkShortcut">) {
+function YourTurnPanel({
+  flow,
+  checkShortcut,
+  writing,
+}: Pick<Props, "flow" | "checkShortcut"> & { writing: number }) {
   const phase = useShowThenYou((s) => s.phase);
   const offerHint = useShowThenYou((s) => s.offerHint);
   const finished = useShowThenYou((s) => s.finished);
   const offerSolution = useShowThenYou((s) => s.offerSolution);
+  const solutions = useShowThenYou((s) => s.solutions);
+  // The strip folds at the first stroke of the student's turn (§5.3).
+  const [turnStarted, setTurnStarted] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (phase === "your_turn") setTurnStarted(Date.now());
+  }, [phase]);
   const offering = phase === "idle" && offerSolution;
   if ((phase === "idle" && !offering) || phase === "showing") return null;
-  const button =
-    "rounded-full px-3 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2";
+  const latest = [...solutions].reverse().find((s) => s.steps?.length);
+  const showStrip = phase === "your_turn" && latest && writing <= turnStarted;
+  const turn = [...solutions].reverse().find((s) => s.yourTurn)?.yourTurn ?? null;
   return (
-    // Away from the page's writing (the Your Turn box is usually low on the sheet): top right.
-    <div className="pointer-events-none absolute top-16 right-4 z-40 flex max-w-[min(30rem,70%)] justify-end">
-      <div
+    <div className="pointer-events-none absolute top-4 right-4 bottom-20 left-4 z-40 flex items-start justify-end gap-4">
+      {showStrip && latest && (
+        <div className="min-h-0 flex-1 self-stretch">
+          <SolutionStrip solution={latest} />
+        </div>
+      )}
+      <section
         role="status"
         aria-live="polite"
         data-testid="your-turn-panel"
-        className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-2xl bg-ink px-4 py-2 text-sm text-paper shadow-lg"
+        className="pointer-events-auto relative w-[300px] shrink-0 rotate-[1.5deg] rounded-[4px] bg-paper-hi px-5 pt-6 pb-4 text-ink shadow-sh-2"
+        style={{
+          backgroundImage: "repeating-linear-gradient(transparent 0 31px, var(--rule) 31px 32px)",
+          backgroundPosition: "0 52px",
+        }}
       >
+        <span
+          aria-hidden
+          className="absolute -top-2.5 left-1/2 h-5 w-20 -translate-x-1/2 -rotate-2 bg-note/90"
+        />
         {offering && (
           <>
-            <span>Stuck on this one? I can show you every step, then give you one to try.</span>
-            <button
-              type="button"
-              data-testid="offer-solution"
-              className={`${button} bg-paper text-ink`}
-              onClick={() => void flow.acceptOffer()}
-            >
-              Show me
-            </button>
-            <button
-              type="button"
-              className={`${button} opacity-80`}
-              onClick={() => flow.declineOffer()}
-            >
-              Not now
-            </button>
-          </>
-        )}
-        {phase === "solving" && <span>Working it out and checking it…</span>}
-        {phase === "your_turn" && (
-          <>
-            <span>Your turn: write your answer in the box.</span>
-            <button
-              type="button"
-              className={`${button} bg-paper text-ink`}
-              onClick={() => void flow.check({ quiet: false })}
-            >
-              Check{checkShortcut ? ` (${checkShortcut})` : ""}
-            </button>
-            {offerHint && (
+            <p className="neb-voice text-[13px]">stuck on this one?</p>
+            <p className="mt-2 text-[15px]">
+              I can show you every step, then give you one to try on your own.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                className={`${button} border border-paper/60`}
-                onClick={() => void flow.takeHintStep()}
+                data-testid="offer-solution"
+                className={buttonClass("neb", { dense: true })}
+                onClick={() => void flow.acceptOffer()}
               >
-                Hint step
+                Show me
               </button>
-            )}
-            <button
-              type="button"
-              className={`${button} opacity-80`}
-              onClick={() => void flow.skip()}
-            >
-              Skip for now
-            </button>
+              <button
+                type="button"
+                className={buttonClass("quiet", { dense: true })}
+                onClick={() => flow.declineOffer()}
+              >
+                Not now
+              </button>
+            </div>
+          </>
+        )}
+        {phase === "solving" && (
+          <p className="neb-voice text-[13px]">working it out and checking it…</p>
+        )}
+        {phase === "your_turn" && (
+          <>
+            <p className="neb-voice text-[13px]">
+              <span className="sr-only">Your turn: </span>your turn · same idea, new numbers
+            </p>
+            {turn && <p className="mt-2 font-serif text-[28px] leading-tight">{turn.problem}</p>}
+            <p className="mt-2 font-hand text-[20px] text-muted">
+              write it in the box on the page…
+            </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={buttonClass("neb", { dense: true })}
+                onClick={() => void flow.check({ quiet: false })}
+                title={`Check my work${checkShortcut ? ` (${checkShortcut})` : ""} · or say “check this”`}
+              >
+                Check my work{checkShortcut ? ` (${checkShortcut})` : ""}
+              </button>
+              {offerHint && (
+                <button
+                  type="button"
+                  className={buttonClass("quiet", { dense: true })}
+                  onClick={() => void flow.takeHintStep()}
+                >
+                  Peek at a step
+                </button>
+              )}
+            </div>
+            <p className="mt-2 flex items-center justify-between text-xs text-muted">
+              <span>{offerHint ? "a peek counts as a hint" : "the steps are on the page"}</span>
+              <button type="button" className="hover:text-ink" onClick={() => void flow.skip()}>
+                Skip for now
+              </button>
+            </p>
           </>
         )}
         {phase === "done" && (
           <>
-            <span>{finished}</span>
-            <button
-              type="button"
-              className={`${button} bg-paper text-ink`}
-              onClick={() => void flow.oneMore()}
-            >
-              One more
-            </button>
-            <button type="button" className={`${button} opacity-80`} onClick={() => flow.back()}>
-              Back to your work
-            </button>
+            <p className="neb-voice text-[15px]">{finished}</p>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className={buttonClass("neb", { dense: true })}
+                onClick={() => void flow.oneMore()}
+              >
+                One more
+              </button>
+              <button
+                type="button"
+                className={buttonClass("ghost", { dense: true })}
+                onClick={() => flow.back()}
+              >
+                Back to your work
+              </button>
+            </div>
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }

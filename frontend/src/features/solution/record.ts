@@ -15,6 +15,13 @@ export type LocalSolution = {
   bbox: BBox;
   folded: boolean;
   problem: string;
+  /**
+   * The worked steps as text, the final answer and how it was checked (NEB_APP_UI §5.3: the
+   * solution strip). Absent on records made before U5.
+   */
+  steps?: { work: string; latex: string | null; why: string }[];
+  finalAnswer?: string;
+  verifiedBy?: "sympy" | "chem_balance" | "code" | "rubric";
   courseId: string | null;
   /** Concepts the solution and its Your Turn practise (from the course). */
   conceptIds: string[];
