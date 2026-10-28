@@ -1,11 +1,18 @@
-//! The capture indicator: a brief violet glow around the edges of the monitor that was just
-//! captured (brief §7.1: visible every time a screenshot is taken).
+//! The capture indicator: violet edges around a monitor (brief §7.1: visible every time a
+//! screenshot is taken), as a brief glow after a capture (`flash`) or held for as long as neb can
+//! capture (`Frame`, NEB_APP_UI §5.4: the coach frame).
 //!
 //! Four thin native windows (one per edge): click-through, topmost, never focused, hidden from
 //! Alt+Tab, and excluded from every capture, ours and screen shares alike. They fade out and
-//! are destroyed; nothing stays running between captures.
+//! are destroyed; nothing stays running when no frame is held.
+//!
+//! A capture needs a `FrameToken`, which only a `Frame` that is on screen lends: the pipeline's
+//! capture takes one, so no capture happens while the frame is off (decision U9).
 
-use std::sync::Once;
+use std::marker::PhantomData;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use std::sync::{Arc, Once};
 use std::time::Duration;
 
 use windows::core::w;
@@ -30,21 +37,87 @@ const PEAK_ALPHA: u8 = 220;
 const FADE_STEPS: u32 = 12;
 const HOLD: Duration = Duration::from_millis(250);
 const FADE: Duration = Duration::from_millis(450);
+/// A held frame fades within this when it's let go (§5.4).
+const HELD_FADE: Duration = Duration::from_millis(150);
+const HELD_FADE_STEPS: u32 = 6;
+/// How long `Frame::hold` waits for the edges to be on screen before giving up.
+const SHOW_TIMEOUT: Duration = Duration::from_millis(300);
 
 static REGISTER: Once = Once::new();
 
+/// How long the edges stay before they fade.
+enum Keep {
+    /// A flash: a moment, then the slow fade.
+    Briefly,
+    /// A held frame: until the flag is set, then the quick fade.
+    Until(Arc<AtomicBool>),
+}
+
 /// Flashes the edges of `monitor` (non-blocking: runs on its own short-lived thread).
 pub fn flash(monitor: ScreenRect, dpi: u32) {
-    let spawned = std::thread::Builder::new()
-        .name("mew-capture-indicator".into())
-        .spawn(move || {
-            if let Err(error) = run(monitor, dpi) {
-                eprintln!("[screen] capture indicator failed ({:#x})", error.code().0);
-            }
-        });
-    if spawned.is_err() {
+    if !spawn(monitor, dpi, Keep::Briefly, None) {
         eprintln!("[screen] couldn't start the capture indicator");
     }
+}
+
+/// The frame held on a monitor while neb can capture it. Dropping it lets go: the edges fade
+/// within 150 ms.
+pub struct Frame {
+    monitor: ScreenRect,
+    stop: Arc<AtomicBool>,
+}
+
+/// Proof that a frame is on screen, for as long as it's borrowed: what a capture requires.
+pub struct FrameToken<'a>(PhantomData<&'a Frame>);
+
+impl Frame {
+    /// Shows the frame on `monitor` and returns once it's on screen, or None if it couldn't be
+    /// shown (then nothing may be captured).
+    pub fn hold(monitor: ScreenRect, dpi: u32) -> Option<Frame> {
+        let stop = Arc::new(AtomicBool::new(false));
+        let (shown, on_screen) = mpsc::channel();
+        if !spawn(monitor, dpi, Keep::Until(Arc::clone(&stop)), Some(shown)) {
+            return None;
+        }
+        match on_screen.recv_timeout(SHOW_TIMEOUT) {
+            Ok(true) => Some(Frame { monitor, stop }),
+            _ => {
+                stop.store(true, Ordering::SeqCst);
+                None
+            }
+        }
+    }
+
+    /// The monitor it's on.
+    pub fn monitor(&self) -> ScreenRect {
+        self.monitor
+    }
+
+    /// Lends the proof that it's on screen.
+    pub fn token(&self) -> FrameToken<'_> {
+        FrameToken(PhantomData)
+    }
+}
+
+impl Drop for Frame {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+    }
+}
+
+/// Runs the edges on their own thread. False if the thread couldn't start.
+fn spawn(monitor: ScreenRect, dpi: u32, keep: Keep, shown: Option<mpsc::Sender<bool>>) -> bool {
+    std::thread::Builder::new()
+        .name("mew-capture-indicator".into())
+        .spawn(move || {
+            if let Err(error) = run(monitor, dpi, keep, shown.as_ref()) {
+                eprintln!("[screen] capture indicator failed ({:#x})", error.code().0);
+                if let Some(shown) = shown {
+                    let _ = shown.send(false);
+                }
+            }
+        })
+        .is_ok()
 }
 
 /// Edge strips for a monitor: top, bottom, left, right (left/right between the other two).
@@ -91,7 +164,12 @@ pub fn fade_alphas(steps: u32) -> Vec<u8> {
         .collect()
 }
 
-fn run(monitor: ScreenRect, dpi: u32) -> windows::core::Result<()> {
+fn run(
+    monitor: ScreenRect,
+    dpi: u32,
+    keep: Keep,
+    shown: Option<&mpsc::Sender<bool>>,
+) -> windows::core::Result<()> {
     let colour = if system::high_contrast() {
         // SAFETY: reads a system colour; no pointers.
         COLORREF(unsafe { GetSysColor(COLOR_HIGHLIGHT) })
@@ -153,18 +231,33 @@ fn run(monitor: ScreenRect, dpi: u32) -> windows::core::Result<()> {
         }
     }
 
-    pump_for(HOLD);
+    pump_for(Duration::ZERO);
+    if let Some(shown) = shown {
+        let _ = shown.send(true);
+    }
+    let (fade, steps) = match keep {
+        Keep::Briefly => {
+            pump_for(HOLD);
+            (FADE, FADE_STEPS)
+        }
+        Keep::Until(stop) => {
+            while !stop.load(Ordering::SeqCst) {
+                pump_for(Duration::from_millis(16));
+            }
+            (HELD_FADE, HELD_FADE_STEPS)
+        }
+    };
     if system::animations_enabled() {
-        for alpha in fade_alphas(FADE_STEPS) {
+        for alpha in fade_alphas(steps) {
             for &hwnd in &windows {
                 // SAFETY: windows created above, still alive.
                 let _ = unsafe { SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA) };
             }
-            pump_for(FADE / FADE_STEPS);
+            pump_for(fade / steps);
         }
     } else {
         // "Show animations" is off: no fade, just a steady glow for the same total time.
-        pump_for(FADE);
+        pump_for(fade);
     }
     for hwnd in windows {
         // SAFETY: windows created above on this thread, destroyed once.
@@ -199,13 +292,16 @@ unsafe extern "system" fn window_proc(
 fn pump_for(duration: Duration) {
     let until = std::time::Instant::now() + duration;
     let mut msg = MSG::default();
-    while std::time::Instant::now() < until {
+    loop {
         // SAFETY: standard message pump for windows owned by this thread.
         unsafe {
             while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
+        }
+        if std::time::Instant::now() >= until {
+            break;
         }
         std::thread::sleep(Duration::from_millis(10));
     }

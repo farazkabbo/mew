@@ -53,16 +53,23 @@ test("the introduction shows once, can be skipped, and can be shown again", asyn
   await setSettings(page, { onboarded: false });
   await page.goto("/notebook");
 
-  const intro = page.getByRole("dialog", { name: "Write here" });
-  await expect(intro).toBeVisible();
+  // U7 (§5.10): the hand, the handwriting, how much neb marks, then listening; any can be skipped.
+  const intro = page.getByTestId("onboarding");
+  await expect(intro.getByRole("heading", { name: "Which hand do you write with?" })).toBeVisible();
+  await intro.getByRole("button", { name: "Left hand" }).click();
+  // The pencil case moves to the other side at once.
+  await expect(page.getByRole("button", { name: /Writing hand: left/ })).toBeAttached();
+  await expect(intro.getByRole("heading", { name: "Teach neb your handwriting" })).toBeVisible();
+  await intro.getByRole("button", { name: "Skip, neb will learn as you go" }).click();
+  await expect(intro.getByRole("heading", { name: "How much should neb mark?" })).toBeVisible();
+  await expect(intro.getByRole("radio", { name: /^Hint/ })).toHaveAttribute("aria-checked", "true");
+  await intro.getByRole("radio", { name: /^Coach/ }).click();
   await intro.getByRole("button", { name: "Next", exact: true }).click();
-  const second = page.getByRole("dialog", { name: "Talk while you study" });
-  await expect(second).toBeVisible();
-  await second.getByRole("button", { name: "Next", exact: true }).click();
-  const last = page.getByRole("dialog", { name: "Learn from your own material" });
-  await expect(last.getByRole("button", { name: "Start listening" })).toBeFocused();
-  await last.getByRole("button", { name: "Not now" }).click();
+  await expect(intro.getByRole("button", { name: "Start listening" })).toBeFocused();
+  await intro.getByRole("button", { name: "Not now" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  // The level chosen is the notebook's.
+  await expect(page.getByRole("radio", { name: "Coach" })).toHaveAttribute("aria-checked", "true");
 
   // Remembered on the account.
   await page.reload();
@@ -73,7 +80,7 @@ test("the introduction shows once, can be skipped, and can be shown again", asyn
   await page.goto("/settings");
   await page.getByRole("button", { name: "Show the introduction again" }).click();
   await page.goto("/notebook");
-  await expect(page.getByRole("dialog", { name: "Write here" })).toBeVisible();
+  await expect(page.getByTestId("onboarding")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });

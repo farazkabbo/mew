@@ -11,6 +11,28 @@ import { NodeIcon } from "./node-style";
 /** A place in the tree: a node, or the top level (null). */
 export type Destination = string | null;
 
+/** The places picked last on this device, newest first (NEB_APP_UI §5.8: chips on top). */
+const RECENT_KEY = "neb:recent-destinations";
+const RECENT_MAX = 4;
+
+function readRecent(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function remember(id: string) {
+  try {
+    const next = [id, ...readRecent().filter((r) => r !== id)].slice(0, RECENT_MAX);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // Private mode or storage off: no recent chips, nothing else changes.
+  }
+}
+
 type Props = {
   open: boolean;
   title: string;
@@ -34,7 +56,7 @@ export function DestinationPicker(props: Props) {
       open={props.open}
       onClose={props.onClose}
       label={props.title}
-      className="fixed top-[12vh] mx-auto w-[min(30rem,calc(100vw-2rem))]"
+      className="fixed top-[12vh] mx-auto w-[min(640px,calc(100vw-2rem))] bg-paper-hi shadow-sh-3"
     >
       <PickerBody {...props} />
     </Dialog>
@@ -46,6 +68,16 @@ type Option = { id: Destination; label: string; path: string; level: number; roo
 function PickerBody({ title, tree, refuse, topLevel, onPick, onClose }: Props) {
   const ids = useId();
   const [query, setQuery] = useState("");
+  const [recent] = useState(() =>
+    readRecent()
+      .filter((id) => tree.isLive(id) && refuse(id) === null)
+      .map((id) => ({ id, path: tree.path(id).map((n) => n.title) })),
+  );
+  const pick = (destination: Destination) => {
+    if (destination) remember(destination);
+    onClose();
+    onPick(destination);
+  };
 
   const options = useMemo(() => {
     const all: Option[] = topLevel ? [{ id: null, label: "Top level", path: "", level: 0 }] : [];
@@ -69,21 +101,36 @@ function PickerBody({ title, tree, refuse, topLevel, onPick, onClose }: Props) {
 
   return (
     <div className="flex flex-col">
-      <h2 id={`${ids}-title`} className="px-5 pt-4 font-serif text-xl">
+      <h2 id={`${ids}-title`} className="px-5 pt-5 font-serif text-[26px] leading-tight">
         {title}
       </h2>
-      <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-line px-3">
-        <Search className="size-4 shrink-0 text-muted" aria-hidden />
+      {recent.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-5 pt-3" aria-label="Recent places">
+          {recent.map(({ id, path }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => pick(id)}
+              className="max-w-full truncate rounded-full border border-line bg-paper px-3 py-1.5 text-sm hover:border-ink/40"
+              title={path.join(" › ")}
+            >
+              {path.join(" › ")}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mx-5 mt-3 flex items-center gap-3 border-b border-line">
+        <Search className="size-5 shrink-0 text-muted" strokeWidth={1.8} aria-hidden />
         <input
           autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           aria-label="Search notebooks"
           placeholder="Search notebooks"
-          className="w-full bg-transparent py-2 text-sm outline-none"
+          className="w-full bg-transparent py-3 font-serif text-[22px] outline-none placeholder:text-muted/70"
         />
       </div>
-      <ul aria-labelledby={`${ids}-title`} className="max-h-[50vh] overflow-y-auto p-2">
+      <ul aria-labelledby={`${ids}-title`} className="max-h-[50vh] overflow-y-auto p-3">
         {options.map((option) => {
           const reason = refuse(option.id);
           return (
@@ -91,12 +138,9 @@ function PickerBody({ title, tree, refuse, topLevel, onPick, onClose }: Props) {
               <button
                 type="button"
                 disabled={reason !== null}
-                onClick={() => {
-                  onClose();
-                  onPick(option.id);
-                }}
+                onClick={() => pick(option.id)}
                 title={reason ?? option.path}
-                className="flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-sm hover:bg-line/60 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                className="flex w-full items-center gap-2 rounded-[10px] py-2 pr-3 text-left text-[15px] hover:bg-ink/[0.06] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
                 style={{ paddingLeft: `${0.75 + (query ? 0 : option.level) * 1}rem` }}
               >
                 {option.id === null ? (

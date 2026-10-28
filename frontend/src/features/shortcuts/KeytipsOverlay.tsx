@@ -9,6 +9,9 @@ export const KEYTIP_HOLD_MS = 400;
 
 type Tip = { keys: string; x: number; y: number };
 
+/** How far a badge's centre stays from the window's edge (about half a two-key badge). */
+const EDGE = 44;
+
 /**
  * Keytips (docs/NEB_APP_UI.md §5.6, board 6): hold Alt for 400 ms anywhere in neb and every
  * control with a shortcut (`data-keytip="Alt+C"`) shows its keys at its top-right; let go and
@@ -82,8 +85,9 @@ function collect(): Tip[] {
     .filter(({ box }) => box.width > 0 && box.height > 0 && box.bottom > 0 && box.top < innerHeight)
     .map(({ element, box }) => ({
       keys: element.dataset.keytip ?? "",
-      x: box.right - 4,
-      y: box.top + 4,
+      // Kept inside the window (a control at the edge still shows its keys whole).
+      x: Math.min(box.right - 4, innerWidth - EDGE),
+      y: Math.max(box.top + 4, EDGE / 2),
     }))
     .filter((tip) => tip.keys);
 }

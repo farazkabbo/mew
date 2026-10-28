@@ -157,6 +157,7 @@ export function Desk(props: DeskProps) {
           onClick={props.onJump}
           className="hidden h-11 w-[340px] shrink-0 items-center gap-2.5 rounded-full whitespace-nowrap border border-line bg-paper px-3.5 text-sm text-muted transition-colors duration-[120ms] hover:border-ink/40 md:flex"
           title={`Jump to any page or moment (${props.keys.jump}) · or say “open physics chapter 3”`}
+          data-keytip={props.keys.jump}
         >
           <Search className="size-4 shrink-0" strokeWidth={1.8} aria-hidden />
           <span className="min-w-0 flex-1 truncate text-left">Jump to any page or moment</span>
@@ -167,6 +168,7 @@ export function Desk(props: DeskProps) {
           onClick={props.onNewNotebook}
           className="flex h-11 shrink-0 items-center gap-2.5 rounded-full bg-ink px-3.5 text-sm font-medium whitespace-nowrap text-paper transition-opacity duration-[120ms] hover:opacity-90"
           title={`New notebook (${props.keys.newNotebook}) · or say “new notebook called chemistry”`}
+          data-keytip={props.keys.newNotebook}
         >
           <Plus className="size-4" strokeWidth={2.2} aria-hidden />
           New notebook

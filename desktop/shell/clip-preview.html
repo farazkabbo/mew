@@ -6,9 +6,11 @@
     <!-- No network at all: the image comes from Rust's in-memory mewclip:// handler. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src http://mewclip.localhost; connect-src ipc: http://ipc.localhost"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src http://mewclip.localhost; connect-src ipc: http://ipc.localhost"
     />
     <title>Save to notebook · Neb</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts.css" />
     <link rel="stylesheet" href="overlay.css" />
     <link rel="stylesheet" href="clip-preview.css" />
     <script src="gen/clip-preview.js" defer></script>

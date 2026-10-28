@@ -76,6 +76,7 @@ export function ChapterTabs({
         type="button"
         onClick={onAdd}
         title={`New chapter (${addKeys}) · or say “add a chapter called optics”`}
+        data-keytip={addKeys}
         className="flex h-11 w-32 shrink-0 items-center gap-1.5 rounded-[0_8px_8px_0] bg-[color-mix(in_srgb,var(--line)_45%,var(--desk))] px-3 text-[13px] text-muted hover:text-ink"
       >
         + chapter

@@ -3,24 +3,11 @@
 
 :root {
   color-scheme: light dark;
-  --violet: #6b4ee6;
-  --violet-strong: #6b5ce0;
-  --paper: #fffcf2;
-  --ink: #1d1c1a;
-  --muted: #5d5a54;
-  --line: rgba(29, 28, 26, 0.14);
-  --surface: #ffffff;
-  font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #23221f;
-    --ink: #ece9e2;
-    --muted: #b3afa6;
-    --line: rgba(236, 233, 226, 0.16);
-    --surface: #2c2b28;
-  }
+  /* Aliases of the shared tokens (tokens.css, NEB_APP_UI §3.1): one violet, for neb only. */
+  --violet: var(--neb);
+  --violet-strong: var(--neb);
+  --surface: var(--paper-hi);
+  font-family: var(--font-ui);
 }
 
 * {
@@ -75,7 +62,7 @@ body.pill {
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--sh-2);
 }
 
 .pill-bar button {
@@ -131,7 +118,7 @@ body.notes {
   border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--sh-3);
   overflow: hidden;
 }
 
@@ -207,12 +194,12 @@ body.notes {
 
 .notes-panel .difference .icon,
 .notes-panel .unclear .icon {
-  background: #fde7c4;
-  color: #8a4b00;
+  background: var(--note);
+  color: var(--ink);
 }
 
 .notes-panel .gap .icon {
-  background: #e6e1ff;
+  background: var(--neb-wash);
   color: var(--violet-strong);
 }
 
@@ -283,7 +270,7 @@ body.coach {
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--sh-2);
 }
 
 .coach-text {
@@ -434,7 +421,7 @@ body.pointer {
 
 .mew-pointer[data-look="drawing"] .pen {
   display: block;
-  fill: #e02424;
+  fill: var(--neb);
 }
 
 .mew-pointer[data-look="listening"] .halo {
@@ -463,12 +450,12 @@ body.pointer {
 
 .mew-pointer[data-look="blocked"] .ears,
 .mew-pointer[data-look="blocked"] .face {
-  fill: #9a9a9a;
+  fill: var(--muted);
 }
 
 .mew-pointer[data-look="blocked"] .slash {
   display: block;
-  stroke: #b42318;
+  stroke: var(--danger);
   stroke-width: 3;
   stroke-linecap: round;
 }
@@ -509,6 +496,13 @@ body.draw.capturing {
   background: rgba(255, 255, 255, 0.004);
 }
 
+/* Select (§5.4): a violet dashed lasso, its tip where the loop starts. */
+body.draw.capturing[data-tool="select"] {
+  cursor:
+    url("lasso-cursor.svg") 3 29,
+    crosshair;
+}
+
 .draw-hint {
   position: fixed;
   left: 50%;
@@ -520,7 +514,7 @@ body.draw.capturing {
   background: var(--surface);
   color: var(--ink);
   font-size: 16px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--sh-2);
 }
 
 .draw-hint:empty {
@@ -539,19 +533,50 @@ body.card {
   max-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: var(--paper);
+  border-top: 4px solid var(--neb);
+  box-shadow: var(--sh-3);
   overflow: hidden;
 }
 
+/* "neb · sketch": neb's voice, pixel 12. */
 .card-top {
   margin: 0;
-  font-size: 13px;
-  color: var(--muted);
+  font-family: var(--font-neb);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-ligatures: none;
+  text-transform: lowercase;
+  color: var(--neb-ink);
+}
+
+/* Saved (§5.4, the SavedStamp): a postage stamp, paper with a dashed edge inside a paper margin,
+   and the ✓ as a violet disc. */
+.circle-card[data-mode="saved"] {
+  border-top: 0;
+  padding: 18px 20px;
+  outline: 2px dashed var(--line);
+  outline-offset: -8px;
+}
+
+.circle-card[data-mode="saved"] .card-top {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 500;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.circle-card[data-mode="saved"] .card-top::first-letter {
+  margin-right: 6px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: var(--neb);
+  color: #fff;
+  font-size: 12px;
 }
 
 .card-top:empty,
@@ -620,12 +645,12 @@ body.card {
 .card-ask input {
   width: 100%;
   min-height: 44px;
-  padding: 8px 10px;
+  padding: 8px 16px;
   font: inherit;
   font-size: max(16px, 1rem);
-  border-radius: 10px;
+  border-radius: 999px;
   border: 1px solid var(--line);
-  background: var(--paper);
+  background: var(--paper-hi);
   color: var(--ink);
 }
 
@@ -639,19 +664,32 @@ body.card {
 .circle-card button {
   font: inherit;
   font-size: 14px;
+  font-weight: 500;
   min-height: 44px;
   min-width: 44px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
   cursor: pointer;
   background: transparent;
   color: var(--ink);
+  transition:
+    border-color 120ms ease-out,
+    opacity 120ms ease-out;
+}
+
+.circle-card button:hover:not(:disabled) {
+  border-color: var(--ink);
 }
 
 .circle-card button.primary {
-  background: var(--violet-strong);
+  background: var(--neb);
+  border-color: var(--neb);
   color: #fff;
+}
+
+.circle-card button.primary:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .circle-card button:disabled {
@@ -659,7 +697,11 @@ body.card {
   cursor: default;
 }
 
-.circle-card button:focus-visible,
+.circle-card button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 .card-ask {
   display: flex;
   gap: 6px;
@@ -689,8 +731,8 @@ body.card {
 }
 
 .card-mic[aria-pressed="true"] {
-  background: #2e8b57;
-  border-color: #2e8b57;
+  background: var(--neb);
+  border-color: var(--neb);
   color: #fff;
   animation: mic-pulse 1.4s ease-in-out infinite;
 }
@@ -702,12 +744,13 @@ body.card {
 
 @keyframes mic-pulse {
   50% {
-    box-shadow: 0 0 0 6px rgba(46, 139, 87, 0.25);
+    box-shadow: 0 0 0 6px var(--neb-wash);
   }
 }
 
+/* Focus is ink, never violet (§3.10). */
 .card-ask input:focus-visible {
-  outline: 2px solid var(--violet-strong);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
@@ -728,12 +771,13 @@ body.card {
   line-height: 1.35;
   padding: 6px 10px;
   border-radius: 10px;
-  border-left: 4px solid var(--violet);
+  border-left: 4px solid var(--line);
   background: var(--paper);
 }
 
+/* Right is neb's violet; not yet stays a quiet hairline (§3.9: never red for a student). */
 .quiz-result[data-correct="true"] {
-  border-left-color: #2e8b57;
+  border-left-color: var(--neb);
 }
 
 .quiz-result:empty {
@@ -777,7 +821,7 @@ body.island {
 
 body.island {
   overflow: hidden;
-  color: #f5f5f7;
+  color: #fffefb;
   user-select: none;
   color-scheme: dark;
 }
@@ -814,36 +858,98 @@ body.island {
   gap: 8px;
   margin: 0;
   min-width: 96px;
+  font-family: var(--font-neb);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
+  font-variant-ligatures: none;
+  text-transform: lowercase;
+  color: #c9bcff;
   white-space: nowrap;
 }
 
+/* The neb dot (NEB_APP_UI §3.8): watching breathes, looking shows three pixel dots, listening
+   wears a ring, speaking glows. */
 .island-dot {
-  width: 8px;
-  height: 8px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
-  background: #8e8e93;
-  transition: background 200ms ease-out;
+  background: #6b4ee6;
+  animation: island-breathe 3.2s ease-in-out infinite;
+}
+
+.island-bar .island-mark {
+  width: 13px;
+  height: 10px;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 30;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.island-dots {
+  display: none;
+  gap: 2px;
+}
+
+.island-dots i {
+  width: 3px;
+  height: 3px;
+  background: #ffffff;
+  animation: island-dots 0.9s steps(2) infinite;
+}
+
+.island-dots i:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.island-dots i:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+.island[data-activity="looking"] .island-dot,
+.island[data-activity="thinking"] .island-dot {
+  animation: none;
+}
+
+.island[data-activity="looking"] .island-mark,
+.island[data-activity="thinking"] .island-mark {
+  display: none;
+}
+
+.island[data-activity="looking"] .island-dots,
+.island[data-activity="thinking"] .island-dots {
+  display: flex;
 }
 
 .island[data-activity="listening"] .island-dot {
-  background: #30d158;
-  animation: island-pulse 1.2s ease-in-out infinite;
-}
-.island[data-activity="looking"] .island-dot,
-.island[data-activity="thinking"] .island-dot {
-  background: var(--violet);
-  animation: island-pulse 1.2s ease-in-out infinite;
-}
-.island[data-activity="speaking"] .island-dot {
-  background: #5b8def;
+  animation: none;
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 0 5px #9c86ff;
 }
 
-@keyframes island-pulse {
+.island[data-activity="speaking"] .island-dot {
+  animation: none;
+  box-shadow: 0 0 0 4px rgba(156, 134, 255, 0.35);
+}
+
+@keyframes island-breathe {
   50% {
-    transform: scale(1.5);
-    opacity: 0.6;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes island-dots {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
@@ -873,13 +979,18 @@ body.island {
 }
 
 .island-bar button[aria-pressed="true"] {
-  background: #f5f5f7;
-  color: #000;
+  background: #fffefb;
+  color: #1e1d1a;
+}
+
+.island-bar button[data-tool="select"][aria-pressed="true"] {
+  background: #6b4ee6;
+  color: #ffffff;
 }
 
 .island-bar button.island-mic[aria-pressed="true"] {
-  background: #30d158;
-  color: #000;
+  background: #fffefb;
+  color: #1e1d1a;
 }
 
 .island button:disabled {
@@ -933,7 +1044,7 @@ body.island {
   padding: 5px 10px;
   border-radius: 8px;
   background: #000;
-  color: #f5f5f7;
+  color: #fffefb;
   font-size: 12px;
   white-space: nowrap;
   pointer-events: none;
@@ -974,7 +1085,7 @@ body.island {
 }
 
 .island-menu button[aria-checked="true"] {
-  background: #f5f5f7;
+  background: #fffefb;
   color: #000;
 }
 
@@ -984,7 +1095,7 @@ body.island {
 }
 
 .island-bar button.island-music[aria-expanded="true"] {
-  background: #f5f5f7;
+  background: #fffefb;
   color: #000;
 }
 
@@ -995,7 +1106,7 @@ body.island {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #30d158;
+  background: #7da4af;
   opacity: 0;
   transition: opacity 200ms ease-out;
 }
@@ -1051,7 +1162,7 @@ body.island {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.1);
-  color: #8e8e93;
+  color: #a9a294;
 }
 
 .music-text {
@@ -1075,7 +1186,7 @@ body.island {
 .music-artist {
   margin-top: 2px;
   font-size: 12px;
-  color: #a1a1a6;
+  color: #a9a294;
 }
 
 .music-controls {
@@ -1093,7 +1204,7 @@ body.island {
 }
 
 .music-controls button.music-play {
-  background: #f5f5f7;
+  background: #fffefb;
   color: #000;
 }
 
@@ -1147,7 +1258,7 @@ body.island {
 
 .music-pin-kind {
   font-size: 11px;
-  color: #8e8e93;
+  color: #a9a294;
 }
 
 .music-unpin {
@@ -1157,7 +1268,7 @@ body.island {
   display: grid;
   place-items: center;
   border-radius: 999px;
-  color: #8e8e93;
+  color: #a9a294;
 }
 
 .music-unpin svg {
@@ -1169,7 +1280,7 @@ body.island {
   margin: 0;
   padding: 0 4px;
   font-size: 12px;
-  color: #ffd60a;
+  color: #f1e5ae;
 }
 
 .music-notice[hidden] {
@@ -1185,6 +1296,7 @@ body.island {
 
 @media (prefers-reduced-motion: reduce) {
   .island-dot,
+  .island-dots i,
   .card-mic[aria-pressed="true"] {
     animation: none;
   }

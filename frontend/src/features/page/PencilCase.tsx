@@ -27,6 +27,15 @@ const COLLAPSE_AFTER_MS = 8000;
 
 export type WritingHand = "right" | "left";
 
+/** Keeps the writing hand on this device (the case and onboarding both set it). */
+export function saveWritingHand(hand: WritingHand) {
+  try {
+    localStorage.setItem(HAND_KEY, hand);
+  } catch {
+    // This session only.
+  }
+}
+
 export function readWritingHand(): WritingHand {
   try {
     return localStorage.getItem(HAND_KEY) === "left" ? "left" : "right";
@@ -101,6 +110,7 @@ export function PencilCase({
           key={t}
           icon={icon}
           label={`${label} (${keys.shown(t)})`}
+          keytip={keys.shown(t)}
           pressed={tool === t}
           onClick={() => {
             if (t === "pen" && tool === "pen") setSizes((v) => !v);
@@ -181,12 +191,14 @@ export function PencilCase({
       <CaseButton
         icon={Undo2}
         label={`Undo (${keys.shown("undo")})`}
+        keytip={keys.shown("undo")}
         disabled={!canUndo}
         onClick={onUndo}
       />
       <CaseButton
         icon={Redo2}
         label={`Redo (${keys.shown("redo")})`}
+        keytip={keys.shown("redo")}
         disabled={!canRedo}
         onClick={onRedo}
       />
@@ -195,11 +207,7 @@ export function PencilCase({
         type="button"
         onClick={() => {
           const next = hand === "right" ? "left" : "right";
-          try {
-            localStorage.setItem(HAND_KEY, next);
-          } catch {
-            // This session only.
-          }
+          saveWritingHand(next);
           onHand(next);
         }}
         aria-label={`Writing hand: ${hand}. The case sits on the ${hand === "right" ? "left" : "right"}.`}
@@ -214,12 +222,15 @@ export function PencilCase({
 function CaseButton({
   icon: Icon,
   label,
+  keytip,
   pressed,
   disabled,
   onClick,
 }: {
   icon: LucideIcon;
   label: string;
+  /** Its keys, shown while Alt is held (§5.6). */
+  keytip?: string;
   pressed?: boolean;
   disabled?: boolean;
   onClick(): void;
@@ -231,6 +242,7 @@ function CaseButton({
       aria-label={label}
       aria-pressed={pressed}
       disabled={disabled}
+      data-keytip={keytip}
       onClick={onClick}
       className="grid size-11 place-items-center rounded-full text-paper/80 transition-colors duration-[120ms] hover:bg-paper/10 hover:text-paper disabled:pointer-events-none disabled:opacity-35 aria-pressed:bg-paper aria-pressed:text-ink"
     >

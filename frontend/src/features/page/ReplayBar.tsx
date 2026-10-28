@@ -120,7 +120,7 @@ export function ReplayBar({
   return (
     <div
       data-testid="replay-bar"
-      className="pointer-events-auto flex h-11 min-w-0 flex-1 items-center gap-4"
+      className="@container pointer-events-auto flex h-11 min-w-0 flex-1 items-center gap-4"
       onKeyDown={(event) => {
         if (event.key === " " && event.target === event.currentTarget) {
           event.preventDefault();
@@ -189,7 +189,7 @@ export function ReplayBar({
       <div
         role="radiogroup"
         aria-label="Replay speed"
-        className="hidden shrink-0 gap-0.5 text-xs xl:flex"
+        className="hidden shrink-0 gap-0.5 text-xs @[30rem]:flex"
       >
         {SPEEDS.map((s) => (
           <button
@@ -204,7 +204,7 @@ export function ReplayBar({
           </button>
         ))}
       </div>
-      <span className="hidden shrink-0 text-[13px] text-muted tabular-nums 2xl:inline">
+      <span className="hidden shrink-0 text-[13px] text-muted tabular-nums @[46rem]:inline">
         {clock(writingTime(strokes))} of writing · {nebMarks} neb{" "}
         {nebMarks === 1 ? "mark" : "marks"}
       </span>

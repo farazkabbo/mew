@@ -210,6 +210,14 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
+    // NEB_APP_UI §5.4 (U7): a pause that ends by itself.
+    let pause_hour = MenuItem::with_id(
+        app,
+        "screen-pause-hour",
+        "Pause for 1 hour",
+        false,
+        None::<&str>,
+    )?;
     let stop_walkthrough = MenuItem::with_id(
         app,
         "screen-coach-stop",
@@ -235,6 +243,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             &separator,
             &look,
             &pause,
+            &pause_hour,
             &stop_walkthrough,
             &settings,
             &separator2,
@@ -254,6 +263,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             "screen-look" => screen::coach::look_from_tray(app),
             #[cfg(windows)]
             "screen-pause" => screen::coach::toggle_pause(app),
+            #[cfg(windows)]
+            "screen-pause-hour" => screen::coach::pause_for_an_hour(app),
             #[cfg(windows)]
             "screen-coach-stop" => screen::coach_mode::stop_from_tray(app),
             #[cfg(windows)]
@@ -279,6 +290,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     app.manage(screen::coach::TrayItems {
         look,
         pause,
+        pause_hour,
         stop_walkthrough,
     });
     Ok(())

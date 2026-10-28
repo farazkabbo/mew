@@ -327,6 +327,7 @@ export function NodeHome({
                       type="button"
                       onClick={actions.onAddChild}
                       title={keys.shown("new_chapter")}
+                      data-keytip={keys.shown("new_chapter")}
                       aria-keyshortcuts={keys.aria("new_chapter")}
                       className="flex h-full min-h-28 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line p-4 text-sm text-muted hover:border-ink/30 hover:text-ink"
                     >
@@ -360,6 +361,7 @@ export function NodeHome({
                     type="button"
                     onClick={actions.onAddPage}
                     title={keys.shown("new_page")}
+                    data-keytip={keys.shown("new_page")}
                     aria-keyshortcuts={keys.aria("new_page")}
                     className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line text-sm text-muted hover:border-ink/30 hover:text-ink"
                   >
@@ -372,6 +374,7 @@ export function NodeHome({
                     type="button"
                     onClick={actions.onImportPdf}
                     title={keys.shown("import_pdf")}
+                    data-keytip={keys.shown("import_pdf")}
                     aria-keyshortcuts={keys.aria("import_pdf")}
                     className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line text-sm text-muted hover:border-ink/30 hover:text-ink"
                   >

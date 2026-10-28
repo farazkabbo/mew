@@ -23,6 +23,27 @@ export function fuzzyScore(query: string, text: string): number {
   return score / (1 + t.length / 200);
 }
 
+/**
+ * Where the query matched in `text` (character indexes), for underlining them: the typed word as
+ * one run when it's there, otherwise each character in order, as `fuzzyScore` finds them.
+ */
+export function fuzzyMatches(query: string, text: string): number[] {
+  const q = normalise(query).replace(/\s+/g, "");
+  const t = normalise(text);
+  if (!q || t.length !== text.length) return [];
+  const run = t.indexOf(q);
+  if (run >= 0) return Array.from({ length: q.length }, (_, i) => run + i);
+  const found: number[] = [];
+  let at = 0;
+  for (const char of q) {
+    const index = t.indexOf(char, at);
+    if (index < 0) return [];
+    found.push(index);
+    at = index + 1;
+  }
+  return found;
+}
+
 function normalise(text: string): string {
   return text.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }

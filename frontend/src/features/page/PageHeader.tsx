@@ -77,6 +77,7 @@ export function PageHeader({
           onClick={onFold}
           aria-pressed={folded}
           title={`${folded ? "Unfold the margin" : "Fold the margin: marks wait until you're done"} (${checkKeys}) · or say “fold the margin”`}
+          data-keytip={checkKeys}
           className="flex h-10 shrink-0 items-center gap-2 rounded-full border border-line bg-paper px-3.5 text-sm text-ink hover:border-ink/40 aria-pressed:border-ink"
         >
           <svg

@@ -1,6 +1,7 @@
 // Bundles Screen Coach's overlay pages (desktop/overlay-src) into the shell the app ships
 // (desktop/shell/gen, gitignored). Runs before `tauri dev` and `tauri build`.
 import { build } from "esbuild";
+import { copyFileSync, mkdirSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -28,3 +29,10 @@ await build({
   legalComments: "none",
   logLevel: "info",
 });
+
+// The app's bundled fonts (packages/shared/fonts, NEB_APP_UI §3.2) for the pages' fonts.css.
+const fonts = fileURLToPath(new URL("../packages/shared/fonts/", new URL("..", import.meta.url)));
+mkdirSync(`${root}shell/gen/fonts`, { recursive: true });
+for (const file of readdirSync(fonts).filter((f) => f.endsWith(".woff2"))) {
+  copyFileSync(`${fonts}${file}`, `${root}shell/gen/fonts/${file}`);
+}

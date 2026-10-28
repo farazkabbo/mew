@@ -25,10 +25,12 @@ type Props = {
   onSummon(): void;
   onStartListening(): void;
   onStopListening(): void;
+  /** "?": every shortcut and what to say instead (§5.6). */
+  onShortcuts?(): void;
 };
 
 /** Bottom-right controls: debug toggle, microphone toggle, and the neb dot (tap to ask neb). */
-export function MewDock({ onSummon, onStartListening, onStopListening }: Props) {
+export function MewDock({ onSummon, onStartListening, onStopListening, onShortcuts }: Props) {
   const state = useMascotState();
   const { status, error, level } = useVoice();
   const { debugOpen, toggleDebug } = useMew();
@@ -78,6 +80,7 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
           onClick={onSummon}
           aria-label={`Ask neb. ${nebDotLabel(DOT[state])}.`}
           title="Ask neb (or say “Hey Neb”)"
+          data-keytip="Ctrl+Alt"
           data-mascot-state={state}
           className="flex h-10 items-center gap-2 rounded-full pr-2 pl-1 text-sm text-ink hover:bg-ink/5"
         >
@@ -99,6 +102,18 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
             <MicOff className="size-4" aria-hidden />
           )}
         </button>
+        {onShortcuts && (
+          <button
+            type="button"
+            className="grid size-8 place-items-center rounded-full text-sm font-semibold text-muted hover:text-ink"
+            aria-label="Shortcuts and what to say"
+            title="Shortcuts and what to say (Shift+?)"
+            data-keytip="Shift+?"
+            onClick={onShortcuts}
+          >
+            ?
+          </button>
+        )}
         <button
           type="button"
           className="grid size-8 place-items-center rounded-full text-muted hover:text-ink aria-pressed:bg-ink aria-pressed:text-paper"

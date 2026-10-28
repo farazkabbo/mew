@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tauri::image::Image;
@@ -47,6 +47,8 @@ const CHANGED_SCRIPT: &str = "window.dispatchEvent(new Event('screen-coach:chang
 pub struct TrayItems<R: Runtime> {
     pub look: MenuItem<R>,
     pub pause: CheckMenuItem<R>,
+    /// "Pause for 1 hour": enabled while Screen Coach is on and not paused.
+    pub pause_hour: MenuItem<R>,
     /// "Stop the walkthrough": enabled while one is in progress (S4).
     pub stop_walkthrough: MenuItem<R>,
 }
@@ -71,6 +73,10 @@ pub struct ScreenCoach {
     coaching: Mutex<CoachState>,
     /// Circle & Ask: draw mode and the session (S3.2).
     circle: Mutex<circle::CircleState>,
+    /// The coach frame, held while neb can capture (NEB_APP_UI §5.4, decision U9).
+    frame: Mutex<Option<indicator::Frame>>,
+    /// Counts pauses and resumes: a timed pause ends only if nothing changed since.
+    pause_generation: std::sync::atomic::AtomicU64,
 }
 
 struct State {
@@ -281,6 +287,8 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         clip_place: Mutex::new(None),
         coaching: Mutex::new(CoachState::default()),
         circle: Mutex::new(circle::CircleState::default()),
+        frame: Mutex::new(None),
+        pause_generation: std::sync::atomic::AtomicU64::new(0),
     };
     {
         let mut state = coach.lock();
@@ -559,13 +567,49 @@ pub fn toggle_pause<R: Runtime>(app: &AppHandle<R>) {
         return;
     };
     let paused = coach.lock().config.paused;
+    coach.pause_generation.fetch_add(1, Ordering::SeqCst);
     if set_paused(app, !paused).is_err() {
         notify(app, "Couldn't save Screen Coach settings.");
     }
 }
 
+/// How long "Pause for 1 hour" lasts.
+const PAUSE_HOUR: Duration = Duration::from_secs(60 * 60);
+
+/// "Pause for 1 hour" from the tray: paused now, back on in an hour unless it was resumed or
+/// paused again meanwhile (then that choice stands). A restart in between keeps it paused.
+pub fn pause_for_an_hour<R: Runtime>(app: &AppHandle<R>) {
+    let Some(coach) = app.try_state::<ScreenCoach>() else {
+        return;
+    };
+    let generation = coach.pause_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    if set_paused(app, true).is_err() {
+        notify(app, "Couldn't save Screen Coach settings.");
+        return;
+    }
+    notify(app, "Screen Coach is paused for an hour.");
+    let app = app.clone();
+    let _ = std::thread::Builder::new()
+        .name("mew-pause-hour".into())
+        .spawn(move || {
+            std::thread::sleep(PAUSE_HOUR);
+            let Some(coach) = app.try_state::<ScreenCoach>() else {
+                return;
+            };
+            if coach.pause_generation.load(Ordering::SeqCst) == generation
+                && coach.lock().config.paused
+                && set_paused(&app, false).is_ok()
+            {
+                notify(&app, "Screen Coach is back on.");
+            }
+        });
+}
+
 /// "Neb, pause" (said while holding the keys): Screen Coach pauses until resumed from the tray.
 pub fn pause<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(coach) = app.try_state::<ScreenCoach>() {
+        coach.pause_generation.fetch_add(1, Ordering::SeqCst);
+    }
     match set_paused(app, true) {
         Ok(_) => notify(app, "Screen Coach is paused. Resume it from the tray icon."),
         Err(_) => notify(app, "Couldn't save Screen Coach settings."),
@@ -710,6 +754,58 @@ pub fn privacy_of<R: Runtime>(app: &AppHandle<R>) -> Privacy {
     app.try_state::<ScreenCoach>()
         .map(|coach| coach.privacy())
         .unwrap_or_default()
+}
+
+/// What can capture right now (NEB_APP_UI §5.4): the frame is on for any of these.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CaptureReach {
+    /// Select is on: a circle can be drawn and asked about.
+    pub selecting: bool,
+    /// The mic is open on the island or the card: what's said goes with a capture.
+    pub listening: bool,
+    /// A walkthrough is running: coach mode sees the monitor.
+    pub coaching: bool,
+    /// Screen Coach is on and not paused.
+    pub usable: bool,
+}
+
+impl CaptureReach {
+    /// The frame shows exactly while one of them can capture, and never while neb can't.
+    pub fn wants_frame(self) -> bool {
+        self.usable && (self.selecting || self.listening || self.coaching)
+    }
+}
+
+/// Holds or lets go of the coach frame (after any change to the tools, the mic, a walkthrough or
+/// the settings). It stays on the monitor it came on until it's let go.
+pub fn refresh_frame<R: Runtime>(app: &AppHandle<R>) {
+    let Some(coach) = app.try_state::<ScreenCoach>() else {
+        return;
+    };
+    let reach = CaptureReach {
+        selecting: circle::tool(app).0 == Tool::Select,
+        listening: mic_on(app),
+        coaching: coach_mode::is_coaching(app),
+        usable: usable(&coach),
+    };
+    let Ok(mut frame) = coach.frame.lock() else {
+        return;
+    };
+    if !reach.wants_frame() {
+        *frame = None; // dropped: the edges fade within 150 ms
+        return;
+    }
+    if frame.is_some() {
+        return;
+    }
+    // On the island's monitor when it's out, else where the pointer is.
+    let at = circle::state(app)
+        .and_then(|s| s.island)
+        .map(|r| ((r.left + r.right) / 2, (r.top + r.bottom) / 2))
+        .or_else(win::input::cursor);
+    if let Some((monitor, dpi)) = at.and_then(|(x, y)| win::target::monitor_at(x, y)) {
+        *frame = indicator::Frame::hold(monitor, dpi);
+    }
 }
 
 /// Keeps the frame (and shows the indicator) or tells the user why there's none. A tray capture
@@ -859,6 +955,7 @@ pub fn settle<R: Runtime>(app: &AppHandle<R>) {
 
 /// Updates the tray (icon, tooltip, menu items) and the settings page to the current state.
 pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
+    refresh_frame(app);
     let Some(coach) = app.try_state::<ScreenCoach>() else {
         return;
     };
@@ -884,6 +981,7 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         let _ = items.look.set_enabled(on && !paused);
         let _ = items.pause.set_enabled(on);
         let _ = items.pause.set_checked(paused);
+        let _ = items.pause_hour.set_enabled(on && !paused);
         let _ = items
             .stop_walkthrough
             .set_enabled(coach_mode::is_coaching(app));
@@ -1046,4 +1144,40 @@ pub fn screen_coach_set_circle<R: Runtime>(
     coach.update(|config| config.circle = circle)?;
     refresh(app);
     Ok(coach.view())
+}
+
+#[cfg(test)]
+mod frame_tests {
+    use super::CaptureReach;
+
+    #[test]
+    fn the_frame_is_on_exactly_while_neb_can_capture() {
+        let on = CaptureReach {
+            usable: true,
+            ..CaptureReach::default()
+        };
+        assert!(!on.wants_frame(), "nothing can capture: no frame");
+        for reach in [
+            CaptureReach {
+                selecting: true,
+                ..on
+            },
+            CaptureReach {
+                listening: true,
+                ..on
+            },
+            CaptureReach {
+                coaching: true,
+                ..on
+            },
+        ] {
+            assert!(reach.wants_frame());
+            // Paused or off: nothing can capture, so no frame either.
+            assert!(!CaptureReach {
+                usable: false,
+                ..reach
+            }
+            .wants_frame());
+        }
+    }
 }

@@ -1,26 +1,12 @@
 :root {
   color-scheme: light dark;
-  --paper: #f7f5f0;
-  --raised: #fdfcf9;
-  --ink: #1d1c1a;
-  --muted: #6d695f;
-  --rule: #e3dfd4;
-  --tutor: #6f5fe0;
-  --tutor-ink: #ffffff;
-  --error: #b5442a;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #1b1a18;
-    --raised: #24231f;
-    --ink: #ece9e2;
-    --muted: #a8a397;
-    --rule: #3a3833;
-    --tutor: #a59af5;
-    --tutor-ink: #1b1a18;
-    --error: #f08a6c;
-  }
+  /* Aliases of the shared tokens (tokens.css, NEB_APP_UI §3.1). */
+  --raised: var(--paper-hi);
+  --rule: var(--line);
+  --tutor: var(--neb);
+  --tutor-ink: var(--paper-hi);
+  --error: var(--danger);
+  font-family: var(--font-ui);
 }
 
 * {

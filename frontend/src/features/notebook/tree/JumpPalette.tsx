@@ -2,18 +2,23 @@
 
 import type { Notebook, NotebookTree, Page } from "@mew/shared";
 import { FileText, Search, Sparkles } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { Fragment, useId, useMemo, useState } from "react";
 
+import { clipImageUrl } from "../../moments/api";
 import type { Moment } from "../../moments/moments";
 import { Dialog } from "./Dialog";
-import { fuzzyScore } from "./fuzzy";
+import { fuzzyMatches, fuzzyScore } from "./fuzzy";
 import { NodeIcon } from "./node-style";
 import { nodeNoun } from "./tree-labels";
 
 const MAX_RESULTS = 12;
 
+/** NEB_APP_UI §5.8: results come in these groups, in this order. */
+const GROUPS = ["Notebooks", "Chapters", "Pages", "Moments"] as const;
+type Group = (typeof GROUPS)[number];
+
 type Item =
-  | { kind: "node"; id: string; label: string; detail: string; node: Notebook }
+  | { kind: "node"; id: string; label: string; detail: string; node: Notebook; root: boolean }
   | { kind: "page"; id: string; label: string; detail: string; nodeId: string }
   | { kind: "moment"; id: string; label: string; detail: string; moment: Moment };
 
@@ -40,7 +45,7 @@ export function JumpPalette(props: Props) {
       open={props.open}
       onClose={props.onClose}
       label="Jump to"
-      className="fixed top-[12vh] mx-auto w-[min(36rem,calc(100vw-2rem))]"
+      className="fixed top-[12vh] mx-auto w-[min(640px,calc(100vw-2rem))] bg-paper-hi shadow-sh-3"
     >
       <PaletteBody {...props} />
     </Dialog>
@@ -71,6 +76,7 @@ function PaletteBody({
           label: path.join(" › "),
           detail: nodeNoun(tree, node.id),
           node: tree.path(node.id)[0] ?? node,
+          root: parentId === null,
         });
         walk(node.id);
       }
@@ -97,12 +103,14 @@ function PaletteBody({
         moment,
       });
     }
-    return all
+    const best = all
       .map((item) => ({ item, score: fuzzyScore(query, item.label) }))
       .filter((r) => r.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, MAX_RESULTS)
       .map((r) => r.item);
+    // Grouped (the best first within each group); the arrows go through them in this order.
+    return GROUPS.flatMap((group) => best.filter((item) => groupOf(item) === group));
   }, [tree, pages, moments, query]);
 
   const choose = (item: Item | undefined) => {
@@ -120,8 +128,8 @@ function PaletteBody({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-2 border-b border-line px-4">
-        <Search className="size-4 shrink-0 text-muted" aria-hidden />
+      <div className="flex items-center gap-3 border-b border-line px-5">
+        <Search className="size-5 shrink-0 text-muted" strokeWidth={1.8} aria-hidden />
         <input
           autoFocus
           value={query}
@@ -145,35 +153,83 @@ function PaletteBody({
               choose(items[current]);
             }
           }}
-          className="w-full bg-transparent py-3.5 text-base outline-none"
+          className="w-full bg-transparent py-4 font-serif text-[22px] outline-none placeholder:text-muted/70"
         />
       </div>
-      <ul id={`${ids}-list`} role="listbox" className="max-h-[50vh] overflow-y-auto p-2">
-        {items.map((item, index) => (
-          <li
-            key={`${item.kind}-${item.id}`}
-            id={`${ids}-${item.id}`}
-            role="option"
-            aria-selected={index === current}
-            onMouseEnter={() => setActive(index)}
-            onClick={() => choose(item)}
-            className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm aria-selected:bg-line/60"
-          >
-            {item.kind === "node" ? (
-              <NodeIcon node={item.node} />
-            ) : item.kind === "moment" ? (
-              <Sparkles className="size-4 shrink-0 text-neb-ink" aria-hidden />
-            ) : (
-              <FileText className="size-4 shrink-0 text-muted" aria-hidden />
-            )}
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            <span className="text-xs text-muted">{item.detail}</span>
-          </li>
-        ))}
+      <ul id={`${ids}-list`} role="listbox" className="max-h-[56vh] overflow-y-auto p-2">
+        {items.map((item, index) => {
+          const group = groupOf(item);
+          const first = index === 0 || groupOf(items[index - 1]!) !== group;
+          return (
+            <Fragment key={`${item.kind}-${item.id}`}>
+              {first && (
+                <li
+                  role="presentation"
+                  className="px-3 pt-3 pb-1 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase"
+                >
+                  {group}
+                </li>
+              )}
+              <li
+                id={`${ids}-${item.id}`}
+                role="option"
+                aria-selected={index === current}
+                onMouseEnter={() => setActive(index)}
+                onClick={() => choose(item)}
+                className="flex cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2 text-[15px] aria-selected:bg-ink/[0.06]"
+              >
+                {item.kind === "node" ? (
+                  <NodeIcon node={item.node} />
+                ) : item.kind === "moment" ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a private, signed-in image
+                  <img
+                    src={clipImageUrl(item.moment.imageId)}
+                    alt=""
+                    className="h-8 w-12 shrink-0 rounded-[4px] bg-line object-cover"
+                  />
+                ) : (
+                  <FileText className="size-4 shrink-0 text-muted" aria-hidden />
+                )}
+                <span className="min-w-0 flex-1 truncate">
+                  <Matched text={item.label} query={query} />
+                </span>
+                {item.kind === "moment" ? (
+                  <Sparkles className="size-3.5 shrink-0 text-neb-ink" aria-hidden />
+                ) : (
+                  <span className="text-xs text-muted">{item.detail}</span>
+                )}
+              </li>
+            </Fragment>
+          );
+        })}
         {items.length === 0 && (
           <li className="px-3 py-6 text-center text-sm text-muted">Nothing matches.</li>
         )}
       </ul>
     </div>
+  );
+}
+
+function groupOf(item: Item): Group {
+  if (item.kind === "node") return item.root ? "Notebooks" : "Chapters";
+  return item.kind === "page" ? "Pages" : "Moments";
+}
+
+/** The label with the typed characters underlined (ink, never violet: §5.8). */
+function Matched({ text, query }: { text: string; query: string }) {
+  const hits = new Set(fuzzyMatches(query, text));
+  if (hits.size === 0) return <>{text}</>;
+  return (
+    <>
+      {text.split("").map((char, i) =>
+        hits.has(i) ? (
+          <span key={i} className="underline decoration-ink decoration-2 underline-offset-[3px]">
+            {char}
+          </span>
+        ) : (
+          char
+        ),
+      )}
+    </>
   );
 }

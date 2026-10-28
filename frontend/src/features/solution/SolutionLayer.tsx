@@ -164,6 +164,7 @@ function YourTurnPanel({
                 className={buttonClass("neb", { dense: true })}
                 onClick={() => void flow.check({ quiet: false })}
                 title={`Check my work${checkShortcut ? ` (${checkShortcut})` : ""} · or say “check this”`}
+                data-keytip={checkShortcut ?? undefined}
               >
                 Check my work{checkShortcut ? ` (${checkShortcut})` : ""}
               </button>

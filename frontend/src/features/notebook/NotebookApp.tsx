@@ -37,6 +37,8 @@ import {
   subtreeIds,
 } from "../moments/moments";
 import { QuickCheck } from "../moments/QuickCheck";
+import { KeytipsOverlay } from "../shortcuts/KeytipsOverlay";
+import { ShortcutsSheet } from "../shortcuts/ShortcutsSheet";
 import { useMomentChecks } from "../moments/store";
 import { useNotesCheck } from "../notes/check-store";
 import { checkClip, pageOfFinding, usePageMarks } from "../notes/notebook-check";
@@ -541,9 +543,12 @@ export function NotebookApp({
     mew.setSolutionRecords(solutionRecords);
     return () => mew.setSolutionRecords(null);
   }, [mew, solutionRecords]);
+  // "Two keys, max" (NEB_APP_UI §5.6): Shift+? or the ask pill's "?".
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   useShortcuts(
     {
       ...actions,
+      showShortcuts: () => setShortcutsOpen(true),
       checkWork: () => {
         mew.checkWork();
         // NEB_APP_UI §4.4: while the margin is folded, Alt+C checks and then unfolds it.
@@ -1100,6 +1105,7 @@ export function NotebookApp({
                       onSummon={mew.summon}
                       onStartListening={mew.startListening}
                       onStopListening={mew.stopListening}
+                      onShortcuts={() => setShortcutsOpen(true)}
                     />
                   </div>
                 )}
@@ -1198,6 +1204,8 @@ export function NotebookApp({
           onClose={() => setImporting(null)}
         />
       )}
+      <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <KeytipsOverlay />
       <QuickCheck
         onListen={mew.startListening}
         inNeb={inNeb}
@@ -1253,7 +1261,11 @@ export function NotebookApp({
         openPage={openPage}
       />
       {app.showIntro && (
-        <Onboarding onDone={app.closeIntro} onStartListening={mew.startListening} />
+        <Onboarding
+          onDone={app.closeIntro}
+          onStartListening={mew.startListening}
+          onHand={setHand}
+        />
       )}
     </div>
   );

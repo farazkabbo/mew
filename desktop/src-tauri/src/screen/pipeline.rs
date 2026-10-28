@@ -29,6 +29,7 @@ use super::screen_text::ScreenText;
 use super::secret::SecretBytes;
 use super::win::capture::{CaptureError, Capturer};
 use super::win::encode::encode_jpeg;
+use super::win::indicator;
 use super::win::media_session::{MediaSessions, MediaState};
 use super::win::ocr::{Ocr, OcrError};
 use super::win::system;
@@ -118,8 +119,12 @@ pub fn run_on(
     may_capture(&situation(tools, target, privacy)).map_err(ScreenError::Refused)?;
     let checks_ms = elapsed_ms(started);
 
+    // The frame is on the monitor before a pixel is read, or nothing is read (decision U9).
+    let frame =
+        indicator::Frame::hold(target.monitor_rect, target.dpi).ok_or(ScreenError::Failed)?;
     let started = Instant::now();
-    let mut raw = capture(tools, target)?;
+    let mut raw = capture(tools, target, &frame.token())?;
+    drop(frame);
     let capture_ms = elapsed_ms(started);
     if looks_blank(&raw) {
         return Err(ScreenError::Blank);
@@ -219,7 +224,12 @@ fn situation(tools: &mut Tools, target: &Target, privacy: &Privacy) -> Situation
     }
 }
 
-fn capture(tools: &mut Tools, target: &Target) -> Result<Pixels, ScreenError> {
+/// The only place pixels are read: it needs the frame's token (a frame on screen).
+fn capture(
+    tools: &mut Tools,
+    target: &Target,
+    _frame: &indicator::FrameToken<'_>,
+) -> Result<Pixels, ScreenError> {
     if tools.capturer.is_none() {
         tools.capturer = Capturer::new().ok();
     }
@@ -393,6 +403,55 @@ fn elapsed_ms(since: Instant) -> u32 {
 mod tests {
     use super::*;
 
+    /// Decision U9: no capture while the frame is off. Pixels are read in one place, the
+    /// pipeline's `capture`, which takes the frame's token (only a frame on screen lends one);
+    /// this checks that no other code reads the screen.
+    #[test]
+    fn every_capture_needs_the_frame() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = vec![src.clone()];
+        let mut sources = Vec::new();
+        while let Some(path) = files.pop() {
+            if path.is_dir() {
+                files.extend(std::fs::read_dir(&path).unwrap().map(|e| e.unwrap().path()));
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let text = std::fs::read_to_string(&path).unwrap();
+                // Tests (at the end of each file) capture windows they drew themselves.
+                let code = text.split("#[cfg(test)]").next().unwrap_or("").to_owned();
+                sources.push((path, code));
+            }
+        }
+        let mut readers = Vec::new();
+        for (path, code) in &sources {
+            for (n, line) in code.lines().enumerate() {
+                if line.contains("capturer.capture(") || line.contains("Capturer::new(") {
+                    readers.push(format!("{}:{}", path.display(), n + 1));
+                }
+            }
+        }
+        assert!(
+            readers.iter().all(|r| r.contains("pipeline.rs")),
+            "the screen is read outside the pipeline: {readers:?}"
+        );
+        let pipeline = &sources
+            .iter()
+            .find(|(p, _)| p.ends_with("screen/pipeline.rs"))
+            .unwrap()
+            .1;
+        let signature = pipeline.split("fn capture(").nth(1).unwrap();
+        let signature = &signature[..signature.find('{').unwrap()];
+        assert!(
+            signature.contains("FrameToken"),
+            "the pipeline's capture must take the frame's token"
+        );
+        // And the pipeline holds the frame before it reads a pixel.
+        let hold = pipeline.find("Frame::hold(").unwrap();
+        let read = pipeline
+            .find("capture(tools, target, &frame.token())")
+            .unwrap();
+        assert!(hold < read);
+    }
+
     fn rect(left: i32, top: i32, right: i32, bottom: i32) -> ScreenRect {
         ScreenRect {
             left,
@@ -472,7 +531,8 @@ mod tests {
         );
         let target = target::window_target(window.hwnd).expect("target");
         let mut tools = Tools::default();
-        let mut raw = capture(&mut tools, &target).expect("capture");
+        let frame = indicator::Frame::hold(target.monitor_rect, target.dpi).expect("frame");
+        let mut raw = capture(&mut tools, &target, &frame.token()).expect("capture");
         drop(window);
 
         let privacy = Privacy::default();

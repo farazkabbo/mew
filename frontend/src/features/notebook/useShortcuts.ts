@@ -19,6 +19,8 @@ type Handlers = {
   resetView(): void;
   /** Alt+C: check my work (K2 §11.3). */
   checkWork(): void;
+  /** Shift+? (or "?"): the shortcuts sheet (NEB_APP_UI §5.6). */
+  showShortcuts?(): void;
 };
 
 /**
@@ -53,7 +55,9 @@ export function useShortcuts(
       else if (action === "highlighter") ui.setTool("highlighter");
       else if (action === "eraser") ui.setTool("eraser");
       else if (action === "lasso") ui.setTool("lasso");
-      else if (zoomCharacter(e)) h.zoom(e.key === "+" ? 1.25 : 1 / 1.25);
+      else if (e.key === "?" && !e.ctrlKey && !e.altKey && !e.metaKey && h.showShortcuts) {
+        h.showShortcuts();
+      } else if (zoomCharacter(e)) h.zoom(e.key === "+" ? 1.25 : 1 / 1.25);
       else handled = fixedKey(bindingOfKey(e), h, ui.toggleTutorInk);
 
       if (handled) e.preventDefault();

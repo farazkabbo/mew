@@ -4,9 +4,11 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src ipc: http://ipc.localhost"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src data:; connect-src ipc: http://ipc.localhost"
     />
     <title>Neb</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts.css" />
     <link rel="stylesheet" href="overlay.css" />
     <script src="gen/island.js" defer></script>
   </head>
@@ -15,7 +17,14 @@
     <div class="island" id="island" data-activity="ready" data-panel="none">
       <div class="island-bar" role="toolbar" aria-label="Neb tools">
         <p class="island-status" aria-live="polite">
-          <span class="island-dot" aria-hidden="true"></span><span id="island-activity">Neb</span>
+          <span class="island-dot" aria-hidden="true">
+            <svg class="island-mark" viewBox="12 34 190 146">
+              <path
+                d="M36 150 V104 C36 74 56 58 80 58 C104 58 122 74 122 104 V136 L142 156 L178 106"
+              />
+            </svg>
+            <span class="island-dots"><i></i><i></i><i></i></span> </span
+          ><span id="island-activity">Neb</span>
         </p>
         <span class="island-gap" aria-hidden="true"></span>
         <button

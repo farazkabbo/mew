@@ -898,3 +898,34 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **`GET /api/moments/stayed`** feeds the cover ribbons (board 1's white notched ribbon) and
       "stayed this week: N" on the Tonight card. Local mode counts per node; the web app adds both
       up its tree (`stayedByNotebook`). "Physics stayed 34 → 35" on the check card is not built.
+21. **U21. Built in U7 (2026-10-28, `feat/ui-u7-overlays`).**
+    - **The frame:** `indicator::Frame` holds the four edge windows open until it's dropped,
+      then they fade in 150 ms. The coach keeps one while Select is on, the island's or card's
+      mic is open, or a walkthrough runs (`CaptureReach`, refreshed with the island and the
+      tray), on the island's monitor or the pointer's. Every capture holds its own frame on the
+      captured monitor too: the pipeline's only pixel read takes a `FrameToken`, which only a
+      frame on screen lends, and `every_capture_needs_the_frame` checks no other code reads the
+      screen. The frame is the 4 px violet edge; the inner 40 px glow isn't drawn (layered
+      windows are flat colour). The per-capture flash stays.
+    - **Overlays** link `tokens.css` and `fonts.css` (`font-src 'self'`); `overlay.css` and
+      `screen-coach.css` alias their old names to the tokens. The island keeps its black notch;
+      its status is a small neb dot (breathing, three dots while looking, a ring while
+      listening), only Select's pressed state is violet. The circle card is the sketch card
+      (paper, violet top edge, `--sh-3`, pill buttons, the ask box as a pill, "neb · …" in pixel
+      type); its saved state is the stamp (dashed edge inside a paper margin, the ✓ as a violet
+      disc). Select's cursor is a dashed violet lasso (`lasso-cursor.svg`).
+    - **Keys:** `KeytipsOverlay` and `ShortcutsSheet` are mounted in the notebook; Shift + ? or
+      the ask pill's "?" opens the sheet. Controls with keys carry `data-keytip`.
+    - **Jump palette and destination picker:** 640 px sheets, serif search, results grouped
+      (Notebooks · Chapters · Pages · Moments) with the typed letters underlined and moment
+      thumbnails; the picker shows this device's last 4 places as chips.
+    - **Onboarding** stays a dialog (over the desk or page), in four skippable steps: the
+      writing hand, K10's calibration, how much neb marks (this device's level for notebooks
+      without their own, `defaultLevel` in the mark prefs), then Start listening. The first
+      notebook is named on the desk's first-run cover (U4).
+    - **Tray:** "Pause for 1 hour" pauses now and resumes in an hour unless the pause changed
+      meanwhile; a restart in between keeps it paused.
+    - **Not built:** the status capsule and the hold's keys indicator (new overlay windows), the
+      sketch card's pointer line into the circle, onboarding's desktop "Try it" step, the
+      palette's "> " commands, the picker's "+ New chapter here" and "suggested: matched …",
+      and "what can I say?" (it needs a new voice intent).

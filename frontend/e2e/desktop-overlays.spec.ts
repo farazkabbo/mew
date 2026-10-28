@@ -37,7 +37,11 @@ async function openShellPage(page: Page, file: string, replies: Record<string, u
       ? "text/html"
       : name.endsWith(".css")
         ? "text/css"
-        : "text/javascript";
+        : name.endsWith(".woff2")
+          ? "font/woff2"
+          : name.endsWith(".svg")
+            ? "image/svg+xml"
+            : "text/javascript";
     return route.fulfill({ contentType: type, body });
   });
   await page.addInitScript((answers) => {

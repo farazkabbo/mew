@@ -130,6 +130,7 @@ pub fn raise<R: Runtime>(app: &AppHandle<R>) {
 
 /// Sends the island what to show now (after any change to the tools, the mic or Neb's status).
 pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
+    coach::refresh_frame(app);
     if !shown(app) {
         return;
     }

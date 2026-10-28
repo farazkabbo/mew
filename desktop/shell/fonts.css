@@ -1,0 +1,62 @@
+/* The app's type for the overlay pages (docs/NEB_APP_UI.md §3.2): the bundled files from
+   packages/shared/fonts, copied to gen/fonts by scripts/build-shell.mjs. */
+
+@font-face {
+  font-family: "Inter";
+  font-weight: 400;
+  font-display: swap;
+  src: url("gen/fonts/inter-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-weight: 500;
+  font-display: swap;
+  src: url("gen/fonts/inter-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-weight: 600;
+  font-display: swap;
+  src: url("gen/fonts/inter-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Instrument Serif";
+  font-weight: 400;
+  font-display: swap;
+  src: url("gen/fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Pixelify Sans";
+  font-weight: 500;
+  font-display: swap;
+  src: url("gen/fonts/pixelify-sans-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Caveat";
+  font-weight: 500;
+  font-display: swap;
+  src: url("gen/fonts/caveat-latin-500-normal.woff2") format("woff2");
+}
+
+/* tokens.css names the families through next/font's variables, which the overlays don't have. */
+:root {
+  --font-inter: "Inter";
+  --font-instrument-serif: "Instrument Serif";
+  --font-pixelify: "Pixelify Sans";
+  --font-caveat: "Caveat";
+}
+
+/* neb's voice (§3.2): pixel font, lowercase. */
+.neb-voice {
+  font-family: var(--font-neb);
+  font-weight: 500;
+  color: var(--neb-ink);
+  text-transform: lowercase;
+  /* Pixelify's "fi" ligature draws as a block: letters stay letters. */
+  font-variant-ligatures: none;
+}

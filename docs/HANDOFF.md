@@ -464,7 +464,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     character read right on a later line; Reset and turning learning off (the count goes to 0).
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
-- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U20:
+- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U21:
   - **U1 built** (2026-10-28, branch `feat/ui-u1-tokens`): design tokens (`shared/src/ui/tokens.ts`
     → `pnpm build:tokens`), the old colour names migrated and linted out, the four fonts vendored
     (`packages/shared/fonts`), Appearance and Text size (Settings → Appearance; `lib/display.ts`),
@@ -482,9 +482,16 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **Branches** (none pushed): `feat/ui-desk-overhaul` (the spec) → `feat/notebooks-k10` (K10) →
     `feat/ui-u1-tokens` → `feat/ui-u4-desk` → `feat/ui-u2-page` → `feat/ui-u5-show` →
     `feat/ui-u6-checks`.
-  - **Next: U7** (overlays and keys: the frame, status capsule, island restyle, sketch card,
-    saved stamp; keytips, the shortcuts sheet, palette and picker, onboarding) on
+  - **U7 built** (2026-10-28, `feat/ui-u7-overlays`): the coach frame held while neb can
+    capture (and a `FrameToken` on every capture), the overlays on the shared tokens and fonts,
+    the island's neb dot, the sketch card and saved stamp, the lasso cursor, keytips and the
+    shortcuts sheet, the restyled palette and picker, onboarding in steps, "Pause for 1 hour".
+    What's left of U7 is listed at the end of decision U21.
+  - **The U series is built through U7.** Branches: … → `feat/ui-u6-checks` →
     `feat/ui-u7-overlays`.
+  - **To verify by hand (U7):** in the desktop app, the frame comes on with Select, the mic and a
+    walkthrough and fades when they end; the island and the circle card in light and night;
+    "Pause for 1 hour" from the tray.
   - **To verify by hand:** the night desk on a real page (ink, marks and PDFs), Text size at 130 %
     in the notebook (nothing overlaps the canvas), and a new notebook's colour choices.
 - **K10 left over:** the stroke-order run (`pnpm eval:handwriting --mode=k10,k10-order

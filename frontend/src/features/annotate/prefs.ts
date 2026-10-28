@@ -14,16 +14,26 @@ const Prefs = z.object({
 type Prefs = z.infer<typeof Prefs>;
 
 const KEY = "mew:mark-prefs";
-const DEFAULT: Prefs = { level: DEFAULT_MARK_LEVEL, hideUntilDone: false };
+/** This device's level for notebooks without one of their own (onboarding asks, §5.10). */
+const DEFAULT_KEY = "neb:mark-default";
+const FALLBACK: Readonly<Record<MarkLevel, Prefs>> = {
+  off: { level: "off", hideUntilDone: false },
+  quiet: { level: "quiet", hideUntilDone: false },
+  normal: { level: "normal", hideUntilDone: false },
+  coach: { level: "coach", hideUntilDone: false },
+};
 
 type MarkPrefsState = {
   byNotebook: Readonly<Record<string, Prefs>>;
+  /** The level a notebook starts with (Hint unless the student chose another). */
+  defaultLevel: MarkLevel;
   /** Until when the budget is spent (0: it isn't). */
   quietUntil: number;
   prefsFor(notebookId: string | null): Prefs;
   /** The level in force: the notebook's, or Quiet while the budget is spent. */
   levelFor(notebookId: string | null, now?: number): MarkLevel;
   setLevel(notebookId: string, level: MarkLevel): void;
+  setDefaultLevel(level: MarkLevel): void;
   setHideUntilDone(notebookId: string, hide: boolean): void;
   /** The budget ran out: Quiet until the end of the day. Returns false if it already was. */
   budgetSpent(now?: number): boolean;
@@ -38,13 +48,26 @@ const QUIETER: Record<MarkLevel, MarkLevel> = {
 
 export const useMarkPrefs = create<MarkPrefsState>()((set, get) => ({
   byNotebook: read(),
+  defaultLevel: readDefault(),
   quietUntil: 0,
-  prefsFor: (id) => (id ? (get().byNotebook[id] ?? DEFAULT) : DEFAULT),
+  prefsFor: (id) => {
+    // One object per level: selectors compare by identity, so a new one each call would loop.
+    const fallback = FALLBACK[get().defaultLevel];
+    return id ? (get().byNotebook[id] ?? fallback) : fallback;
+  },
   levelFor: (id, now = Date.now()) => {
     const level = get().prefsFor(id).level;
     return now < get().quietUntil ? QUIETER[level] : level;
   },
   setLevel: (id, level) => update(set, get, id, { level }),
+  setDefaultLevel: (level) => {
+    set({ defaultLevel: level });
+    try {
+      localStorage.setItem(DEFAULT_KEY, level);
+    } catch {
+      // Storage unavailable: the choice lasts for this session only.
+    }
+  },
   setHideUntilDone: (id, hideUntilDone) => update(set, get, id, { hideUntilDone }),
   budgetSpent: (now = Date.now()) => {
     if (now < get().quietUntil) return false;
@@ -67,6 +90,16 @@ function update(
     localStorage.setItem(KEY, JSON.stringify(byNotebook));
   } catch {
     // Storage unavailable: the choice lasts for this session only.
+  }
+}
+
+function readDefault(): MarkLevel {
+  if (typeof window === "undefined") return DEFAULT_MARK_LEVEL;
+  try {
+    const parsed = MarkLevel.safeParse(window.localStorage.getItem(DEFAULT_KEY));
+    return parsed.success ? parsed.data : DEFAULT_MARK_LEVEL;
+  } catch {
+    return DEFAULT_MARK_LEVEL;
   }
 }
 
