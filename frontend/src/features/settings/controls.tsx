@@ -26,11 +26,11 @@ export function Toggle({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 size-4 accent-(--accent)"
+        className="mt-1 size-4 accent-(--ink)"
       />
       <span>
         <span className="font-medium">{label}</span>
-        {hint && <span className="block text-sm text-ink-muted">{hint}</span>}
+        {hint && <span className="block text-sm text-muted">{hint}</span>}
       </span>
     </label>
   );

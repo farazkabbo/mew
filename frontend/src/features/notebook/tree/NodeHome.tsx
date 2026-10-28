@@ -153,7 +153,7 @@ export function NodeHome({
             <NodeIcon node={root} className="size-8" />
             <h1 className="font-serif text-4xl tracking-tight">{node.title}</h1>
           </div>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
             <span>
               {plural(children.length, noun)} · {plural(totalPages, "page")}
             </span>
@@ -167,7 +167,7 @@ export function NodeHome({
                     const subject = Subject.safeParse(event.target.value);
                     actions.onSetSubject(subject.success ? subject.data : null);
                   }}
-                  className="rounded-md bg-transparent px-1 py-0.5 hover:bg-rule/50"
+                  className="rounded-md bg-transparent px-1 py-0.5 hover:bg-line/50"
                 >
                   <option value="">Not set</option>
                   {Subject.options.map((subject) => (
@@ -193,7 +193,7 @@ export function NodeHome({
         {courseId && topics && (
           <aside
             data-testid="review-topics"
-            className="flex items-center justify-between gap-4 rounded-2xl border border-rule bg-paper-raised p-4"
+            className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-paper-hi p-4"
           >
             <span className="text-sm">
               {topics === "review"
@@ -214,10 +214,10 @@ export function NodeHome({
         {(dueCounts.get(node.id) ?? 0) > 0 && (
           <aside
             data-testid="quick-check-card"
-            className="flex items-center justify-between gap-4 rounded-2xl border border-rule bg-paper-raised p-4"
+            className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-paper-hi p-4"
           >
             <span className="flex items-center gap-2 text-sm">
-              <Sparkles className="size-4 text-tutor" aria-hidden />
+              <Sparkles className="size-4 text-neb-ink" aria-hidden />
               {plural(dueCounts.get(node.id) ?? 0, "check")} due from what you saved here.
             </span>
             <button
@@ -230,7 +230,7 @@ export function NodeHome({
           </aside>
         )}
 
-        <div role="tablist" aria-label="Show" className="flex gap-1 border-b border-rule">
+        <div role="tablist" aria-label="Show" className="flex gap-1 border-b border-line">
           <TabButton selected={tab === "contents"} onSelect={() => setTab("contents")}>
             Contents
           </TabButton>
@@ -269,7 +269,7 @@ export function NodeHome({
         ) : (
           <div role="tabpanel" aria-label="Contents" className="flex flex-col gap-8">
             <section aria-labelledby="chapters-heading" className="flex flex-col gap-3">
-              <h2 id="chapters-heading" className="text-xs tracking-wide text-ink-muted uppercase">
+              <h2 id="chapters-heading" className="text-xs tracking-wide text-muted uppercase">
                 {root.childLabel}
               </h2>
               <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -281,14 +281,14 @@ export function NodeHome({
                         type="button"
                         onClick={() => actions.onOpen(child.id)}
                         data-testid="chapter-card"
-                        className="flex h-full w-full flex-col gap-2 rounded-2xl border border-rule bg-paper-raised p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 motion-reduce:transition-none"
+                        className="flex h-full w-full flex-col gap-2 rounded-2xl border border-line bg-paper-hi p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 motion-reduce:transition-none"
                       >
-                        <span className="flex items-center justify-between gap-2 text-xs text-ink-muted tabular-nums">
+                        <span className="flex items-center justify-between gap-2 text-xs text-muted tabular-nums">
                           {index + 1}
                           {(dueCounts.get(child.id) ?? 0) > 0 && (
                             <span
                               data-testid="checks-due-badge"
-                              className="rounded-full bg-tutor/15 px-2 py-0.5 font-medium text-ink"
+                              className="rounded-full bg-neb/15 px-2 py-0.5 font-medium text-ink"
                             >
                               {plural(dueCounts.get(child.id) ?? 0, "check")} due
                             </span>
@@ -297,21 +297,21 @@ export function NodeHome({
                         <span className="font-serif text-xl leading-tight">{child.title}</span>
                         {done && (
                           <span data-testid="chapter-progress" className="flex flex-col gap-1">
-                            <span className="text-xs text-ink-muted tabular-nums">
+                            <span className="text-xs text-muted tabular-nums">
                               {done.checked} of {plural(done.total, "topic")} checked
                             </span>
                             <span
-                              className="h-1.5 overflow-hidden rounded-full bg-rule"
+                              className="h-1.5 overflow-hidden rounded-full bg-line"
                               aria-hidden
                             >
                               <span
-                                className="block h-full rounded-full bg-tutor"
+                                className="block h-full rounded-full bg-ink"
                                 style={{ width: `${(100 * done.checked) / done.total}%` }}
                               />
                             </span>
                           </span>
                         )}
-                        <span className="mt-auto text-xs text-ink-muted">
+                        <span className="mt-auto text-xs text-muted">
                           {plural(pageCounts.get(child.id) ?? 0, "page")}
                           {tree.children(child.id).length > 0 &&
                             ` · ${plural(tree.children(child.id).length, "section")}`}{" "}
@@ -328,7 +328,7 @@ export function NodeHome({
                       onClick={actions.onAddChild}
                       title={keys.shown("new_chapter")}
                       aria-keyshortcuts={keys.aria("new_chapter")}
-                      className="flex h-full min-h-28 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-rule p-4 text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
+                      className="flex h-full min-h-28 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line p-4 text-sm text-muted hover:border-ink/30 hover:text-ink"
                     >
                       <Plus className="size-4" aria-hidden />
                       Add {noun}
@@ -339,7 +339,7 @@ export function NodeHome({
             </section>
 
             <section aria-labelledby="pages-heading" className="flex flex-col gap-3">
-              <h2 id="pages-heading" className="text-xs tracking-wide text-ink-muted uppercase">
+              <h2 id="pages-heading" className="text-xs tracking-wide text-muted uppercase">
                 Loose pages
               </h2>
               <ul className="flex flex-wrap gap-3">
@@ -348,7 +348,7 @@ export function NodeHome({
                     <button
                       type="button"
                       onClick={() => actions.onOpenPage(page.id)}
-                      className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-rule bg-paper-raised text-sm text-ink-muted hover:border-ink/25 hover:text-ink"
+                      className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-line bg-paper-hi text-sm text-muted hover:border-ink/25 hover:text-ink"
                     >
                       <FileText className="size-5" aria-hidden />
                       Page {page.index + 1}
@@ -361,7 +361,7 @@ export function NodeHome({
                     onClick={actions.onAddPage}
                     title={keys.shown("new_page")}
                     aria-keyshortcuts={keys.aria("new_page")}
-                    className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
+                    className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line text-sm text-muted hover:border-ink/30 hover:text-ink"
                   >
                     <Plus className="size-5" aria-hidden />
                     New page
@@ -373,7 +373,7 @@ export function NodeHome({
                     onClick={actions.onImportPdf}
                     title={keys.shown("import_pdf")}
                     aria-keyshortcuts={keys.aria("import_pdf")}
-                    className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-rule text-sm text-ink-muted hover:border-ink/30 hover:text-ink"
+                    className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line text-sm text-muted hover:border-ink/30 hover:text-ink"
                   >
                     <FileUp className="size-5" aria-hidden />
                     Import PDF
@@ -403,7 +403,7 @@ function TabButton({
       role="tab"
       aria-selected={selected}
       onClick={onSelect}
-      className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-ink-muted hover:text-ink aria-selected:border-ink aria-selected:text-ink"
+      className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-muted hover:text-ink aria-selected:border-ink aria-selected:text-ink"
     >
       {children}
     </button>

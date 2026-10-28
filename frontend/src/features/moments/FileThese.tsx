@@ -87,14 +87,14 @@ export function FileThese({ moments, isLive, onFile, onChoose }: Props) {
     <section
       aria-labelledby="file-these-heading"
       data-testid="file-these"
-      className="flex flex-col gap-3 rounded-2xl border border-rule bg-paper-raised p-4"
+      className="flex flex-col gap-3 rounded-2xl border border-line bg-paper-hi p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 id="file-these-heading" className="font-serif text-xl">
           File these
         </h2>
         {loading ? (
-          <span role="status" className="flex items-center gap-2 text-sm text-ink-muted">
+          <span role="status" className="flex items-center gap-2 text-sm text-muted">
             <Loader2 className="size-4 animate-spin" aria-hidden />
             Finding places…
           </span>
@@ -113,7 +113,7 @@ export function FileThese({ moments, isLive, onFile, onChoose }: Props) {
           )
         )}
       </div>
-      <ul className="flex flex-col divide-y divide-rule">
+      <ul className="flex flex-col divide-y divide-line">
         {moments.slice(0, SHOWN).map((moment) => {
           const place = placeOf(moment);
           const state = rows.get(moment.clipId)?.state ?? "idle";
@@ -125,7 +125,7 @@ export function FileThese({ moments, isLive, onFile, onChoose }: Props) {
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{moment.question}</span>
-                <span className="block truncate text-xs text-ink-muted">
+                <span className="block truncate text-xs text-muted">
                   {state === "filed" && place
                     ? `Filed in ${place.path.join(" › ")}`
                     : state === "failed"
@@ -138,7 +138,7 @@ export function FileThese({ moments, isLive, onFile, onChoose }: Props) {
                 </span>
               </span>
               {state === "filed" ? (
-                <Check className="size-4 text-check" aria-label="Filed" />
+                <Check className="size-4 text-neb-ink" aria-label="Filed" />
               ) : (
                 <>
                   {place && (
@@ -146,7 +146,7 @@ export function FileThese({ moments, isLive, onFile, onChoose }: Props) {
                       type="button"
                       disabled={state === "filing"}
                       onClick={() => void file(moment)}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 text-sm hover:border-accent disabled:opacity-60"
+                      className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 text-sm hover:border-ink disabled:opacity-60"
                     >
                       <FolderInput className="size-3.5" aria-hidden />
                       File
@@ -156,7 +156,7 @@ export function FileThese({ moments, isLive, onFile, onChoose }: Props) {
                     type="button"
                     disabled={state === "filing"}
                     onClick={() => onChoose(moment)}
-                    className="rounded-full px-3 py-1 text-sm text-ink-muted hover:text-ink"
+                    className="rounded-full px-3 py-1 text-sm text-muted hover:text-ink"
                   >
                     Choose…
                   </button>

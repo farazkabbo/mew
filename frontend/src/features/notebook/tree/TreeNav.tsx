@@ -146,7 +146,7 @@ export function TreeNav(props: Props) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between px-2 pb-1">
-        <h2 id="notebooks-heading" className="text-xs tracking-wide text-sidebar-ink/50 uppercase">
+        <h2 id="notebooks-heading" className="text-xs tracking-wide text-ink/50 uppercase">
           Notebooks
         </h2>
         <button
@@ -154,7 +154,7 @@ export function TreeNav(props: Props) {
           onClick={props.onCreateNotebook}
           aria-label={`New notebook (${props.newNotebookShortcut})`}
           title={`New notebook (${props.newNotebookShortcut})`}
-          className="grid size-6 place-items-center rounded-md text-sidebar-ink/60 hover:bg-white/10 hover:text-sidebar-ink"
+          className="grid size-6 place-items-center rounded-md text-ink/60 hover:bg-white/10 hover:text-ink"
         >
           <Plus className="size-3.5" aria-hidden />
         </button>
@@ -219,7 +219,7 @@ export function TreeNav(props: Props) {
         {props.draft && (
           <div
             aria-hidden
-            className="flex items-center gap-1 rounded-lg bg-white/10 py-1 pr-1 pl-1 text-sm text-sidebar-ink/80 italic"
+            className="flex items-center gap-1 rounded-lg bg-white/10 py-1 pr-1 pl-1 text-sm text-ink/80 italic"
           >
             <span className="size-5" />
             <NodeIcon node={props.draft} />
@@ -229,7 +229,7 @@ export function TreeNav(props: Props) {
           </div>
         )}
         {visible.length === 0 && !props.draft && (
-          <p className="px-2 py-1 text-sm text-sidebar-ink/45">No notebooks yet.</p>
+          <p className="px-2 py-1 text-sm text-ink/45">No notebooks yet.</p>
         )}
       </div>
 
@@ -237,7 +237,7 @@ export function TreeNav(props: Props) {
         <button
           type="button"
           onClick={props.onOpenTrash}
-          className="mt-1 flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-sidebar-ink/55 hover:bg-white/5 hover:text-sidebar-ink"
+          className="mt-1 flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink/55 hover:bg-white/5 hover:text-ink"
         >
           <Trash2 className="size-4 shrink-0 opacity-60" aria-hidden />
           Trash

@@ -38,7 +38,7 @@ export function Dialog({ open, onClose, label, children, className = "" }: Props
       onMouseDown={(event) => {
         if (event.target === ref.current) onClose(); // a press on the backdrop
       }}
-      className={`rounded-2xl border border-rule bg-paper-raised p-0 text-ink shadow-[0_24px_60px_-20px_rgba(0,0,0,0.45)] backdrop:bg-black/30 ${className}`}
+      className={`rounded-2xl border border-line bg-paper-hi p-0 text-ink shadow-[0_24px_60px_-20px_rgba(0,0,0,0.45)] backdrop:bg-black/30 ${className}`}
     >
       {open && children}
     </dialog>

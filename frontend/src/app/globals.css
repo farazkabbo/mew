@@ -1,89 +1,100 @@
 @import "tailwindcss";
+/* The design tokens (docs/NEB_APP_UI.md §3), generated from packages/shared/src/ui/tokens.ts. */
+@import "./tokens.css";
 
-/* Design tokens: calm, editorial, notebook-like. Light is the default; dark follows the OS. */
-:root {
-  --paper: #f7f5f0;
-  --paper-raised: #fdfcf9;
-  --ink: #1d1c1a;
-  --ink-muted: #6d695f;
-  --rule: #e3dfd4;
-  --dot: #cfc9bb;
-  --sidebar: #161513;
-  --sidebar-ink: #ece9e2;
-  --tutor: #8a7bf0;
-  --accent: #5b8def;
-  --error: #e0623a;
-  --check: #3e9a69;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #1b1a18;
-    --paper-raised: #232220;
-    --ink: #ece9e2;
-    --ink-muted: #a29d92;
-    --rule: #34322e;
-    --dot: #45423c;
-    --sidebar: #0f0e0d;
-    --tutor: #a497ff;
-  }
-}
-
+/* Tailwind names for the tokens: bg-paper, text-muted, border-line, text-neb-ink, … */
 @theme inline {
+  --color-desk: var(--desk);
   --color-paper: var(--paper);
-  --color-paper-raised: var(--paper-raised);
+  --color-paper-hi: var(--paper-hi);
   --color-ink: var(--ink);
-  --color-ink-muted: var(--ink-muted);
+  --color-pencil: var(--pencil);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
   --color-rule: var(--rule);
-  --color-dot: var(--dot);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-ink: var(--sidebar-ink);
-  --color-tutor: var(--tutor);
-  --color-accent: var(--accent);
-  --color-error: var(--error);
-  --color-check: var(--check);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --color-margin-red: var(--margin-red);
+  --color-neb: var(--neb);
+  --color-neb-ink: var(--neb-ink);
+  --color-neb-wash: var(--neb-wash);
+  --color-note: var(--note);
+  --color-teal: var(--teal);
+  --color-ok-pen: var(--ok-pen);
+  --color-red-pen: var(--red-pen);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-display);
+  --font-neb: var(--font-neb);
+  --font-hand: var(--font-hand);
+  --shadow-sh-1: var(--sh-1);
+  --shadow-sh-2: var(--sh-2);
+  --shadow-sh-3: var(--sh-3);
+}
+
+html {
+  /* Settings → Text size (§3.10): the UI scales, the canvas doesn't. */
+  font-size: calc(100% * var(--text-scale, 1));
 }
 
 body {
-  background: var(--paper);
+  background: var(--desk);
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
+/* §3.10: focus is ink, never violet (paper-coloured on the night desk). */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
-/* Mascot motion (only applied under motion-safe). */
-@keyframes mew-breathe {
+::selection {
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+/* neb's voice (§3.2): pixel font, lowercase. */
+.neb-voice {
+  font-family: var(--font-neb);
+  font-weight: 500;
+  color: var(--neb-ink);
+  text-transform: lowercase;
+}
+
+/* The neb dot (§3.8). Only under motion-safe. */
+@keyframes neb-breathe {
   0%,
   100% {
-    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes neb-dots {
+  0%,
+  100% {
+    opacity: 0.25;
   }
   50% {
     opacity: 1;
   }
 }
 
-@keyframes mew-dot {
-  0%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.4;
-  }
-  50% {
-    transform: translateY(-3px);
-    opacity: 1;
-  }
-}
-
-@keyframes mew-talk {
+@keyframes neb-bars {
   from {
-    transform: scaleY(0.4);
+    transform: scaleY(0.35);
   }
   to {
-    transform: scaleY(1.2);
+    transform: scaleY(1);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
   }
 }

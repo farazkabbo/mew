@@ -1,6 +1,8 @@
 "use client";
 
 import type { BBox, Stroke } from "@mew/shared";
+
+import { isNight, onNightChange } from "@/lib/display";
 import {
   bboxesIntersect,
   type Camera,
@@ -252,12 +254,11 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
     });
     resize.observe(container);
 
-    const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const onTheme = () => {
+    // The night desk: the OS's, or the student's choice in Settings (U1 §3.1).
+    const stopNight = onNightChange(() => {
       renderer.setTheme(readTheme());
       schedule(all);
-    };
-    darkQuery.addEventListener("change", onTheme);
+    });
 
     const unsubscribeEngine = engine.subscribe(() => {
       for (const tool of Object.values(tools)) tool.documentChanged?.();
@@ -289,7 +290,7 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       input.dispose();
       window.removeEventListener("keydown", onKeyDown);
       resize.disconnect();
-      darkQuery.removeEventListener("change", onTheme);
+      stopNight();
       unsubscribeEngine();
       unsubscribeUi();
       unsubscribeTutor?.();
@@ -323,10 +324,10 @@ function readTheme(): Theme {
   const token = (name: string, fallback: string) =>
     styles.getPropertyValue(name).trim() || fallback;
   return {
-    dark: window.matchMedia("(prefers-color-scheme: dark)").matches,
-    dot: token("--dot", "#cfc9bb"),
-    tutor: token("--tutor", "#8a7bf0"),
-    accent: token("--accent", "#5b8def"),
+    dark: isNight(),
+    dot: token("--rule", "#d6e2e6"),
+    tutor: token("--neb", "#6b4ee6"),
+    accent: token("--ink", "#1e1d1a"),
   };
 }
 

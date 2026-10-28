@@ -23,7 +23,7 @@ import { useMomentChecks } from "../moments/store";
 import { type Circled, circledLines, circledPrinted, joinPrinted } from "../notebook/circle";
 import type { PageEngine } from "../notebook/engine";
 import { blobToBase64, renderStrokesPng, strokesOf, studentLines } from "../notebook/export-line";
-import { INK_COLORS, TUTOR_HIGHLIGHT, TUTOR_INK } from "../notebook/palette";
+import { TUTOR_HIGHLIGHT, TUTOR_INK } from "../notebook/palette";
 import { WorkChecker } from "../check/checker";
 import { PyodideCodeRunner } from "../check/code-runner";
 import { gradeRemote } from "../quiz/grade-client";
@@ -45,7 +45,6 @@ import { VoiceSession } from "../voice/voice-session";
 import { MewController, type MewHooks } from "./controller";
 import { HttpMewGate } from "./gate";
 import { CascadeMewGate, WorkerClassifier } from "./local-gate";
-import type { MascotState } from "./Mascot";
 import { useMew } from "./store";
 import { browserClock } from "./triggers";
 
@@ -114,8 +113,9 @@ function createPipeline() {
     engine: () => engine,
     colors: () => ({
       ink: TUTOR_INK.light,
-      error: INK_COLORS[2].light,
-      correct: INK_COLORS[3].light,
+      // Violet is neb's, and only neb's (U1): its circles and ticks too, never the red pen.
+      error: TUTOR_INK.light,
+      correct: TUTOR_INK.light,
       highlight: TUTOR_HIGHLIGHT.light,
     }),
     // The notebook's pointer glides to where the ink starts before it's written (K6 §6.3).
@@ -280,8 +280,9 @@ function createPipeline() {
     hideUntilDone: () => useMarkPrefs.getState().prefsFor(liveNotebook).hideUntilDone,
     colors: () => ({
       ink: TUTOR_INK.light,
-      error: INK_COLORS[2].light,
-      correct: INK_COLORS[3].light,
+      // Violet is neb's, and only neb's (U1): its circles and ticks too, never the red pen.
+      error: TUTOR_INK.light,
+      correct: TUTOR_INK.light,
     }),
     viewport: () => ink.viewport(),
     rubric: liveMarkNote,
@@ -702,7 +703,10 @@ function useRecognitionOnPause(engine: PageEngine | null, service: RecognitionSe
   }, [engine, service]);
 }
 
-/** Derives the mascot's state from listening, gate and tutor activity. */
+/** What neb is doing, from listening, the gate and the tutor (shown by the neb dot). */
+export type MascotState = "sleeping" | "listening" | "thinking" | "speaking" | "muted";
+
+/** Derives neb's state from listening, gate and tutor activity. */
 export function useMascotState(): MascotState {
   const status = useVoice((s) => s.status);
   const pending = useMew((s) => s.pending);

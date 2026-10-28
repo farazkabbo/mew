@@ -15,11 +15,11 @@ type Props = {
 const UPCOMING = ["Library", "Mind map", "Flowchart", "Just practise"];
 
 const LINK =
-  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-sidebar-ink/75 hover:bg-white/5 hover:text-sidebar-ink";
+  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-ink/75 hover:bg-white/5 hover:text-ink";
 
 export function Sidebar({ notebooks, onQuiz }: Props) {
   return (
-    <aside className="hidden w-60 shrink-0 flex-col bg-sidebar text-sidebar-ink md:flex">
+    <aside className="hidden w-60 shrink-0 flex-col bg-paper text-ink md:flex">
       <Link href="/" className="px-5 pt-5 pb-6 font-serif text-2xl tracking-tight">
         mew
       </Link>
@@ -30,9 +30,7 @@ export function Sidebar({ notebooks, onQuiz }: Props) {
       >
         {notebooks}
 
-        <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-sidebar-ink/50 uppercase">
-          Study
-        </h2>
+        <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-ink/50 uppercase">Study</h2>
         <Link href="/courses" className={LINK}>
           <GraduationCap className="size-4 shrink-0 opacity-60" aria-hidden />
           Courses
@@ -42,9 +40,7 @@ export function Sidebar({ notebooks, onQuiz }: Props) {
           Review
         </Link>
 
-        <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-sidebar-ink/50 uppercase">
-          Study modes
-        </h2>
+        <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-ink/50 uppercase">Study modes</h2>
         <button
           onClick={onQuiz ?? undefined}
           disabled={!onQuiz}
@@ -57,12 +53,10 @@ export function Sidebar({ notebooks, onQuiz }: Props) {
           Quiz me
         </button>
 
-        <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-sidebar-ink/50 uppercase">
-          Coming soon
-        </h2>
+        <h2 className="mt-6 px-2 pb-1 text-xs tracking-wide text-ink/50 uppercase">Coming soon</h2>
         <ul className="flex flex-col gap-0.5">
           {UPCOMING.map((label) => (
-            <li key={label} className="rounded-lg px-2 py-1.5 text-sm text-sidebar-ink/35">
+            <li key={label} className="rounded-lg px-2 py-1.5 text-sm text-ink/35">
               {label}
             </li>
           ))}

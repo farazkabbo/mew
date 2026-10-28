@@ -235,7 +235,7 @@ export function childTitles(count: number, label: ChildLabel, startAt = 1): stri
 /** Keyword stems → an icon and colour, so "Physics" starts as an atom in teal. */
 const STYLES: readonly (readonly [RegExp, Icon, Color])[] = [
   [/\b(phys|mechanic|optic|thermo|quantum|astro)/, "atom", "teal"],
-  [/\b(chem|organic|biochem)/, "flask", "violet"],
+  [/\b(chem|organic|biochem)/, "flask", "amber"],
   [/\b(math|calc|algebra|geometr|statist|trig|linear|discrete)/, "sigma", "blue"],
   [/\b(bio|anatom|physiolog|genetic|microbio|medic)/, "dna", "green"],
   [/\b(ecolog|environment|botan|plant|earth|geolog)/, "leaf", "green"],
@@ -247,9 +247,9 @@ const STYLES: readonly (readonly [RegExp, Icon, Color])[] = [
     "languages",
     "rose",
   ],
-  [/\b(music|piano|guitar|choir|band)/, "music", "violet"],
+  [/\b(music|piano|guitar|choir|band)/, "music", "rose"],
   [/\b(art|design|drawing|paint|photo)/, "palette", "rose"],
-  [/\b(psych|neuro|philosoph|cognit|sociolog)/, "brain", "violet"],
+  [/\b(psych|neuro|philosoph|cognit|sociolog)/, "brain", "slate"],
   [/\b(account|financ|business|market)/, "calculator", "amber"],
 ];
 

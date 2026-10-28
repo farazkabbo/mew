@@ -25,7 +25,7 @@ export function Caption() {
     <p
       aria-live="polite"
       data-testid="tutor-caption"
-      className="max-w-80 rounded-2xl rounded-br-sm border border-rule bg-paper-raised px-4 py-2.5 text-sm leading-relaxed text-ink shadow-lg"
+      className="max-w-80 rounded-2xl rounded-br-sm border border-line bg-paper-hi px-4 py-2.5 text-sm leading-relaxed text-ink shadow-lg"
     >
       {caption}
     </p>

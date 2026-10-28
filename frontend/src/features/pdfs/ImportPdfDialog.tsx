@@ -137,7 +137,7 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="grid size-8 place-items-center rounded-lg text-ink-muted hover:bg-rule/60"
+          className="grid size-8 place-items-center rounded-lg text-muted hover:bg-line/60"
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -159,19 +159,19 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
           <button
             type="button"
             onClick={() => input.current?.click()}
-            className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-rule px-4 py-8 text-ink-muted hover:border-ink/30 hover:text-ink"
+            className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-line px-4 py-8 text-muted hover:border-ink/30 hover:text-ink"
           >
             <FileUp className="size-5" aria-hidden />
             Choose a PDF (up to 100 MB)
           </button>
           {read.state === "failed" && (
-            <p role="alert" className="text-sm text-error">
+            <p role="alert" className="text-sm text-muted">
               {read.message}
             </p>
           )}
         </div>
       ) : read.state === "reading" ? (
-        <p role="status" className="flex items-center gap-2 text-sm text-ink-muted">
+        <p role="status" className="flex items-center gap-2 text-sm text-muted">
           <Loader2 className="size-4 animate-spin" aria-hidden /> Reading the PDF…
         </p>
       ) : (
@@ -182,18 +182,18 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
             </p>
 
             <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-ink-muted">Destination</span>
+              <span className="text-xs font-medium text-muted">Destination</span>
               <button
                 type="button"
                 onClick={() => setPicking(true)}
-                className="rounded-lg border border-rule bg-paper px-3 py-2 text-left text-sm hover:border-accent"
+                className="rounded-lg border border-line bg-paper px-3 py-2 text-left text-sm hover:border-ink"
               >
                 {where}
               </button>
             </div>
 
             <div className="flex flex-col gap-1">
-              <label htmlFor={`${ids}-range`} className="text-xs font-medium text-ink-muted">
+              <label htmlFor={`${ids}-range`} className="text-xs font-medium text-muted">
                 Pages (all, or a range like 40–62)
               </label>
               <input
@@ -201,10 +201,10 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
                 value={range}
                 placeholder={`1–${info.pageCount}`}
                 onChange={(event) => setRange(event.target.value)}
-                className="rounded-lg border border-rule bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+                className="rounded-lg border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
               />
               {!pages && (
-                <p role="alert" className="text-xs text-error">
+                <p role="alert" className="text-xs text-muted">
                   Pages 1 to {info.pageCount}, like “40–62”.
                 </p>
               )}
@@ -217,7 +217,7 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
                     type="checkbox"
                     checked={split}
                     onChange={(event) => setSplit(event.target.checked)}
-                    className="size-4 accent-(--accent)"
+                    className="size-4 accent-(--ink)"
                   />
                   Split into chapters using the PDF&apos;s contents
                 </label>
@@ -244,7 +244,7 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
                                 return next;
                               })
                             }
-                            className="size-4 accent-(--accent)"
+                            className="size-4 accent-(--ink)"
                           />
                           <input
                             aria-label={`Chapter name for ${item.title}`}
@@ -253,9 +253,9 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
                               setTitles((now) => new Map(now).set(index, event.target.value))
                             }
                             disabled={skip.has(index)}
-                            className="min-w-0 flex-1 rounded-md border border-rule bg-paper px-2 py-1 disabled:opacity-50"
+                            className="min-w-0 flex-1 rounded-md border border-line bg-paper px-2 py-1 disabled:opacity-50"
                           />
-                          <span className="shrink-0 text-xs text-ink-muted tabular-nums">
+                          <span className="shrink-0 text-xs text-muted tabular-nums">
                             {planned ? `pp. ${planned.firstPage}–${planned.lastPage}` : "left out"}
                           </span>
                         </li>
@@ -264,7 +264,7 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
                   </ol>
                 )}
                 {split && plan?.loose && (
-                  <p className="pl-6 text-xs text-ink-muted">
+                  <p className="pl-6 text-xs text-muted">
                     Pages {plan.loose.firstPage}–{plan.loose.lastPage} go straight into{" "}
                     {node?.title}.
                   </p>
@@ -277,13 +277,13 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
                 type="checkbox"
                 checked={course}
                 onChange={(event) => setCourse(event.target.checked)}
-                className="mt-0.5 size-4 accent-(--accent)"
+                className="mt-0.5 size-4 accent-(--ink)"
               />
               <span>
                 {root?.courseId
                   ? "Use as course material"
                   : `Use as course material (creates a ${root?.title ?? "new"} course)`}
-                <span className="block text-xs text-ink-muted">
+                <span className="block text-xs text-muted">
                   Neb learns from it to explain, quiz you and track what you know. Turn it off for
                   PDFs that aren&apos;t for study.
                 </span>
@@ -291,7 +291,7 @@ function ImportForm({ tree, nodeId, file, onImport, onClose }: Props) {
             </label>
 
             {problem && (
-              <p role="alert" className="text-sm text-error">
+              <p role="alert" className="text-sm text-muted">
                 {problem}
               </p>
             )}

@@ -87,7 +87,7 @@ export function ShortcutsSection() {
   return (
     <Section title="Shortcuts">
       <div id="shortcuts" className="space-y-6">
-        <p className="text-sm text-ink-muted">
+        <p className="text-sm text-muted">
           Every Neb shortcut is two keys at most. Single keys only work in the notebook when
           you&apos;re not typing in a box.
         </p>
@@ -100,7 +100,7 @@ export function ShortcutsSection() {
               const mine = own[action] !== undefined;
               const isRecording = recording?.action === action;
               return (
-                <tr key={action} className="border-t border-rule align-top">
+                <tr key={action} className="border-t border-line align-top">
                   <th scope="row" className="py-2 pr-3 text-left font-normal">
                     {SHORTCUT_LABELS[action]}
                   </th>
@@ -131,7 +131,7 @@ export function ShortcutsSection() {
                         setRecording({ ...recording, pending: null })
                       }
                       onBlur={() => isRecording && !recording.problem && setRecording(null)}
-                      className="rounded-full border border-rule px-3 py-1 hover:border-accent aria-pressed:border-accent"
+                      className="rounded-full border border-line px-3 py-1 hover:border-ink aria-pressed:border-ink"
                     >
                       {isRecording
                         ? recording.pending
@@ -142,14 +142,14 @@ export function ShortcutsSection() {
                     {mine && !isRecording && (
                       <button
                         type="button"
-                        className="ml-2 text-ink-muted underline"
+                        className="ml-2 text-muted underline"
                         onClick={() => bind(action, defaultBindings(action, platform)[0] ?? "")}
                       >
                         Default
                       </button>
                     )}
                     {isRecording && recording.problem && (
-                      <p role="alert" className="mt-1 text-right whitespace-normal text-error">
+                      <p role="alert" className="mt-1 text-right whitespace-normal text-muted">
                         {recording.problem}
                         {recording.suggestion && (
                           <>
@@ -179,7 +179,7 @@ export function ShortcutsSection() {
             save({});
           }}
           disabled={Object.keys(own).length === 0}
-          className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent disabled:opacity-50"
+          className="rounded-full border border-line px-4 py-1.5 text-sm hover:border-ink disabled:opacity-50"
         >
           Reset to defaults
         </button>
@@ -216,7 +216,7 @@ export function ShortcutsSection() {
               <kbd>→</kbd> <kbd>←</kbd> next step and repeat, <kbd>Space</kbd> pause
             </li>
           </ul>
-          <p className="mt-2 text-sm text-ink-muted">
+          <p className="mt-2 text-sm text-muted">
             Only left Ctrl and left Alt count, after a moment with no other key, so typing with
             AltGr (@, €, {"{"}) never starts Neb.
           </p>

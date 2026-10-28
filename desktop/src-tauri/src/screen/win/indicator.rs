@@ -23,8 +23,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use super::system;
 use crate::screen::frame::ScreenRect;
 
-/// The tutor's ink colour (#8a7bf0) as a COLORREF (0x00BBGGRR).
-const TUTOR_VIOLET: COLORREF = COLORREF(0x00F0_7B8A);
+/// neb's violet (#6b4ee6, `--neb` in packages/shared/src/ui/tokens.ts) as a COLORREF (0x00BBGGRR).
+const TUTOR_VIOLET: COLORREF = COLORREF(0x00E6_4E6B);
 const THICKNESS_AT_100: i32 = 4;
 const PEAK_ALPHA: u8 = 220;
 const FADE_STEPS: u32 = 12;

@@ -19,7 +19,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { coursesApi } from "../../courses/api";
 import type { NewNotebook } from "../tree-repository";
 import { Dialog } from "./Dialog";
-import { COLORS, ICONS } from "./node-style";
+import { COLORS, ICONS, PICKABLE_COLORS } from "./node-style";
 
 const LABELS: readonly ChildLabel[] = ["Chapters", "Units", "Weeks", "Topics", "Modules"];
 
@@ -134,14 +134,14 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
           type="button"
           onClick={onCancel}
           aria-label="Cancel"
-          className="grid size-8 place-items-center rounded-lg text-ink-muted hover:bg-rule/60"
+          className="grid size-8 place-items-center rounded-lg text-muted hover:bg-line/60"
         >
           <X className="size-4" aria-hidden />
         </button>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor={`${ids}-name`} className="text-xs font-medium text-ink-muted">
+        <label htmlFor={`${ids}-name`} className="text-xs font-medium text-muted">
           Name
         </label>
         <input
@@ -153,9 +153,9 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
           onChange={(event) => setName(event.target.value)}
           aria-invalid={!title || taken}
           aria-describedby={`${ids}-name-note`}
-          className="rounded-lg border border-rule bg-paper px-3 py-2 text-base outline-none focus:border-accent"
+          className="rounded-lg border border-line bg-paper px-3 py-2 text-base outline-none focus:border-ink"
         />
-        <p id={`${ids}-name-note`} className="min-h-4 text-xs text-error" aria-live="polite">
+        <p id={`${ids}-name-note`} className="min-h-4 text-xs text-muted" aria-live="polite">
           {!title && "Give it a name."}
           {taken && (
             <>
@@ -173,7 +173,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
       </div>
 
       <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 text-xs font-medium text-ink-muted">Icon and colour</legend>
+        <legend className="mb-1 text-xs font-medium text-muted">Icon and colour</legend>
         <div role="radiogroup" aria-label="Icon" className="flex flex-wrap gap-1">
           {(Object.keys(ICONS) as NotebookIcon[]).map((key) => {
             const Icon = ICONS[key].icon;
@@ -185,7 +185,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
                 aria-checked={shown.icon === key}
                 aria-label={ICONS[key].label}
                 onClick={() => setStyle({ ...shown, icon: key })}
-                className="grid size-8 place-items-center rounded-lg border border-transparent hover:bg-rule/50 aria-checked:border-ink/40 aria-checked:bg-rule/60"
+                className="grid size-8 place-items-center rounded-lg border border-transparent hover:bg-line/50 aria-checked:border-ink/40 aria-checked:bg-line/60"
               >
                 <Icon className="size-4" style={{ color: COLORS[shown.color].hex }} aria-hidden />
               </button>
@@ -193,7 +193,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
           })}
         </div>
         <div role="radiogroup" aria-label="Colour" className="flex flex-wrap gap-1.5">
-          {(Object.keys(COLORS) as NotebookColor[]).map((key) => (
+          {PICKABLE_COLORS.map((key) => (
             <button
               key={key}
               type="button"
@@ -201,7 +201,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
               aria-checked={shown.color === key}
               aria-label={COLORS[key].label}
               onClick={() => setStyle({ ...shown, color: key })}
-              className="size-6 rounded-full ring-offset-2 ring-offset-paper-raised aria-checked:ring-2 aria-checked:ring-ink/60"
+              className="size-6 rounded-full ring-offset-2 ring-offset-paper-hi aria-checked:ring-2 aria-checked:ring-ink/60"
               style={{ background: COLORS[key].hex }}
             />
           ))}
@@ -210,14 +210,14 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
 
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1">
-          <label htmlFor={`${ids}-label`} className="text-xs font-medium text-ink-muted">
+          <label htmlFor={`${ids}-label`} className="text-xs font-medium text-muted">
             Divided into
           </label>
           <select
             id={`${ids}-label`}
             value={label}
             onChange={(event) => setLabel(event.target.value as ChildLabel)}
-            className="rounded-lg border border-rule bg-paper px-2 py-2 text-sm"
+            className="rounded-lg border border-line bg-paper px-2 py-2 text-sm"
           >
             {LABELS.map((each) => (
               <option key={each}>{each}</option>
@@ -226,14 +226,14 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
         </div>
         {courses.length > 0 && (
           <div className="flex flex-col gap-1">
-            <label htmlFor={`${ids}-course`} className="text-xs font-medium text-ink-muted">
+            <label htmlFor={`${ids}-course`} className="text-xs font-medium text-muted">
               Course (optional)
             </label>
             <select
               id={`${ids}-course`}
               value={courseId}
               onChange={(event) => setCourseId(event.target.value)}
-              className="rounded-lg border border-rule bg-paper px-2 py-2 text-sm"
+              className="rounded-lg border border-line bg-paper px-2 py-2 text-sm"
             >
               <option value="">Not linked</option>
               {courses.map((course) => (
@@ -248,8 +248,8 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
 
       <fieldset className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <legend className="text-xs font-medium text-ink-muted">{label} (optional)</legend>
-          <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <legend className="text-xs font-medium text-muted">{label} (optional)</legend>
+          <label className="flex items-center gap-2 text-xs text-muted">
             How many
             <input
               type="number"
@@ -258,7 +258,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
               value={chapters.length}
               onChange={(event) => setCount(event.target.value)}
               aria-label={`Number of ${label.toLowerCase()}`}
-              className="w-16 rounded-lg border border-rule bg-paper px-2 py-1 text-sm text-ink"
+              className="w-16 rounded-lg border border-line bg-paper px-2 py-1 text-sm text-ink"
             />
           </label>
         </div>
@@ -267,9 +267,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
           <ol className="flex flex-col gap-1" aria-label={label}>
             {chapters.map((chapter, index) => (
               <li key={index} className="flex items-center gap-1">
-                <span className="w-6 text-right text-xs text-ink-muted tabular-nums">
-                  {index + 1}
-                </span>
+                <span className="w-6 text-right text-xs text-muted tabular-nums">{index + 1}</span>
                 <input
                   value={chapter}
                   maxLength={TREE_LIMITS.titleChars}
@@ -279,7 +277,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
                       now.map((each, i) => (i === index ? event.target.value : each)),
                     )
                   }
-                  className="min-w-0 flex-1 rounded-lg border border-rule bg-paper px-2 py-1 text-sm outline-none focus:border-accent"
+                  className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-2 py-1 text-sm outline-none focus:border-ink"
                 />
                 <SmallButton
                   label={`Move ${chapter} up`}
@@ -321,7 +319,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
               setNewChapter("");
             }
           }}
-          className="rounded-lg border border-dashed border-rule bg-transparent px-2 py-1.5 text-sm outline-none focus:border-accent"
+          className="rounded-lg border border-dashed border-line bg-transparent px-2 py-1.5 text-sm outline-none focus:border-ink"
         />
       </fieldset>
 
@@ -336,7 +334,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
               }
               onFromPdf({ title, ...shown, childLabel: label, ...(courseId && { courseId }) });
             }}
-            className="mr-auto rounded-lg px-3 py-2 text-sm text-ink-muted underline-offset-2 hover:underline"
+            className="mr-auto rounded-lg px-3 py-2 text-sm text-muted underline-offset-2 hover:underline"
           >
             Chapters from a PDF…
           </button>
@@ -344,7 +342,7 @@ function CreateNotebookForm({ tree, onCreate, onFromPdf, onCancel, onDraft }: Pr
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-rule/50"
+          className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-line/50"
         >
           Cancel
         </button>
@@ -372,7 +370,7 @@ function SmallButton(props: {
       title={props.label}
       disabled={props.disabled}
       onClick={props.onClick}
-      className="grid size-7 shrink-0 place-items-center rounded-md text-ink-muted hover:bg-rule/60 disabled:opacity-30"
+      className="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-line/60 disabled:opacity-30"
     >
       {props.children}
     </button>

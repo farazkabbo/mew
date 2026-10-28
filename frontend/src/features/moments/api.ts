@@ -28,7 +28,7 @@ async function call<T>(url: string, schema: z.ZodType<T>, init: RequestInit = {}
   }
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-    const message = typeof body?.error === "string" ? body.error : "Something went wrong.";
+    const message = typeof body?.error === "string" ? body.error : "Couldn't reach neb. Try again.";
     throw new MomentApiError(message, response.status);
   }
   return schema.parse(response.status === 204 ? undefined : await response.json());

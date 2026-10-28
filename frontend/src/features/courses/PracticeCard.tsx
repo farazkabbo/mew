@@ -1,7 +1,7 @@
 "use client";
 
 import type { ConceptProgress, PracticeQuestion } from "@mew/shared";
-import { Check, Lightbulb, X } from "lucide-react";
+import { Check, Circle, Lightbulb } from "lucide-react";
 import { useState } from "react";
 
 import { coursesApi } from "./api";
@@ -50,10 +50,7 @@ export function PracticeCard({
   };
 
   return (
-    <li
-      data-testid="practice-question"
-      className="rounded-xl border border-rule bg-paper-raised p-5"
-    >
+    <li data-testid="practice-question" className="rounded-xl border border-line bg-paper-hi p-5">
       <p className="font-medium">
         {index + 1}. {question.question}
       </p>
@@ -62,17 +59,17 @@ export function PracticeCard({
         rows={2}
         disabled={revealed}
         placeholder="Your answer (or work it out in the notebook)"
-        className="mt-3 w-full resize-y rounded-lg border border-rule bg-paper px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-70"
+        className="mt-3 w-full resize-y rounded-lg border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink disabled:opacity-70"
       />
       {hint && question.hint && (
         <p className="mt-2 flex gap-2 text-sm">
-          <Lightbulb className="mt-0.5 size-4 shrink-0 text-tutor" aria-hidden />
+          <Lightbulb className="mt-0.5 size-4 shrink-0 text-neb-ink" aria-hidden />
           {question.hint}
         </p>
       )}
       {revealed && (
-        <div className="mt-3 rounded-lg border border-rule bg-paper p-3 text-sm">
-          <p className="text-xs tracking-wide text-ink-muted uppercase">Model answer</p>
+        <div className="mt-3 rounded-lg border border-line bg-paper p-3 text-sm">
+          <p className="text-xs tracking-wide text-muted uppercase">Model answer</p>
           <p className="mt-1 whitespace-pre-wrap">{question.answer}</p>
         </div>
       )}
@@ -92,18 +89,18 @@ export function PracticeCard({
         )}
         {revealed && !result && (
           <>
-            <span className="text-ink-muted">Did you have it?</span>
+            <span className="text-muted">Did you have it?</span>
             <button onClick={() => record(true)} className={SECONDARY}>
-              <Check className="size-4 text-check" aria-hidden />I had it
+              <Check className="size-4 text-ink" aria-hidden />I had it
             </button>
             <button onClick={() => record(false)} className={SECONDARY}>
-              <X className="size-4 text-error" aria-hidden />
+              <Circle className="size-4 text-muted" aria-hidden />
               Not quite
             </button>
           </>
         )}
         {result && (
-          <span role="status" className={result.correct ? "text-check" : "text-ink-muted"}>
+          <span role="status" className={result.correct ? "text-neb-ink" : "text-muted"}>
             {result.correct
               ? result.withHint
                 ? "Recorded: correct with a hint."
@@ -112,7 +109,7 @@ export function PracticeCard({
           </span>
         )}
         {error && (
-          <span role="alert" className="text-error">
+          <span role="alert" className="text-muted">
             {error}
           </span>
         )}
@@ -122,5 +119,5 @@ export function PracticeCard({
 }
 
 const SECONDARY =
-  "inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 hover:border-accent";
+  "inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 hover:border-ink";
 const PRIMARY = "rounded-full bg-ink px-3 py-1 font-medium text-paper";

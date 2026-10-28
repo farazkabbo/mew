@@ -29,17 +29,17 @@ export function NotesCheckPanel() {
           type="button"
           aria-label="Close Notes Check"
           onClick={closePanel}
-          className="px-1 text-lg text-ink-muted"
+          className="px-1 text-lg text-muted"
         >
           ×
         </button>
       </header>
       <div aria-live="polite" className="px-4 pt-1">
-        {running && <p className="text-ink-muted">Checking against your notes…</p>}
-        {error && <p className="text-error">{error}</p>}
+        {running && <p className="text-muted">Checking against your notes…</p>}
+        {error && <p className="text-muted">{error}</p>}
         {result && !running && <p>{result.speech}</p>}
         {result?.scopeLabel && !running && (
-          <p className="mt-1 text-xs text-ink-muted">{result.scopeLabel}</p>
+          <p className="mt-1 text-xs text-muted">{result.scopeLabel}</p>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
@@ -64,9 +64,7 @@ export function NotesCheckPanel() {
                       </span>
                       <div>
                         <p>{item.title}</p>
-                        {item.detail && (
-                          <p className="mt-1 text-xs text-ink-muted">{item.detail}</p>
-                        )}
+                        {item.detail && <p className="mt-1 text-xs text-muted">{item.detail}</p>}
                         <div className="mt-1 flex gap-3 text-xs">
                           {item.inNotebook && (
                             <button
@@ -80,13 +78,13 @@ export function NotesCheckPanel() {
                           {item.type !== "match" && !done && (
                             <button
                               type="button"
-                              className="text-ink-muted underline"
+                              className="text-muted underline"
                               onClick={() => void dismissFinding(item.findingId)}
                             >
                               Dismiss
                             </button>
                           )}
-                          {done && <span className="text-ink-muted">✓ Worked through</span>}
+                          {done && <span className="text-muted">✓ Worked through</span>}
                         </div>
                       </div>
                     </li>

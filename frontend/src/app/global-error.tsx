@@ -23,7 +23,7 @@ export default function GlobalError({
         <div style={{ maxWidth: 420, textAlign: "center", padding: 24 }}>
           <h1 style={{ fontWeight: 400 }}>Neb couldn&apos;t start</h1>
           <p style={{ color: "#6b675f" }}>
-            Something went wrong while loading the app. Your notes are saved on this device.
+            The app didn&apos;t load. Your notes are saved on this device. Try again.
           </p>
           <button
             type="button"

@@ -21,7 +21,7 @@ export function ClipSource({ image, onCheck, onRecognize, reading = false }: Pro
   return (
     <p
       data-testid="clip-source"
-      className="pointer-events-auto flex max-w-[min(36rem,90vw)] items-center gap-2 truncate rounded-full bg-paper/90 px-3 py-1 text-xs text-ink-muted shadow-sm ring-1 ring-ink/10"
+      className="pointer-events-auto flex max-w-[min(36rem,90vw)] items-center gap-2 truncate rounded-full bg-paper/90 px-3 py-1 text-xs text-muted shadow-sm ring-1 ring-ink/10"
     >
       <span className="truncate">
         {image.pdf ? sourceLabel(image) : `From your screen · ${sourceLabel(image)}`}

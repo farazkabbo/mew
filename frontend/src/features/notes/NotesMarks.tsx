@@ -158,14 +158,14 @@ export function NotesMarks({ canvas, marks, focusId, db, ink }: Props) {
                         target="_blank"
                         rel="noopener noreferrer"
                         aria-label={`Matches your source: ${mark.link.label}`}
-                        className="pointer-events-auto absolute max-w-48 truncate rounded-full bg-paper/90 px-2 py-0.5 text-[10px] text-ink-muted shadow-sm ring-1 ring-ink/10"
+                        className="pointer-events-auto absolute max-w-48 truncate rounded-full bg-paper/90 px-2 py-0.5 text-[10px] text-muted shadow-sm ring-1 ring-ink/10"
                         style={{ left: x + w + 8, top: y + h / 2 - 9 }}
                       >
                         ✓ {mark.link.label}
                       </a>
                     ) : (
                       <span
-                        className="absolute max-w-48 truncate rounded-full bg-paper/90 px-2 py-0.5 text-[10px] text-ink-muted ring-1 ring-ink/10"
+                        className="absolute max-w-48 truncate rounded-full bg-paper/90 px-2 py-0.5 text-[10px] text-muted ring-1 ring-ink/10"
                         style={{ left: x + w + 8, top: y + h / 2 - 9 }}
                       >
                         ✓ {mark.link.label}
@@ -228,7 +228,7 @@ function Card({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="float-right -mt-1 -mr-1 px-1 text-ink-muted"
+        className="float-right -mt-1 -mr-1 px-1 text-muted"
       >
         ×
       </button>

@@ -64,7 +64,7 @@ export function InkBox({
       width={width}
       height={height}
       aria-label={label}
-      className="touch-none rounded-md border border-rule bg-paper text-ink"
+      className="touch-none rounded-md border border-line bg-paper text-ink"
       style={{ width, height }}
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);

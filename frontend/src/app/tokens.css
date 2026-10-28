@@ -1,0 +1,82 @@
+/* Generated from packages/shared/src/ui/tokens.ts by `pnpm build:tokens`. Don't edit. */
+
+:root {
+  --desk: #ECE6D8;
+  --paper: #FBF8F0;
+  --paper-hi: #FFFEFB;
+  --ink: #1E1D1A;
+  --pencil: #26292E;
+  --muted: #5F5A50;
+  --line: #D3CAB7;
+  --rule: #D6E2E6;
+  --margin-red: #E9B9B2;
+  --neb: #6B4EE6;
+  --neb-ink: #3F2BA0;
+  --neb-wash: #F1EDFF;
+  --note: #F1E5AE;
+  --teal: #7DA4AF;
+  --ok-pen: #3E6DB5;
+  --red-pen: #C2453A;
+  --danger: #A8402F;
+  --sh-1: 0 1px 0 var(--line);
+  --sh-2: 0 10px 24px -14px #1E1D1A66;
+  --sh-3: 0 24px 50px -30px #1E1D1A99;
+  --z-page: 0;
+  --z-ink: 10;
+  --z-marks: 20;
+  --z-notes: 30;
+  --z-tools: 40;
+  --z-toasts: 50;
+  --z-pickers: 60;
+  --t-quick: 120ms ease-out;
+  --t-move: 220ms cubic-bezier(.2, .8, .2, 1);
+  --font-ui: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), "Instrument Serif", ui-serif, Georgia, serif;
+  --font-neb: var(--font-pixelify), "Pixelify Sans", ui-monospace, monospace;
+  --font-hand: var(--font-caveat), "Caveat", cursive;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #1B1F23;
+    --paper: #22272C;
+    --paper-hi: #2A3036;
+    --ink: #ECE6D8;
+    --pencil: #E2DED4;
+    --muted: #A9A294;
+    --line: #3A4047;
+    --rule: #2F3A40;
+    --margin-red: #6A3E3A;
+    --neb: #9C86FF;
+    --neb-ink: #C9BCFF;
+    --neb-wash: #2C2550;
+    --note: #5A5230;
+    --teal: #7DA4AF;
+    --ok-pen: #7FA6E8;
+    --red-pen: #E07B70;
+    --danger: #E8907F;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="night"] {
+  --desk: #1B1F23;
+  --paper: #22272C;
+  --paper-hi: #2A3036;
+  --ink: #ECE6D8;
+  --pencil: #E2DED4;
+  --muted: #A9A294;
+  --line: #3A4047;
+  --rule: #2F3A40;
+  --margin-red: #6A3E3A;
+  --neb: #9C86FF;
+  --neb-ink: #C9BCFF;
+  --neb-wash: #2C2550;
+  --note: #5A5230;
+  --teal: #7DA4AF;
+  --ok-pen: #7FA6E8;
+  --red-pen: #E07B70;
+  --danger: #E8907F;
+  color-scheme: dark;
+}

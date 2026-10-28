@@ -109,7 +109,7 @@ export function EntryNotes({ canvas, images }: Props) {
                 // A day's first entry on a "From screen" page (K3).
                 <h3
                   data-testid="entry-day"
-                  className="absolute font-serif text-lg text-ink-muted"
+                  className="absolute font-serif text-lg text-muted"
                   style={{ left: image.x, top: image.y - HEADING_SPACE + 4 }}
                 >
                   {entry.heading}
@@ -135,7 +135,7 @@ export function EntryNotes({ canvas, images }: Props) {
                         </li>
                       ))}
                     </ol>
-                    <p className="mt-1 text-ink-muted">{turn.summary}</p>
+                    <p className="mt-1 text-muted">{turn.summary}</p>
                     {turn.followUpQuestion && (
                       <p className="mt-1">
                         <span className="font-medium">To check:</span> {turn.followUpQuestion}

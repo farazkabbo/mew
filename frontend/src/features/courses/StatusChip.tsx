@@ -1,11 +1,11 @@
 import { CONCEPT_STATUS_LABELS, type ConceptStatus } from "@mew/shared";
 
 const TONE: Record<ConceptStatus, string> = {
-  not_started: "border-rule text-ink-muted",
-  explored: "border-accent/30 text-accent",
-  practised_with_hint: "border-tutor/40 text-tutor",
-  checked: "border-check/40 bg-check/10 text-check",
-  revisit: "border-error/40 text-error",
+  not_started: "border-line text-muted",
+  explored: "border-ink/30 text-ink",
+  practised_with_hint: "border-line text-ink",
+  checked: "border-ink/40 bg-ink/5 text-ink",
+  revisit: "border-line text-muted",
 };
 
 /** A concept's learning status: Not started · Explored · Practised with hint · Checked · Revisit. */

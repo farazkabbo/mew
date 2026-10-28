@@ -72,7 +72,7 @@ export function MarkLayer({ canvas, live, onWhy }: Props) {
                 aria-label={`${KIND_LABEL[mark.markKind]}${mark.note && mark.note !== "?" ? `: ${mark.note}` : ""}`}
                 aria-expanded={open}
                 onClick={() => (open ? close() : setOpenId(mark.id))}
-                className="pointer-events-auto block rounded-md focus-visible:outline-2 focus-visible:outline-accent"
+                className="pointer-events-auto block rounded-md focus-visible:outline-2 focus-visible:outline-ink"
                 style={{ width: w, height: h }}
               />
               {open && (
@@ -80,7 +80,7 @@ export function MarkLayer({ canvas, live, onWhy }: Props) {
                   role="menu"
                   aria-label="Mark"
                   data-testid="mark-menu"
-                  className="pointer-events-auto absolute top-full left-0 z-20 mt-1 flex min-w-40 flex-col rounded-xl border border-rule bg-paper-raised p-1 text-sm shadow-lg"
+                  className="pointer-events-auto absolute top-full left-0 z-20 mt-1 flex min-w-40 flex-col rounded-xl border border-line bg-paper-hi p-1 text-sm shadow-lg"
                   onKeyDown={(event) => event.key === "Escape" && close()}
                 >
                   {mark.markKind !== "unsure" && mark.recognizedText && (
@@ -154,7 +154,7 @@ function MenuItem({ onClick, children }: { onClick(): void; children: React.Reac
       type="button"
       role="menuitem"
       onClick={onClick}
-      className="rounded-lg px-3 py-1.5 text-left hover:bg-rule/60"
+      className="rounded-lg px-3 py-1.5 text-left hover:bg-line/60"
     >
       {children}
     </button>
@@ -176,7 +176,7 @@ function ReadAs({
   if (typing) return <SaysForm mark={mark} onTyped={onTyped} />;
   return (
     <>
-      <p className="px-3 pt-1.5 text-xs text-ink-muted" data-testid="mark-neb-read">
+      <p className="px-3 pt-1.5 text-xs text-muted" data-testid="mark-neb-read">
         neb read: <span className="font-mono">{mark.recognizedText}</span>
       </p>
       <MenuItem onClick={onType}>Fix what neb read</MenuItem>
@@ -194,7 +194,7 @@ function SaysForm({ mark, onTyped }: { mark: Annotation; onTyped(text: string): 
         if (text.trim()) onTyped(text.trim());
       }}
     >
-      <label className="text-xs text-ink-muted" htmlFor={`${mark.id}-says`}>
+      <label className="text-xs text-muted" htmlFor={`${mark.id}-says`}>
         It says
       </label>
       <input
@@ -203,7 +203,7 @@ function SaysForm({ mark, onTyped }: { mark: Annotation; onTyped(text: string): 
         maxLength={300}
         value={text}
         onChange={(event) => setText(event.target.value)}
-        className="rounded-lg border border-rule bg-paper px-2 py-1 outline-none focus:border-accent"
+        className="rounded-lg border border-line bg-paper px-2 py-1 outline-none focus:border-ink"
       />
       <button type="submit" className="self-end rounded-full bg-ink px-3 py-1 text-paper">
         Check it
@@ -228,7 +228,7 @@ function Unsure({
   if (typing) return <SaysForm mark={mark} onTyped={onTyped} />;
   return (
     <>
-      <p className="px-3 py-1.5 text-ink-muted" data-testid="mark-read-as">
+      <p className="px-3 py-1.5 text-muted" data-testid="mark-read-as">
         I read: <span className="text-ink">{mark.recognizedText || "nothing"}</span> — right?
       </p>
       <MenuItem onClick={onYes}>Yes</MenuItem>

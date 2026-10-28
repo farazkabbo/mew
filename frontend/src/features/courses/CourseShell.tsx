@@ -19,13 +19,13 @@ export function CourseShell({
       <main className="mx-auto max-w-3xl px-6 py-10 sm:py-14">
         <Link
           href={back.href}
-          className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"
+          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"
         >
           <ArrowLeft className="size-4" aria-hidden />
           {back.label}
         </Link>
         <h1 className="mt-6 font-serif text-4xl tracking-tight sm:text-5xl">{title}</h1>
-        {subtitle && <div className="mt-3 text-ink-muted">{subtitle}</div>}
+        {subtitle && <div className="mt-3 text-muted">{subtitle}</div>}
         <div className="mt-10">{children}</div>
       </main>
     </div>
@@ -35,10 +35,10 @@ export function CourseShell({
 export function StatusPill({ status }: { status: string }) {
   const tone =
     status === "ready"
-      ? "bg-check/15 text-check"
+      ? "bg-ink/10 text-ink"
       : status === "failed"
-        ? "bg-error/15 text-error"
-        : "bg-accent/15 text-accent";
+        ? "bg-line text-muted"
+        : "bg-ink/15 text-ink";
   const label =
     status === "processing" ? "Building" : status === "review" ? "Needs review" : status;
   return (

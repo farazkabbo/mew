@@ -47,7 +47,7 @@ export function MarksMenu({ notebookId, pageId }: Props) {
         aria-expanded={open}
         aria-controls={`${ids}-panel`}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-ink-muted hover:bg-rule/50 hover:text-ink aria-expanded:bg-rule/60"
+        className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-muted hover:bg-line/50 hover:text-ink aria-expanded:bg-line/60"
       >
         <CheckCheck className="size-4" aria-hidden />
         <span className="hidden capitalize sm:inline">{level}</span>
@@ -57,10 +57,10 @@ export function MarksMenu({ notebookId, pageId }: Props) {
           id={`${ids}-panel`}
           role="group"
           aria-label="Live marks"
-          className="absolute top-10 right-0 z-30 w-72 rounded-xl border border-rule bg-paper-raised p-3 text-sm shadow-lg"
+          className="absolute top-10 right-0 z-30 w-72 rounded-xl border border-line bg-paper-hi p-3 text-sm shadow-lg"
         >
           <fieldset disabled={!notebookId}>
-            <legend className="mb-1 text-xs font-medium text-ink-muted">
+            <legend className="mb-1 text-xs font-medium text-muted">
               Marks while I write (this notebook)
             </legend>
             {MarkLevel.options.map((option) => (
@@ -77,11 +77,11 @@ export function MarksMenu({ notebookId, pageId }: Props) {
               </label>
             ))}
             {quiet && prefs.level !== "quiet" && prefs.level !== "off" && (
-              <p role="status" className="mt-1 text-xs text-ink-muted">
+              <p role="status" className="mt-1 text-xs text-muted">
                 On Quiet for the rest of today: today&apos;s live marking budget is used.
               </p>
             )}
-            <label className="mt-2 flex items-center gap-2 border-t border-rule pt-2">
+            <label className="mt-2 flex items-center gap-2 border-t border-line pt-2">
               <input
                 type="checkbox"
                 checked={prefs.hideUntilDone}

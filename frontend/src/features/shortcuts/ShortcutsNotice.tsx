@@ -22,12 +22,12 @@ export function ShortcutsNotice({ hidden }: { hidden: boolean }) {
     <section
       aria-labelledby="shortcuts-notice-title"
       data-testid="shortcuts-notice"
-      className="pointer-events-auto w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-rule bg-paper-raised p-4 text-sm shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)]"
+      className="pointer-events-auto w-[22rem] max-w-[calc(100vw-2rem)] rounded-2xl border border-line bg-paper-hi p-4 text-sm shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)]"
     >
       <h2 id="shortcuts-notice-title" className="font-semibold">
         Shortcuts got simpler
       </h2>
-      <p className="mt-1 text-ink-muted">Every Neb shortcut is two keys at most now.</p>
+      <p className="mt-1 text-muted">Every Neb shortcut is two keys at most now.</p>
       <ul className="mt-2 list-disc space-y-1 pl-5">
         <li>
           Redo is <kbd>{keys.shown("redo")}</kbd> (Ctrl+Shift+Z is gone).

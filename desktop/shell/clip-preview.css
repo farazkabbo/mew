@@ -86,7 +86,7 @@ body.preview main {
 
 .frame .card {
   fill: rgba(255, 252, 242, 0.95);
-  stroke: rgba(138, 123, 240, 0.45);
+  stroke: rgba(107, 78, 230, 0.45);
 }
 
 .hint {

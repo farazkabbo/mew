@@ -807,13 +807,11 @@ export function NotebookApp({ userId }: { userId: string }) {
             onSelection={setLassoed}
           />
         ) : (
-          <div className="grid h-full place-items-center text-sm text-ink-muted">
-            Opening notebook…
-          </div>
+          <div className="grid h-full place-items-center text-sm text-muted">Opening notebook…</div>
         )}
 
         {view === "page" && notebookId && !quizActive && (
-          <div className="pointer-events-auto absolute top-[4.25rem] left-4 hidden max-w-[45%] rounded-xl bg-paper-raised/90 px-1 py-1 backdrop-blur md:block">
+          <div className="pointer-events-auto absolute top-[4.25rem] left-4 hidden max-w-[45%] rounded-xl bg-paper-hi/90 px-1 py-1 backdrop-blur md:block">
             <Breadcrumb
               tree={tree}
               nodeId={notebookId}
@@ -957,9 +955,7 @@ export function NotebookApp({ userId }: { userId: string }) {
         >
           {notice && (
             <p
-              className={`pointer-events-auto flex items-center gap-3 rounded-full px-4 py-2 text-sm shadow-lg ${
-                notice.tone === "error" ? "bg-error text-white" : "bg-ink text-paper"
-              }`}
+              className={`pointer-events-auto flex items-center gap-3 rounded-full px-4 py-2 text-sm shadow-lg ${"bg-ink text-paper"}`}
             >
               {notice.text}
               {notice.action && (

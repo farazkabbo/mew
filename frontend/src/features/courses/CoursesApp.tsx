@@ -63,10 +63,10 @@ export function CoursesApp() {
       <form
         onSubmit={(e) => void submit(e)}
         aria-label="New course"
-        className="rounded-2xl border border-rule bg-paper-raised p-6"
+        className="rounded-2xl border border-line bg-paper-hi p-6"
       >
         <h2 className="font-serif text-2xl">New course</h2>
-        <label className="mt-5 flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-rule px-4 py-8 text-center text-sm text-ink-muted hover:border-accent focus-within:border-accent">
+        <label className="mt-5 flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-muted hover:border-ink focus-within:border-ink">
           <FileUp className="size-6" aria-hidden />
           <span>{file ? file.name : "Choose a PDF (up to 15 MB)"}</span>
           <input
@@ -77,13 +77,13 @@ export function CoursesApp() {
           />
         </label>
         <label className="mt-4 block text-sm">
-          <span className="text-ink-muted">Course title</span>
+          <span className="text-muted">Course title</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={120}
             required
-            className="mt-1 w-full rounded-lg border border-rule bg-paper px-3 py-2 outline-none focus:border-accent"
+            className="mt-1 w-full rounded-lg border border-line bg-paper px-3 py-2 outline-none focus:border-ink"
           />
         </label>
         <button
@@ -95,7 +95,7 @@ export function CoursesApp() {
           Build course
         </button>
         {error && (
-          <p role="alert" className="mt-3 text-sm text-error">
+          <p role="alert" className="mt-3 text-sm text-muted">
             {error}
           </p>
         )}
@@ -104,16 +104,16 @@ export function CoursesApp() {
       <section aria-label="Your courses" className="mt-12">
         <h2 className="font-serif text-2xl">Your courses</h2>
         {courses === null ? (
-          <p className="mt-4 text-sm text-ink-muted">Loading…</p>
+          <p className="mt-4 text-sm text-muted">Loading…</p>
         ) : courses.length === 0 ? (
-          <p className="mt-4 text-sm text-ink-muted">No courses yet.</p>
+          <p className="mt-4 text-sm text-muted">No courses yet.</p>
         ) : (
-          <ul className="mt-4 divide-y divide-rule border-y border-rule">
+          <ul className="mt-4 divide-y divide-line border-y border-line">
             {courses.map((course) => (
               <li key={course.id}>
                 <Link
                   href={`/courses/${course.id}`}
-                  className="flex items-center justify-between gap-4 py-4 hover:text-accent"
+                  className="flex items-center justify-between gap-4 py-4 hover:text-ink"
                 >
                   <span className="font-medium">{course.title}</span>
                   <StatusPill status={course.status} />

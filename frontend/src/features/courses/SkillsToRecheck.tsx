@@ -51,25 +51,25 @@ export function SkillsToRecheck({ now }: { now: Date }) {
     <section
       aria-label="Skills to re-check"
       data-testid="review-skills"
-      className="mb-8 rounded-2xl border border-rule bg-paper-raised p-4"
+      className="mb-8 rounded-2xl border border-line bg-paper-hi p-4"
     >
       <h2 className="font-serif text-2xl">Skills to re-check</h2>
-      <p className="text-sm text-ink-muted">
+      <p className="text-sm text-muted">
         {due === 0
           ? "Nothing to re-check today."
           : `${due === 1 ? "1 skill is" : `${due} skills are`} due. On your computer, hold the key and say “let me try ${sorted[0]?.title.toLowerCase()} on my own”.`}
       </p>
       {error && (
-        <p role="alert" className="mt-2 text-sm text-error">
+        <p role="alert" className="mt-2 text-sm text-muted">
           {error}
         </p>
       )}
-      <ul className="mt-3 divide-y divide-rule border-y border-rule">
+      <ul className="mt-3 divide-y divide-line border-y border-line">
         {sorted.map((skill) => (
           <li key={skill.id} data-testid="review-skill" className="flex items-center gap-4 py-3">
             <span className="min-w-0 flex-1">
               <span className="font-medium">{skill.title}</span>
-              <span className="block text-sm text-ink-muted">
+              <span className="block text-sm text-muted">
                 {[
                   skill.conceptTitle && `Part of ${skill.conceptTitle}`,
                   skill.lastEvidence && `Last time: ${LAST[skill.lastEvidence]}`,
@@ -79,12 +79,12 @@ export function SkillsToRecheck({ now }: { now: Date }) {
                   .join(" · ")}
               </span>
             </span>
-            <span className="text-sm text-ink-muted">{formatDue(skill.dueAt, now)}</span>
+            <span className="text-sm text-muted">{formatDue(skill.dueAt, now)}</span>
             <button
               type="button"
               onClick={() => void forget(skill.id)}
               aria-label={`Forget ${skill.title}`}
-              className="rounded-full p-1 text-ink-muted hover:text-ink"
+              className="rounded-full p-1 text-muted hover:text-ink"
             >
               <X className="size-4" aria-hidden />
             </button>

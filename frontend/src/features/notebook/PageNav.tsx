@@ -15,12 +15,12 @@ export function PageNav({ pages, currentPageId, onSelect, onAdd }: Props) {
   const previous = pages[index - 1];
   const next = pages[index + 1];
   const button =
-    "grid size-8 place-items-center rounded-lg text-ink-muted hover:bg-rule/50 hover:text-ink disabled:pointer-events-none disabled:opacity-35";
+    "grid size-8 place-items-center rounded-lg text-muted hover:bg-line/50 hover:text-ink disabled:pointer-events-none disabled:opacity-35";
 
   return (
     <nav
       aria-label="Pages"
-      className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-rule bg-paper-raised/95 p-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] backdrop-blur"
+      className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-line bg-paper-hi/95 p-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] backdrop-blur"
     >
       <button
         className={button}
@@ -30,7 +30,7 @@ export function PageNav({ pages, currentPageId, onSelect, onAdd }: Props) {
       >
         <ChevronLeft className="size-4" aria-hidden />
       </button>
-      <span className="min-w-20 text-center text-xs tabular-nums text-ink-muted" aria-live="polite">
+      <span className="min-w-20 text-center text-xs tabular-nums text-muted" aria-live="polite">
         Page {index + 1} of {pages.length}
       </span>
       <button
@@ -41,7 +41,7 @@ export function PageNav({ pages, currentPageId, onSelect, onAdd }: Props) {
       >
         <ChevronRight className="size-4" aria-hidden />
       </button>
-      <span aria-hidden className="mx-1 h-5 w-px bg-rule" />
+      <span aria-hidden className="mx-1 h-5 w-px bg-line" />
       <button className={button} aria-label="New page" title="New page" onClick={onAdd}>
         <Plus className="size-4" aria-hidden />
       </button>

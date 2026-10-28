@@ -77,12 +77,12 @@ export function ScopeReview({
   return (
     <section aria-label="Review the concepts">
       <h2 className="font-serif text-2xl">Check the plan</h2>
-      <p className="mt-2 text-sm text-ink-muted">
+      <p className="mt-2 text-sm text-muted">
         These are the concepts we found, in a suggested order. Rename, reorder, merge or remove any
         before you start.
       </p>
 
-      <ol className="mt-6 divide-y divide-rule border-y border-rule">
+      <ol className="mt-6 divide-y divide-line border-y border-line">
         {rows.map((row, index) => {
           const concept = byId.get(row.id);
           const needs = edges
@@ -92,7 +92,7 @@ export function ScopeReview({
           const off = row.removed || row.mergedInto;
           return (
             <li key={row.id} data-testid="review-concept" className="flex gap-3 py-4">
-              <span className="w-6 shrink-0 pt-2 text-right text-sm text-ink-muted tabular-nums">
+              <span className="w-6 shrink-0 pt-2 text-right text-sm text-muted tabular-nums">
                 {off ? "–" : active.findIndex((r) => r.id === row.id) + 1}
               </span>
               <div className={`min-w-0 flex-1 ${off ? "opacity-45" : ""}`}>
@@ -102,9 +102,9 @@ export function ScopeReview({
                   disabled={Boolean(off)}
                   maxLength={120}
                   onChange={(e) => update(row.id, { title: e.target.value })}
-                  className="w-full rounded-md border border-transparent bg-transparent px-1 py-1 font-medium hover:border-rule focus:border-accent focus:outline-none"
+                  className="w-full rounded-md border border-transparent bg-transparent px-1 py-1 font-medium hover:border-line focus:border-ink focus:outline-none"
                 />
-                <p className="px-1 text-sm text-ink-muted">
+                <p className="px-1 text-sm text-muted">
                   {row.mergedInto
                     ? `Merged into “${titleOf(row.mergedInto)}”`
                     : row.removed
@@ -158,12 +158,12 @@ export function ScopeReview({
 
       <div className="mt-8 flex flex-wrap items-end gap-4">
         <label className="text-sm">
-          <span className="text-ink-muted">Exam date (optional)</span>
+          <span className="text-muted">Exam date (optional)</span>
           <input
             type="date"
             value={examDate}
             onChange={(e) => setExamDate(e.target.value)}
-            className="mt-1 block rounded-lg border border-rule bg-paper px-3 py-2 outline-none focus:border-accent"
+            className="mt-1 block rounded-lg border border-line bg-paper px-3 py-2 outline-none focus:border-ink"
           />
         </label>
         <button
@@ -176,7 +176,7 @@ export function ScopeReview({
         </button>
       </div>
       {error && (
-        <p role="alert" className="mt-3 text-sm text-error">
+        <p role="alert" className="mt-3 text-sm text-muted">
           {error}
         </p>
       )}
@@ -202,7 +202,7 @@ function Action({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-md text-ink-muted hover:bg-rule/60 hover:text-ink disabled:opacity-30 [&>svg]:size-4"
+      className="grid size-8 place-items-center rounded-md text-muted hover:bg-line/60 hover:text-ink disabled:opacity-30 [&>svg]:size-4"
     >
       {children}
     </button>

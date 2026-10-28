@@ -12,8 +12,9 @@ import { expect, type Page, test } from "./fixtures";
  */
 
 const DB_NAME = "mew-notebooks-local";
-const RED = "#c8432b";
-const GREEN = "#2f7d55";
+/** neb's marks are all violet (U1), so they're told apart by kind. */
+const RED = ["error", "missing"];
+const GREEN = ["tick"];
 
 type StoredStroke = {
   id: string;
@@ -128,8 +129,8 @@ function readStore<T>(page: Page, store: string): Promise<T[]> {
 }
 
 const strokes = (page: Page) => readStore<StoredStroke>(page, "strokes");
-const marksIn = async (page: Page, color: string) =>
-  (await strokes(page)).filter((s) => s.markKind && s.color === color);
+const marksIn = async (page: Page, kinds: string[]) =>
+  (await strokes(page)).filter((s) => s.markKind !== undefined && kinds.includes(s.markKind));
 
 test("K9: a wrong step is circled with a hint, silently; fixed, it turns into a tick", async ({
   page,

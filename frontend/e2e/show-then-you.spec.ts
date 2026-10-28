@@ -14,7 +14,8 @@ import { expect, type Page, test } from "./fixtures";
  */
 
 const DB_NAME = "mew-notebooks-local";
-const RED = "#c8432b";
+/** neb's marks (U1: violet, never the red pen). */
+const RED = "#6b4ee6";
 
 type Reading = { text: string; latex: string | null };
 type StoredStroke = { author: string; color: string; bbox: [number, number, number, number] };

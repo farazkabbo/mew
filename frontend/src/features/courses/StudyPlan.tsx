@@ -60,7 +60,7 @@ export function StudyPlan({
   return (
     <section aria-label="Study plan">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-ink-muted" data-testid="plan-summary">
+        <p className="text-muted" data-testid="plan-summary">
           {concepts.length} concepts · {counts.checked} checked
           {counts.revisit > 0 && ` · ${counts.revisit} to revisit`}
           {plan &&
@@ -69,9 +69,9 @@ export function StudyPlan({
         <div className="flex flex-wrap gap-2">
           <Link
             href={quizHref(course)}
-            className="inline-flex items-center gap-2 rounded-full border border-rule px-5 py-2 text-sm font-medium hover:border-accent"
+            className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium hover:border-ink"
           >
-            <Sparkles className="size-4 text-tutor" aria-hidden />
+            <Sparkles className="size-4 text-neb-ink" aria-hidden />
             Quiz me
           </Link>
           <Link
@@ -87,7 +87,7 @@ export function StudyPlan({
       <ExamDate detail={detail} onChange={onChange} />
       {plan && plan.daysLeft >= 0 && known && <ExamPlanView plan={plan} concepts={concepts} />}
 
-      <ol className="mt-6 divide-y divide-rule border-y border-rule">
+      <ol className="mt-6 divide-y divide-line border-y border-line">
         {concepts.map((concept, index) => {
           const needs = edges
             .filter((e) => e.to_concept === concept.id)
@@ -96,17 +96,17 @@ export function StudyPlan({
           const state = progress.get(concept.id);
           return (
             <li key={concept.id} data-testid="plan-concept" className="flex gap-4 py-4">
-              <span className="w-6 shrink-0 text-right text-sm text-ink-muted tabular-nums">
+              <span className="w-6 shrink-0 text-right text-sm text-muted tabular-nums">
                 {index + 1}
               </span>
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/courses/${course.id}/concepts/${concept.id}`}
-                  className="font-medium hover:text-accent"
+                  className="font-medium hover:text-ink"
                 >
                   {concept.title}
                 </Link>
-                <p className="text-sm text-ink-muted">
+                <p className="text-sm text-muted">
                   {[
                     needs.length ? `Needs: ${needs.join(", ")}` : null,
                     concept.source_pages.length ? formatPages(concept.source_pages) : null,
@@ -137,16 +137,16 @@ function ExamDate({ detail, onChange }: { detail: CourseDetail; onChange(d: Cour
   return (
     <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
       <label className="flex items-center gap-2">
-        <span className="text-ink-muted">Exam date</span>
+        <span className="text-muted">Exam date</span>
         <input
           type="date"
           defaultValue={detail.course.exam_date ?? ""}
           onChange={(e) => save(e.target.value)}
-          className="rounded-lg border border-rule bg-paper px-3 py-1.5 outline-none focus:border-accent"
+          className="rounded-lg border border-line bg-paper px-3 py-1.5 outline-none focus:border-ink"
         />
       </label>
       {error && (
-        <span role="alert" className="text-error">
+        <span role="alert" className="text-muted">
           {error}
         </span>
       )}

@@ -72,8 +72,8 @@ function PickerBody({ title, tree, refuse, topLevel, onPick, onClose }: Props) {
       <h2 id={`${ids}-title`} className="px-5 pt-4 font-serif text-xl">
         {title}
       </h2>
-      <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-rule px-3">
-        <Search className="size-4 shrink-0 text-ink-muted" aria-hidden />
+      <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-line px-3">
+        <Search className="size-4 shrink-0 text-muted" aria-hidden />
         <input
           autoFocus
           value={query}
@@ -96,11 +96,11 @@ function PickerBody({ title, tree, refuse, topLevel, onPick, onClose }: Props) {
                   onPick(option.id);
                 }}
                 title={reason ?? option.path}
-                className="flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-sm hover:bg-rule/60 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                className="flex w-full items-center gap-2 rounded-lg py-2 pr-3 text-left text-sm hover:bg-line/60 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
                 style={{ paddingLeft: `${0.75 + (query ? 0 : option.level) * 1}rem` }}
               >
                 {option.id === null ? (
-                  <CornerLeftUp className="size-4 shrink-0 text-ink-muted" aria-hidden />
+                  <CornerLeftUp className="size-4 shrink-0 text-muted" aria-hidden />
                 ) : option.level === 0 || query ? (
                   option.root && <NodeIcon node={option.root} />
                 ) : (
@@ -109,13 +109,13 @@ function PickerBody({ title, tree, refuse, topLevel, onPick, onClose }: Props) {
                 <span className="min-w-0 flex-1 truncate">
                   {query ? option.path : option.label}
                 </span>
-                {reason && <span className="shrink-0 text-xs text-ink-muted">{reason}</span>}
+                {reason && <span className="shrink-0 text-xs text-muted">{reason}</span>}
               </button>
             </li>
           );
         })}
         {options.length === 0 && (
-          <li className="px-3 py-6 text-center text-sm text-ink-muted">Nothing matches.</li>
+          <li className="px-3 py-6 text-center text-sm text-muted">Nothing matches.</li>
         )}
       </ul>
     </div>

@@ -60,7 +60,7 @@ export function CourseApp({ id }: { id: string }) {
   if (!detail) {
     return (
       <CourseShell back={{ href: "/courses", label: "Courses" }} title="Course">
-        <p role={error ? "alert" : undefined} className="text-sm text-ink-muted">
+        <p role={error ? "alert" : undefined} className="text-sm text-muted">
           {error ?? "Loading…"}
         </p>
       </CourseShell>
@@ -82,18 +82,18 @@ export function CourseApp({ id }: { id: string }) {
       {course.status === "processing" && (
         <div
           role="status"
-          className="flex items-center gap-3 rounded-2xl border border-rule bg-paper-raised p-6"
+          className="flex items-center gap-3 rounded-2xl border border-line bg-paper-hi p-6"
         >
-          <Loader2 className="size-5 animate-spin text-accent" aria-hidden />
+          <Loader2 className="size-5 animate-spin text-ink" aria-hidden />
           <p>Reading your material and finding the key concepts…</p>
         </div>
       )}
       {course.status === "failed" && (
-        <div className="rounded-2xl border border-error/40 bg-paper-raised p-6">
+        <div className="rounded-2xl border border-line bg-paper-hi p-6">
           <p>{course.status_detail ?? "This course couldn't be built."}</p>
           <button
             onClick={() => void remove()}
-            className="mt-4 rounded-full border border-rule px-4 py-1.5 text-sm hover:border-error"
+            className="mt-4 rounded-full border border-line px-4 py-1.5 text-sm hover:border-danger"
           >
             Delete and try another file
           </button>

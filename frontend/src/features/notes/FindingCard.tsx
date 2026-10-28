@@ -49,7 +49,7 @@ export function FindingCard({ findingId, kind, question, db, ink, onClose }: Pro
           {progress.reply}
         </p>
       )}
-      {progress.busy && <p className="mt-2 text-xs text-ink-muted">Checking…</p>}
+      {progress.busy && <p className="mt-2 text-xs text-muted">Checking…</p>}
 
       {actions && kind === "question" && (
         <form
@@ -144,7 +144,7 @@ export function FindingCard({ findingId, kind, question, db, ink, onClose }: Pro
           )}
           <button
             type="button"
-            className="text-ink-muted underline"
+            className="text-muted underline"
             onClick={() => {
               void dismissFinding(findingId);
               onClose();

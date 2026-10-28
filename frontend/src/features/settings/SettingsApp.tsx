@@ -13,6 +13,7 @@ import { ShortcutsSection } from "../shortcuts/ShortcutsSection";
 import { PcmStreamPlayer } from "../tutor/pcm-player";
 import { Section, Toggle } from "./controls";
 import { DevicesSection } from "./DevicesSection";
+import { DisplaySection } from "./DisplaySection";
 import { LatencyTable } from "./LatencyTable";
 import { HandwritingSection } from "../handwriting/HandwritingSection";
 import { PrivacySection } from "./PrivacySection";
@@ -47,6 +48,8 @@ export function SettingsApp() {
       }
     >
       <div className="space-y-10">
+        <DisplaySection />
+
         <Section title="Listening">
           <Toggle
             label="Start listening when a notebook opens"
@@ -59,10 +62,10 @@ export function SettingsApp() {
         <Section title="Neb">
           <label className="block">
             <span className="font-medium">How readily Neb speaks up</span>
-            <span className="mt-1 block text-sm text-ink-muted">
+            <span className="mt-1 block text-sm text-muted">
               Neb only answers when it&apos;s this sure you want help. Tapping Neb always works.
             </span>
-            <span className="mt-3 flex items-center gap-3 text-sm text-ink-muted">
+            <span className="mt-3 flex items-center gap-3 text-sm text-muted">
               <span>More often</span>
               <input
                 type="range"
@@ -73,7 +76,7 @@ export function SettingsApp() {
                 aria-label="Neb sensitivity threshold"
                 aria-valuetext={`${Math.round(settings.mew_threshold * 100)}% sure`}
                 onChange={(e) => void update({ mew_threshold: Number(e.target.value) })}
-                className="flex-1 accent-(--accent)"
+                className="flex-1 accent-(--ink)"
               />
               <span>Quieter</span>
               <span className="w-10 text-right text-ink tabular-nums">
@@ -99,11 +102,11 @@ export function SettingsApp() {
                     name="answer-style"
                     checked={settings.answer_style === value}
                     onChange={() => void update({ answer_style: value })}
-                    className="mt-1 accent-(--accent)"
+                    className="mt-1 accent-(--ink)"
                   />
                   <span>
                     {label}
-                    <span className="block text-sm text-ink-muted">{hint}</span>
+                    <span className="block text-sm text-muted">{hint}</span>
                   </span>
                 </label>
               ))}
@@ -117,7 +120,7 @@ export function SettingsApp() {
           />
           <Toggle
             label="Mark my work as I write"
-            hint="Each line you finish is checked: a right step gets a small tick, a wrong one a circle and a short hint, silently. Choose how much in each notebook from the toolbar (Off, Quiet, Normal, Coach)."
+            hint="Each line you finish is checked: a right step gets a small tick, one that isn't right yet a circle and a short hint, silently. Choose how much in each notebook: Quiet, Hint or Coach."
             checked={settings.auto_check}
             onChange={(auto_check) => void update({ auto_check })}
           />
@@ -149,7 +152,7 @@ export function SettingsApp() {
               role="group"
               aria-label="Checks you already have"
               data-testid="moment-checks-keep-or-clear"
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-rule bg-paper p-3 text-sm"
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-paper p-3 text-sm"
             >
               <span className="flex-1">
                 No new checks from now on. Keep the ones you already have?
@@ -157,7 +160,7 @@ export function SettingsApp() {
               <button
                 type="button"
                 onClick={() => setAskClear(false)}
-                className="rounded-full border border-rule px-3 py-1 hover:border-accent"
+                className="rounded-full border border-line px-3 py-1 hover:border-ink"
               >
                 Keep them
               </button>
@@ -190,7 +193,7 @@ export function SettingsApp() {
 
         <Section title="Voice">
           {voices.length === 0 ? (
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-muted">
               The tutor&apos;s voice isn&apos;t set up on this server.
             </p>
           ) : (
@@ -209,7 +212,7 @@ export function SettingsApp() {
         <DevicesSection />
 
         <Section title="Performance">
-          <p className="text-sm text-ink-muted">
+          <p className="text-sm text-muted">
             How quickly the tutor has responded to you recently (on this server, since it started).
           </p>
           <LatencyTable />
@@ -219,13 +222,13 @@ export function SettingsApp() {
           <button
             type="button"
             onClick={() => void update({ onboarded: false })}
-            className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent"
+            className="rounded-full border border-line px-4 py-1.5 text-sm hover:border-ink"
           >
             Show the introduction again
           </button>
-          <p className="text-sm text-ink-muted">
+          <p className="text-sm text-muted">
             It appears next time you open the{" "}
-            <Link href="/notebook" className="underline hover:text-accent">
+            <Link href="/notebook" className="underline hover:text-ink">
               notebook
             </Link>
             .
@@ -284,7 +287,7 @@ function VoicePicker({
               setState("idle");
               onChange(e.target.value);
             }}
-            className="rounded-lg border border-rule bg-paper px-3 py-1.5 outline-none focus:border-accent"
+            className="rounded-lg border border-line bg-paper px-3 py-1.5 outline-none focus:border-ink"
           >
             {voices.map((v) => (
               <option key={v.id} value={v.id}>
@@ -297,7 +300,7 @@ function VoicePicker({
           type="button"
           onClick={() => void sample()}
           disabled={state === "playing"}
-          className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 text-sm hover:border-accent disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm hover:border-ink disabled:opacity-50"
         >
           {state === "playing" ? (
             <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -308,7 +311,7 @@ function VoicePicker({
         </button>
       </div>
       {state !== "idle" && state !== "playing" && (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="text-sm text-muted">
           {state}
         </p>
       )}

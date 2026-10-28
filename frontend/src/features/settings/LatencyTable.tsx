@@ -24,22 +24,22 @@ export function LatencyTable() {
     };
   }, []);
 
-  if (failed) return <p className="text-sm text-ink-muted">Couldn&apos;t load the numbers.</p>;
-  if (!report) return <p className="text-sm text-ink-muted">Loading…</p>;
+  if (failed) return <p className="text-sm text-muted">Couldn&apos;t load the numbers.</p>;
+  if (!report) return <p className="text-sm text-muted">Loading…</p>;
   if (report.turns === 0) {
     return (
-      <p className="text-sm text-ink-muted" data-testid="latency-empty">
+      <p className="text-sm text-muted" data-testid="latency-empty">
         No tutor turns yet. Ask the tutor something in the notebook.
       </p>
     );
   }
   return (
     <table className="w-full max-w-lg text-sm" data-testid="latency-table">
-      <caption className="mb-2 text-left text-ink-muted">
+      <caption className="mb-2 text-left text-muted">
         Last {report.turns} turn{report.turns === 1 ? "" : "s"}, from the end of your question
       </caption>
       <thead>
-        <tr className="border-b border-rule text-left text-ink-muted">
+        <tr className="border-b border-line text-left text-muted">
           <th className="py-1 font-normal">Stage</th>
           <th className="py-1 text-right font-normal">Typical</th>
           <th className="py-1 text-right font-normal">Slowest 5%</th>
@@ -53,15 +53,13 @@ export function LatencyTable() {
           if (!stats) return null;
           const slow = target !== undefined && stats.p50 > target;
           return (
-            <tr key={stage} className="border-b border-rule/60">
+            <tr key={stage} className="border-b border-line/60">
               <td className="py-1.5">{LATENCY_STAGE_LABELS[stage]}</td>
-              <td className={`py-1.5 text-right tabular-nums ${slow ? "text-error" : ""}`}>
+              <td className={`py-1.5 text-right tabular-nums ${slow ? "text-danger" : ""}`}>
                 {seconds(stats.p50)}
               </td>
-              <td className="py-1.5 text-right text-ink-muted tabular-nums">
-                {seconds(stats.p95)}
-              </td>
-              <td className="py-1.5 text-right text-ink-muted tabular-nums">
+              <td className="py-1.5 text-right text-muted tabular-nums">{seconds(stats.p95)}</td>
+              <td className="py-1.5 text-right text-muted tabular-nums">
                 {target === undefined ? "" : seconds(target)}
               </td>
             </tr>

@@ -35,24 +35,24 @@ export function DevicesSection() {
 
   return (
     <Section title="Signed-in devices">
-      <p className="text-sm text-ink-muted">
+      <p className="text-sm text-muted">
         Computers where the Neb desktop app is connected to your account for Screen Coach. To
         connect one, open Neb&apos;s tray menu → Screen Coach settings → Connect.
       </p>
-      {state.status === "loading" && <p className="text-sm text-ink-muted">Loading…</p>}
+      {state.status === "loading" && <p className="text-sm text-muted">Loading…</p>}
       {state.status === "error" && (
-        <p className="text-sm text-ink-muted">Your devices couldn&apos;t be loaded right now.</p>
+        <p className="text-sm text-muted">Your devices couldn&apos;t be loaded right now.</p>
       )}
       {state.status === "ready" && active.length === 0 && (
-        <p className="text-sm text-ink-muted">No devices are connected.</p>
+        <p className="text-sm text-muted">No devices are connected.</p>
       )}
       {active.length > 0 && (
-        <ul className="divide-y divide-rule rounded-lg border border-rule">
+        <ul className="divide-y divide-line rounded-lg border border-line">
           {active.map((device) => (
             <li key={device.id} className="flex items-center justify-between gap-4 px-4 py-3">
               <div>
                 <p className="font-medium">{device.deviceName}</p>
-                <p className="text-sm text-ink-muted">
+                <p className="text-sm text-muted">
                   Connected {formatDate(device.createdAt)}
                   {device.lastUsedAt && ` · last used ${formatDate(device.lastUsedAt)}`}
                 </p>
@@ -62,7 +62,7 @@ export function DevicesSection() {
                 disabled={busy}
                 onClick={() => void revoke(`/api/devices/${device.id}/revoke`)}
                 aria-label={`Sign out ${device.deviceName}`}
-                className="rounded-md border border-rule px-3 py-1.5 text-sm hover:bg-paper-raised disabled:opacity-50"
+                className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-paper-hi disabled:opacity-50"
               >
                 Sign out
               </button>
@@ -75,7 +75,7 @@ export function DevicesSection() {
           type="button"
           disabled={busy}
           onClick={() => void revoke("/api/devices/revoke-all")}
-          className="text-sm text-accent underline-offset-2 hover:underline disabled:opacity-50"
+          className="text-sm text-ink underline-offset-2 hover:underline disabled:opacity-50"
         >
           Sign out all devices
         </button>

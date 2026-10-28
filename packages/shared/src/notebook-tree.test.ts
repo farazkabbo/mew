@@ -158,7 +158,8 @@ describe("titles and styles", () => {
 
   it("suggests an icon and colour from the name", () => {
     expect(suggestStyle("Physics")).toEqual({ icon: "atom", color: "teal" });
-    expect(suggestStyle("Organic Chemistry II")).toEqual({ icon: "flask", color: "violet" });
+    // Never violet: that is neb's colour (NEB_APP_UI §3.1).
+    expect(suggestStyle("Organic Chemistry II")).toEqual({ icon: "flask", color: "amber" });
     expect(suggestStyle("EECS 3221")).toEqual({ icon: "code", color: "slate" });
     expect(suggestStyle("Diary")).toEqual({ icon: "book", color: "slate" });
   });

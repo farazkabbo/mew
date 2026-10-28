@@ -22,7 +22,8 @@
     "eval:quiz": "pnpm --filter @mew/frontend eval:quiz",
     "eval:notes": "pnpm --filter @mew/frontend eval:notes",
     "eval:solution": "pnpm --filter @mew/frontend eval:solution",
-    "eval:handwriting": "pnpm --filter @mew/frontend eval:handwriting"
+    "eval:handwriting": "pnpm --filter @mew/frontend eval:handwriting",
+    "build:tokens": "tsx scripts/build-tokens.ts"
   },
   "devDependencies": {
     "@types/node": "^24",

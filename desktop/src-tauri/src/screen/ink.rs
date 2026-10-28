@@ -17,8 +17,8 @@ use super::screen_text::ScreenText;
 pub type Rect = [f32; 4];
 
 /// The tutor's ink colours (light theme; the overlay never remaps them).
-pub const TUTOR_INK: &str = "#8a7bf0";
-pub const TUTOR_HIGHLIGHT: &str = "#8a7bf055";
+pub const TUTOR_INK: &str = "#6b4ee6";
+pub const TUTOR_HIGHLIGHT: &str = "#6b4ee655";
 /// Notes Check's "look at this again" (amber; shapes, not colour alone, tell the marks apart).
 pub const QUESTION_INK: &str = "#d97706";
 /// The student's own marks in Circle & Ask: red, so they stand out from the screen's blue text

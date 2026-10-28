@@ -236,7 +236,8 @@ export function markHint(
 ): { kind: "error" | "missing"; note: string } {
   if (check.reason === "units") return { kind: "missing", note: "units?" };
   if (check.checker === "chemistry") return { kind: "missing", note: "not balanced" };
-  if (check.checker === "code") return { kind: "error", note: "this line fails" };
+  // neb never says "fail" (NEB_APP_UI §3.9): the line simply doesn't run yet.
+  if (check.checker === "code") return { kind: "error", note: "doesn't run yet" };
   if (previousText && signSlip(previousText, text)) return { kind: "error", note: "sign?" };
   if (check.reason === "not_equal") return { kind: "error", note: "check arithmetic" };
   return { kind: "error", note: "check this step" };

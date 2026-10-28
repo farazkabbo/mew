@@ -838,3 +838,34 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     reading into the neb lane (§4.2). Settings → Handwriting and the calibration (K10) get the
     U1 tokens like the other settings sections; onboarding step 3 (§5.10, decision U12) can now
     use K10's `Calibration`.
+18. **U18. Built in U1 (2026-10-28, `feat/ui-u1-tokens`).**
+    - **Tokens:** `packages/shared/src/ui/tokens.ts` → `pnpm build:tokens` writes
+      `frontend/src/app/tokens.css` and `desktop/shell/tokens.css` (both Prettier-ignored; a test
+      fails when either is stale). Night is `:root[data-theme="night"]`, or the OS's dark mode
+      unless `data-theme="light"`.
+    - **Old names** were migrated by a codemod (570 uses in 67 files) and an ESLint rule
+      (`no-restricted-syntax` in `frontend/eslint.config.mjs`) keeps them out. Hairlines are
+      `border-line`; links, focus and hovers are ink; violet stayed only where neb speaks or
+      acts (marks, the pointer, the hold's loop, neb's answers, checks due). Red (`danger`) stays
+      only on destructive actions and developer pages: error messages are muted sentences, a
+      wrong answer is a muted circle, notices and validation are ink pills.
+    - **Fonts:** latin subsets from Fontsource 5.3.0 in `packages/shared/fonts` with their OFL
+      licences, 152 KB in all; **Caveat has one weight (500)**, as its two came to 102 KB alone
+      and it's only for mock ink and labels.
+    - **Appearance and Text size** are kept in this device's localStorage (`lib/display.ts`) and
+      applied by an inline script with the CSP nonce before the first paint; the canvas redraws
+      its ink when night turns on or off.
+    - **Ink colours:** the pens are the tokens' (graphite, blue, red; green kept); strokes stored
+      in the old violet or pens draw in today's (`displayColor`). The desktop's violet (the
+      capture indicator, `ink.rs`, the overlays) is `#6b4ee6`.
+    - **Notebook colours:** the stored names stay (`slate`, `teal`, `blue`, `violet`, `rose`,
+      `amber`, `green`) and show as the cover palette (violet shows as sky and isn't offered;
+      suggestions never pick it). The cover palette's other names (clay, ink, sage, mustard) need
+      the database change U4 makes with the covers.
+    - **The mascot is gone:** `NebDot` (`components/ui/`) is in the dock; its states map from the
+      session (sleeping → watching, muted → off).
+    - **Copy:** `src/copy.test.ts` fails on "wrong", "incorrect", "error", "fail" or "easy" in any
+      sentence a student reads (K9's "Not wrong" label is kept on purpose).
+    - **`/dev/ui`** shows U1's components; `e2e/ui.spec.ts` screenshots each section in light and
+      night (tolerance 30 pixels: a broken icon must fail) and checks focus, the desk colour and
+      the Appearance and Text size settings across a reload.

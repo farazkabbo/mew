@@ -88,7 +88,7 @@ export function NotebookPointer({ canvas, ink }: Props) {
         viewBox="0 0 32 32"
         width={SIZE}
         height={SIZE}
-        className="group absolute top-0 left-0 text-tutor opacity-50 transition-[transform,opacity] duration-500 ease-out data-[look=writing]:opacity-100 motion-reduce:transition-none"
+        className="group absolute top-0 left-0 text-neb-ink opacity-50 transition-[transform,opacity] duration-500 ease-out data-[look=writing]:opacity-100 motion-reduce:transition-none"
       >
         <path fill="currentColor" d="M8 12 L10 5 L14 10 Z M24 12 L22 5 L18 10 Z" />
         <circle fill="currentColor" cx="16" cy="17" r="9" />

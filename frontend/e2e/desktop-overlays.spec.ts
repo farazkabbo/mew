@@ -543,9 +543,17 @@ test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard
 test("the Circle & Ask card asks, plays steps with their controls, and counts the save down", async ({
   page,
 }) => {
-  const shell = await openShellPage(page, "circle-card.html");
+  const opened = await openShellPage(page, "circle-card.html");
+  // The card also tells Rust its height as it changes ("fit", since the island): not an action.
+  const shell = {
+    ...opened,
+    calls: async () =>
+      (await opened.calls()).filter(
+        (c) => (c.args as { action?: string } | undefined)?.action !== "fit",
+      ),
+  };
   await shell.dispatch("mew:card-show", { mode: "ask", silent: false });
-  await expect(page.getByText("Hold Ctrl+Alt to ask out loud")).toBeVisible();
+  await expect(page.getByText("Or click the mic to ask out loud")).toBeVisible();
   // Ctrl+S: save the marks without an explanation (K2: two keys at most).
   await page.getByLabel("Your question").focus();
   await page.keyboard.press("Control+KeyS");

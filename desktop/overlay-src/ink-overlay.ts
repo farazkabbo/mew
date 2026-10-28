@@ -37,7 +37,7 @@ type InkRequest = z.infer<typeof InkRequest>;
 
 /** A sticky note's paper: warm, nearly opaque, readable over any content. */
 const CARD_FILL = "rgba(255, 252, 242, 0.95)";
-const CARD_EDGE = "rgba(138, 123, 240, 0.45)";
+const CARD_EDGE = "rgba(107, 78, 230, 0.45)";
 const FADE_MS = 150;
 /** Notes Check's ticks are a quiet "you've got this": they fade on their own (brief §8). */
 const TICK_VISIBLE_MS = 4000;

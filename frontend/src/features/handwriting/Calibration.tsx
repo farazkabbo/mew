@@ -48,13 +48,13 @@ export function Calibration({
 
   return (
     <div className="flex flex-col gap-4" data-testid="calibration">
-      <p className="text-sm text-ink-muted">
+      <p className="text-sm text-muted">
         Write each one in its box, the way you normally write. It takes about a minute, and you can
         skip any box.
       </p>
       {GROUPS.map((group) => (
         <fieldset key={group.title} className="flex flex-col gap-2">
-          <legend className="mb-1 text-xs font-semibold tracking-wide text-ink-muted uppercase">
+          <legend className="mb-1 text-xs font-semibold tracking-wide text-muted uppercase">
             {group.title}
           </legend>
           <div className="flex flex-wrap gap-2">
@@ -96,15 +96,15 @@ export function Calibration({
         <button
           type="button"
           onClick={() => onDone(null)}
-          className="text-sm text-ink-muted hover:text-ink"
+          className="text-sm text-muted hover:text-ink"
         >
           {skipLabel}
         </button>
-        <span className="text-xs text-ink-muted" aria-live="polite">
+        <span className="text-xs text-muted" aria-live="polite">
           {filled} of {CALIBRATION_PROMPTS.length} written
         </span>
         {state === "failed" && (
-          <span role="alert" className="text-sm text-ink-muted">
+          <span role="alert" className="text-sm text-muted">
             Couldn&apos;t save that. Your writing is still here; try again.
           </span>
         )}

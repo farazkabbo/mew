@@ -75,7 +75,7 @@ export function HoldCircle({ canvas, onLoop }: Props) {
           <polyline
             key={i}
             points={loop.map(([x, y]) => `${x},${y}`).join(" ")}
-            className="fill-none stroke-error"
+            className="fill-none stroke-neb"
             strokeWidth={2.5}
             strokeLinecap="round"
             strokeLinejoin="round"

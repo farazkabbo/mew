@@ -64,7 +64,7 @@ export function ReadAsChip({
     >
       <div ref={layer} className="absolute top-0 left-0 origin-top-left">
         <div
-          className="pointer-events-auto absolute flex items-center gap-2 rounded-lg border border-rule bg-paper-raised px-2 py-1 text-xs text-ink-muted shadow-sm"
+          className="pointer-events-auto absolute flex items-center gap-2 rounded-lg border border-line bg-paper-hi px-2 py-1 text-xs text-muted shadow-sm"
           style={{ left: box[0], top: box[1] + box[3] + 6 }}
         >
           {fixing ? (
@@ -89,7 +89,7 @@ export function ReadAsChip({
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => event.key === "Escape" && setFixing(false)}
-                className="w-48 rounded border border-rule bg-paper px-1.5 py-0.5 text-ink"
+                className="w-48 rounded border border-line bg-paper px-1.5 py-0.5 text-ink"
               />
               <button type="submit" className="rounded-full bg-ink px-2 py-0.5 text-paper">
                 Check it

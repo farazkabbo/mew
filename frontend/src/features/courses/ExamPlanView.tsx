@@ -15,13 +15,13 @@ export function ExamPlanView({ plan, concepts }: { plan: ExamPlan; concepts: rea
   const days = plan.days.filter((d) => d.learn.length || d.review.length || d.finalReview);
 
   return (
-    <section aria-label="Plan until the exam" className="mt-8 rounded-2xl border border-rule p-5">
+    <section aria-label="Plan until the exam" className="mt-8 rounded-2xl border border-line p-5">
       <h2 className="flex items-center gap-2 font-serif text-xl">
-        <CalendarDays className="size-5 text-accent" aria-hidden />
+        <CalendarDays className="size-5 text-ink" aria-hidden />
         Until the exam
       </h2>
       {days.length === 0 ? (
-        <p className="mt-2 text-sm text-ink-muted">
+        <p className="mt-2 text-sm text-muted">
           Everything is checked. Keep an eye on the reviews as they come due.
         </p>
       ) : (
@@ -33,7 +33,7 @@ export function ExamPlanView({ plan, concepts }: { plan: ExamPlan; concepts: rea
                   ? "Today"
                   : DAY_NAMES.format(new Date(`${day.date}T00:00:00Z`))}
               </span>
-              <span className="min-w-0 flex-1 text-ink-muted">
+              <span className="min-w-0 flex-1 text-muted">
                 {[
                   day.learn.length ? `Work on: ${names(day.learn)}` : null,
                   day.review.length ? `Review: ${names(day.review)}` : null,

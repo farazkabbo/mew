@@ -12,20 +12,20 @@ export default async function StatusPage() {
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-16">
       <h1 className="font-serif text-4xl tracking-tight">System status</h1>
-      <p className="mt-2 text-ink-muted">End-to-end checks of the auth chain for your account.</p>
-      <ul className="mt-10 divide-y divide-rule border-y border-rule">
+      <p className="mt-2 text-muted">End-to-end checks of the auth chain for your account.</p>
+      <ul className="mt-10 divide-y divide-line border-y border-line">
         {checks.map((check) => (
           <li key={check.name} className="flex gap-4 py-4">
             <span
               aria-hidden
-              className={`mt-1.5 size-2.5 shrink-0 rounded-full ${check.ok ? "bg-check" : "bg-error"}`}
+              className={`mt-1.5 size-2.5 shrink-0 rounded-full ${check.ok ? "bg-ink" : "bg-danger"}`}
             />
             <div>
               <p className="font-medium">
                 {check.name}
                 <span className="sr-only">{check.ok ? " — passing" : " — failing"}</span>
               </p>
-              <p className="text-sm text-ink-muted">{check.detail}</p>
+              <p className="text-sm text-muted">{check.detail}</p>
             </div>
           </li>
         ))}

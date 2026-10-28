@@ -63,7 +63,7 @@ export function HandwritingSection() {
             </p>
           )}
           {summary && summary.confusions.length > 0 && (
-            <ul className="list-inside list-disc text-ink-muted">
+            <ul className="list-inside list-disc text-muted">
               {summary.confusions.slice(0, 5).map((c) => (
                 <li key={`${c.read}-${c.meant}`}>
                   your <span className="font-mono text-ink">{c.meant}</span> was read as{" "}
@@ -73,7 +73,7 @@ export function HandwritingSection() {
               ))}
             </ul>
           )}
-          {failed && <p className="text-ink-muted">Couldn&apos;t reach neb. Try again later.</p>}
+          {failed && <p className="text-muted">Couldn&apos;t reach neb. Try again later.</p>}
           {calibrating ? (
             <Calibration
               skipLabel="Cancel"
@@ -97,7 +97,7 @@ export function HandwritingSection() {
                 <button
                   type="button"
                   onClick={() => setConfirmReset(true)}
-                  className="rounded-full border border-rule px-4 py-1.5 text-ink-muted"
+                  className="rounded-full border border-line px-4 py-1.5 text-muted"
                 >
                   Reset
                 </button>
@@ -108,7 +108,7 @@ export function HandwritingSection() {
                   <button
                     type="button"
                     onClick={() => void reset()}
-                    className="rounded-full border border-rule px-3 py-1"
+                    className="rounded-full border border-line px-3 py-1"
                   >
                     Forget it
                   </button>

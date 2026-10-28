@@ -17,7 +17,7 @@ export function Breadcrumb({ tree, nodeId, pageNumber, onOpen }: Props) {
   const path = tree.path(nodeId);
   return (
     <nav aria-label="Breadcrumb" data-testid="breadcrumb">
-      <ol className="flex min-w-0 items-center gap-1 text-sm text-ink-muted">
+      <ol className="flex min-w-0 items-center gap-1 text-sm text-muted">
         {path.map((node, i) => {
           const last = i === path.length - 1 && pageNumber === undefined;
           return (
@@ -28,7 +28,7 @@ export function Breadcrumb({ tree, nodeId, pageNumber, onOpen }: Props) {
                   type="button"
                   onClick={() => onOpen(node.id)}
                   aria-current={last ? "location" : undefined}
-                  className="block max-w-48 truncate rounded px-1 hover:bg-rule/50 hover:text-ink aria-[current=location]:text-ink"
+                  className="block max-w-48 truncate rounded px-1 hover:bg-line/50 hover:text-ink aria-[current=location]:text-ink"
                 >
                   {node.title}
                 </button>

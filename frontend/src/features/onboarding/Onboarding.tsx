@@ -7,17 +7,17 @@ import { Calibration } from "../handwriting/Calibration";
 
 const STEPS: { icon: ReactNode; title: string; body: string }[] = [
   {
-    icon: <PenLine className="size-6 text-accent" aria-hidden />,
+    icon: <PenLine className="size-6 text-ink" aria-hidden />,
     title: "Write here",
     body: "This is your notebook. Write with a pen, a mouse or a trackpad, just as on paper. When you pause, Neb reads your handwriting.",
   },
   {
-    icon: <Mic className="size-6 text-tutor" aria-hidden />,
+    icon: <Mic className="size-6 text-neb-ink" aria-hidden />,
     title: "Talk while you study",
     body: "Neb listens and stays quiet until you need it. Ask a question, say “is this right?”, or tap Neb in the corner. It answers out loud and writes on your page.",
   },
   {
-    icon: <GraduationCap className="size-6 text-check" aria-hidden />,
+    icon: <GraduationCap className="size-6 text-ink" aria-hidden />,
     title: "Learn from your own material",
     body: "Upload a chapter in Courses: you get lessons, quizzes in the notebook, and reviews spaced so things stick.",
   },
@@ -61,7 +61,7 @@ export function Onboarding({
         e.preventDefault(); // Escape: same as "Skip"
         finish(false);
       }}
-      className={`m-auto ${calibrating ? "w-[min(34rem,calc(100vw-2rem))]" : "w-[min(28rem,calc(100vw-2rem))]"} rounded-3xl border border-rule bg-paper-raised p-0 text-ink shadow-2xl backdrop:bg-ink/30`}
+      className={`m-auto ${calibrating ? "w-[min(34rem,calc(100vw-2rem))]" : "w-[min(28rem,calc(100vw-2rem))]"} rounded-3xl border border-line bg-paper-hi p-0 text-ink shadow-2xl backdrop:bg-ink/30`}
     >
       {calibrating ? (
         <div className="p-7">
@@ -82,19 +82,19 @@ export function Onboarding({
         <div className="p-7">
           <div className="flex items-center justify-between">
             {current?.icon}
-            <span className="text-xs text-ink-muted" aria-live="polite">
+            <span className="text-xs text-muted" aria-live="polite">
               {step + 1} of {STEPS.length}
             </span>
           </div>
           <h2 id="onboarding-title" className="mt-4 font-serif text-3xl">
             {current?.title}
           </h2>
-          <p className="mt-3 leading-relaxed text-ink-muted">{current?.body}</p>
+          <p className="mt-3 leading-relaxed text-muted">{current?.body}</p>
           <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => finish(false)}
-              className="text-sm text-ink-muted hover:text-ink"
+              className="text-sm text-muted hover:text-ink"
             >
               {last ? "Not now" : "Skip"}
             </button>
@@ -103,7 +103,7 @@ export function Onboarding({
                 <button
                   type="button"
                   onClick={() => setStep(step - 1)}
-                  className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent"
+                  className="rounded-full border border-line px-4 py-1.5 text-sm hover:border-ink"
                 >
                   Back
                 </button>
@@ -112,7 +112,7 @@ export function Onboarding({
                 <button
                   type="button"
                   onClick={() => setCalibrating(true)}
-                  className="rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent"
+                  className="rounded-full border border-line px-4 py-1.5 text-sm hover:border-ink"
                 >
                   Teach neb my handwriting (60 s)
                 </button>

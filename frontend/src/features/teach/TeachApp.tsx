@@ -93,12 +93,9 @@ export function TeachApp() {
       subtitle="Mark what Neb should have done. Your labels train a faster Neb that runs on your device."
     >
       {loaded && !optedIn && (
-        <p
-          role="status"
-          className="mb-6 rounded-2xl border border-rule bg-paper-raised p-4 text-sm"
-        >
+        <p role="status" className="mb-6 rounded-2xl border border-line bg-paper-hi p-4 text-sm">
           Neb isn&apos;t keeping new decisions. Turn on <em>Keep Neb&apos;s decisions</em> in{" "}
-          <Link href="/settings" className="underline hover:text-accent">
+          <Link href="/settings" className="underline hover:text-ink">
             Settings
           </Link>{" "}
           to collect some.
@@ -110,7 +107,7 @@ export function TeachApp() {
             type="checkbox"
             checked={unlabeledOnly}
             onChange={(e) => setUnlabeledOnly(e.target.checked)}
-            className="accent-(--accent)"
+            className="accent-(--ink)"
           />
           Only unlabelled
         </label>
@@ -118,7 +115,7 @@ export function TeachApp() {
           <a
             href="/api/mew/events/export"
             download="mew-labels.jsonl"
-            className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 hover:border-accent"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 hover:border-ink"
           >
             <Download className="size-4" aria-hidden />
             Download labels
@@ -126,7 +123,7 @@ export function TeachApp() {
           <button
             type="button"
             onClick={() => void deleteAll()}
-            className="inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1.5 hover:border-error hover:text-error"
+            className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 hover:border-danger hover:text-danger"
           >
             <Trash2 className="size-4" aria-hidden />
             Delete everything
@@ -135,19 +132,19 @@ export function TeachApp() {
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 text-sm text-error">
+        <p role="alert" className="mt-4 text-sm text-muted">
           {error}
         </p>
       )}
-      {events === null && !error && <p className="mt-6 text-ink-muted">Loading…</p>}
+      {events === null && !error && <p className="mt-6 text-muted">Loading…</p>}
       {events?.length === 0 && (
-        <p className="mt-6 text-ink-muted" data-testid="teach-empty">
+        <p className="mt-6 text-muted" data-testid="teach-empty">
           Nothing here yet. Neb keeps its decisions while you study (with the setting on).
         </p>
       )}
       {events && events.length > 0 && (
         <>
-          <p className="mt-6 text-sm text-ink-muted" aria-live="polite">
+          <p className="mt-6 text-sm text-muted" aria-live="polite">
             {labelled} of {events.length} shown labelled · keys 1–6 label the focused decision
           </p>
           <ol className="mt-3 space-y-3">
@@ -159,7 +156,7 @@ export function TeachApp() {
             <button
               type="button"
               onClick={() => void loadMore()}
-              className="mt-4 rounded-full border border-rule px-4 py-1.5 text-sm hover:border-accent"
+              className="mt-4 rounded-full border border-line px-4 py-1.5 text-sm hover:border-ink"
             >
               Load older decisions
             </button>

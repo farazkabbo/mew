@@ -72,7 +72,7 @@ export function Toolbar({
     <div
       role="toolbar"
       aria-label="Drawing tools"
-      className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-rule bg-paper-raised/95 p-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] backdrop-blur"
+      className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-line bg-paper-hi/95 p-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] backdrop-blur"
     >
       {TOOLS.map(({ tool: t, label, icon }) => (
         <IconButton
@@ -96,7 +96,7 @@ export function Toolbar({
             title={c.name}
             disabled={tool === "eraser" || tool === "lasso"}
             onClick={() => setColor(c.light)}
-            className="grid size-7 place-items-center rounded-full disabled:opacity-40 aria-checked:ring-2 aria-checked:ring-accent"
+            className="grid size-7 place-items-center rounded-full disabled:opacity-40 aria-checked:ring-2 aria-checked:ring-ink"
           >
             {/* Swatches show the colour as it renders in the current theme. */}
             <span
@@ -118,7 +118,7 @@ export function Toolbar({
                 aria-checked={penSize === size}
                 aria-label={`Size ${size}`}
                 onClick={() => setPenSize(size)}
-                className="grid size-8 place-items-center rounded-lg text-ink-muted hover:bg-rule/50 aria-checked:bg-rule aria-checked:text-ink"
+                className="grid size-8 place-items-center rounded-lg text-muted hover:bg-line/50 aria-checked:bg-line aria-checked:text-ink"
               >
                 <span
                   className="rounded-full bg-current"
@@ -150,7 +150,7 @@ export function Toolbar({
         onClick={onResetView}
         title="Reset view (0)"
         aria-label={`Zoom ${Math.round(zoom * 100)}%, reset view`}
-        className="h-8 min-w-12 rounded-lg px-1 text-xs tabular-nums text-ink-muted hover:bg-rule/50"
+        className="h-8 min-w-12 rounded-lg px-1 text-xs tabular-nums text-muted hover:bg-line/50"
       >
         {Math.round(zoom * 100)}%
       </button>
@@ -205,7 +205,7 @@ function IconButton({
       aria-pressed={pressed}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-lg text-ink-muted transition-colors hover:bg-rule/50 hover:text-ink disabled:pointer-events-none disabled:opacity-35 aria-pressed:bg-ink aria-pressed:text-paper"
+      className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-line/50 hover:text-ink disabled:pointer-events-none disabled:opacity-35 aria-pressed:bg-ink aria-pressed:text-paper"
     >
       <Icon className="size-4" aria-hidden />
     </button>
@@ -213,5 +213,5 @@ function IconButton({
 }
 
 function Divider(): ReactNode {
-  return <span aria-hidden className="mx-1 h-5 w-px bg-rule" />;
+  return <span aria-hidden className="mx-1 h-5 w-px bg-line" />;
 }

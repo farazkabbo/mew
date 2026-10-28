@@ -16,8 +16,8 @@ export function PrivacySection() {
         checked={settings.mew_logging_opt_in}
         onChange={(mew_logging_opt_in) => void update({ mew_logging_opt_in })}
       />
-      <p className="text-sm text-ink-muted">
-        <Link href="/teach" className="text-accent underline-offset-2 hover:underline">
+      <p className="text-sm text-muted">
+        <Link href="/teach" className="text-ink underline-offset-2 hover:underline">
           Teach Neb
         </Link>
         : review what Neb kept, mark what it should have done, download your labels, or delete

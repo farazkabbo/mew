@@ -111,11 +111,9 @@ export function TreeRow({
         event.preventDefault();
         onDrop();
       }}
-      className={`group relative flex cursor-pointer items-center gap-1 rounded-lg py-1 pr-1 text-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-accent ${
-        current
-          ? "bg-white/10 text-sidebar-ink"
-          : "text-sidebar-ink/75 hover:bg-white/5 hover:text-sidebar-ink"
-      } ${dropZone === "inside" ? "ring-2 ring-accent" : ""}`}
+      className={`group relative flex cursor-pointer items-center gap-1 rounded-lg py-1 pr-1 text-sm outline-none select-none focus-visible:ring-2 focus-visible:ring-ink ${
+        current ? "bg-white/10 text-ink" : "text-ink/75 hover:bg-white/5 hover:text-ink"
+      } ${dropZone === "inside" ? "ring-2 ring-ink" : ""}`}
       style={{ paddingLeft: `${0.25 + level * 0.9}rem` }}
     >
       {dropZone === "before" && <DropLine at="top" />}
@@ -129,7 +127,7 @@ export function TreeRow({
           event.stopPropagation();
           onToggle();
         }}
-        className={`grid size-5 shrink-0 place-items-center rounded text-sidebar-ink/50 hover:text-sidebar-ink ${
+        className={`grid size-5 shrink-0 place-items-center rounded text-ink/50 hover:text-ink ${
           hasChildren ? "" : "invisible"
         }`}
       >
@@ -141,7 +139,7 @@ export function TreeRow({
       {level === 0 ? (
         <NodeIcon node={root} />
       ) : (
-        <span aria-hidden className="mx-1.5 size-1.5 shrink-0 rounded-full bg-sidebar-ink/35" />
+        <span aria-hidden className="mx-1.5 size-1.5 shrink-0 rounded-full bg-ink/35" />
       )}
 
       {renaming ? (
@@ -153,7 +151,7 @@ export function TreeRow({
         <span
           data-testid="tree-row-count"
           aria-label={`${count} waiting`}
-          className="shrink-0 rounded-full bg-sidebar-ink/10 px-1.5 text-xs tabular-nums"
+          className="shrink-0 rounded-full bg-ink/10 px-1.5 text-xs tabular-nums"
         >
           {count}
         </span>
@@ -186,7 +184,7 @@ function DropLine({ at }: { at: "top" | "bottom" }) {
   return (
     <span
       aria-hidden
-      className={`pointer-events-none absolute inset-x-1 h-0.5 rounded bg-accent ${
+      className={`pointer-events-none absolute inset-x-1 h-0.5 rounded bg-ink ${
         at === "top" ? "-top-px" : "-bottom-px"
       }`}
     />
@@ -211,7 +209,7 @@ function IconButton(props: {
         event.stopPropagation();
         props.onClick();
       }}
-      className="grid size-6 place-items-center rounded-md text-sidebar-ink/60 hover:bg-white/10 hover:text-sidebar-ink"
+      className="grid size-6 place-items-center rounded-md text-ink/60 hover:bg-white/10 hover:text-ink"
     >
       {props.icon}
     </button>
@@ -272,13 +270,13 @@ function RenameField(props: {
           }
         }}
         onBlur={() => void save()}
-        className="w-full rounded-md bg-white/10 px-1.5 py-0.5 text-sm text-sidebar-ink outline-none focus:ring-2 focus:ring-accent"
+        className="w-full rounded-md bg-white/10 px-1.5 py-0.5 text-sm text-ink outline-none focus:ring-2 focus:ring-ink"
       />
       {error && (
         <span
           id="rename-error"
           role="alert"
-          className="absolute top-full left-0 z-20 mt-1 w-56 rounded-md bg-error px-2 py-1 text-xs text-white shadow-lg"
+          className="absolute top-full left-0 z-20 mt-1 w-56 rounded-md bg-ink px-2 py-1 text-xs text-paper shadow-sh-2"
         >
           {error}
         </span>
@@ -320,7 +318,7 @@ function RowMenu({ items, onClose }: { items: readonly RowMenuItem[]; onClose():
       role="menu"
       onKeyDown={step}
       onClick={(event) => event.stopPropagation()}
-      className="absolute top-full right-0 z-30 mt-1 w-52 rounded-xl border border-white/10 bg-sidebar p-1 text-sidebar-ink shadow-xl"
+      className="absolute top-full right-0 z-30 mt-1 w-52 rounded-xl border border-white/10 bg-paper p-1 text-ink shadow-xl"
     >
       {items.map((item) => (
         <button
@@ -332,11 +330,11 @@ function RowMenu({ items, onClose }: { items: readonly RowMenuItem[]; onClose():
             item.run();
           }}
           className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-white/10 focus:bg-white/10 focus:outline-none ${
-            item.danger ? "text-error" : ""
+            item.danger ? "text-danger" : ""
           }`}
         >
           {item.label}
-          {item.shortcut && <kbd className="text-xs text-sidebar-ink/45">{item.shortcut}</kbd>}
+          {item.shortcut && <kbd className="text-xs text-ink/45">{item.shortcut}</kbd>}
         </button>
       ))}
     </div>

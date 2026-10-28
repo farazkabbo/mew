@@ -9,7 +9,7 @@ export function TutorDebug() {
 
   return (
     <section aria-label="Tutor">
-      <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Tutor</h3>
+      <h3 className="mb-2 text-xs tracking-wide text-muted uppercase">Tutor</h3>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <fieldset className="flex items-center gap-2">
           <legend className="sr-only">Answer style</legend>
@@ -20,7 +20,7 @@ export function TutorDebug() {
                 name="answer-style"
                 checked={answerStyle === style}
                 onChange={() => void useSettings.getState().update({ answer_style: style })}
-                className="accent-(--accent)"
+                className="accent-(--ink)"
               />
               {style === "hints_first" ? "Hints first" : "Direct answers"}
             </label>
@@ -31,7 +31,7 @@ export function TutorDebug() {
             type="checkbox"
             checked={captions}
             onChange={(e) => void useSettings.getState().update({ captions: e.target.checked })}
-            className="accent-(--accent)"
+            className="accent-(--ink)"
           />
           Captions
         </label>
@@ -40,7 +40,7 @@ export function TutorDebug() {
             type="checkbox"
             checked={autoCheck}
             onChange={(e) => void useSettings.getState().update({ auto_check: e.target.checked })}
-            className="accent-(--accent)"
+            className="accent-(--ink)"
           />
           Check my steps
         </label>
@@ -59,8 +59,8 @@ export function TutorDebug() {
 
 function TurnRow({ turn }: { turn: Turn }) {
   return (
-    <li className="rounded-lg border border-rule bg-paper p-2" data-outcome={turn.outcome}>
-      <div className="flex justify-between gap-2 text-xs text-ink-muted">
+    <li className="rounded-lg border border-line bg-paper p-2" data-outcome={turn.outcome}>
+      <div className="flex justify-between gap-2 text-xs text-muted">
         <span>
           {turn.intent} · {turn.outcome}
         </span>
@@ -68,7 +68,7 @@ function TurnRow({ turn }: { turn: Turn }) {
       </div>
       {turn.speech && <p className="mt-1">{turn.speech}</p>}
       {turn.checks && turn.checks.length > 0 && (
-        <ul className="mt-1 text-xs text-ink-muted" data-testid="turn-checks">
+        <ul className="mt-1 text-xs text-muted" data-testid="turn-checks">
           {turn.checks.map((c) => (
             <li key={c.lineId}>
               {c.checker}: {c.verdict} ({c.reason}){c.detail ? ` — ${c.detail}` : ""}
@@ -77,7 +77,7 @@ function TurnRow({ turn }: { turn: Turn }) {
         </ul>
       )}
       {turn.actions.length > 0 && (
-        <details className="mt-1 text-xs text-ink-muted">
+        <details className="mt-1 text-xs text-muted">
           <summary>
             {turn.actions.length} board action{turn.actions.length === 1 ? "" : "s"}
             {turn.ink && ` · ${turn.ink.strokes} ink strokes`}

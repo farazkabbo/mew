@@ -60,7 +60,7 @@ export function SolutionLayer({ canvas, pageId, flow, records, checkShortcut }: 
                 data-testid="solution-tab"
                 aria-expanded={open}
                 onClick={() => void flow.peek(solution.id)}
-                className="pointer-events-auto absolute rounded-full border border-rule bg-paper-raised px-3 py-1 text-sm whitespace-nowrap text-ink shadow-sm"
+                className="pointer-events-auto absolute rounded-full border border-line bg-paper-hi px-3 py-1 text-sm whitespace-nowrap text-ink shadow-sm"
                 style={{ left: x, top: y - 34 }}
               >
                 {open ? "Solution · tap to fold" : "Solution · tap to peek"}

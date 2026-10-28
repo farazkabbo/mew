@@ -18,8 +18,8 @@ export default function ErrorPage({
   return (
     <main className="grid min-h-dvh place-items-center bg-paper px-6 text-ink">
       <div className="max-w-md text-center">
-        <h1 className="font-serif text-4xl">Something went wrong</h1>
-        <p className="mt-3 text-ink-muted">
+        <h1 className="font-serif text-4xl">This page didn&apos;t load</h1>
+        <p className="mt-3 text-muted">
           This page hit an unexpected problem. Your notes are saved on this device, so nothing is
           lost.
         </p>
@@ -33,7 +33,7 @@ export default function ErrorPage({
           </button>
           <Link
             href="/notebook"
-            className="rounded-full border border-rule px-5 py-2 text-sm hover:border-accent"
+            className="rounded-full border border-line px-5 py-2 text-sm hover:border-ink"
           >
             Back to the notebook
           </Link>

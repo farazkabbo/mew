@@ -120,8 +120,8 @@ function PaletteBody({
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-2 border-b border-rule px-4">
-        <Search className="size-4 shrink-0 text-ink-muted" aria-hidden />
+      <div className="flex items-center gap-2 border-b border-line px-4">
+        <Search className="size-4 shrink-0 text-muted" aria-hidden />
         <input
           autoFocus
           value={query}
@@ -157,21 +157,21 @@ function PaletteBody({
             aria-selected={index === current}
             onMouseEnter={() => setActive(index)}
             onClick={() => choose(item)}
-            className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm aria-selected:bg-rule/60"
+            className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm aria-selected:bg-line/60"
           >
             {item.kind === "node" ? (
               <NodeIcon node={item.node} />
             ) : item.kind === "moment" ? (
-              <Sparkles className="size-4 shrink-0 text-tutor" aria-hidden />
+              <Sparkles className="size-4 shrink-0 text-neb-ink" aria-hidden />
             ) : (
-              <FileText className="size-4 shrink-0 text-ink-muted" aria-hidden />
+              <FileText className="size-4 shrink-0 text-muted" aria-hidden />
             )}
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            <span className="text-xs text-ink-muted">{item.detail}</span>
+            <span className="text-xs text-muted">{item.detail}</span>
           </li>
         ))}
         {items.length === 0 && (
-          <li className="px-3 py-6 text-center text-sm text-ink-muted">Nothing matches.</li>
+          <li className="px-3 py-6 text-center text-sm text-muted">Nothing matches.</li>
         )}
       </ul>
     </div>

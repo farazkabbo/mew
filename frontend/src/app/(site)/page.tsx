@@ -18,7 +18,7 @@ export default function Home() {
         A tutor that waits <br />
         until you need it.
       </h1>
-      <p className="max-w-lg text-lg text-ink-muted">
+      <p className="max-w-lg text-lg text-muted">
         Write and think out loud in your notebook. Neb stays quiet — and when you&apos;re stuck,
         answers with a short hint in ink, right on the page.
       </p>

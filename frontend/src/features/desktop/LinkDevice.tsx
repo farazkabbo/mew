@@ -67,7 +67,7 @@ export function LinkDevice() {
   return (
     <CourseShell back={{ href: "/notebook", label: "Notebook" }} title="Connect Screen Coach">
       <div className="max-w-prose space-y-4">
-        {step.kind === "checking" && <p className="text-ink-muted">One moment…</p>}
+        {step.kind === "checking" && <p className="text-muted">One moment…</p>}
         {step.kind === "not-desktop" && (
           <p>Open this page from the Neb desktop app: tray → Screen Coach settings → Connect.</p>
         )}
@@ -83,10 +83,10 @@ export function LinkDevice() {
               Connect the Neb desktop app on this computer to your account? Screen Coach will then
               be able to answer your questions about your screen.
             </p>
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-muted">
               The app gets its own sign-in, which only works for Screen Coach. You can sign it out
               any time in{" "}
-              <Link href="/settings" className="text-accent underline-offset-2 hover:underline">
+              <Link href="/settings" className="text-ink underline-offset-2 hover:underline">
                 Settings → Signed-in devices
               </Link>
               .
@@ -95,22 +95,22 @@ export function LinkDevice() {
               <button
                 type="button"
                 onClick={() => void connect(step.challenge)}
-                className="rounded-md bg-tutor px-4 py-2 font-medium text-white"
+                className="rounded-md bg-ink px-4 py-2 font-medium text-paper"
               >
                 Connect
               </button>
-              <Link href="/notebook" className="rounded-md border border-rule px-4 py-2">
+              <Link href="/notebook" className="rounded-md border border-line px-4 py-2">
                 Not now
               </Link>
             </div>
           </>
         )}
-        {step.kind === "connecting" && <p className="text-ink-muted">Connecting…</p>}
+        {step.kind === "connecting" && <p className="text-muted">Connecting…</p>}
         {step.kind === "connected" && (
           <p>Connected. Hold Ctrl+Alt in any app and ask about your screen.</p>
         )}
         {step.kind === "failed" && (
-          <p role="alert" className="text-error">
+          <p role="alert" className="text-muted">
             {step.message}
           </p>
         )}

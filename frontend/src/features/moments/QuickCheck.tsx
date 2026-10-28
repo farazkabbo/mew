@@ -113,7 +113,7 @@ function QuickCheckBody({
   if (all === null) {
     return (
       <Shell onClose={close} progress={null}>
-        <p role="status" className="text-sm text-ink-muted">
+        <p role="status" className="text-sm text-muted">
           Your checks couldn&apos;t be loaded. Check your connection and try again.
         </p>
       </Shell>
@@ -178,7 +178,7 @@ function QuickCheckBody({
       </p>
       {hinted && check.conceptHints.length > 0 && (
         <p className="mt-2 text-sm">
-          <span className="text-ink-muted">It&apos;s about: </span>
+          <span className="text-muted">It&apos;s about: </span>
           {check.conceptHints.join(", ")}
         </p>
       )}
@@ -191,7 +191,7 @@ function QuickCheckBody({
               type="button"
               disabled={phase.kind === "grading"}
               onClick={() => void submit(choice)}
-              className="rounded-xl border border-rule px-4 py-2 text-left text-sm hover:border-accent disabled:opacity-60"
+              className="rounded-xl border border-line px-4 py-2 text-left text-sm hover:border-ink disabled:opacity-60"
             >
               {choice}
             </button>
@@ -206,7 +206,7 @@ function QuickCheckBody({
             void submit(reply);
           }}
         >
-          <label htmlFor={`${ids}-answer`} className="text-xs font-medium text-ink-muted">
+          <label htmlFor={`${ids}-answer`} className="text-xs font-medium text-muted">
             Your answer
           </label>
           <textarea
@@ -224,7 +224,7 @@ function QuickCheckBody({
                 void submit(reply);
               }
             }}
-            className="w-full resize-y rounded-xl border border-rule bg-paper px-3 py-2 text-sm outline-none focus:border-accent"
+            className="w-full resize-y rounded-xl border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
           />
           {writing && (
             <WritePad
@@ -244,7 +244,7 @@ function QuickCheckBody({
               type="button"
               aria-pressed={writing}
               onClick={() => setWriting((v) => !v)}
-              className={`${SECONDARY} aria-pressed:border-accent`}
+              className={`${SECONDARY} aria-pressed:border-ink`}
             >
               <PenLine className="size-3.5" aria-hidden />
               Write it
@@ -257,7 +257,7 @@ function QuickCheckBody({
               Check
             </button>
             {phase.kind === "grading" && (
-              <span role="status" className="flex items-center gap-2 text-ink-muted">
+              <span role="status" className="flex items-center gap-2 text-muted">
                 <Loader2 className="size-4 animate-spin" aria-hidden />
                 Checking…
               </span>
@@ -267,14 +267,14 @@ function QuickCheckBody({
       )}
 
       {phase.kind === "error" && (
-        <p role="alert" className="mt-3 text-sm text-error">
+        <p role="alert" className="mt-3 text-sm text-muted">
           {phase.text}
         </p>
       )}
 
       {result && (
         <div role="status" data-testid="quick-check-result" className="mt-3 text-sm">
-          <p className={result.correct ? "font-medium text-check" : "font-medium text-error"}>
+          <p className={result.correct ? "font-medium text-neb-ink" : "font-medium text-muted"}>
             {result.correct ? (
               <Check className="mr-1 inline size-4" aria-hidden />
             ) : (
@@ -282,15 +282,15 @@ function QuickCheckBody({
             )}
             {result.feedback}
           </p>
-          <p className="mt-2 rounded-lg border border-rule bg-paper p-2.5">
-            <span className="text-xs tracking-wide text-ink-muted uppercase">Answer </span>
+          <p className="mt-2 rounded-lg border border-line bg-paper p-2.5">
+            <span className="text-xs tracking-wide text-muted uppercase">Answer </span>
             {result.answerKey}
           </p>
         </div>
       )}
 
       {showMoment && clips.length === 0 && check.sourceTitle && (
-        <p data-testid="quick-check-source" className="mt-4 text-xs text-ink-muted">
+        <p data-testid="quick-check-source" className="mt-4 text-xs text-muted">
           From your screen: {check.sourceTitle}
         </p>
       )}
@@ -318,7 +318,7 @@ function QuickCheckBody({
             />
           ))}
           {clips.length > SHOWN_MOMENTS && (
-            <li className="text-xs text-ink-muted">
+            <li className="text-xs text-muted">
               and {clips.length - SHOWN_MOMENTS} more moments about this
             </li>
           )}
@@ -343,7 +343,7 @@ function QuickCheckBody({
             {index + 1 < picked.length ? "Next" : "Finish"}
           </button>
         ) : (
-          <button type="button" onClick={next} className="text-ink-muted hover:text-ink">
+          <button type="button" onClick={next} className="text-muted hover:text-ink">
             Skip
           </button>
         )}
@@ -377,7 +377,7 @@ function MomentRow({
   return (
     <li
       data-testid="quick-check-moment"
-      className="flex items-center gap-3 rounded-xl border border-rule bg-paper p-2"
+      className="flex items-center gap-3 rounded-xl border border-line bg-paper p-2"
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- a private, signed-in image */}
       <img
@@ -386,7 +386,7 @@ function MomentRow({
         className="h-14 w-20 shrink-0 rounded-md object-cover"
       />
       <div className="min-w-0 flex-1 text-sm">
-        <p className="text-ink-muted">
+        <p className="text-muted">
           From your moment on {momentDay(moment?.createdAt ?? Date.parse(fallbackAt), now)}
         </p>
         {moment && <p className="truncate font-medium">{moment.question}</p>}
@@ -422,8 +422,8 @@ function Shell({
 }) {
   return (
     <div className="flex flex-col p-5" data-testid="quick-check">
-      <header className="mb-3 flex items-center gap-2 text-xs text-ink-muted">
-        <Sparkles className="size-3.5 text-tutor" aria-hidden />
+      <header className="mb-3 flex items-center gap-2 text-xs text-muted">
+        <Sparkles className="size-3.5 text-neb-ink" aria-hidden />
         <span className="flex-1">Quick check{progress && ` · ${progress}`}</span>
         <button
           type="button"
@@ -440,6 +440,6 @@ function Shell({
 }
 
 const SECONDARY =
-  "inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 hover:border-accent";
+  "inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1 hover:border-ink";
 const PRIMARY =
   "rounded-full bg-ink px-4 py-1.5 font-medium text-paper disabled:cursor-not-allowed disabled:opacity-50";

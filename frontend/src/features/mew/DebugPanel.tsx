@@ -31,14 +31,14 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
   return (
     <aside
       aria-label="Neb debug panel"
-      className="pointer-events-auto flex h-full w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-rule bg-paper-raised/95 text-sm shadow-xl backdrop-blur"
+      className="pointer-events-auto flex h-full w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-line bg-paper-hi/95 text-sm shadow-xl backdrop-blur"
     >
-      <header className="flex items-center justify-between border-b border-rule px-4 py-3">
+      <header className="flex items-center justify-between border-b border-line px-4 py-3">
         <h2 className="font-serif text-lg">Neb debug</h2>
         <button
           aria-label="Close debug panel"
           onClick={useMew.getState().toggleDebug}
-          className="rounded p-1 text-ink-muted hover:text-ink"
+          className="rounded p-1 text-muted hover:text-ink"
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -46,22 +46,22 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
         <section aria-label="Voice">
-          <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Voice</h3>
+          <h3 className="mb-2 text-xs tracking-wide text-muted uppercase">Voice</h3>
           <p>
             Status:{" "}
             <span data-testid="voice-status" className="font-medium">
               {status}
             </span>
-            {error && <span className="text-error"> — {error}</span>}
+            {error && <span className="text-danger"> — {error}</span>}
           </p>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-rule" aria-hidden>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-line" aria-hidden>
             <div
-              className="h-full bg-accent transition-[width] duration-100"
+              className="h-full bg-ink transition-[width] duration-100"
               style={{ width: `${Math.min(100, level * 600)}%` }}
             />
           </div>
           <p
-            className="mt-2 min-h-5 text-ink-muted italic"
+            className="mt-2 min-h-5 text-muted italic"
             data-testid="partial-transcript"
             aria-live="polite"
           >
@@ -77,7 +77,7 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
         </section>
 
         <section aria-label="Simulate">
-          <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Simulate speech</h3>
+          <h3 className="mb-2 text-xs tracking-wide text-muted uppercase">Simulate speech</h3>
           <form onSubmit={submit} className="flex gap-2">
             <input
               value={draft}
@@ -85,13 +85,13 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
               placeholder="Type what the student says…"
               aria-label="Simulated utterance"
               maxLength={500}
-              className="min-w-0 flex-1 rounded-lg border border-rule bg-paper px-2 py-1.5 outline-none focus:border-accent"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-paper px-2 py-1.5 outline-none focus:border-ink"
             />
             <button className="rounded-lg bg-ink px-3 text-paper">Send</button>
           </form>
           <button
             onClick={onSummon}
-            className="mt-2 text-xs text-accent underline-offset-2 hover:underline"
+            className="mt-2 text-xs text-ink underline-offset-2 hover:underline"
           >
             Summon Neb (tap mascot)
           </button>
@@ -100,7 +100,7 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
         <TutorDebug />
 
         <section aria-label="Sensitivity">
-          <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Sensitivity</h3>
+          <h3 className="mb-2 text-xs tracking-wide text-muted uppercase">Sensitivity</h3>
           <label className="flex items-center gap-3">
             <span className="shrink-0">Threshold</span>
             <input
@@ -112,16 +112,16 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
               onChange={(e) =>
                 void useSettings.getState().update({ mew_threshold: Number(e.target.value) })
               }
-              className="flex-1 accent-(--accent)"
+              className="flex-1 accent-(--ink)"
             />
             <span className="w-10 text-right tabular-nums">{threshold.toFixed(2)}</span>
           </label>
         </section>
 
         <section aria-label="Decisions">
-          <h3 className="mb-2 text-xs tracking-wide text-ink-muted uppercase">Neb decisions</h3>
+          <h3 className="mb-2 text-xs tracking-wide text-muted uppercase">Neb decisions</h3>
           {decisions.length === 0 ? (
-            <p className="text-ink-muted">Nothing yet. Speak, write, or simulate an utterance.</p>
+            <p className="text-muted">Nothing yet. Speak, write, or simulate an utterance.</p>
           ) : (
             <ol className="space-y-2" data-testid="decisions">
               {decisions.map((d) => (
@@ -131,7 +131,7 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
           )}
         </section>
       </div>
-      <footer className="border-t border-rule px-4 py-2 text-xs text-ink-muted">
+      <footer className="border-t border-line px-4 py-2 text-xs text-muted">
         <button onClick={toggleDebug} className="hover:text-ink">
           Close
         </button>
@@ -142,19 +142,19 @@ export function DebugPanel({ onSimulateUtterance, onSummon }: Props) {
 
 function DecisionRow({ decision: d }: { decision: DecisionRecord }) {
   return (
-    <li className="rounded-lg border border-rule bg-paper p-2" data-label={d.output.label}>
+    <li className="rounded-lg border border-line bg-paper p-2" data-label={d.output.label}>
       <div className="flex items-center justify-between gap-2">
-        <span className={`font-medium ${d.acted ? "text-tutor" : "text-ink-muted"}`}>
+        <span className={`font-medium ${d.acted ? "text-neb-ink" : "text-muted"}`}>
           {d.output.label}
         </span>
-        <span className="text-xs text-ink-muted tabular-nums">
+        <span className="text-xs text-muted tabular-nums">
           {d.output.confidence.toFixed(2)} · {d.source} · {d.roundTripMs} ms
         </span>
       </div>
-      <p className="mt-1 truncate text-xs text-ink-muted" title={d.utterance}>
+      <p className="mt-1 truncate text-xs text-muted" title={d.utterance}>
         [{d.trigger}] {d.utterance || "—"}
       </p>
-      <p className="text-xs text-ink-muted">{d.output.reason}</p>
+      <p className="text-xs text-muted">{d.output.reason}</p>
     </li>
   );
 }

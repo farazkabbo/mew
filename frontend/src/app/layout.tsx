@@ -1,18 +1,13 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata, Viewport } from "next";
-import { Instrument_Serif, Inter } from "next/font/google";
+import { headers } from "next/headers";
 import { connection } from "next/server";
 
 import { isClerkConfigured } from "@/lib/auth-mode";
+import { DISPLAY_SCRIPT } from "@/lib/display";
 
+import { fontVariables } from "./fonts";
 import "./globals.css";
-
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
-const instrumentSerif = Instrument_Serif({
-  variable: "--font-instrument-serif",
-  subsets: ["latin"],
-  weight: "400",
-});
 
 export const metadata: Metadata = {
   title: "Neb",
@@ -21,17 +16,22 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f5f0" },
-    { media: "(prefers-color-scheme: dark)", color: "#1b1a18" },
+    { media: "(prefers-color-scheme: light)", color: "#ECE6D8" },
+    { media: "(prefers-color-scheme: dark)", color: "#1B1F23" },
   ],
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Every page renders per request so it can carry the CSP nonce set in proxy.ts.
   await connection();
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
-    <html lang="en" className={`${inter.variable} ${instrumentSerif.variable} h-full antialiased`}>
+    <html lang="en" className={`${fontVariables} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        {/* Appearance and text size before the first paint (NEB_APP_UI §3.1, §3.10). */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: DISPLAY_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col font-sans">
         {isClerkConfigured ? <ClerkProvider dynamic>{children}</ClerkProvider> : children}
       </body>

@@ -34,7 +34,7 @@ export function TrashDialog({ open, tree, now, onRestore, onDeleteForever, onClo
       <div className="flex flex-col gap-3 p-5">
         <div>
           <h2 className="font-serif text-2xl">Trash</h2>
-          <p className="text-sm text-ink-muted">
+          <p className="text-sm text-muted">
             Things here are deleted for good after {TREE_LIMITS.trashDays} days.
           </p>
         </div>
@@ -45,12 +45,12 @@ export function TrashDialog({ open, tree, now, onRestore, onDeleteForever, onClo
             return (
               <li
                 key={node.id}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-rule/40"
+                className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-line/40"
               >
                 <NodeIcon node={root} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm">{node.title}</span>
-                  <span className="block text-xs text-ink-muted">
+                  <span className="block text-xs text-muted">
                     Deleted {ago(node.deletedAt ?? now, now)}
                     {inside > 0 && ` · ${inside} inside`}
                     {node.parentId !== null &&
@@ -69,14 +69,14 @@ export function TrashDialog({ open, tree, now, onRestore, onDeleteForever, onClo
                         setConfirming(null);
                         onDeleteForever(node.id);
                       }}
-                      className="rounded-lg bg-error px-3 py-1.5 text-sm text-white"
+                      className="rounded-lg bg-danger px-3 py-1.5 text-sm text-white"
                     >
                       Delete for good
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirming(null)}
-                      className="rounded-lg px-2 py-1.5 text-sm text-ink-muted hover:bg-rule/60"
+                      className="rounded-lg px-2 py-1.5 text-sm text-muted hover:bg-line/60"
                     >
                       Keep
                     </button>
@@ -86,7 +86,7 @@ export function TrashDialog({ open, tree, now, onRestore, onDeleteForever, onClo
                     <button
                       type="button"
                       onClick={() => onRestore(node.id)}
-                      className="rounded-lg border border-rule px-3 py-1.5 text-sm hover:bg-rule/50"
+                      className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-line/50"
                     >
                       Restore
                     </button>
@@ -94,7 +94,7 @@ export function TrashDialog({ open, tree, now, onRestore, onDeleteForever, onClo
                       type="button"
                       onClick={() => setConfirming(node.id)}
                       aria-label={`Delete ${node.title} for good`}
-                      className="rounded-lg px-2 py-1.5 text-sm text-error hover:bg-rule/60"
+                      className="rounded-lg px-2 py-1.5 text-sm text-danger hover:bg-line/60"
                     >
                       Delete
                     </button>
@@ -104,14 +104,14 @@ export function TrashDialog({ open, tree, now, onRestore, onDeleteForever, onClo
             );
           })}
           {items.length === 0 && (
-            <li className="py-6 text-center text-sm text-ink-muted">The trash is empty.</li>
+            <li className="py-6 text-center text-sm text-muted">The trash is empty.</li>
           )}
         </ul>
         <div className="flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-rule/50"
+            className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-line/50"
           >
             Close
           </button>

@@ -56,12 +56,12 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
       }
     >
       {error && (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="text-sm text-muted">
           {error}
         </p>
       )}
       {!lesson && !error && (
-        <p role="status" className="flex items-center gap-2 text-ink-muted">
+        <p role="status" className="flex items-center gap-2 text-muted">
           <Loader2 className="size-4 animate-spin" aria-hidden />
           Writing your lesson from the course material…
         </p>
@@ -72,13 +72,13 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
             <h2 className="font-serif text-2xl">Explanation</h2>
             <Paragraphs text={lesson.explanation} />
             {lesson.pages.length > 0 && (
-              <p className="mt-3 text-sm text-ink-muted">From {formatPages(lesson.pages)}</p>
+              <p className="mt-3 text-sm text-muted">From {formatPages(lesson.pages)}</p>
             )}
           </section>
           {lesson.worked_example && (
             <section>
               <h2 className="font-serif text-2xl">Worked example</h2>
-              <p className="mt-3 whitespace-pre-wrap rounded-xl border border-rule bg-paper-raised p-5 leading-relaxed">
+              <p className="mt-3 whitespace-pre-wrap rounded-xl border border-line bg-paper-hi p-5 leading-relaxed">
                 {lesson.worked_example}
               </p>
             </section>
@@ -101,7 +101,7 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
             </section>
           )}
           {!lesson.generated && (
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-muted">
               This is the summary and the most relevant passage. Full lessons (worked examples and
               practice) are written by the tutor model when it&apos;s configured.
             </p>
@@ -117,9 +117,9 @@ export function LessonView({ courseId, conceptId }: { courseId: string; conceptI
               </Link>
               <Link
                 href={quizHref(detail.course)}
-                className="inline-flex items-center gap-2 rounded-full border border-rule px-5 py-2 text-sm font-medium hover:border-accent"
+                className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium hover:border-ink"
               >
-                <Sparkles className="size-4 text-tutor" aria-hidden />
+                <Sparkles className="size-4 text-neb-ink" aria-hidden />
                 Quiz me
               </Link>
             </div>

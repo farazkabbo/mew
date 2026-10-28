@@ -78,7 +78,7 @@ export function WritePad({ onRead }: { onRead(text: string): void }) {
         width={440}
         height={110}
         aria-label="Write your answer here"
-        className="w-full touch-none rounded-xl border border-dashed border-rule bg-paper text-ink"
+        className="w-full touch-none rounded-xl border border-dashed border-line bg-paper text-ink"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture(event.pointerId);
           current.current = [point(event)];
@@ -112,7 +112,7 @@ export function WritePad({ onRead }: { onRead(text: string): void }) {
           type="button"
           disabled={state === "empty" || state === "reading"}
           onClick={() => void read()}
-          className="rounded-full border border-rule px-3 py-1 hover:border-accent disabled:opacity-50"
+          className="rounded-full border border-line px-3 py-1 hover:border-ink disabled:opacity-50"
         >
           {state === "reading" ? (
             <Loader2 className="inline size-3.5 animate-spin" aria-hidden />
@@ -128,12 +128,12 @@ export function WritePad({ onRead }: { onRead(text: string): void }) {
             setState("empty");
             draw();
           }}
-          className="text-ink-muted hover:text-ink disabled:opacity-50"
+          className="text-muted hover:text-ink disabled:opacity-50"
         >
           Clear
         </button>
         {state === "failed" && (
-          <span role="alert" className="text-error">
+          <span role="alert" className="text-muted">
             Couldn&apos;t read it. Try again, or type it.
           </span>
         )}

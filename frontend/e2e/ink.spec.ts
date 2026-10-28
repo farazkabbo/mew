@@ -4,7 +4,7 @@ import { expect, type Page, test } from "./fixtures";
  * without overlapping my work. The model and voice are mocked; everything else is real. */
 
 const DB_NAME = "mew-notebooks-local";
-const TUTOR_VIOLET = [0x8a, 0x7b, 0xf0] as const;
+const TUTOR_VIOLET = [0x6b, 0x4e, 0xe6] as const;
 
 type StoredStroke = {
   id: string;

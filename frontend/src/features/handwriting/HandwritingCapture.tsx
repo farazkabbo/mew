@@ -97,11 +97,11 @@ export function HandwritingCapture() {
     URL.revokeObjectURL(link.href);
   };
 
-  const field = "rounded-lg border border-rule bg-paper px-2 py-1";
+  const field = "rounded-lg border border-line bg-paper px-2 py-1";
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
       <h1 className="font-serif text-3xl">Handwriting samples</h1>
-      <p className="text-sm text-ink-muted">
+      <p className="text-sm text-muted">
         For the eval set (evals/handwriting). Initials only, never a name. Write naturally.
       </p>
       <div className="flex flex-wrap gap-3 text-sm">
@@ -177,7 +177,7 @@ export function HandwritingCapture() {
             setStrokes([]);
             setClearKey((k) => k + 1);
           }}
-          className="rounded-full border border-rule px-4 py-1.5"
+          className="rounded-full border border-line px-4 py-1.5"
         >
           Clear
         </button>

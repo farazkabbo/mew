@@ -66,7 +66,7 @@ export class ScribeClient {
       if (typeof event.data !== "string") return;
       this.dispatch(event.data, handlers);
     };
-    this.socket.onerror = () => handlers.onError("Speech-to-text connection failed");
+    this.socket.onerror = () => handlers.onError("Couldn't connect to listening. Try again.");
     this.socket.onclose = () => handlers.onClose();
   }
 
@@ -133,7 +133,7 @@ function describeError(type: string): string {
     case "session_time_limit_exceeded":
       return "Speech-to-text session ended";
     default:
-      return "Speech-to-text error";
+      return "Listening stopped. Try again.";
   }
 }
 

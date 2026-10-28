@@ -35,11 +35,11 @@ export function ReviewApp() {
     <section
       aria-label="Saved moments"
       data-testid="review-moments"
-      className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rule bg-paper-raised p-4"
+      className="mb-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-paper-hi p-4"
     >
       <span>
         <span className="font-serif text-2xl">From what you saved</span>
-        <span className="block text-sm text-ink-muted">
+        <span className="block text-sm text-muted">
           {momentsDue === 1 ? "1 check" : `${momentsDue} checks`} due from moments you saved and
           quizzes on your screen.
           {exam &&
@@ -85,18 +85,18 @@ export function ReviewApp() {
       subtitle="Concepts due for another look, spaced so they stick."
     >
       {error && (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="text-sm text-muted">
           {error}
         </p>
       )}
-      {!items && !error && <p className="text-ink-muted">Loading…</p>}
+      {!items && !error && <p className="text-muted">Loading…</p>}
       {momentsDue > 0 && !exam && moments}
       <QuickCheck onReplay={(clipId) => router.push(`/notebook?moment=${clipId}`)} />
       <SkillsToRecheck now={now} />
       {items?.length === 0 && momentsDue === 0 && (
-        <p className="rounded-2xl border border-rule bg-paper-raised p-6">
+        <p className="rounded-2xl border border-line bg-paper-hi p-6">
           Nothing is due right now. Open a lesson or{" "}
-          <Link href="/courses" className="underline hover:text-accent">
+          <Link href="/courses" className="underline hover:text-ink">
             pick a course
           </Link>{" "}
           to start something new.
@@ -109,7 +109,7 @@ export function ReviewApp() {
             <section key={courseId} aria-label={group.title} data-testid="review-course">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-serif text-2xl">
-                  <Link href={`/courses/${courseId}`} className="hover:text-accent">
+                  <Link href={`/courses/${courseId}`} className="hover:text-ink">
                     {group.title}
                   </Link>
                 </h2>
@@ -121,16 +121,16 @@ export function ReviewApp() {
                   Quiz me ({group.items.length})
                 </Link>
               </div>
-              <ul className="mt-3 divide-y divide-rule border-y border-rule">
+              <ul className="mt-3 divide-y divide-line border-y border-line">
                 {group.items.map((item) => (
                   <li key={item.conceptId} data-testid="review-item" className="flex gap-4 py-3">
                     <Link
                       href={`/courses/${courseId}/concepts/${item.conceptId}`}
-                      className="min-w-0 flex-1 font-medium hover:text-accent"
+                      className="min-w-0 flex-1 font-medium hover:text-ink"
                     >
                       {item.conceptTitle}
                     </Link>
-                    <span className="text-sm text-ink-muted">
+                    <span className="text-sm text-muted">
                       {item.isNew ? "new · not practised yet" : formatDue(item.due, now)}
                     </span>
                   </li>

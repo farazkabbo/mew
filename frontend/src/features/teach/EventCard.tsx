@@ -32,17 +32,17 @@ export function EventCard({
       data-testid="mew-event"
       data-label={label ?? ""}
       aria-label={`Decision: ${input.lastUtterance || "writing pause"}`}
-      className="rounded-xl border border-rule bg-paper-raised p-4 outline-none focus-visible:border-accent"
+      className="rounded-xl border border-line bg-paper-hi p-4 outline-none focus-visible:border-ink"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="font-medium">
           {input.lastUtterance ? `“${input.lastUtterance}”` : <em>(a pause in writing)</em>}
         </p>
-        <time className="text-xs text-ink-muted" dateTime={event.created_at}>
+        <time className="text-xs text-muted" dateTime={event.created_at}>
           {new Date(event.created_at).toLocaleString()}
         </time>
       </div>
-      <p className="mt-1 text-xs text-ink-muted">
+      <p className="mt-1 text-xs text-muted">
         {input.trigger.replace("_", " ")}
         {input.recentTranscript.length > 0 && ` · before: “${input.recentTranscript.at(-1)}”`}
         {signals.activeRegionText && ` · writing “${signals.activeRegionText}”`}
@@ -50,7 +50,7 @@ export function EventCard({
       </p>
       <p className="mt-2 text-sm">
         Neb decided <strong>{MEW_LABEL_NAMES[output.label]}</strong>{" "}
-        <span className="text-ink-muted">
+        <span className="text-muted">
           ({Math.round(output.confidence * 100)}%{output.source ? `, ${output.source}` : ""})
         </span>
       </p>
@@ -66,9 +66,9 @@ export function EventCard({
             type="button"
             aria-pressed={label === option}
             onClick={() => onLabel(label === option ? null : option)}
-            className="rounded-full border border-rule px-3 py-1 text-xs hover:border-accent aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-paper"
+            className="rounded-full border border-line px-3 py-1 text-xs hover:border-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-paper"
           >
-            <span className="mr-1 text-ink-muted tabular-nums">{i + 1}</span>
+            <span className="mr-1 text-muted tabular-nums">{i + 1}</span>
             {MEW_LABEL_NAMES[option]}
           </button>
         ))}
@@ -76,7 +76,7 @@ export function EventCard({
           <button
             type="button"
             onClick={() => onLabel(output.label)}
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs text-check hover:underline"
+            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs text-neb-ink hover:underline"
           >
             <Check className="size-3.5" aria-hidden />
             Neb was right

@@ -8,14 +8,17 @@ import { expect, type Page, test } from "./fixtures";
  */
 
 const DB_NAME = "mew-notebooks-local";
-const RED = "#c8432b";
-const GREEN = "#2f7d55";
 
 type StoredStroke = {
   author: "student" | "tutor";
   color: string;
   bbox: [number, number, number, number];
+  markKind?: string;
 };
+
+/** neb's marks are all violet (U1), so they're told apart by kind. */
+const ERROR = ["error", "missing"];
+const TICK = ["tick"];
 
 test.beforeEach(({ page }) => {
   page.on("console", (message) => {
@@ -120,8 +123,10 @@ async function storedStrokes(page: Page): Promise<StoredStroke[]> {
   );
 }
 
-const tutorInColor = async (page: Page, color: string) =>
-  (await storedStrokes(page)).filter((s) => s.author === "tutor" && s.color === color);
+const tutorMarks = async (page: Page, kinds: string[]) =>
+  (await storedStrokes(page)).filter(
+    (s) => s.author === "tutor" && s.markKind !== undefined && kinds.includes(s.markKind),
+  );
 
 /** The student's strokes in the band [top, bottom] (page units = CSS px at zoom 1). */
 const studentBetween = async (page: Page, top: number, bottom: number) =>
@@ -147,9 +152,9 @@ test("a wrong algebra step is circled where it's wrong, with a short hint, silen
 
   // The pause after line 2 → SymPy says it doesn't follow → a red loop and a note, no voice.
   await expect
-    .poll(async () => (await tutorInColor(page, RED)).length, { timeout: 15_000 })
+    .poll(async () => (await tutorMarks(page, ERROR)).length, { timeout: 15_000 })
     .toBeGreaterThan(3);
-  const red = await tutorInColor(page, RED);
+  const red = await tutorMarks(page, ERROR);
   const loop = red.reduce((a, b) => (a.bbox[2] * a.bbox[3] > b.bbox[2] * b.bbox[3] ? a : b));
   // Round the wrong side ("10", the last letter), not the whole line.
   const line = (await studentBetween(page, 240, 290)).sort((a, b) => a.bbox[0] - b.bbox[0]);
@@ -174,16 +179,14 @@ test("a correct step gets a small tick, quietly", async ({ page }) => {
   await page.waitForTimeout(3000);
   await writeLine(page, 250, 3); // a different shape, so it isn't mistaken for line 1
 
-  await expect
-    .poll(async () => (await tutorInColor(page, GREEN)).length, { timeout: 15_000 })
-    .toBe(1);
-  const [tick] = await tutorInColor(page, GREEN);
+  await expect.poll(async () => (await tutorMarks(page, TICK)).length, { timeout: 15_000 }).toBe(1);
+  const [tick] = await tutorMarks(page, TICK);
   const line = await studentBetween(page, 240, 290);
   const lineRight = Math.max(...line.map((s) => s.bbox[0] + s.bbox[2]));
   expect(tick?.bbox[0]).toBeGreaterThan(lineRight); // beside the line, not on it
   expect(tick?.bbox[3]).toBeLessThan(60); // small
   expect(tutorCalls).toHaveLength(0); // no model call, no voice
-  expect(await tutorInColor(page, RED)).toHaveLength(0);
+  expect(await tutorMarks(page, ERROR)).toHaveLength(0);
 });
 
 test("code that crashes is caught by actually running it (Pyodide)", async ({ page }) => {
@@ -197,11 +200,11 @@ test("code that crashes is caught by actually running it (Pyodide)", async ({ pa
   // The line fails when run: marked, quietly (K9), with a short note.
   await expect(page.getByTestId("live-mark")).toHaveAttribute(
     "aria-label",
-    "Mark: this line fails",
+    "Mark: doesn't run yet",
     {
       timeout: 60_000,
     },
   );
-  expect(await tutorInColor(page, RED)).not.toHaveLength(0);
+  expect(await tutorMarks(page, ERROR)).not.toHaveLength(0);
   expect(tutorCalls).toHaveLength(0);
 });
