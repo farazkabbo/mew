@@ -16,7 +16,7 @@ export const test = base.extend<{
 }>({
   /**
    * The Contents drawer (the K1 tree, NEB_APP_UI §4.10) kept open, as a student who pins it:
-   * the tree's tests reach it without opening it first.
+   * the tree's tests reach it without opening it first. And the debug panel switched on.
    */
   contentsOpen: [
     async ({ page }, use) => {
@@ -24,6 +24,8 @@ export const test = base.extend<{
         try {
           if (localStorage.getItem("neb:contents") === null)
             localStorage.setItem("neb:contents", "1");
+          // The developer's panel (its simulated speech drives many tests): off for students.
+          localStorage.setItem("neb:debug", "1");
         } catch {
           // No storage: the drawer starts closed.
         }

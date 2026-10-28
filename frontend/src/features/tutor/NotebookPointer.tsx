@@ -88,14 +88,11 @@ export function NotebookPointer({ canvas, ink }: Props) {
         viewBox="0 0 32 32"
         width={SIZE}
         height={SIZE}
-        className="group absolute top-0 left-0 text-neb-ink opacity-50 transition-[transform,opacity] duration-500 ease-out data-[look=writing]:opacity-100 motion-reduce:transition-none"
+        className="absolute top-0 left-0 text-neb opacity-0 transition-[transform,opacity] duration-500 ease-out data-[look=writing]:opacity-100 motion-reduce:transition-none"
       >
-        <path fill="currentColor" d="M8 12 L10 5 L14 10 Z M24 12 L22 5 L18 10 Z" />
-        <circle fill="currentColor" cx="16" cy="17" r="9" />
-        <path
-          className="fill-ink opacity-0 group-data-[look=writing]:opacity-100"
-          d="M21 25 L28 18 L30 20 L23 27 Z M21 25 L20 29 L23 27 Z"
-        />
+        {/* A pen nib, its tip at TIP: neb's, so violet (§3.1). */}
+        <path fill="currentColor" d="M20 29 L15 19 L22 8 L29 15 Z" />
+        <path fill="var(--paper-hi)" d="M20 29 L19 24 L21 23 Z" />
       </svg>
     </div>
   );

@@ -87,7 +87,7 @@ test("the page: header, pencil case, sheet with neb's lane, chapter tabs, replay
     "aria-current",
     "page",
   );
-  await expect(page.getByRole("radio", { name: "Hint" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "How much neb marks: Hint" })).toBeVisible();
   await expect(page.getByRole("tree")).toBeHidden(); // the Contents drawer is closed
   await page.screenshot({ path: `${SHOTS}/empty.png` });
 

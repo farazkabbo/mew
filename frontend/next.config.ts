@@ -27,6 +27,7 @@ const nextConfig: NextConfig = {
   // A separate build folder lets the e2e server run beside a normal `next dev` (one per folder).
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   poweredByHeader: false,
+  devIndicators: false,
   reactStrictMode: true,
   transpilePackages: ["@mew/shared", "@mew/ink"],
   turbopack: {

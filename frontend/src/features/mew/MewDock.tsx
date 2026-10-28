@@ -1,6 +1,7 @@
 "use client";
 
 import { Bug, Mic, MicOff, VolumeX, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { Keys } from "@/components/ui/Keycap";
@@ -36,6 +37,16 @@ export function MewDock({ onSummon, onStartListening, onStopListening, onShortcu
   const { debugOpen, toggleDebug } = useMew();
   const voiceIssue = useTutor((s) => s.voiceIssue);
   const listening = status === "listening" || status === "connecting";
+  // The developer's panel: only when it's switched on on this device (`neb:debug` = "1").
+  const [debugging, setDebugging] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- read once, after hydration
+      setDebugging(localStorage.getItem("neb:debug") === "1");
+    } catch {
+      // Storage off: no panel.
+    }
+  }, []);
 
   return (
     <div className="pointer-events-auto flex flex-col items-end gap-2">
@@ -114,16 +125,18 @@ export function MewDock({ onSummon, onStartListening, onStopListening, onShortcu
             ?
           </button>
         )}
-        <button
-          type="button"
-          className="grid size-8 place-items-center rounded-full text-muted hover:text-ink aria-pressed:bg-ink aria-pressed:text-paper"
-          aria-label="Debug panel"
-          title="Debug panel"
-          aria-pressed={debugOpen}
-          onClick={toggleDebug}
-        >
-          <Bug className="size-3.5" aria-hidden />
-        </button>
+        {debugging && (
+          <button
+            type="button"
+            className="grid size-8 place-items-center rounded-full text-muted hover:text-ink aria-pressed:bg-ink aria-pressed:text-paper"
+            aria-label="Debug panel"
+            title="Debug panel"
+            aria-pressed={debugOpen}
+            onClick={toggleDebug}
+          >
+            <Bug className="size-3.5" aria-hidden />
+          </button>
+        )}
       </div>
     </div>
   );

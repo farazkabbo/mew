@@ -256,6 +256,7 @@ test("K9: Hide marks until I'm done keeps them back until Alt+C; Off marks nothi
   ]);
   await page.goto("/notebook");
   await warmChecker(page);
+  await page.getByRole("button", { name: "View options" }).click();
   await page.getByTestId("marks-menu").click();
   await page.getByLabel("Hide marks until I'm done (Alt+C shows them)").check();
   await page.keyboard.press("Escape");
@@ -272,6 +273,7 @@ test("K9: Hide marks until I'm done keeps them back until Alt+C; Off marks nothi
   await expect(page.getByTestId("live-mark")).toHaveAttribute("aria-label", "Mark: sign?");
 
   // Off: the next line gets nothing.
+  await page.getByRole("button", { name: "View options" }).click();
   await page.getByTestId("marks-menu").click();
   await page.getByLabel("Off").check();
   await page.keyboard.press("Escape");

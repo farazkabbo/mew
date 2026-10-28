@@ -22,6 +22,7 @@ export function ChapterTabs({
   rootId,
   openId,
   addKeys,
+  onContents,
   onOpen,
   onAdd,
   onDropPage,
@@ -31,6 +32,8 @@ export function ChapterTabs({
   /** The open node (a chapter, a section in it, or the notebook itself). */
   openId: string | null;
   addKeys: string;
+  /** Contents (the whole tree, §4.10), under the tabs. */
+  onContents?(): void;
   onOpen(id: string): void;
   onAdd(): void;
   onDropPage?(pageId: string, chapterId: string): void;
@@ -82,6 +85,16 @@ export function ChapterTabs({
         + chapter
         <span className="text-[11px] opacity-70">{addKeys.replace("+", " ")}</span>
       </button>
+      {onContents && (
+        <button
+          type="button"
+          onClick={onContents}
+          title="Contents: every notebook, chapter and page"
+          className="mt-2 h-9 w-32 shrink-0 rounded-[0_8px_8px_0] px-3 text-left text-[13px] text-muted hover:text-ink"
+        >
+          Contents
+        </button>
+      )}
     </nav>
   );
 }

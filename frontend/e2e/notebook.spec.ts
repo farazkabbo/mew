@@ -104,7 +104,10 @@ test("exports the current line as a PNG", async ({ page }) => {
 
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "Export current line as PNG" }).click(),
+    page
+      .getByRole("button", { name: "View options" })
+      .click()
+      .then(() => page.getByRole("button", { name: "Export current line as PNG" }).click()),
   ]);
   const file = await readFile(await download.path());
 
@@ -117,6 +120,8 @@ test("exports the current line as a PNG", async ({ page }) => {
 
 test("zooms with the keyboard and resets the view", async ({ page }) => {
   await openNotebook(page);
+  // The zoom is under the page's "⋯" (U10).
+  await page.getByRole("button", { name: "View options" }).click();
   const zoomLabel = page.getByRole("button", { name: /^Zoom \d+%/ });
 
   await page.keyboard.press("=");

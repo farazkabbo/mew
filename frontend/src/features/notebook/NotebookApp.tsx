@@ -915,6 +915,17 @@ export function NotebookApp({
       say: "or drop it on a notebook",
       run: () => setImporting({ nodeId: notebookId, file: null }),
     },
+    ...(courseId
+      ? [
+          {
+            id: "quiz",
+            label: "Quiz me on this course",
+            keys: "",
+            say: "or say “quiz me”",
+            run: () => void quiz.start(courseId),
+          },
+        ]
+      : []),
     {
       id: "desk",
       label: "Go to the desk",
@@ -969,7 +980,6 @@ export function NotebookApp({
               onOpenTrash={() => treeActions.setTrashOpen(true)}
             />
           }
-          onQuiz={courseId ? () => void quiz.start(courseId) : null}
         />
       )}
       <main className="relative flex min-w-0 flex-1 flex-col bg-desk">
@@ -985,7 +995,6 @@ export function NotebookApp({
             checkKeys={keys.shown("check_work")}
             page={view === "page"}
             onDesk={openDesk}
-            onContents={toggleContents}
             onOpenHome={openHome}
             onFold={() => rootId && useMarkPrefs.getState().setHideUntilDone(rootId, !folded)}
           />
@@ -1195,7 +1204,6 @@ export function NotebookApp({
                       onSummon={mew.summon}
                       onStartListening={mew.startListening}
                       onStopListening={mew.stopListening}
-                      onShortcuts={() => setShortcutsOpen(true)}
                     />
                   </div>
                 )}
@@ -1276,6 +1284,7 @@ export function NotebookApp({
                 addKeys={keys.shown("new_chapter")}
                 onOpen={openNode}
                 onAdd={() => treeActions.addChild(rootId)}
+                onContents={toggleContents}
               />
             </div>
           )}

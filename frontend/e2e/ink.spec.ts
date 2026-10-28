@@ -202,6 +202,7 @@ test("tutor ink survives a reload and can be hidden", async ({ page }) => {
   await expect.poll(() => violetPixels(page)).toBeGreaterThan(100);
   expect((await tutorStrokes(page)).length).toBe(count);
 
+  await page.getByRole("button", { name: "View options" }).click();
   const toggle = page.getByRole("button", { name: "Show tutor ink (T)" });
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
   await toggle.click();

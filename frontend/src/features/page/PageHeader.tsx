@@ -1,7 +1,7 @@
 "use client";
 
 import type { Notebook, NotebookTree } from "@mew/shared";
-import { ChevronLeft, Menu } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 import { Keys } from "@/components/ui/Keycap";
 
@@ -9,8 +9,7 @@ import { Breadcrumb } from "../notebook/tree/Breadcrumb";
 import { LevelSwitch } from "./LevelSwitch";
 
 /**
- * The page's header (docs/NEB_APP_UI.md §4.1, board 2): back to the desk, the contents, where you
- * are (Physics › Ch 3 · Projectiles › Page 4), how much neb marks, and Fold the margin (Alt C).
+ * The page's header (docs/NEB_APP_UI.md §4.1, board 2): back to the desk, where you are (Physics › Ch 3 · Projectiles › Page 4), how much neb marks, and Fold the margin (Alt C).
  */
 export function PageHeader({
   tree,
@@ -21,7 +20,6 @@ export function PageHeader({
   checkKeys,
   page,
   onDesk,
-  onContents,
   onOpenHome,
   onFold,
 }: {
@@ -34,7 +32,6 @@ export function PageHeader({
   checkKeys: string;
   page: boolean;
   onDesk(): void;
-  onContents(): void;
   onOpenHome(id: string): void;
   onFold(): void;
 }) {
@@ -51,15 +48,6 @@ export function PageHeader({
         className="grid size-10 place-items-center rounded-full text-ink hover:bg-ink/5"
       >
         <ChevronLeft className="size-5" strokeWidth={2} aria-hidden />
-      </button>
-      <button
-        type="button"
-        onClick={onContents}
-        aria-label="Contents"
-        title="Contents (every notebook, chapter and page)"
-        className="grid size-10 place-items-center rounded-full text-muted hover:bg-ink/5 hover:text-ink"
-      >
-        <Menu className="size-5" strokeWidth={1.8} aria-hidden />
       </button>
       <div className="min-w-0 flex-1 text-[15px]">
         <Breadcrumb

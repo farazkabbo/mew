@@ -29,7 +29,7 @@ test("holding Alt shows the keys, and Shift+? opens the sheet", async ({ page })
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
 
-  await page.getByRole("button", { name: "Shortcuts and what to say" }).click();
+  await page.keyboard.press("Shift+Slash");
   await expect(sheet).toBeVisible();
   await sheet.getByRole("button", { name: "Close" }).click();
   await expect(sheet).toBeHidden();

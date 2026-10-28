@@ -122,7 +122,7 @@ export function NebLane({
     <aside
       aria-label="neb's margin"
       data-testid="neb-lane"
-      className="pointer-events-none relative z-30 h-full shrink-0 border-r border-margin-red"
+      className="pointer-events-none relative z-30 h-full shrink-0 border-r-2 border-margin-red"
       style={{ width }}
     >
       <div className="pointer-events-auto absolute top-3 left-3">

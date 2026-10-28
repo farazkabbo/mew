@@ -257,8 +257,11 @@ test("without a grader, the student compares with the model answer themselves", 
   await startCourse(page);
   await page.getByRole("link", { name: "Open the course notebook" }).click();
 
-  // "Quiz me" from the sidebar, in the course's own notebook.
-  await page.getByRole("button", { name: "Quiz me" }).click();
+  // "Quiz me" from Ctrl+K's commands, in the course's own notebook.
+  await expect(page.getByTestId("pencil-case")).toBeVisible();
+  await page.keyboard.press("Control+KeyK");
+  await page.keyboard.type(">quiz");
+  await page.getByRole("option", { name: /Quiz me on this course/ }).click();
   const card = page.getByTestId("quiz-card");
   await expect(page.getByTestId("quiz-question")).toHaveText(LESSON.practice[0]?.question ?? "");
   await writeLetters(page, 520, 300, 4);

@@ -69,7 +69,7 @@ test("the introduction shows once, can be skipped, and can be shown again", asyn
   await intro.getByRole("button", { name: "Not now" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   // The level chosen is the notebook's.
-  await expect(page.getByRole("radio", { name: "Coach" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("button", { name: "How much neb marks: Coach" })).toBeVisible();
 
   // Remembered on the account.
   await page.reload();
@@ -169,8 +169,12 @@ test("tutor turn latencies are reported and shown in Settings", async ({ page })
   await ask(page, "why does the force cancel out?");
   await expect(page.getByTestId("tutor-caption")).toHaveText(speech);
 
-  // Leaving the notebook (here by its Settings link) sends what's queued: timings only.
-  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  // Leaving the notebook (here for Settings, from the desk's menu) sends what's queued: timings
+  // only.
+  await page.getByRole("button", { name: "Close debug panel" }).click();
+  await page.getByRole("button", { name: "Back to the desk" }).click();
+  await page.getByRole("button", { name: "Your account and more" }).click();
+  await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect.poll(() => sent.length).toBeGreaterThan(0);
   expect(JSON.stringify(sent)).not.toContain("force");

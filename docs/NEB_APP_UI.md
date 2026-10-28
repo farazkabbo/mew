@@ -959,3 +959,18 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       command, `screen_coach_onboarding`, which answers only whether Screen Coach is on and,
       when asked, opens its local settings page; the student turns it on there, with its consent.
       The web app still can't change a Screen Coach setting (decision 1).
+24. **U24. The page matches board 2 (2026-10-28, `feat/ui-u10-board-fidelity`).** The owner found
+    the page cluttered next to the board:
+    - **The Contents drawer is the notebook tree only.** Courses, Review and Settings are on the
+      desk's avatar menu; "Quiz me on this course" is a Ctrl + K command. The drawer opens from
+      "Contents" under the chapter tabs; the header's ☰ is gone.
+    - **The header** is back, where you are, one level pill (Quiet / Hint / Coach open from it),
+      and Fold the margin.
+    - **Under the sheet:** the replay bar, the page arrows, and one "⋯" holding zoom, the
+      detected lines, neb's ink, export and the marks menu.
+    - **The ask pill** has no "?" (Shift + ?, Ctrl + K and "what can I say?" open the sheet) and
+      shows the debug toggle only when `localStorage["neb:debug"]` is "1" (the e2e fixture sets
+      it).
+    - **neb's pointer** shows only while neb writes, as a violet nib; the old Mew cat is gone.
+    - **Next's development badge** is off (`devIndicators: false`); it was the black circle in
+      every page's corner.
