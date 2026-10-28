@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src ipc: http://ipc.localhost"
     />
     <title>Neb</title>
     <link rel="stylesheet" href="overlay.css" />
@@ -12,7 +12,7 @@
   </head>
   <body class="island">
     <svg class="island-shape" aria-hidden="true"><path id="island-shape" /></svg>
-    <div class="island" id="island" data-activity="ready" data-open="false">
+    <div class="island" id="island" data-activity="ready" data-panel="none">
       <div class="island-bar" role="toolbar" aria-label="Neb tools">
         <p class="island-status" aria-live="polite">
           <span class="island-dot" aria-hidden="true"></span><span id="island-activity">Neb</span>
@@ -70,6 +70,22 @@
         <span class="island-divider" aria-hidden="true"></span>
         <button
           type="button"
+          id="island-music"
+          class="island-music"
+          aria-expanded="false"
+          aria-controls="island-music-panel"
+          aria-label="Music"
+          title="Music: what's playing and your pinned playlists"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 18V5.5l10-2V16" />
+            <circle cx="6.5" cy="18" r="2.5" />
+            <circle cx="16.5" cy="16" r="2.5" />
+          </svg>
+          <span class="island-music-dot" aria-hidden="true"></span>
+        </button>
+        <button
+          type="button"
           id="island-mic"
           class="island-mic"
           aria-pressed="false"
@@ -101,6 +117,36 @@
         </button>
       </div>
       <ul class="island-menu" id="island-menu" role="menu" aria-label="Selection shape" hidden></ul>
+      <section class="music" id="island-music-panel" aria-label="Music" hidden>
+        <div class="music-now">
+          <img class="music-art" id="music-art" alt="" hidden />
+          <span class="music-art music-art-empty" id="music-art-empty" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M9 18V5.5l10-2V16" />
+              <circle cx="6.5" cy="18" r="2.5" />
+              <circle cx="16.5" cy="16" r="2.5" />
+            </svg>
+          </span>
+          <div class="music-text" aria-live="polite">
+            <p class="music-title" id="music-title">Nothing playing</p>
+            <p class="music-artist" id="music-artist">Play something in Spotify or your browser</p>
+          </div>
+          <div class="music-controls">
+            <button type="button" id="music-previous" aria-label="Previous">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 6v12M18 6l-8 6 8 6z" /></svg>
+            </button>
+            <button type="button" id="music-play" class="music-play" aria-label="Play">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path id="music-play-icon" /></svg>
+            </button>
+            <button type="button" id="music-next" aria-label="Next">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 6v12M6 6l8 6-8 6z" /></svg>
+            </button>
+          </div>
+        </div>
+        <ul class="music-pins" id="music-pins" aria-label="Pinned playlists"></ul>
+        <p class="music-notice" id="music-notice" role="status" hidden></p>
+        <button type="button" id="music-pin" class="music-pin">Pin copied Spotify link</button>
+      </section>
       <p class="island-tip" id="island-tip" role="tooltip" hidden></p>
     </div>
   </body>

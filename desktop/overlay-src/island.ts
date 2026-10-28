@@ -1,11 +1,16 @@
 import {
   ACTIVITY_LABEL,
   CLOSED_HEIGHT,
+  type Control,
   EAR,
   notchPath,
   RADIUS,
   type IslandView,
+  type MusicView,
   parseIslandView,
+  parseMusicView,
+  PIN_KIND_LABEL,
+  type PinView,
   type Shape,
   SHAPE_LABEL,
   TIP_DELAY_MS,
@@ -22,8 +27,13 @@ import { invoke, on } from "./tauri";
  * may not see a click, so Rust passes each press on the island (`mew:island-press`); a button
  * acts once per press however the click arrives.
  *
- * The shapes menu opens inside the island: the island grows (its window too, clipped to the
- * island's shape by Rust) and closes again when a shape is picked.
+ * The shapes menu and the music panel open inside the island (one at a time): the island is
+ * drawn taller, as tall as what it shows, in a window that's always tall enough, and closes
+ * again when a shape is picked or the music button is pressed again.
+ *
+ * The music panel (`screen_music.rs`) shows what's playing on this PC with its playback buttons,
+ * and the student's pinned Spotify playlists. The island can't be typed into (it never takes the
+ * focus), so a playlist is pinned from a link the student copied in Spotify.
  */
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -44,6 +54,22 @@ const menu = document.getElementById("island-menu");
 const mic = document.getElementById("island-mic") as HTMLButtonElement | null;
 const clear = document.getElementById("island-clear") as HTMLButtonElement | null;
 const close = document.getElementById("island-close");
+const musicButton = document.getElementById("island-music") as HTMLButtonElement | null;
+const musicPanel = document.getElementById("island-music-panel");
+const art = document.getElementById("music-art") as HTMLImageElement | null;
+const artEmpty = document.getElementById("music-art-empty");
+const title = document.getElementById("music-title");
+const artist = document.getElementById("music-artist");
+const previous = document.getElementById("music-previous") as HTMLButtonElement | null;
+const play = document.getElementById("music-play") as HTMLButtonElement | null;
+const playIcon = document.getElementById("music-play-icon");
+const next = document.getElementById("music-next") as HTMLButtonElement | null;
+const pinList = document.getElementById("music-pins");
+const notice = document.getElementById("music-notice");
+const pinButton = document.getElementById("music-pin") as HTMLButtonElement | null;
+
+const PLAY_PATH = "M8 5.5v13l10.5-6.5z";
+const PAUSE_PATH = "M8 5.5v13M16 5.5v13";
 
 function send(action: object): void {
   void invoke("screen_island", { action }).catch(() => undefined);
@@ -78,17 +104,32 @@ function onPress(button: HTMLButtonElement | null, run: () => void): void {
   });
 }
 
+/** What's open below the tools: the shapes menu, the music panel, or nothing. */
+type Panel = "none" | "menu" | "music";
+
+function openPanel(): Panel {
+  const panel = bar?.dataset.panel;
+  return panel === "menu" || panel === "music" ? panel : "none";
+}
+
+/** The island's height with what's open below the tools (CSS px), as tall as its content. */
+function islandHeight(): number {
+  const panel = openPanel();
+  const element = panel === "menu" ? menu : panel === "music" ? musicPanel : null;
+  const bottom = element ? element.getBoundingClientRect().bottom : CLOSED_HEIGHT;
+  return Math.min(Math.ceil(bottom), window.innerHeight);
+}
+
 /**
- * The island, drawn in the top of its window: the bar alone, or the bar and its menu filling the
- * window. The window never resizes; what's below the island is clear (clicks reach the app).
+ * The island, drawn in the top of its window: the bar alone, or the bar and what's open below
+ * it. The window never resizes; what's below the island is clear (clicks reach the app).
  */
 const outline = document.getElementById("island-shape");
 function drawShape(): void {
-  const open = bar?.dataset.open === "true";
-  const height = open ? window.innerHeight : Math.min(CLOSED_HEIGHT, window.innerHeight);
+  const open = openPanel() !== "none";
   outline?.setAttribute(
     "d",
-    notchPath(window.innerWidth, height, EAR, open ? RADIUS.open : RADIUS.closed),
+    notchPath(window.innerWidth, islandHeight(), EAR, open ? RADIUS.open : RADIUS.closed),
   );
 }
 
@@ -102,7 +143,7 @@ function hideTip(): void {
 function showTipFor(button: HTMLElement): void {
   hideTip();
   const name = button.dataset.tip;
-  if (!tip || !name || bar?.dataset.open === "true") return;
+  if (!tip || !name || openPanel() !== "none") return;
   tipTimer = window.setTimeout(() => {
     tip.textContent = name;
     tip.hidden = false;
@@ -131,12 +172,39 @@ drawShape();
 
 function setMenu(open: boolean): void {
   if (!menu || !caret || menu.hidden === !open) return;
+  if (open) setMusic(false);
   menu.hidden = !open;
-  if (bar) bar.dataset.open = String(open);
+  if (bar) bar.dataset.panel = open ? "menu" : "none";
   hideTip();
   drawShape();
   caret.setAttribute("aria-expanded", String(open));
   send({ type: "menu", open });
+}
+
+/** The height Rust was last told the music panel makes the island (presses there are clicks). */
+let sentMusicHeight = 0;
+
+function setMusic(open: boolean): void {
+  if (!musicPanel || !musicButton || musicPanel.hidden === !open) return;
+  if (open) setMenu(false);
+  musicPanel.hidden = !open;
+  if (bar) bar.dataset.panel = open ? "music" : "none";
+  musicButton.setAttribute("aria-expanded", String(open));
+  hideTip();
+  drawShape();
+  sentMusicHeight = open ? islandHeight() : 0;
+  send({ type: "music_panel", open, height: sentMusicHeight });
+}
+
+/** The music panel changed size (a pin came or went, a notice): redraw, and tell Rust. */
+function musicResized(): void {
+  if (openPanel() !== "music") return;
+  drawShape();
+  const height = islandHeight();
+  if (height !== sentMusicHeight) {
+    sentMusicHeight = height;
+    send({ type: "music_panel", open: true, height });
+  }
 }
 
 function render(next: IslandView): void {
@@ -200,8 +268,115 @@ onPress(clear, () => {
 });
 onPress(close as HTMLButtonElement | null, () => {
   if (menu) menu.hidden = true;
-  if (bar) bar.dataset.open = "false";
+  if (musicPanel) musicPanel.hidden = true;
+  musicButton?.setAttribute("aria-expanded", "false");
+  if (bar) bar.dataset.panel = "none";
+  drawShape();
   send({ type: "close" });
+});
+
+// ─── Music ───────────────────────────────────────────────────────────────────────────────────
+
+function control(button: HTMLButtonElement | null, which: Control): void {
+  onPress(button, () => {
+    send({ type: "music_control", control: which });
+  });
+}
+
+onPress(musicButton, () => {
+  setMusic(musicPanel?.hidden === true);
+});
+control(previous, "previous");
+control(play, "play_pause");
+control(next, "next");
+onPress(pinButton, () => {
+  send({ type: "music_pin" });
+});
+
+function pinItem(pin: PinView): HTMLLIElement {
+  const item = document.createElement("li");
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "music-open";
+  const name = document.createElement("span");
+  name.className = "music-pin-name";
+  name.textContent = pin.name;
+  const kind = document.createElement("span");
+  kind.className = "music-pin-kind";
+  kind.textContent = PIN_KIND_LABEL[pin.kind];
+  open.append(name, kind);
+  open.setAttribute("aria-label", `Open ${pin.name} in Spotify`);
+  onPress(open, () => {
+    send({ type: "music_open", id: pin.id });
+  });
+  const unpin = document.createElement("button");
+  unpin.type = "button";
+  unpin.className = "music-unpin";
+  unpin.setAttribute("aria-label", `Unpin ${pin.name}`);
+  const icon = document.createElementNS(SVG, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  icon.append(path("M8 8l8 8M16 8l-8 8"));
+  unpin.append(icon);
+  onPress(unpin, () => {
+    send({ type: "music_unpin", id: pin.id });
+  });
+  item.append(open, unpin);
+  return item;
+}
+
+function renderMusic(view: MusicView): void {
+  const now = view.now;
+  if (musicButton) musicButton.dataset.playing = String(now?.playing === true);
+  if (title) title.textContent = now ? now.title : "Nothing playing";
+  if (artist) {
+    artist.textContent = now
+      ? [now.artist, now.player].filter(Boolean).join(" · ")
+      : "Play something in Spotify or your browser";
+  }
+  if (art && artEmpty) {
+    if (now?.art) {
+      art.src = now.art;
+      art.hidden = false;
+      artEmpty.hidden = true;
+    } else {
+      art.removeAttribute("src");
+      art.hidden = true;
+      artEmpty.hidden = false;
+    }
+  }
+  if (play) {
+    play.disabled = !now;
+    play.setAttribute("aria-label", now?.playing ? "Pause" : "Play");
+  }
+  playIcon?.setAttribute("d", now?.playing ? PAUSE_PATH : PLAY_PATH);
+  if (previous) previous.disabled = !now?.canPrevious;
+  if (next) next.disabled = !now?.canNext;
+
+  for (const old of pinList?.querySelectorAll("button") ?? []) actions.delete(old);
+  pinList?.replaceChildren(...view.pins.map(pinItem));
+  if (pinList) pinList.hidden = view.pins.length === 0;
+  if (notice) {
+    notice.textContent = view.notice ?? "";
+    notice.hidden = !view.notice;
+  }
+  if (pinButton) {
+    pinButton.disabled = view.pinning;
+    pinButton.textContent = view.pinning ? "Pinning…" : "Pin copied Spotify link";
+  }
+  musicResized();
+}
+
+// Shown again (hidden by the double tap last time, with something open): start closed.
+on("mew:island-reset", () => {
+  setMenu(false);
+  setMusic(false);
+  drawShape();
+});
+
+on("mew:island-music", (detail) => {
+  const view = parseMusicView(detail);
+  if (view) renderMusic(view);
 });
 
 // A press Rust saw while the draw overlay had the mouse: the button under it acts.
@@ -218,5 +393,6 @@ on("mew:island-show", (detail) => {
   if (next) render(next);
 });
 
-// Until Rust's first view: the freehand icon, nothing pressed.
+// Until Rust's first view: the freehand icon, nothing pressed, nothing playing.
 shapeIcon?.replaceChildren(path(SHAPE_PATHS.free));
+renderMusic({ now: null, pins: [], notice: null, pinning: false });

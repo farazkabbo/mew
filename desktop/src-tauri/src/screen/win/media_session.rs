@@ -1,19 +1,36 @@
-//! What Windows' media controls know about playing video (S3): whether the app in front is
-//! playing (so the tutor can ask to pause first) and where it is (a saved clip's timestamp).
+//! What Windows' media controls know about playing media.
 //!
-//! Browsers publish their playing tab to the system media session (the same thing the volume
-//! flyout shows). Only the playback state and position are read; titles stay unread.
+//! - For video (S3): whether the app in front is playing (so the tutor can ask to pause first)
+//!   and where it is (a saved clip's timestamp). Only the playback state and position are read.
+//! - For the island's music panel (`screen_music.rs`): the current session's title, artist and
+//!   album art, shown on the island only (never sent, logged or saved), and its play/pause, next
+//!   and previous buttons.
+//!
+//! Players and browsers publish what they play to the system media session (the same thing the
+//! volume flyout shows).
 
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use windows::core::Interface;
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession, GlobalSystemMediaTransportControlsSessionManager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as Playback,
 };
+use windows::Storage::Streams::{DataReader, IRandomAccessStreamReference};
 use windows_future::{AsyncStatus, IAsyncOperation};
+
+use crate::screen::music::{art_mime, Control, NowPlaying, MAX_ART_BYTES};
 
 /// Windows answers in a few milliseconds; a hung media service must never hold up a capture.
 const TIMEOUT: Duration = Duration::from_millis(300);
+/// Album art comes from the player and may take a little longer.
+const ART_TIMEOUT: Duration = Duration::from_millis(1500);
+
+/// What's playing now, and where its album art is (read separately, once per track).
+pub struct Track {
+    pub now: NowPlaying,
+    pub thumbnail: Option<IRandomAccessStreamReference>,
+}
 /// 100-nanosecond ticks between 1601-01-01 (Windows' epoch) and 1970-01-01.
 const EPOCH_DIFFERENCE_TICKS: i64 = 116_444_736_000_000_000;
 
@@ -34,8 +51,60 @@ impl MediaSessions {
     pub fn new() -> Option<Self> {
         let request = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().ok()?;
         Some(Self {
-            manager: wait(&request)?,
+            manager: wait(&request, TIMEOUT)?,
         })
+    }
+
+    /// The session Windows' media flyout shows (the player used most recently), if any.
+    fn current(&self) -> Option<GlobalSystemMediaTransportControlsSession> {
+        self.manager.GetCurrentSession().ok()
+    }
+
+    /// What the current session is playing (or has paused), with its buttons' state.
+    pub fn now_playing(&self) -> Option<Track> {
+        let session = self.current()?;
+        let properties = wait(&session.TryGetMediaPropertiesAsync().ok()?, TIMEOUT)?;
+        let app_id = session
+            .SourceAppUserModelId()
+            .map(|id| id.to_string_lossy())
+            .unwrap_or_default();
+        let mut now = NowPlaying::new(
+            &properties.Title().ok()?.to_string_lossy(),
+            &properties
+                .Artist()
+                .map(|artist| artist.to_string_lossy())
+                .unwrap_or_default(),
+            &app_id,
+        )?;
+        if let Ok(info) = session.GetPlaybackInfo() {
+            now.playing = info
+                .PlaybackStatus()
+                .is_ok_and(|status| status == Playback::Playing);
+            if let Ok(controls) = info.Controls() {
+                now.can_next = controls.IsNextEnabled().unwrap_or(false);
+                now.can_previous = controls.IsPreviousEnabled().unwrap_or(false);
+            }
+        }
+        Some(Track {
+            now,
+            thumbnail: properties.Thumbnail().ok(),
+        })
+    }
+
+    /// Presses a playback button on the current session. False if there's none or it refused.
+    pub fn control(&self, control: Control) -> bool {
+        let Some(session) = self.current() else {
+            return false;
+        };
+        let operation = match control {
+            Control::PlayPause => session.TryTogglePlayPauseAsync(),
+            Control::Next => session.TrySkipNextAsync(),
+            Control::Previous => session.TrySkipPreviousAsync(),
+        };
+        operation
+            .ok()
+            .and_then(|operation| wait(&operation, TIMEOUT))
+            .unwrap_or(false)
     }
 
     /// The media state of `app` (an executable name such as "msedge.exe"), if it has a session.
@@ -95,9 +164,29 @@ fn now_ticks() -> Option<i64> {
         .map(|ticks| ticks + EPOCH_DIFFERENCE_TICKS)
 }
 
-/// Waits for an async operation, giving up after `TIMEOUT`.
-fn wait<T: windows::core::RuntimeType + 'static>(operation: &IAsyncOperation<T>) -> Option<T> {
-    let deadline = Instant::now() + TIMEOUT;
+/// A track's album art: its bytes and type, when it's a PNG or JPEG of at most `MAX_ART_BYTES`
+/// (checked by the bytes, not by what the player says it is).
+pub fn read_art(thumbnail: &IRandomAccessStreamReference) -> Option<(Vec<u8>, &'static str)> {
+    let stream = wait(&thumbnail.OpenReadAsync().ok()?, ART_TIMEOUT)?;
+    let size = u32::try_from(stream.Size().ok()?).ok()?;
+    if size == 0 || size as usize > MAX_ART_BYTES {
+        return None;
+    }
+    let reader = DataReader::CreateDataReader(&stream.GetInputStreamAt(0).ok()?).ok()?;
+    let load: IAsyncOperation<u32> = reader.LoadAsync(size).ok()?.cast().ok()?;
+    let loaded = wait(&load, ART_TIMEOUT)?;
+    let mut bytes = vec![0u8; loaded.min(size) as usize];
+    reader.ReadBytes(&mut bytes).ok()?;
+    let mime = art_mime(&bytes)?;
+    Some((bytes, mime))
+}
+
+/// Waits for an async operation, giving up after `timeout`.
+fn wait<T: windows::core::RuntimeType + 'static>(
+    operation: &IAsyncOperation<T>,
+    timeout: Duration,
+) -> Option<T> {
+    let deadline = Instant::now() + timeout;
     loop {
         match operation.Status().ok()? {
             AsyncStatus::Completed => return operation.GetResults().ok(),
@@ -149,5 +238,19 @@ mod tests {
         let sessions = MediaSessions::new().expect("media session manager");
         eprintln!("msedge: {:?}", sessions.state_of("msedge.exe"));
         eprintln!("chrome: {:?}", sessions.state_of("chrome.exe"));
+    }
+
+    /// Reads what's playing for the island (play something in Spotify or a browser first).
+    #[test]
+    #[ignore = "needs a Windows desktop session"]
+    fn reads_what_is_playing() {
+        let _com = super::super::ComThread::init().unwrap();
+        let sessions = MediaSessions::new().expect("media session manager");
+        let track = sessions.now_playing();
+        eprintln!("now: {:?}", track.as_ref().map(|track| &track.now));
+        let art = track
+            .and_then(|track| track.thumbnail)
+            .and_then(|thumbnail| read_art(&thumbnail));
+        eprintln!("art: {:?}", art.map(|(bytes, mime)| (bytes.len(), mime)));
     }
 }

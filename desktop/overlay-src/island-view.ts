@@ -41,6 +41,87 @@ export function parseIslandView(detail: unknown): IslandView | null {
   return { tool, shape, mic, silent, activity, clearable };
 }
 
+/** What's playing (`music.rs`'s `NowPlaying`), as the music panel shows it. */
+export type NowPlaying = {
+  title: string;
+  artist: string;
+  player: string | null;
+  playing: boolean;
+  canPrevious: boolean;
+  canNext: boolean;
+  /** A `data:` URL of a PNG or JPEG. */
+  art: string | null;
+};
+
+export type PinKind = "playlist" | "album";
+export type PinView = { kind: PinKind; id: string; name: string };
+
+/** The music panel (`music.rs`'s `MusicView`, sent as `mew:island-music`). */
+export type MusicView = {
+  now: NowPlaying | null;
+  pins: PinView[];
+  notice: string | null;
+  pinning: boolean;
+};
+
+export type Control = "play_pause" | "next" | "previous";
+
+const PIN_KINDS: readonly PinKind[] = ["playlist", "album"];
+const SPOTIFY_ID = /^[0-9A-Za-z]{22}$/;
+/** Only album art Rust checked: a PNG or JPEG as base64. */
+const ART_URL = /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/;
+/** Rust cuts text to 120 characters; in UTF-16 units that can be up to twice as many. */
+const MAX_TEXT = 300;
+const MAX_PINS = 6;
+
+function text(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MAX_TEXT;
+}
+
+function parseNowPlaying(value: unknown): NowPlaying | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "object") return undefined;
+  const { title, artist, player, playing, can_previous, can_next, art } = value as Record<
+    string,
+    unknown
+  >;
+  if (!text(title) || !text(artist) || (player !== null && !text(player))) return undefined;
+  if (
+    typeof playing !== "boolean" ||
+    typeof can_previous !== "boolean" ||
+    typeof can_next !== "boolean"
+  ) {
+    return undefined;
+  }
+  if (art !== null && (typeof art !== "string" || !ART_URL.test(art))) return undefined;
+  return { title, artist, player, playing, canPrevious: can_previous, canNext: can_next, art };
+}
+
+function parsePin(value: unknown): PinView | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { kind, id, name } = value as Record<string, unknown>;
+  if (!oneOf(kind, PIN_KINDS) || typeof id !== "string" || !SPOTIFY_ID.test(id) || !text(name)) {
+    return null;
+  }
+  return { kind, id, name };
+}
+
+export function parseMusicView(detail: unknown): MusicView | null {
+  if (typeof detail !== "object" || detail === null) return null;
+  const { now, pins, notice, pinning } = detail as Record<string, unknown>;
+  const playing = parseNowPlaying(now);
+  if (playing === undefined || !Array.isArray(pins) || pins.length > MAX_PINS) return null;
+  const parsed = pins.map(parsePin);
+  if (parsed.some((pin) => pin === null)) return null;
+  if ((notice !== null && !text(notice)) || typeof pinning !== "boolean") return null;
+  return { now: playing, pins: parsed as PinView[], notice, pinning };
+}
+
+export const PIN_KIND_LABEL: Record<PinKind, string> = {
+  playlist: "Playlist",
+  album: "Album",
+};
+
 /** The words beside the status dot. */
 export const ACTIVITY_LABEL: Record<Activity, string> = {
   ready: "Neb",
@@ -64,7 +145,7 @@ export const SHAPE_LABEL: Record<Shape, string> = {
  */
 export const EAR = 0;
 export const RADIUS = { closed: 22, open: 28 } as const;
-/** The island's height closed (CSS px); open, it fills its window. */
+/** The island's height closed (CSS px); open, it's as tall as what it shows. */
 export const CLOSED_HEIGHT = 58;
 /** How long the pointer rests on a button before its name shows (ms). */
 export const TIP_DELAY_MS = 600;

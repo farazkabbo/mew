@@ -291,6 +291,28 @@ pub fn open_in_browser(url: &tauri::Url) -> bool {
     result.0 as isize > 32
 }
 
+/// Opens a pinned playlist or album in the Spotify app (`spotify:playlist:<id>`). Nothing else:
+/// the URI must be exactly one a pin makes. False if Spotify isn't installed (then the caller
+/// opens the web link instead).
+pub fn open_spotify(uri: &str) -> bool {
+    if !crate::screen::music::parse_link(uri).is_some_and(|_| uri.starts_with("spotify:")) {
+        return false;
+    }
+    let target = HSTRING::from(uri);
+    // SAFETY: plain strings that outlive the call; "open" hands the URI to its registered app.
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            &target,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    result.0 as isize > 32
+}
+
 /// https, a host, and no user name or password.
 pub fn is_openable(url: &tauri::Url) -> bool {
     url.scheme() == "https"

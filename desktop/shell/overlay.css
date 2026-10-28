@@ -914,7 +914,7 @@ body.island {
   transition: transform 150ms ease-out;
 }
 
-.island[data-open="true"] .island-caret svg {
+.island[data-panel="menu"] .island-caret svg {
   transform: rotate(180deg);
 }
 
@@ -978,6 +978,211 @@ body.island {
   color: #000;
 }
 
+/* The music button: open while its panel shows; a green dot while something plays. */
+.island-bar button.island-music {
+  position: relative;
+}
+
+.island-bar button.island-music[aria-expanded="true"] {
+  background: #f5f5f7;
+  color: #000;
+}
+
+.island-music-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #30d158;
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+
+.island-music[data-playing="true"] .island-music-dot {
+  opacity: 1;
+}
+
+/* The music panel: what's playing and its buttons, the pins, then the pin button. */
+.music {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 2px 14px 14px;
+}
+
+.music[hidden] {
+  display: none;
+}
+
+.music svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.music-now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.music-art {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.music-art[hidden] {
+  display: none;
+}
+
+.music-art-empty {
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  color: #8e8e93;
+}
+
+.music-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.music-title,
+.music-artist {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.music-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.music-artist {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #a1a1a6;
+}
+
+.music-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.music-controls button {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.music-controls button.music-play {
+  background: #f5f5f7;
+  color: #000;
+}
+
+.music-controls button.music-play:hover {
+  background: #fff;
+}
+
+.music-play path {
+  fill: currentColor;
+}
+
+.music-pins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.music-pins[hidden] {
+  display: none;
+}
+
+.music-pins li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.music-open {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.music-pin-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.music-pin-kind {
+  font-size: 11px;
+  color: #8e8e93;
+}
+
+.music-unpin {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #8e8e93;
+}
+
+.music-unpin svg {
+  width: 16px;
+  height: 16px;
+}
+
+.music-notice {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  color: #ffd60a;
+}
+
+.music-notice[hidden] {
+  display: none;
+}
+
+.music-pin {
+  min-height: 40px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .island-dot,
   .card-mic[aria-pressed="true"] {
@@ -990,7 +1195,12 @@ body.island {
     fill: Canvas;
     stroke: CanvasText;
   }
-  .island-bar button[aria-pressed="true"] {
+  .island-bar button[aria-pressed="true"],
+  .island-bar button.island-music[aria-expanded="true"] {
     outline: 2px solid Highlight;
+  }
+  .music-now,
+  .music-pin {
+    border: 1px solid CanvasText;
   }
 }

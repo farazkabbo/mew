@@ -414,6 +414,34 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     while Select is on (the draw overlay must stay under it); pen, eraser and Clear; a rectangle
     and an ellipse selection, then the mic; the card's mic for a follow-up; an underline landing
     under (not through) a line of a PDF question.
+- **Music on the island** (2026-10-27, branch `feat/spotify-island`; the owner's request):
+  - **Why no Spotify login:** Spotify's Web API lets an app in development mode serve only a
+    handful of allow-listed users (Premium required), and extended access is for registered
+    businesses with ~250k monthly users (Spotify developer blog, 2025-04-15 and 2026-02-06). So
+    nothing signs in to Spotify. Revisit only if Spotify grants the app extended access.
+  - **What it does:** a ♫ button on the island (now 520 px wide) opens a panel below the tools:
+    what's playing on this PC, from Windows' media session (any player: the Spotify app, Spotify
+    or YouTube in a browser), with album art, play/pause, next and previous; and up to six pinned
+    Spotify playlists or albums, which open in the Spotify app (`spotify:` URI) or, without it,
+    on open.spotify.com. A green dot on ♫ means something is playing.
+  - **Pinning:** the island never takes the focus, so it can't be pasted into. "Pin copied Spotify
+    link" reads the clipboard once (`win/clipboard.rs`) for an `open.spotify.com/playlist|album/`
+    or `spotify:playlist|album:` link; the name comes from Spotify's public oEmbed endpoint
+    (`http::get`, no headers, no token), falling back to "Spotify playlist". Pins are saved in
+    `music.json` beside Screen Coach's settings (each entry validated on load).
+  - **Where:** `screen/music.rs` (pure: links, pins, cleaning, the view), `screen/screen_music.rs`
+    (a worker thread, while the island shows, reads the media session every second and presses
+    its buttons), `win/media_session.rs` (`now_playing`, `control`, `read_art`: PNG/JPEG only,
+    ≤ 512 KB, checked by bytes), `IslandAction::Music*`, `mew:island-music`, `mew:island-reset`.
+    The island page's CSP gains `img-src data:` for the art. New `windows` features:
+    `Storage_Streams`, `Win32_System_DataExchange`, `Win32_System_Memory` (no new crate).
+  - **Privacy:** titles and art are shown on the island only (excluded from captures), never
+    sent, logged or saved; forgotten when the island hides.
+  - **To verify by hand (Windows):** play something in Spotify and in a browser tab; the panel's
+    title, art and buttons for each; copy a playlist link (Share → Copy link), pin it, open it
+    with and without the Spotify app; unpin; pinning with something else on the clipboard; the
+    panel's height with 0 and 6 pins, and the island's buttons while Select is on. The live
+    media session test: `cargo test --lib reads_what_is_playing -- --ignored --nocapture`.
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
 - **Next:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.

@@ -11,15 +11,20 @@ use super::circle::{self, Stage};
 use super::coach::{self, ScreenCoach};
 use super::frame::ScreenRect;
 use super::island::{
-    island_spot, Activity, IslandView, Shape, Tool, ISLAND_MENU_HEIGHT, ISLAND_SIZE,
+    island_spot, music_height, Activity, IslandView, Shape, Tool, ISLAND_MENU_HEIGHT, ISLAND_SIZE,
+    ISLAND_WINDOW_HEIGHT,
 };
+use super::music::Control;
 use super::overlay::{self, require_surface, Surface};
+use super::screen_music;
 use super::tray_badge::Status;
 use super::win::{input, target};
 
 const ISLAND_SHOW: &str = "mew:island-show";
 /// A press on the island that Rust saw (CSS pixels of the island's page).
 const ISLAND_PRESS: &str = "mew:island-press";
+/// The island is showing again: its menu and music panel start closed.
+const ISLAND_RESET: &str = "mew:island-reset";
 
 /// Whether the island is showing.
 pub fn shown<R: Runtime>(app: &AppHandle<R>) -> bool {
@@ -43,16 +48,19 @@ fn show<R: Runtime>(app: &AppHandle<R>) {
         return;
     };
     let scale = f64::from(dpi.max(96)) / 96.0;
-    // The window is always tall enough for the menu (and the buttons' names on hover): the page
-    // draws the island in its top part and leaves the rest clear, so the window never resizes
-    // (resizing it showed a pale band). Clicks on the clear part reach the app below.
-    let window_rect = island_spot(monitor, scale, ISLAND_MENU_HEIGHT);
+    // The window is always tall enough for the menu and the music panel (and the buttons' names
+    // on hover): the page draws the island in its top part and leaves the rest clear, so the
+    // window never resizes (resizing it showed a pale band). Clicks on the clear part reach the
+    // app below.
+    let window_rect = island_spot(monitor, scale, ISLAND_WINDOW_HEIGHT);
     if let Some(mut state) = circle::state(app) {
         state.island = Some(island_spot(monitor, scale, ISLAND_SIZE.1));
     }
+    overlay::dispatch(app, Surface::Island, ISLAND_RESET, &serde_json::json!({}));
     shape(&window, window_rect);
     circle::start_tracker(app);
     refresh(app);
+    screen_music::start(app);
 }
 
 /// Hides the island: its tool goes off, the microphone stops without asking, and the student's
@@ -155,7 +163,7 @@ fn activity(status: Status, answering: bool) -> Activity {
 }
 
 /// A button on the island.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum IslandAction {
     /// The pen, the eraser or select (clicked again: off).
@@ -173,6 +181,25 @@ pub enum IslandAction {
     Mic,
     Clear,
     Close,
+    /// The music panel opened (`height`: the island's height with it, measured by the page) or
+    /// closed.
+    MusicPanel {
+        open: bool,
+        height: u32,
+    },
+    /// Play/pause, next or previous on what's playing.
+    MusicControl {
+        control: Control,
+    },
+    /// Pin the playlist whose link is on the clipboard.
+    MusicPin,
+    /// Open a pinned playlist, or unpin it (its Spotify id).
+    MusicOpen {
+        id: String,
+    },
+    MusicUnpin {
+        id: String,
+    },
 }
 
 #[tauri::command(async)]
@@ -195,11 +222,45 @@ pub fn screen_island<R: Runtime>(
             circle::set_shape(app, shape);
             circle::set_tool(app, Tool::Select);
         }
-        IslandAction::Menu { open } => fit(app, open),
+        IslandAction::Menu { open } => fit(
+            app,
+            if open {
+                ISLAND_MENU_HEIGHT
+            } else {
+                ISLAND_SIZE.1
+            },
+        ),
         IslandAction::Mic => coach::toggle_mic(app),
         IslandAction::Clear => circle::clear_all(app),
         IslandAction::Close => {
             hide(app);
+            return Ok(());
+        }
+        IslandAction::MusicPanel { open, height } => {
+            fit(
+                app,
+                if open {
+                    music_height(height)
+                } else {
+                    ISLAND_SIZE.1
+                },
+            );
+            return Ok(());
+        }
+        IslandAction::MusicControl { control } => {
+            screen_music::control(app, control);
+            return Ok(());
+        }
+        IslandAction::MusicPin => {
+            screen_music::pin(app);
+            return Ok(());
+        }
+        IslandAction::MusicOpen { id } => {
+            screen_music::open(app, &id);
+            return Ok(());
+        }
+        IslandAction::MusicUnpin { id } => {
+            screen_music::unpin(app, &id);
             return Ok(());
         }
     }
@@ -207,19 +268,14 @@ pub fn screen_island<R: Runtime>(
     Ok(())
 }
 
-/// Where the island is drawn (the bar, or the bar with its menu open): presses there are clicks
-/// on it, never strokes. The window itself stays the same.
-fn fit<R: Runtime>(app: &AppHandle<R>, open: bool) {
+/// Where the island is drawn (the bar, or the bar with its menu or music panel open, `height`
+/// CSS pixels): presses there are clicks on it, never strokes. The window itself stays the same.
+fn fit<R: Runtime>(app: &AppHandle<R>, height: f64) {
     let Some(rect) = circle::state(app).and_then(|s| s.island) else {
         return;
     };
     let Some((monitor, dpi)) = target::monitor_at(rect.left + rect.width() / 2, rect.top) else {
         return;
-    };
-    let height = if open {
-        ISLAND_MENU_HEIGHT
-    } else {
-        ISLAND_SIZE.1
     };
     let scale = f64::from(dpi.max(96)) / 96.0;
     let next = island_spot(monitor, scale, height);

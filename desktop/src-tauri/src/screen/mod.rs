@@ -41,6 +41,8 @@
 //! - The island (`screen_island.rs`, pure: `island.rs`): a double tap of Ctrl+Alt shows a bar at
 //!   the top of the screen with the pen, the eraser, select (freehand, rectangle, ellipse), the
 //!   microphone, Clear and Close. It replaced holding the keys to circle and talk.
+//! - Music on the island (`screen_music.rs`, pure: `music.rs`): what's playing (Windows' media
+//!   session) with its playback buttons, and pinned Spotify playlists that open in Spotify.
 //!
 //! Where to start reading: `coach.rs` (`on_hold`: what the gesture does), then
 //! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
@@ -59,6 +61,7 @@ pub mod ink;
 pub mod intent;
 pub mod island;
 pub mod marks;
+pub mod music;
 pub mod notes_marks;
 pub mod pointer;
 pub mod privacy;
@@ -104,6 +107,8 @@ pub mod pipeline;
 pub mod reanchor;
 #[cfg(windows)]
 pub mod screen_island;
+#[cfg(windows)]
+pub mod screen_music;
 #[cfg(windows)]
 pub mod screen_quiz;
 #[cfg(windows)]

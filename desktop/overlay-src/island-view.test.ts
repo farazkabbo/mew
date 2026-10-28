@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { notchPath, parseIslandView } from "./island-view";
+import { notchPath, parseIslandView, parseMusicView } from "./island-view";
 
 const VIEW = {
   tool: "select",
@@ -22,6 +22,66 @@ describe("parseIslandView", () => {
     expect(parseIslandView({ ...VIEW, shape: "star" })).toBeNull();
     expect(parseIslandView({ ...VIEW, mic: "yes" })).toBeNull();
     expect(parseIslandView({ ...VIEW, activity: "<b>hi</b>" })).toBeNull();
+  });
+});
+
+const ID = "37i9dQZF1DXcBWIGoYBM5M";
+const MUSIC = {
+  now: {
+    title: "Song",
+    artist: "Artist",
+    player: "Spotify",
+    playing: true,
+    can_previous: false,
+    can_next: true,
+    art: "data:image/png;base64,iVBORw0KGgo=",
+  },
+  pins: [{ kind: "playlist", id: ID, name: "Deep Focus" }],
+  notice: null,
+  pinning: false,
+};
+
+describe("parseMusicView", () => {
+  it("takes the panel Rust sends", () => {
+    expect(parseMusicView(MUSIC)).toEqual({
+      now: {
+        title: "Song",
+        artist: "Artist",
+        player: "Spotify",
+        playing: true,
+        canPrevious: false,
+        canNext: true,
+        art: "data:image/png;base64,iVBORw0KGgo=",
+      },
+      pins: [{ kind: "playlist", id: ID, name: "Deep Focus" }],
+      notice: null,
+      pinning: false,
+    });
+    expect(parseMusicView({ ...MUSIC, now: null, pins: [] })?.now).toBeNull();
+  });
+
+  it("refuses anything malformed", () => {
+    const now = MUSIC.now;
+    expect(parseMusicView(null)).toBeNull();
+    expect(parseMusicView({ ...MUSIC, now: { ...now, playing: "yes" } })).toBeNull();
+    expect(parseMusicView({ ...MUSIC, now: { ...now, title: "x".repeat(400) } })).toBeNull();
+    expect(parseMusicView({ ...MUSIC, pins: "none" })).toBeNull();
+    expect(parseMusicView({ ...MUSIC, pins: [{ kind: "track", id: ID, name: "x" }] })).toBeNull();
+    expect(
+      parseMusicView({ ...MUSIC, pins: [{ kind: "playlist", id: "../x", name: "x" }] }),
+    ).toBeNull();
+    expect(parseMusicView({ ...MUSIC, pins: Array(7).fill(MUSIC.pins[0]) })).toBeNull();
+  });
+
+  it("shows only album art Rust checked", () => {
+    for (const art of [
+      "https://i.scdn.co/image/abc",
+      "data:image/svg+xml;base64,PHN2Zz4=",
+      'data:image/png;base64,abc" onerror="x',
+      "javascript:alert(1)",
+    ]) {
+      expect(parseMusicView({ ...MUSIC, now: { ...MUSIC.now, art } })).toBeNull();
+    }
   });
 });
 

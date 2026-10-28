@@ -2,6 +2,7 @@
 //! these modules, with its safety reasoning next to it.
 
 pub mod capture;
+pub mod clipboard;
 pub mod credential;
 pub mod crypto;
 pub mod encode;

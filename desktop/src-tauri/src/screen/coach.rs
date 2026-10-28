@@ -252,7 +252,8 @@ impl ScreenCoach {
 pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> {
     win::exclude_heap_from_crash_dumps();
     let support = win::check_support();
-    let config_path = config::path_in(&app.path().app_config_dir()?);
+    let config_dir = app.path().app_config_dir()?;
+    let config_path = config::path_in(&config_dir);
     let loaded = config::load(&config_path);
     let config_reset = matches!(loaded, Loaded::Reset(_));
     let config = loaded.into_config();
@@ -286,6 +287,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         state.status = coach.resting_status(&state);
     }
     app.manage(coach);
+    super::screen_music::setup(app, &config_dir);
     settings_capability(app)?;
     overlay_capabilities(app)?;
     refresh(app);

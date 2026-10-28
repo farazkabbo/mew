@@ -3,7 +3,8 @@
 //! From left to right: what Neb is doing (listening, looking, thinking, speaking), the pen and
 //! eraser (the student's own notes on the screen, never sent anywhere), the select tool with its
 //! shapes (freehand, rectangle, ellipse: the area Neb looks at, as Circle & Ask marks), the
-//! microphone (on, speak, off: then Neb answers), Clear and Close.
+//! microphone (on, speak, off: then Neb answers), music (what's playing and pinned playlists:
+//! `music.rs`), Clear and Close.
 //!
 //! Pure: what the tools are, where the bar goes, the paths of the select shapes, and the view
 //! the bar's page is sent. The windows and buttons are `screen_island.rs`.
@@ -13,10 +14,19 @@ use serde::{Deserialize, Serialize};
 use super::frame::ScreenRect;
 use super::marks::Pt;
 
-/// The island's window in CSS pixels, and its height with the
-/// shapes menu open below the tools. Like a Mac's notch it hangs from the top edge of the screen.
-pub const ISLAND_SIZE: (f64, f64) = (460.0, 58.0);
+/// The island's bar in CSS pixels, and its height with the shapes menu open below the tools.
+/// Like a Mac's notch it hangs from the top edge of the screen.
+pub const ISLAND_SIZE: (f64, f64) = (520.0, 58.0);
 pub const ISLAND_MENU_HEIGHT: f64 = 110.0;
+/// The tallest the music panel makes the island (six pins, a notice and the pin button).
+pub const ISLAND_MUSIC_HEIGHT: f64 = 460.0;
+/// The island's window is always this tall (the page draws the island in its top part).
+pub const ISLAND_WINDOW_HEIGHT: f64 = ISLAND_MUSIC_HEIGHT;
+
+/// The island's height with the music panel open, from what its page measured (CSS pixels).
+pub fn music_height(measured: u32) -> f64 {
+    f64::from(measured).clamp(ISLAND_SIZE.1, ISLAND_MUSIC_HEIGHT)
+}
 /// Its shape (a notch with ears where it meets the top edge, round bottom corners) is drawn by
 /// its page, smooth; the window itself is transparent around it.
 /// Points along each side of a rectangle, and around an ellipse (a select shape's path).
@@ -229,7 +239,7 @@ mod tests {
             bottom: 1620,
         };
         let spot = island_spot(monitor, 1.5, ISLAND_SIZE.1);
-        assert_eq!(spot.width(), 690);
+        assert_eq!(spot.width(), 780);
         assert_eq!(spot.height(), 87);
         assert_eq!(spot.top, 0, "it hangs from the top edge");
         assert_eq!(spot.left - monitor.left, monitor.right - spot.right);
@@ -237,6 +247,14 @@ mod tests {
         let open = island_spot(monitor, 1.5, ISLAND_MENU_HEIGHT);
         assert_eq!((open.top, open.left), (spot.top, spot.left));
         assert_eq!(open.height(), 165);
+    }
+
+    #[test]
+    fn the_music_panel_is_never_shorter_than_the_bar_or_taller_than_the_window() {
+        assert_eq!(music_height(300), 300.0);
+        assert_eq!(music_height(0), ISLAND_SIZE.1);
+        assert_eq!(music_height(u32::MAX), ISLAND_MUSIC_HEIGHT);
+        const { assert!(ISLAND_WINDOW_HEIGHT >= ISLAND_MENU_HEIGHT) };
     }
 
     #[test]

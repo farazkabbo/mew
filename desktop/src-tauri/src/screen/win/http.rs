@@ -64,6 +64,22 @@ pub fn post(
     url: &Url,
     headers: &[String],
     body: &[u8],
+    on_chunk: impl FnMut(&[u8]),
+) -> Result<u16, HttpError> {
+    request(w!("POST"), url, headers, body, on_chunk)
+}
+
+/// GETs `url` with no headers (nothing of the student's goes with it) and streams the response
+/// body to `on_chunk`. Returns the HTTP status.
+pub fn get(url: &Url, on_chunk: impl FnMut(&[u8])) -> Result<u16, HttpError> {
+    request(w!("GET"), url, &[], &[], on_chunk)
+}
+
+fn request(
+    method: PCWSTR,
+    url: &Url,
+    headers: &[String],
+    body: &[u8],
     mut on_chunk: impl FnMut(&[u8]),
 ) -> Result<u16, HttpError> {
     let secure = match url.scheme() {
@@ -103,7 +119,7 @@ pub fn post(
         let connection = Handle::new(WinHttpConnect(session.0, &host, port, 0))?;
         let request = Handle::new(WinHttpOpenRequest(
             connection.0,
-            w!("POST"),
+            method,
             &path,
             PCWSTR::null(),
             PCWSTR::null(),
@@ -121,10 +137,13 @@ pub fn post(
             .flat_map(|h| h.encode_utf16().chain("\r\n".encode_utf16()))
             .collect();
         let length = u32::try_from(body.len()).map_err(|_| HttpError::BadUrl)?;
+        // No headers: no buffer at all. With a length of 0, WinHTTP reads a buffer it's given up
+        // to a terminating null, and an empty Vec's pointer points at nothing (a crash, as a GET
+        // with no headers was).
         let sent = WinHttpSendRequest(
             request.0,
-            Some(&header_text),
-            Some(body.as_ptr().cast()),
+            (!header_text.is_empty()).then_some(header_text.as_slice()),
+            (!body.is_empty()).then(|| body.as_ptr().cast()),
             length,
             length,
             0,
