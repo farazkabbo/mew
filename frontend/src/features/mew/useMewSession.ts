@@ -307,6 +307,8 @@ function createPipeline() {
     onTry: (pageId, correct) => solutions?.tried(pageId, correct),
     onChanged: () => liveSync?.soon(),
     teach: (page, line, correction) => void teacher.teach(page.doc, line, correction),
+    // NEB_APP_UI §4.2: the page keeps the marks; their words are notes in the neb lane.
+    words: "lane",
   });
   markOf = (line) => live.markFor(line);
   // Show-then-You (K6): "just give me the answer" is worked, verified, folded, then a Your Turn.

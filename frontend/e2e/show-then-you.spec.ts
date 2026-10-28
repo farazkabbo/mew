@@ -331,6 +331,9 @@ async function jpeg(page: Page): Promise<Buffer> {
 test("K7: just tell me the answer on screen waits in the notebook, folded, with a Your Turn", async ({
   page,
 }) => {
+  // The page's coordinates are the screen's here (no scrolling): room for the Your Turn box
+  // under the solution on the sheet (U2: a header above it and the replay bar below).
+  await page.setViewportSize({ width: 1280, height: 960 });
   test.setTimeout(120_000);
   await fakeServices(page, [
     { text: "5x = 25", latex: "5x=25" },

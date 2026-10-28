@@ -3,6 +3,7 @@
 import { Bug, Mic, MicOff, VolumeX, X } from "lucide-react";
 import Link from "next/link";
 
+import { Keys } from "@/components/ui/Keycap";
 import { NebDot, nebDotLabel, type NebDotState } from "@/components/ui/NebDot";
 
 import { Caption } from "../tutor/Caption";
@@ -33,9 +34,6 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
   const { debugOpen, toggleDebug } = useMew();
   const voiceIssue = useTutor((s) => s.voiceIssue);
   const listening = status === "listening" || status === "connecting";
-
-  const small =
-    "grid size-9 place-items-center rounded-full border border-line bg-paper-hi/95 text-muted shadow-sm backdrop-blur hover:text-ink";
 
   return (
     <div className="pointer-events-auto flex flex-col items-end gap-2">
@@ -70,39 +68,46 @@ export function MewDock({ onSummon, onStartListening, onStopListening }: Props) 
           </button>
         </div>
       )}
-      <div className="flex items-end gap-2">
-        <button
-          type="button"
-          className={`${small} aria-pressed:bg-ink aria-pressed:text-paper`}
-          aria-label="Debug panel"
-          title="Debug panel"
-          aria-pressed={debugOpen}
-          onClick={toggleDebug}
-        >
-          <Bug className="size-4" aria-hidden />
-        </button>
-        <button
-          type="button"
-          className={small}
-          aria-label={listening ? "Stop listening" : "Start listening"}
-          title={listening ? "Stop listening" : "Start listening"}
-          onClick={listening ? onStopListening : onStartListening}
-        >
-          {listening ? (
-            <Mic className="size-4 text-ink" aria-hidden />
-          ) : (
-            <MicOff className="size-4" aria-hidden />
-          )}
-        </button>
+      {/* The ask pill (NEB_APP_UI §4.7): what to do, and neb's mic. */}
+      <div
+        data-testid="ask-pill"
+        className="flex h-12 items-center gap-1 rounded-full bg-paper-hi pr-1.5 pl-1 shadow-sh-2"
+      >
         <button
           type="button"
           onClick={onSummon}
           aria-label={`Ask neb. ${nebDotLabel(DOT[state])}.`}
           title="Ask neb (or say “Hey Neb”)"
           data-mascot-state={state}
-          className="grid size-14 place-items-center rounded-full bg-paper-hi shadow-sh-2 transition-transform duration-[120ms] hover:scale-105 active:scale-95"
+          className="flex h-10 items-center gap-2 rounded-full pr-2 pl-1 text-sm text-ink hover:bg-ink/5"
         >
-          <NebDot state={DOT[state]} level={level} size={36} />
+          <NebDot state={DOT[state]} level={level} size={26} />
+          <span className="hidden whitespace-nowrap sm:inline">
+            Hold <Keys keys={["Ctrl", "Alt"]} size="sm" /> and circle anything, or just ask
+          </span>
+        </button>
+        <button
+          type="button"
+          className="grid size-10 place-items-center rounded-full bg-neb text-white transition-opacity duration-[120ms] hover:opacity-90"
+          aria-label={listening ? "Stop listening" : "Start listening"}
+          title={listening ? "Stop listening" : "Start listening · or say “Hey Neb”"}
+          onClick={listening ? onStopListening : onStartListening}
+        >
+          {listening ? (
+            <Mic className="size-4" aria-hidden />
+          ) : (
+            <MicOff className="size-4" aria-hidden />
+          )}
+        </button>
+        <button
+          type="button"
+          className="grid size-8 place-items-center rounded-full text-muted hover:text-ink aria-pressed:bg-ink aria-pressed:text-paper"
+          aria-label="Debug panel"
+          title="Debug panel"
+          aria-pressed={debugOpen}
+          onClick={toggleDebug}
+        >
+          <Bug className="size-3.5" aria-hidden />
         </button>
       </div>
     </div>

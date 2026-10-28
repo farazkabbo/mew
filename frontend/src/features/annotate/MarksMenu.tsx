@@ -50,7 +50,6 @@ export function MarksMenu({ notebookId, pageId }: Props) {
         className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs text-muted hover:bg-line/50 hover:text-ink aria-expanded:bg-line/60"
       >
         <CheckCheck className="size-4" aria-hidden />
-        <span className="hidden capitalize sm:inline">{level}</span>
       </button>
       {open && (
         <div

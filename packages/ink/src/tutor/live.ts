@@ -34,7 +34,18 @@ export type LiveMarkInk = {
 
 const TYPE = "mark_error" as const;
 
-export function planLiveMarkInk(spec: LiveMarkSpec, input: BoardInput): LiveMarkInk | null {
+/**
+ * Where a mark's words go: written in neb's ink beside the line ("page", K9), or left to the
+ * neb lane in the margin ("lane", NEB_APP_UI §4.2: the page keeps only the circle, the underline
+ * or a small bracket, and the words are a note card).
+ */
+export type MarkWords = "page" | "lane";
+
+export function planLiveMarkInk(
+  spec: LiveMarkSpec,
+  input: BoardInput,
+  words: MarkWords = "page",
+): LiveMarkInk | null {
   const planner = new BoardPlanner(input);
   const line = planner.line(spec.lineId);
   if (!line) return null;
@@ -43,7 +54,7 @@ export function planLiveMarkInk(spec: LiveMarkSpec, input: BoardInput): LiveMark
   const x = planner.scale.xHeight;
 
   const note = (color: string): PlannedAction | null => {
-    if (!spec.note) return null;
+    if (!spec.note || words === "lane") return null;
     const box = planner.typesetText(spec.note, 0.85);
     if (box.marks.length === 0) return null;
     const rect = planner.place(box, { near: "margin_right" }, line);
@@ -99,6 +110,25 @@ export function planLiveMarkInk(spec: LiveMarkSpec, input: BoardInput): LiveMark
       return done([underline, written], written);
     }
     case "margin": {
+      if (words === "lane") {
+        // The words are a card in the lane: on the page, a small bracket closing the line.
+        const [lx, ly, lw, lh] = line.bbox;
+        const bx = lx + lw + 0.5 * x;
+        const bracket = planner.commitPaths(
+          [
+            [
+              [bx - 0.3 * x, ly],
+              [bx, ly],
+              [bx, ly + lh],
+              [bx - 0.3 * x, ly + lh],
+            ],
+          ],
+          colors.ink,
+          TYPE,
+          0,
+        );
+        return done([bracket], bracket);
+      }
       const written = note(colors.ink);
       if (!written) return null;
       const [lx, ly, lw, lh] = line.bbox;

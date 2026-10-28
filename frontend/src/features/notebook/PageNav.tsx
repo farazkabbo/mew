@@ -18,10 +18,7 @@ export function PageNav({ pages, currentPageId, onSelect, onAdd }: Props) {
     "grid size-8 place-items-center rounded-lg text-muted hover:bg-line/50 hover:text-ink disabled:pointer-events-none disabled:opacity-35";
 
   return (
-    <nav
-      aria-label="Pages"
-      className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-line bg-paper-hi/95 p-1.5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)] backdrop-blur"
-    >
+    <nav aria-label="Pages" className="pointer-events-auto flex items-center gap-0.5">
       <button
         className={button}
         aria-label="Previous page"
@@ -30,8 +27,8 @@ export function PageNav({ pages, currentPageId, onSelect, onAdd }: Props) {
       >
         <ChevronLeft className="size-4" aria-hidden />
       </button>
-      <span className="min-w-20 text-center text-xs tabular-nums text-muted" aria-live="polite">
-        Page {index + 1} of {pages.length}
+      <span className="min-w-14 text-center text-xs tabular-nums text-muted" aria-live="polite">
+        {index + 1} of {pages.length}
       </span>
       <button
         className={button}

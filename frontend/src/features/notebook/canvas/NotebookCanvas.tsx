@@ -331,8 +331,8 @@ function readTheme(): Theme {
   };
 }
 
-/** Screen margins (CSS px) covered by floating UI: the toolbar above, page nav and mascot below. */
-const CHROME = { top: 80, bottom: 84, left: 16, right: 16 };
+/** Screen margins (CSS px) covered by floating UI on the sheet: the ask pill below (U2). */
+const CHROME = { top: 16, bottom: 72, left: 16, right: 16 };
 
 /** The part of the visible page not hidden under the floating controls, in page units. */
 function safeArea([x, y, w, h]: BBox, zoom: number, leftInset: number): BBox {

@@ -153,7 +153,8 @@ test("a wrong algebra step is circled where it's wrong, with a short hint, silen
   // The pause after line 2 → SymPy says it doesn't follow → a red loop and a note, no voice.
   await expect
     .poll(async () => (await tutorMarks(page, ERROR)).length, { timeout: 15_000 })
-    .toBeGreaterThan(3);
+    // The circle (U2: its words are a note in the lane, not ink on the page).
+    .toBeGreaterThan(0);
   const red = await tutorMarks(page, ERROR);
   const loop = red.reduce((a, b) => (a.bbox[2] * a.bbox[3] > b.bbox[2] * b.bbox[3] ? a : b));
   // Round the wrong side ("10", the last letter), not the whole line.

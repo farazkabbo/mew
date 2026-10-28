@@ -4,6 +4,7 @@ import {
   type ImageBlock,
   type Page,
   type PdfInfo,
+  type LiveMarkKind,
   type SavedQuizFilter,
   type Stroke,
   unsortedNodeId,
@@ -19,7 +20,12 @@ import { AnnotationSync } from "../annotate/sync";
 import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
 import { useMew } from "../mew/store";
-import { type NotebookVoiceHandler, useMewSession } from "../mew/useMewSession";
+import {
+  type MascotState,
+  type NotebookVoiceHandler,
+  useMascotState,
+  useMewSession,
+} from "../mew/useMewSession";
 import { MomentMoves } from "../moments/outbox";
 import {
   circledWords,
@@ -62,15 +68,12 @@ import { PageNav } from "./PageNav";
 import { NotebookRepository } from "./repository";
 import { Sidebar } from "./Sidebar";
 import { SourceHighlight } from "./SourceHighlight";
-import { replayPage } from "./page-replay";
 import { useNotebookUi } from "./store";
-import { Toolbar } from "./Toolbar";
 import { isShown } from "./visibility";
 import { useAppServices } from "./useAppServices";
 import { useClipImport } from "./useClipImport";
 import { pullTree } from "./tree-api";
 import { useShortcuts } from "./useShortcuts";
-import { Breadcrumb } from "./tree/Breadcrumb";
 import { DestinationPicker } from "./tree/DestinationPicker";
 import { NodeHome } from "./tree/NodeHome";
 import { TreeDialogs } from "./tree/TreeDialogs";
@@ -80,6 +83,13 @@ import { useNotebookTree } from "./tree/useNotebookTree";
 import { useNotebookVoice } from "./tree/useNotebookVoice";
 import { useTreeShortcuts } from "./tree/useTreeShortcuts";
 import { Desk } from "../desk/Desk";
+import { ChapterTabs } from "../page/ChapterTabs";
+import { LANE, NebLane } from "../page/NebLane";
+import { PageHeader } from "../page/PageHeader";
+import { PageTools } from "../page/PageTools";
+import { PencilCase, readWritingHand, type WritingHand } from "../page/PencilCase";
+import { ReplayBar } from "../page/ReplayBar";
+import type { NebDotState } from "@/components/ui/NebDot";
 
 type Notice = TreeNoticeView;
 
@@ -93,6 +103,18 @@ type View = "desk" | "home" | "page";
 const TOUCH_EVERY_MS = 60_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Whether the Contents drawer stays open (this device). */
+const CONTENTS_KEY = "neb:contents";
+/** Marks tapped on the page itself (NEB_APP_UI §4.2); the rest are notes in the lane. */
+const TICKS = new Set<LiveMarkKind>(["tick"]);
+/** neb's state as its dot shows it (§3.8). */
+const MASCOT_DOT: Record<MascotState, NebDotState> = {
+  sleeping: "watching",
+  listening: "listening",
+  thinking: "thinking",
+  speaking: "speaking",
+  muted: "off",
+};
 /** Screen width the quiz card covers on the left (its width plus margins), kept free of ink. */
 const QUIZ_CARD_INSET = 352;
 
@@ -516,7 +538,21 @@ export function NotebookApp({
     mew.setSolutionRecords(solutionRecords);
     return () => mew.setSolutionRecords(null);
   }, [mew, solutionRecords]);
-  useShortcuts({ ...actions, checkWork: mew.checkWork }, keys.platform, keys.own);
+  useShortcuts(
+    {
+      ...actions,
+      checkWork: () => {
+        mew.checkWork();
+        // NEB_APP_UI §4.4: while the margin is folded, Alt+C checks and then unfolds it.
+        const notebook = notebookId ? tree.path(notebookId)[0]?.id : null;
+        if (notebook && useMarkPrefs.getState().prefsFor(notebook).hideUntilDone) {
+          useMarkPrefs.getState().setHideUntilDone(notebook, false);
+        }
+      },
+    },
+    keys.platform,
+    keys.own,
+  );
   // Hold left Ctrl + left Alt to talk and circle your own writing, let go to ask (K2, K6).
   useHoldToTalk({
     start: () => {
@@ -686,6 +722,77 @@ export function NotebookApp({
   useEffect(() => {
     setLiveNotebook(rootId);
   }, [setLiveNotebook, rootId]);
+  // U2 (NEB_APP_UI §4): the page's parts.
+  /** The Contents drawer (the K1 tree), kept open or closed on this device. */
+  const [contentsOpen, setContentsOpen] = useState(false);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setContentsOpen(localStorage.getItem(CONTENTS_KEY) === "1");
+    } catch {
+      // Closed.
+    }
+  }, []);
+  const toggleContents = useCallback(() => {
+    setContentsOpen((open) => {
+      try {
+        localStorage.setItem(CONTENTS_KEY, open ? "0" : "1");
+      } catch {
+        // This session only.
+      }
+      return !open;
+    });
+  }, []);
+  /** Back to the desk (§4.1 "‹"): nothing open. */
+  const openDesk = useCallback(() => {
+    setNotebookId(null);
+    setPageId(null);
+    setEngine(null);
+    setView("desk");
+  }, []);
+  const [hand, setHand] = useState<WritingHand>("right");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHand(readWritingHand());
+  }, []);
+  /** When ink last went down (the pencil case tucks itself away during long writing). */
+  const [writing, setWriting] = useState(0);
+  useEffect(
+    () =>
+      engine?.subscribe((change) => {
+        if (change === "draw") setWriting(Date.now());
+      }),
+    [engine],
+  );
+  /** The lane is 18 % of the sheet, 150–200 px (§4.2). */
+  const sheet = useRef<HTMLDivElement>(null);
+  const [laneWidth, setLaneWidth] = useState<number>(LANE.minWidth);
+  useEffect(() => {
+    const element = sheet.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry?.contentRect.width ?? 0;
+      setLaneWidth(
+        Math.round(Math.min(LANE.maxWidth, Math.max(LANE.minWidth, width * LANE.share))),
+      );
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [view]);
+  const folded = useMarkPrefs((s) => (rootId ? s.prefsFor(rootId).hideUntilDone : false));
+  const markLevel = useMarkPrefs((s) => s.levelFor(rootId));
+  const mascot = useMascotState();
+  const laneDot: NebDotState = markLevel === "off" ? "off" : MASCOT_DOT[mascot];
+  /** Circle & ask from the pencil case: a hold, as if Ctrl+Alt were held; tapped again, it asks. */
+  const toggleCircle = () => {
+    if (holding === null) {
+      mew.hold.start();
+      setHolding((n) => (n ?? 0) + 1);
+      return;
+    }
+    setHolding(null);
+    mew.hold.release(Date.now());
+  };
   // K10 §8.2: the lasso's selection, for "neb read:" on that line.
   const [lassoed, setLassoed] = useState<readonly Stroke[] | null>(null);
   // K10 §8.2: what helps read a line here (the notebook's subject, its chapter's words).
@@ -726,32 +833,6 @@ export function NotebookApp({
     keys.own,
   );
 
-  // K9 page Replay: the page redraws itself in the order it was written (marks included).
-  const stopPageReplay = useRef<(() => void) | null>(null);
-  const [replayingPage, setReplayingPage] = useState(false);
-  const togglePageReplay = () => {
-    if (stopPageReplay.current) {
-      stopPageReplay.current();
-      return;
-    }
-    if (!engine) return;
-    setReplayingPage(true);
-    stopPageReplay.current = replayPage(
-      engine.doc.all(),
-      (ids) => useNotebookUi.getState().setPageReplayHidden(ids.size > 0 ? ids : null),
-      () => {
-        stopPageReplay.current = null;
-        setReplayingPage(false);
-      },
-    );
-  };
-  // A replay never outlives its page, and the pen touching the page stops it.
-  useEffect(() => () => stopPageReplay.current?.(), [engine]);
-  useEffect(
-    () => engine?.subscribe((change) => change === "draw" && stopPageReplay.current?.()),
-    [engine],
-  );
-
   const exportLine = async () => {
     if (!engine) return;
     const crop = await cropCurrentLine(engine.doc, { marks: isShown });
@@ -765,7 +846,7 @@ export function NotebookApp({
 
   return (
     <div className="flex h-dvh w-full overflow-hidden">
-      {view !== "desk" && (
+      {view !== "desk" && contentsOpen && (
         <Sidebar
           notebooks={
             <TreeNav
@@ -793,243 +874,313 @@ export function NotebookApp({
           onQuiz={courseId ? () => void quiz.start(courseId) : null}
         />
       )}
-      <main className="relative min-w-0 flex-1">
-        {view === "desk" ? (
-          nodes ? (
-            <Desk
-              tree={tree}
-              unsortedId={unsortedNodeId(userId)}
-              now={now}
-              name={name}
-              moments={moments}
-              dueCounts={dueCounts}
-              dueTotal={dueTotal}
-              exam={exam ? { title: exam.title, days: exam.daysLeft } : null}
-              loadCounts={loadCounts}
-              keys={{ jump: keys.shown("jump"), newNotebook: keys.shown("new_notebook") }}
-              onOpen={openNode}
-              onOpenMoment={(moment) => openMoment(moment, true)}
-              onQuickCheck={() => openQuickCheck()}
-              onJump={() => treeActions.setPaletteOpen(true)}
-              onNewNotebook={treeActions.startCreating}
-              onDropPdf={(nodeId, file) => setImporting({ nodeId, file })}
-            />
-          ) : (
-            <div className="h-full bg-desk" aria-busy="true" />
-          )
-        ) : view === "home" && node ? (
-          <NodeHome
-            node={node}
+      <main className="relative flex min-w-0 flex-1 flex-col bg-desk">
+        {view !== "desk" && notebookId && (
+          <PageHeader
             tree={tree}
-            pages={pages.filter((p) => p.notebookId === node.id)}
-            now={now}
-            loadCounts={loadCounts}
-            onOpen={openNode}
-            onOpenPage={(id) => {
-              const page = pages.find((p) => p.id === id);
-              if (page) openPage(page);
-            }}
-            onAddChild={() => treeActions.addChild(node.id)}
-            onAddPage={() => treeActions.addPage(node.id)}
-            onImportPdf={() => setImporting({ nodeId: node.id, file: null })}
-            moments={moments.filter((m) => subtreeIds(tree, node.id).has(m.nodeId))}
-            dueCounts={dueCounts}
-            onOpenMoment={(moment) => openMoment(moment)}
-            inNeb={inNeb}
-            onOpenInNeb={openInNeb}
-            onQuickCheck={() => openQuickCheck({ nodeIds: [...subtreeIds(tree, node.id)] })}
-            onSetSubject={(subject) => void repo.tree.setSubject(node.id, subject).catch(report)}
-            {...(node.id === unsortedNodeId(userId) && {
-              unsorted: { onFile: fileMoment, onChoose: setChoosingFor },
-            })}
+            nodeId={notebookId}
+            pageNumber={
+              view === "page" ? (pages.find((p) => p.id === pageId)?.index ?? 0) + 1 : null
+            }
+            rootId={rootId}
+            folded={folded}
+            checkKeys={keys.shown("check_work")}
+            page={view === "page"}
+            onDesk={openDesk}
+            onContents={toggleContents}
+            onOpenHome={openHome}
+            onFold={() => rootId && useMarkPrefs.getState().setHideUntilDone(rootId, !folded)}
           />
-        ) : engine && engine.pageId === pageId ? (
-          <NotebookCanvas
-            ref={canvas}
-            engine={engine}
-            onPenDown={mew.penDown}
-            tutorInk={mew.ink}
-            leftInset={quizActive ? QUIZ_CARD_INSET : 0}
-            onSelection={setLassoed}
-          />
-        ) : (
-          <div className="grid h-full place-items-center text-sm text-muted">Opening notebook…</div>
         )}
+        <div className="relative flex min-h-0 flex-1">
+          {view === "page" && (
+            <div
+              className={`flex w-[96px] shrink-0 items-center justify-center ${hand === "left" ? "order-last" : ""}`}
+            >
+              <PencilCase
+                hand={hand}
+                onHand={setHand}
+                onUndo={actions.undo}
+                onRedo={actions.redo}
+                onCircle={toggleCircle}
+                writing={writing}
+              />
+            </div>
+          )}
+          <div className={`flex min-w-0 flex-1 flex-col ${view === "page" ? "pb-1" : ""}`}>
+            <div
+              ref={sheet}
+              data-testid={view === "page" ? "sheet" : undefined}
+              className={
+                view === "page"
+                  ? "relative flex min-h-0 flex-1 rounded-[6px] bg-paper shadow-sh-3"
+                  : "relative flex min-h-0 flex-1"
+              }
+            >
+              {view === "page" && engine && (
+                <NebLane
+                  canvas={canvas}
+                  live={mew.live}
+                  width={laneWidth}
+                  folded={folded}
+                  dot={laneDot}
+                  onWhy={(mark) => mew.askAboutLine(mark.lineStrokeIds)}
+                  onUnfold={() => rootId && useMarkPrefs.getState().setHideUntilDone(rootId, false)}
+                  onDot={mew.summon}
+                />
+              )}
+              <div className="relative min-w-0 flex-1 overflow-hidden rounded-[6px]">
+                {view === "desk" ? (
+                  nodes ? (
+                    <Desk
+                      tree={tree}
+                      unsortedId={unsortedNodeId(userId)}
+                      now={now}
+                      name={name}
+                      moments={moments}
+                      dueCounts={dueCounts}
+                      dueTotal={dueTotal}
+                      exam={exam ? { title: exam.title, days: exam.daysLeft } : null}
+                      loadCounts={loadCounts}
+                      keys={{ jump: keys.shown("jump"), newNotebook: keys.shown("new_notebook") }}
+                      onOpen={openNode}
+                      onOpenMoment={(moment) => openMoment(moment, true)}
+                      onQuickCheck={() => openQuickCheck()}
+                      onJump={() => treeActions.setPaletteOpen(true)}
+                      onNewNotebook={treeActions.startCreating}
+                      onDropPdf={(nodeId, file) => setImporting({ nodeId, file })}
+                    />
+                  ) : (
+                    <div className="h-full bg-desk" aria-busy="true" />
+                  )
+                ) : view === "home" && node ? (
+                  <NodeHome
+                    node={node}
+                    tree={tree}
+                    pages={pages.filter((p) => p.notebookId === node.id)}
+                    now={now}
+                    loadCounts={loadCounts}
+                    onOpen={openNode}
+                    onOpenPage={(id) => {
+                      const page = pages.find((p) => p.id === id);
+                      if (page) openPage(page);
+                    }}
+                    onAddChild={() => treeActions.addChild(node.id)}
+                    onAddPage={() => treeActions.addPage(node.id)}
+                    onImportPdf={() => setImporting({ nodeId: node.id, file: null })}
+                    moments={moments.filter((m) => subtreeIds(tree, node.id).has(m.nodeId))}
+                    dueCounts={dueCounts}
+                    onOpenMoment={(moment) => openMoment(moment)}
+                    inNeb={inNeb}
+                    onOpenInNeb={openInNeb}
+                    onQuickCheck={() => openQuickCheck({ nodeIds: [...subtreeIds(tree, node.id)] })}
+                    onSetSubject={(subject) =>
+                      void repo.tree.setSubject(node.id, subject).catch(report)
+                    }
+                    {...(node.id === unsortedNodeId(userId) && {
+                      unsorted: { onFile: fileMoment, onChoose: setChoosingFor },
+                    })}
+                  />
+                ) : engine && engine.pageId === pageId ? (
+                  <NotebookCanvas
+                    ref={canvas}
+                    engine={engine}
+                    onPenDown={mew.penDown}
+                    tutorInk={mew.ink}
+                    leftInset={quizActive ? QUIZ_CARD_INSET : 0}
+                    onSelection={setLassoed}
+                  />
+                ) : (
+                  <div className="grid h-full place-items-center text-sm text-muted">
+                    Opening notebook…
+                  </div>
+                )}
 
-        {view === "page" && notebookId && !quizActive && (
-          <div className="pointer-events-auto absolute top-[4.25rem] left-4 hidden max-w-[45%] rounded-xl bg-paper-hi/90 px-1 py-1 backdrop-blur md:block">
-            <Breadcrumb
-              tree={tree}
-              nodeId={notebookId}
-              pageNumber={(pages.find((p) => p.id === pageId)?.index ?? 0) + 1}
-              onOpen={openHome}
-            />
-          </div>
-        )}
-
-        {view !== "desk" && (
-          <div className="pointer-events-none absolute inset-x-0 top-4 flex justify-center px-4">
-            <Toolbar
-              onUndo={actions.undo}
-              onRedo={actions.redo}
-              onZoom={actions.zoom}
-              onResetView={actions.resetView}
-              onExportLine={() => void exportLine().catch(report)}
-              marks={<MarksMenu notebookId={rootId} pageId={view === "page" ? pageId : null} />}
-              {...(view === "page" && engine && { onReplayPage: togglePageReplay })}
-              replayingPage={replayingPage}
-            />
-          </div>
-        )}
-
-        {/* Mounted with the page's canvas (keyed by page), so the notes subscribe to the camera
+                {/* Mounted with the page's canvas (keyed by page), so the notes subscribe to the camera
             of the canvas that's actually shown and scroll with the page, never over it. */}
-        {engine && view === "page" && engine.pageId === pageId && (
-          <EntryNotes key={engine.pageId} canvas={canvas} images={engine.images} />
-        )}
+                {engine && view === "page" && engine.pageId === pageId && (
+                  <EntryNotes key={engine.pageId} canvas={canvas} images={engine.images} />
+                )}
 
-        {engine && view === "page" && <SourceHighlight canvas={canvas} images={engine.images} />}
+                {engine && view === "page" && (
+                  <SourceHighlight canvas={canvas} images={engine.images} />
+                )}
 
-        {engine && view === "page" && <NotebookPointer canvas={canvas} ink={mew.ink} />}
+                {engine && view === "page" && <NotebookPointer canvas={canvas} ink={mew.ink} />}
 
-        {engine && view === "page" && (
-          <MarkLayer
-            canvas={canvas}
-            live={mew.live}
-            onWhy={(mark) => mew.askAboutLine(mark.lineStrokeIds)}
-          />
-        )}
-        {engine && view === "page" && (
-          <ReadAsChip canvas={canvas} live={mew.live} selection={lassoed} />
-        )}
+                {engine && view === "page" && (
+                  <MarkLayer
+                    canvas={canvas}
+                    live={mew.live}
+                    onWhy={(mark) => mew.askAboutLine(mark.lineStrokeIds)}
+                    kinds={TICKS}
+                  />
+                )}
+                {engine && view === "page" && (
+                  <ReadAsChip canvas={canvas} live={mew.live} selection={lassoed} />
+                )}
 
-        {engine && view === "page" && (
-          <SolutionLayer
-            canvas={canvas}
-            pageId={engine.pageId}
-            flow={mew.showThenYou}
-            records={solutionRecords}
-            checkShortcut={keys.shown("check_work")}
-          />
-        )}
+                {engine && view === "page" && (
+                  <SolutionLayer
+                    canvas={canvas}
+                    pageId={engine.pageId}
+                    flow={mew.showThenYou}
+                    records={solutionRecords}
+                    checkShortcut={keys.shown("check_work")}
+                  />
+                )}
 
-        {engine && (
-          <NotesMarks
-            canvas={canvas}
-            marks={marks}
-            focusId={focus?.findingId ?? null}
-            db={db}
-            ink={mew.ink}
-          />
-        )}
+                {engine && (
+                  <NotesMarks
+                    canvas={canvas}
+                    marks={marks}
+                    focusId={focus?.findingId ?? null}
+                    db={db}
+                    ink={mew.ink}
+                  />
+                )}
 
-        {engine && view === "page" && holding !== null && (
-          <HoldCircle key={holding} canvas={canvas} onLoop={mew.hold.circle} />
-        )}
+                {engine && view === "page" && holding !== null && (
+                  <HoldCircle key={holding} canvas={canvas} onLoop={mew.hold.circle} />
+                )}
 
-        {clipImage && !quizActive && (
-          <div className="pointer-events-none absolute inset-x-0 top-[4.5rem] flex flex-col items-center gap-2 px-4">
-            <ClipSource
-              image={clipImage}
-              {...(clipImage.ocrText &&
-                !checking && { onCheck: () => checkAgainstNotes(clipImage) })}
-              {...(scannedPages.has(clipImage.id) && {
-                onRecognize: () => recognizePage(clipImage),
-                reading: readingPage === clipImage.id,
-              })}
-            />
-            {checkPrompt === pageId && clipImage.ocrText && (
-              <div
-                role="status"
-                data-testid="notes-check-prompt"
-                className="pointer-events-auto flex items-center gap-3 rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
-              >
-                Check this against your notes?
-                <button
-                  type="button"
-                  className="font-semibold underline"
-                  onClick={() => checkAgainstNotes(clipImage)}
+                {clipImage && !quizActive && (
+                  <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-4">
+                    <ClipSource
+                      image={clipImage}
+                      {...(clipImage.ocrText &&
+                        !checking && { onCheck: () => checkAgainstNotes(clipImage) })}
+                      {...(scannedPages.has(clipImage.id) && {
+                        onRecognize: () => recognizePage(clipImage),
+                        reading: readingPage === clipImage.id,
+                      })}
+                    />
+                    {checkPrompt === pageId && clipImage.ocrText && (
+                      <div
+                        role="status"
+                        data-testid="notes-check-prompt"
+                        className="pointer-events-auto flex items-center gap-3 rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
+                      >
+                        Check this against your notes?
+                        <button
+                          type="button"
+                          className="font-semibold underline"
+                          onClick={() => checkAgainstNotes(clipImage)}
+                        >
+                          Check
+                        </button>
+                        <button
+                          type="button"
+                          className="opacity-80"
+                          onClick={() => setCheckPrompt(null)}
+                        >
+                          Not now
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="pointer-events-none absolute top-4 left-4">
+                  <QuizCard session={quiz} />
+                </div>
+
+                <div className="pointer-events-none absolute right-4 bottom-24">
+                  <ShortcutsNotice hidden={app.showIntro || quizActive} />
+                </div>
+
+                {view !== "desk" && (
+                  <div className="pointer-events-none absolute right-4 bottom-4">
+                    <MewDock
+                      onSummon={mew.summon}
+                      onStartListening={mew.startListening}
+                      onStopListening={mew.stopListening}
+                    />
+                  </div>
+                )}
+
+                {debugOpen && (
+                  <div className="pointer-events-none absolute top-4 right-4 bottom-20">
+                    <DebugPanel onSimulateUtterance={mew.say} onSummon={mew.summon} />
+                  </div>
+                )}
+
+                <div
+                  aria-live="polite"
+                  className="pointer-events-none absolute inset-x-0 bottom-20 z-50 flex justify-center px-4"
                 >
-                  Check
-                </button>
-                <button type="button" className="opacity-80" onClick={() => setCheckPrompt(null)}>
-                  Not now
-                </button>
+                  {notice && (
+                    <p
+                      className={`pointer-events-auto flex items-center gap-3 rounded-full px-4 py-2 text-sm shadow-lg ${"bg-ink text-paper"}`}
+                    >
+                      {notice.text}
+                      {notice.action && (
+                        <button
+                          type="button"
+                          className="font-semibold underline"
+                          onClick={() => {
+                            notice.action?.run();
+                            setNotice(null);
+                          }}
+                        >
+                          {notice.action.label}
+                        </button>
+                      )}
+                    </p>
+                  )}
+                  {!app.online && !notice && (
+                    <p
+                      data-testid="offline-notice"
+                      className="rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
+                    >
+                      You&apos;re offline. Your notes are saved on this device; Neb needs a
+                      connection.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+            {view === "page" && engine && (
+              <div className="flex items-center gap-4 px-1 pt-2">
+                <ReplayBar
+                  engine={engine}
+                  moments={moments.filter((m) => m.pageId === pageId).map((m) => m.createdAt)}
+                  onHide={(ids) => useNotebookUi.getState().setPageReplayHidden(ids)}
+                />
+                <PageTools
+                  onZoom={actions.zoom}
+                  onResetView={actions.resetView}
+                  onExportLine={() => void exportLine().catch(report)}
+                  marks={<MarksMenu notebookId={rootId} pageId={pageId} />}
+                  pageNav={
+                    pageId && (
+                      <PageNav
+                        pages={pages}
+                        currentPageId={pageId}
+                        onSelect={setPageId}
+                        onAdd={() => notebookId && treeActions.addPage(notebookId)}
+                      />
+                    )
+                  }
+                />
               </div>
             )}
           </div>
-        )}
-
-        <div className="pointer-events-none absolute top-20 right-4 bottom-24 flex flex-col items-end">
+          {view === "page" && rootId && (
+            <div className="flex w-[150px] shrink-0 items-center">
+              <ChapterTabs
+                tree={tree}
+                rootId={rootId}
+                openId={notebookId}
+                addKeys={keys.shown("new_chapter")}
+                onOpen={openNode}
+                onAdd={() => treeActions.addChild(rootId)}
+              />
+            </div>
+          )}
+        </div>
+        <div className="pointer-events-none absolute top-20 right-2 bottom-20 z-40 flex flex-col items-end">
           <NotesCheckPanel />
-        </div>
-
-        <div className="pointer-events-none absolute top-20 left-4">
-          <QuizCard session={quiz} />
-        </div>
-
-        {view === "page" && pageId && (
-          <div className="pointer-events-none absolute bottom-4 left-4">
-            <PageNav
-              pages={pages}
-              currentPageId={pageId}
-              onSelect={setPageId}
-              onAdd={() => notebookId && treeActions.addPage(notebookId)}
-            />
-          </div>
-        )}
-
-        <div className="pointer-events-none absolute right-4 bottom-24">
-          <ShortcutsNotice hidden={app.showIntro || quizActive} />
-        </div>
-
-        {view !== "desk" && (
-          <div className="pointer-events-none absolute right-4 bottom-4">
-            <MewDock
-              onSummon={mew.summon}
-              onStartListening={mew.startListening}
-              onStopListening={mew.stopListening}
-            />
-          </div>
-        )}
-
-        {debugOpen && (
-          <div className="pointer-events-none absolute top-20 right-4 bottom-24">
-            <DebugPanel onSimulateUtterance={mew.say} onSummon={mew.summon} />
-          </div>
-        )}
-
-        <div
-          aria-live="polite"
-          className="pointer-events-none absolute inset-x-0 bottom-20 flex justify-center px-4"
-        >
-          {notice && (
-            <p
-              className={`pointer-events-auto flex items-center gap-3 rounded-full px-4 py-2 text-sm shadow-lg ${"bg-ink text-paper"}`}
-            >
-              {notice.text}
-              {notice.action && (
-                <button
-                  type="button"
-                  className="font-semibold underline"
-                  onClick={() => {
-                    notice.action?.run();
-                    setNotice(null);
-                  }}
-                >
-                  {notice.action.label}
-                </button>
-              )}
-            </p>
-          )}
-          {!app.online && !notice && (
-            <p
-              data-testid="offline-notice"
-              className="rounded-full bg-ink px-4 py-2 text-sm text-paper shadow-lg"
-            >
-              You&apos;re offline. Your notes are saved on this device; Neb needs a connection.
-            </p>
-          )}
         </div>
       </main>
       {importing && (

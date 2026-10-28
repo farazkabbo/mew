@@ -1,4 +1,10 @@
-import { type Line, planLiveMarkInk, strokeGroupHash, type BoardColors } from "@mew/ink";
+import {
+  type BoardColors,
+  type Line,
+  type MarkWords,
+  planLiveMarkInk,
+  strokeGroupHash,
+} from "@mew/ink";
 import {
   ANNOTATION_LIMITS,
   type Annotation,
@@ -73,6 +79,11 @@ export type AnnotatorDeps = {
   onTry?(pageId: string, correct: boolean): void;
   /** A mark changed (the device's copy should reach the server). */
   onChanged?(): void;
+  /**
+   * Where a mark's words go: in ink beside the line ("page", K9), or to the neb lane
+   * (NEB_APP_UI §4.2: "lane", the page keeps the circle and the lane shows the note).
+   */
+  words?: MarkWords;
   /**
    * The student said what a line really says (K10 §8.3: every correction teaches): a fix, a "?"
    * confirmed, or "not wrong" (the reading was right; the mark wasn't).
@@ -576,6 +587,7 @@ export class LiveAnnotator {
         now,
         newId: this.newId,
       },
+      this.deps.words ?? "page",
     );
     if (!ink) {
       if (ended) this.takeOff(engine, [ended]);

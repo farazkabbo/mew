@@ -13,6 +13,11 @@ type Props = {
   live: LiveAnnotator;
   /** "Why?": the tutor explains that line (Mew `answer_question`, the line as context). */
   onWhy(mark: Annotation): void;
+  /**
+   * The kinds tapped on the page (NEB_APP_UI §4.2: only ticks; the others are the lane's note
+   * cards). All of them when absent.
+   */
+  kinds?: ReadonlySet<Annotation["markKind"]>;
 };
 
 const KIND_LABEL: Record<Annotation["markKind"], string> = {
@@ -34,14 +39,13 @@ const KIND_LABEL: Record<Annotation["markKind"], string> = {
  *   what the line says checks it again and teaches neb the student's handwriting (§8.3).
  * A layer above the page that follows the camera, like the entry notes.
  */
-export function MarkLayer({ canvas, live, onWhy }: Props) {
+export function MarkLayer({ canvas, live, onWhy, kinds }: Props) {
   const layer = useRef<HTMLDivElement>(null);
   const marks = useLiveMarks((s) => s.marks);
   const pageId = useLiveMarks((s) => s.pageId);
   const hiddenHere = useNotebookUi((s) => (pageId ? s.marksHiddenOn.has(pageId) : false));
   const showTutorInk = useNotebookUi((s) => s.showTutorInk);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [typing, setTyping] = useState<string | null>(null);
 
   useEffect(() => {
     return canvas.current?.onCamera(({ x, y, zoom }) => {
@@ -50,12 +54,12 @@ export function MarkLayer({ canvas, live, onWhy }: Props) {
     });
   }, [canvas]);
 
-  const shown = hiddenHere || !showTutorInk ? [] : marks.filter((m) => m.revealed && m.hitBox);
+  const shown =
+    hiddenHere || !showTutorInk
+      ? []
+      : marks.filter((m) => m.revealed && m.hitBox && (!kinds || kinds.has(m.markKind)));
   if (shown.length === 0) return null;
-  const close = () => {
-    setOpenId(null);
-    setTyping(null);
-  };
+  const close = () => setOpenId(null);
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" data-testid="mark-layer">
@@ -69,76 +73,14 @@ export function MarkLayer({ canvas, live, onWhy }: Props) {
                 type="button"
                 data-testid="live-mark"
                 data-kind={mark.markKind}
-                aria-label={`${KIND_LABEL[mark.markKind]}${mark.note && mark.note !== "?" ? `: ${mark.note}` : ""}`}
+                aria-label={markLabel(mark)}
                 aria-expanded={open}
                 onClick={() => (open ? close() : setOpenId(mark.id))}
                 className="pointer-events-auto block rounded-md focus-visible:outline-2 focus-visible:outline-ink"
                 style={{ width: w, height: h }}
               />
               {open && (
-                <div
-                  role="menu"
-                  aria-label="Mark"
-                  data-testid="mark-menu"
-                  className="pointer-events-auto absolute top-full left-0 z-20 mt-1 flex min-w-40 flex-col rounded-xl border border-line bg-paper-hi p-1 text-sm shadow-lg"
-                  onKeyDown={(event) => event.key === "Escape" && close()}
-                >
-                  {mark.markKind !== "unsure" && mark.recognizedText && (
-                    <ReadAs
-                      mark={mark}
-                      typing={typing === mark.id}
-                      onType={() => setTyping(mark.id)}
-                      onTyped={(text) => {
-                        close();
-                        void live.reread(mark.id, text);
-                      }}
-                    />
-                  )}
-                  {mark.markKind === "unsure" ? (
-                    <Unsure
-                      mark={mark}
-                      typing={typing === mark.id}
-                      onYes={() => {
-                        close();
-                        void live.reread(mark.id, null);
-                      }}
-                      onType={() => setTyping(mark.id)}
-                      onTyped={(text) => {
-                        close();
-                        void live.reread(mark.id, text);
-                      }}
-                    />
-                  ) : (
-                    mark.markKind !== "tick" && (
-                      <MenuItem
-                        onClick={() => {
-                          close();
-                          void live.askedWhy(mark.id).then((asked) => asked && onWhy(asked));
-                        }}
-                      >
-                        Why?
-                      </MenuItem>
-                    )
-                  )}
-                  {mark.markKind !== "tick" && mark.markKind !== "margin" && (
-                    <MenuItem
-                      onClick={() => {
-                        close();
-                        void live.dismiss(mark.id, "not_wrong");
-                      }}
-                    >
-                      Not wrong
-                    </MenuItem>
-                  )}
-                  <MenuItem
-                    onClick={() => {
-                      close();
-                      void live.dismiss(mark.id, "hidden");
-                    }}
-                  >
-                    Hide
-                  </MenuItem>
-                </div>
+                <MarkMenu mark={mark} live={live} onWhy={onWhy} onClose={() => setOpenId(null)} />
               )}
             </div>
           );
@@ -146,6 +88,101 @@ export function MarkLayer({ canvas, live, onWhy }: Props) {
       </div>
     </div>
   );
+}
+
+/**
+ * A mark's menu (K9 §7.1, K10): "neb read: …" with Fix, or the "?"'s "I read: … — right?";
+ * Why?, Not wrong and Hide. Shared by the page's tap targets and the neb lane's note cards.
+ */
+export function MarkMenu({
+  mark,
+  live,
+  onWhy,
+  onClose,
+  className = "absolute top-full left-0 z-20 mt-1",
+}: {
+  mark: Annotation;
+  live: LiveAnnotator;
+  onWhy(mark: Annotation): void;
+  onClose(): void;
+  className?: string;
+}) {
+  const [typing, setTyping] = useState(false);
+  const close = () => {
+    setTyping(false);
+    onClose();
+  };
+  return (
+    <div
+      role="menu"
+      aria-label="Mark"
+      data-testid="mark-menu"
+      className={`pointer-events-auto flex min-w-40 flex-col rounded-xl border border-line bg-paper-hi p-1 text-sm text-ink shadow-sh-2 ${className}`}
+      onKeyDown={(event) => event.key === "Escape" && close()}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {mark.markKind !== "unsure" && mark.recognizedText && (
+        <ReadAs
+          mark={mark}
+          typing={typing}
+          onType={() => setTyping(true)}
+          onTyped={(text) => {
+            close();
+            void live.reread(mark.id, text);
+          }}
+        />
+      )}
+      {mark.markKind === "unsure" ? (
+        <Unsure
+          mark={mark}
+          typing={typing}
+          onYes={() => {
+            close();
+            void live.reread(mark.id, null);
+          }}
+          onType={() => setTyping(true)}
+          onTyped={(text) => {
+            close();
+            void live.reread(mark.id, text);
+          }}
+        />
+      ) : (
+        mark.markKind !== "tick" && (
+          <MenuItem
+            onClick={() => {
+              close();
+              void live.askedWhy(mark.id).then((asked) => asked && onWhy(asked));
+            }}
+          >
+            Why?
+          </MenuItem>
+        )
+      )}
+      {mark.markKind !== "tick" && mark.markKind !== "margin" && (
+        <MenuItem
+          onClick={() => {
+            close();
+            void live.dismiss(mark.id, "not_wrong");
+          }}
+        >
+          Not wrong
+        </MenuItem>
+      )}
+      <MenuItem
+        onClick={() => {
+          close();
+          void live.dismiss(mark.id, "hidden");
+        }}
+      >
+        Hide
+      </MenuItem>
+    </div>
+  );
+}
+
+/** The label a mark is announced with ("Mark: sign?"). */
+export function markLabel(mark: Pick<Annotation, "markKind" | "note">): string {
+  return `${KIND_LABEL[mark.markKind]}${mark.note && mark.note !== "?" ? `: ${mark.note}` : ""}`;
 }
 
 function MenuItem({ onClick, children }: { onClick(): void; children: React.ReactNode }) {

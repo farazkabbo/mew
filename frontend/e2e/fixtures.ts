@@ -9,7 +9,29 @@ export * from "@playwright/test";
  * this also stops one test's settings from leaking into the next. Tests of the introduction
  * reset `onboarded` themselves (and "Shortcuts got simpler", K2, is marked read).
  */
-export const test = base.extend<{ freshSettings: void; freshNotebooks: void }>({
+export const test = base.extend<{
+  freshSettings: void;
+  freshNotebooks: void;
+  contentsOpen: void;
+}>({
+  /**
+   * The Contents drawer (the K1 tree, NEB_APP_UI §4.10) kept open, as a student who pins it:
+   * the tree's tests reach it without opening it first.
+   */
+  contentsOpen: [
+    async ({ page }, use) => {
+      await page.addInitScript(() => {
+        try {
+          if (localStorage.getItem("neb:contents") === null)
+            localStorage.setItem("neb:contents", "1");
+        } catch {
+          // No storage: the drawer starts closed.
+        }
+      });
+      await use();
+    },
+    { auto: true },
+  ],
   freshSettings: [
     async ({ request, baseURL }, use) => {
       const origin = new URL(baseURL ?? "http://localhost:3000").origin;

@@ -84,7 +84,8 @@ function YourTurnPanel({ flow, checkShortcut }: Pick<Props, "flow" | "checkShort
   const button =
     "rounded-full px-3 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2";
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center px-4">
+    // Away from the page's writing (the Your Turn box is usually low on the sheet): top right.
+    <div className="pointer-events-none absolute top-16 right-4 z-40 flex max-w-[min(30rem,70%)] justify-end">
       <div
         role="status"
         aria-live="polite"
