@@ -10,6 +10,7 @@ Texts for filing are the student's own course passages (by the chapter they were
 and the concept hints and summaries of moments already filed: read to score, never logged.
 """
 
+import logging
 import threading
 import uuid
 from collections.abc import Callable, Iterable, Mapping
@@ -22,6 +23,8 @@ from ..clips.models import CheckQuestion
 from ..supabase_rest import StoreError, SupabaseRest
 from .checks import RecentCard, plan_new_check, room_today
 from .filing import Correction, Memory
+
+logger = logging.getLogger(__name__)
 
 #: Passages and moments read to file one moment (the newest first).
 MAX_PASSAGES = 3000
@@ -53,6 +56,12 @@ class CheckRow:
     origin: str = "moment"
     source_title: str | None = None
     source_app: str | None = None
+    #: The first time it stayed (§6.4); memory only (Supabase keeps it in the column).
+    stayed_at: datetime | None = None
+
+
+#: Stayed counts listed at once (a notebook or node each).
+MAX_STAYED = 2000
 
 
 @dataclass(frozen=True)
@@ -90,9 +99,16 @@ class MomentStore(Protocol):
         now: datetime,
     ) -> list[UUID]: ...
     def due_checks(self, user: str, now: datetime) -> list[CheckRow]: ...
+    def stayed_counts(self, user: str, now: datetime) -> list[tuple[UUID, int, int]]: ...
     def get_check(self, user: str, check_id: UUID) -> CheckRow | None: ...
     def schedule(
-        self, user: str, check_id: UUID, fsrs_state: dict[str, Any], due_at: datetime, reps: int
+        self,
+        user: str,
+        check_id: UUID,
+        fsrs_state: dict[str, Any],
+        due_at: datetime,
+        reps: int,
+        stayed: bool = False,
     ) -> bool: ...
     def clear_checks(self, user: str) -> None: ...
     def move_checks(self, user: str, clip_id: UUID, node_id: UUID) -> None: ...
@@ -267,6 +283,17 @@ class MemoryMomentStore:
                 ids.append(check.id)
             return ids
 
+    def stayed_counts(self, user: str, now: datetime) -> list[tuple[UUID, int, int]]:
+        week = now - timedelta(days=7)
+        counts: dict[UUID, tuple[int, int]] = {}
+        with self._lock:
+            for check in self._data(user).checks.values():
+                if check.stayed_at is None or check.node_id is None:
+                    continue
+                total, recent = counts.get(check.node_id, (0, 0))
+                counts[check.node_id] = (total + 1, recent + (check.stayed_at > week))
+        return [(node, total, recent) for node, (total, recent) in counts.items()][:MAX_STAYED]
+
     def due_checks(self, user: str, now: datetime) -> list[CheckRow]:
         with self._lock:
             data = self._data(user)
@@ -295,13 +322,22 @@ class MemoryMomentStore:
             return replace(check) if check else None
 
     def schedule(
-        self, user: str, check_id: UUID, fsrs_state: dict[str, Any], due_at: datetime, reps: int
+        self,
+        user: str,
+        check_id: UUID,
+        fsrs_state: dict[str, Any],
+        due_at: datetime,
+        reps: int,
+        stayed: bool = False,
     ) -> bool:
         with self._lock:
             check = self._data(user).checks.get(check_id)
             if check is None or check.status != "active":
                 return False
             check.fsrs_state, check.due_at, check.reps = fsrs_state, due_at, reps
+            now = datetime.now(UTC)
+            if stayed and check.stayed_at is None and now - check.created_at >= timedelta(days=1):
+                check.stayed_at = now
             return True
 
     def clear_checks(self, user: str) -> None:
@@ -584,6 +620,20 @@ class SupabaseMomentStore(SupabaseRest):
         rows = self._insert("moment_checks", payload, select="id")
         return [UUID(r["id"]) for r in rows]
 
+    def stayed_counts(self, user: str, now: datetime) -> list[tuple[UUID, int, int]]:
+        try:
+            rows = self._get(
+                "notebook_stayed",
+                {"select": "notebook_id,stayed_count,stayed_week", "limit": str(MAX_STAYED)},
+            )
+        except StoreError:
+            # Before 20261111000000_stayed is applied: no ribbons, nothing else changes.
+            logger.warning("Couldn't read stayed counts")
+            return []
+        return [
+            (UUID(r["notebook_id"]), int(r["stayed_count"]), int(r["stayed_week"])) for r in rows
+        ]
+
     def due_checks(self, user: str, now: datetime) -> list[CheckRow]:
         room = room_today(self._made_today(user, now))
         if room > 0:
@@ -627,13 +677,30 @@ class SupabaseMomentStore(SupabaseRest):
         return _check(rows[0]) if rows else None
 
     def schedule(
-        self, user: str, check_id: UUID, fsrs_state: dict[str, Any], due_at: datetime, reps: int
+        self,
+        user: str,
+        check_id: UUID,
+        fsrs_state: dict[str, Any],
+        due_at: datetime,
+        reps: int,
+        stayed: bool = False,
     ) -> bool:
         rows = self._patch(
             "moment_checks",
             {**self._mine(user), "id": f"eq.{check_id}", "status": "eq.active"},
             {"fsrs_state": fsrs_state, "due_at": due_at.isoformat(), "reps": reps},
         )
+        if rows and stayed:
+            # Only while it's unset (a trigger keeps the first time too); never fails the answer
+            # (the schedule is what matters, and the column comes with 20261111000000_stayed).
+            try:
+                self._patch(
+                    "moment_checks",
+                    {**self._mine(user), "id": f"eq.{check_id}", "stayed_at": "is.null"},
+                    {"stayed_at": datetime.now(UTC).isoformat()},
+                )
+            except StoreError:
+                logger.warning("Couldn't mark a check as stayed")
         return bool(rows)
 
     def clear_checks(self, user: str) -> None:

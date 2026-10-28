@@ -11,6 +11,7 @@ import {
   MomentSuggestionsRequest,
   pickQuickCheck,
   savedQuizRequest,
+  stayedFor,
   unsortedNodeId,
 } from "./moments";
 import { suggestSubject } from "./notebook-tree";
@@ -59,6 +60,16 @@ describe("what a check's answer counts as", () => {
     expect(checkEvidence({ correct: true, peeked: true, hinted: false })).toBe("with_hint");
     expect(checkEvidence({ correct: true, peeked: false, hinted: true })).toBe("with_hint");
     expect(checkEvidence({ correct: false, peeked: false, hinted: false })).toBeNull();
+  });
+
+  it("stayed: right, alone, a day or more after it was saved (U6)", () => {
+    const day = 86_400_000;
+    const alone = { correct: true, peeked: false, hinted: false, savedAt: 0 };
+    expect(stayedFor({ ...alone, now: day })).toBe(true);
+    expect(stayedFor({ ...alone, now: day - 1 })).toBe(false);
+    expect(stayedFor({ ...alone, peeked: true, now: day })).toBe(false);
+    expect(stayedFor({ ...alone, hinted: true, now: day })).toBe(false);
+    expect(stayedFor({ ...alone, correct: false, now: day })).toBe(false);
   });
 });
 

@@ -6,9 +6,11 @@ import {
   FsrsCard,
   type MomentCheckAnswer,
   MomentChecksDue,
+  MomentStayed,
   type MomentCheckResult,
   NotebookTreeView,
   solvedFor,
+  stayedFor,
   withoutUnits,
 } from "@mew/shared";
 import { z } from "zod";
@@ -55,13 +57,21 @@ export function dueChecks() {
   return userApi("/v1/moments/checks/due", MomentChecksDue);
 }
 
+/** What stayed, per notebook (NEB_APP_UI §6.4). */
+export function stayedCounts() {
+  return userApi("/v1/moments/stayed", MomentStayed);
+}
+
 export async function answerCheck(
   checkId: string,
   answer: MomentCheckAnswer,
   deps: MomentCheckDeps = defaultDeps,
 ): Promise<MomentCheckResult> {
   const check = await userApi(`/v1/moments/checks/${checkId}`, CheckWithKey);
-  const graded = await gradeCheck(check, answer.answer, deps);
+  // "I don't know yet": not graded (no model call), the card comes back sooner (FSRS `again`).
+  const graded = answer.dontKnow
+    ? { correct: false, feedback: "That's fine. Here's the answer; this one comes back soon." }
+    : await gradeCheck(check, answer.answer, deps);
   const evidence = checkEvidence({ ...answer, correct: graded.correct });
   const now = deps.now();
   const card = review(
@@ -69,9 +79,15 @@ export async function answerCheck(
     { correct: graded.correct, evidence: evidence ?? "independent" },
     now,
   );
+  const stayed = stayedFor({
+    ...answer,
+    correct: graded.correct,
+    savedAt: Date.parse(check.createdAt),
+    now: now.getTime(),
+  });
   await userApi(`/v1/moments/checks/${checkId}`, z.undefined(), {
     method: "PATCH",
-    body: { fsrsState: card, dueAt: card.due, reps: card.reps },
+    body: { fsrsState: card, dueAt: card.due, reps: card.reps, ...(stayed && { stayed }) },
   });
   await logEvidence(check, graded.correct, evidence, deps).catch(() => undefined);
   return {
@@ -80,6 +96,7 @@ export async function answerCheck(
     answerKey: check.answerKey,
     feedback: graded.feedback,
     nextDue: card.due,
+    stayed,
   };
 }
 

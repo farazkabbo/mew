@@ -14,7 +14,14 @@ export type TonightRow = {
  * with at most 3 things to do, in order: checks due, where you left off, loose pages to file, an
  * exam soon. Nothing to do: "All clear."
  */
-export function TonightCard({ rows }: { rows: readonly TonightRow[] }) {
+export function TonightCard({
+  rows,
+  stayedWeek = 0,
+}: {
+  rows: readonly TonightRow[];
+  /** Checks that stayed in the last 7 days (§6.4); not shown at 0. */
+  stayedWeek?: number;
+}) {
   return (
     <section
       aria-labelledby="desk-tonight"
@@ -63,6 +70,11 @@ export function TonightCard({ rows }: { rows: readonly TonightRow[] }) {
             </li>
           ))}
         </ul>
+      )}
+      {stayedWeek > 0 && (
+        <p className="mt-4 text-[13px] text-muted" data-testid="tonight-stayed">
+          stayed this week: {stayedWeek}
+        </p>
       )}
     </section>
   );

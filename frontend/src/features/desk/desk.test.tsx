@@ -69,4 +69,27 @@ describe("the desk (NEB_APP_UI §5.1)", () => {
       "What are you studying?",
     );
   });
+
+  it("a cover's ribbon shows what stayed, hidden at 0; Tonight says this week's (U6)", () => {
+    const cover = (stayed: number) =>
+      renderToStaticMarkup(
+        <DeskCover
+          name="Physics"
+          color="#7DA4AF"
+          meta="5 chapters · 38 pages"
+          tabs={3}
+          due={0}
+          stayed={stayed}
+          last="Projectiles · 1 h ago"
+          onOpen={() => undefined}
+        />,
+      );
+    expect(cover(34)).toContain('data-testid="stayed-ribbon"');
+    expect(cover(34)).toContain("38 pages, 34 stayed");
+    expect(cover(0)).not.toContain("stayed-ribbon");
+    expect(renderToStaticMarkup(<TonightCard rows={[]} stayedWeek={12} />)).toContain(
+      "stayed this week: 12",
+    );
+    expect(renderToStaticMarkup(<TonightCard rows={[]} />)).not.toContain("stayed this week");
+  });
 });

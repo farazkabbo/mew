@@ -464,17 +464,27 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     character read right on a later line; Reset and turning learning off (the count goes to 0).
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
-- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U18:
+- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U20:
   - **U1 built** (2026-10-28, branch `feat/ui-u1-tokens`): design tokens (`shared/src/ui/tokens.ts`
     → `pnpm build:tokens`), the old colour names migrated and linted out, the four fonts vendored
     (`packages/shared/fonts`), Appearance and Text size (Settings → Appearance; `lib/display.ts`),
     the ink focus ring, `Button`, `Keycap`, `NebDot` (the mascot is gone), the copy test, the new
     violet on the desktop too, `/dev/ui` and `e2e/ui.spec.ts` (light and night screenshots).
     Details in decision U18.
+  - **U4, U2/U3, U5 built** (2026-10-28): the desk (`/desk`), the page (header, pencil case, neb's
+    lane, tabs, Contents drawer, ask pill, replay bar), Show-then-You's solution strip. Decision
+    U19.
+  - **U6 built** (2026-10-28, `feat/ui-u6-checks`): the check screen (board 5), "I don't know
+    yet", stayed (`stayed_at`, `notebook_stayed`, `GET /api/moments/stayed`, cover ribbons,
+    "stayed this week"). Decision U20.
+  - **The `stayed` migration (`20261111000000_stayed.sql`) is not applied to the hosted project
+    yet**: the owner runs it in the SQL editor. Until then answers work and nothing stays.
   - **Branches** (none pushed): `feat/ui-desk-overhaul` (the spec) → `feat/notebooks-k10` (K10) →
-    `feat/ui-u1-tokens` (U1).
-  - **Next: U2** (page anatomy: the neb lane, notes and connectors, the level switch, the margin
-    fold, the pencil case, chapter tabs, the Contents drawer, the ask pill) on `feat/ui-u2-page`.
+    `feat/ui-u1-tokens` → `feat/ui-u4-desk` → `feat/ui-u2-page` → `feat/ui-u5-show` →
+    `feat/ui-u6-checks`.
+  - **Next: U7** (overlays and keys: the frame, status capsule, island restyle, sketch card,
+    saved stamp; keytips, the shortcuts sheet, palette and picker, onboarding) on
+    `feat/ui-u7-overlays`.
   - **To verify by hand:** the night desk on a real page (ink, marks and PDFs), Text size at 130 %
     in the notebook (nothing overlaps the canvas), and a new notebook's colour choices.
 - **K10 left over:** the stroke-order run (`pnpm eval:handwriting --mode=k10,k10-order

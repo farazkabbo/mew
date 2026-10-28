@@ -29,6 +29,8 @@ export type DeskProps = {
   dueCounts: ReadonlyMap<string, number>;
   /** All checks due now, anywhere. */
   dueTotal: number;
+  /** What stayed per root notebook (§6.4): all of it, and this week's. */
+  stayed?: ReadonlyMap<string, { count: number; week: number }>;
   /** A course's exam within two weeks, if any (its reviews come first). */
   exam: { title: string; days: number } | null;
   /** How many pages each node has (its own). */
@@ -97,6 +99,8 @@ export function Desk(props: DeskProps) {
     const node = tree.get(nodeId);
     return node && nodeId !== unsortedId ? placeName(node) : "Unsorted";
   };
+
+  const stayedWeek = [...(props.stayed?.values() ?? [])].reduce((sum, s) => sum + s.week, 0);
 
   // Tonight (§5.1): at most 3 rows, in this order.
   const rows: TonightRow[] = [];
@@ -182,7 +186,7 @@ export function Desk(props: DeskProps) {
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-10 overflow-y-auto px-10 py-8 md:grid-cols-[310px_minmax(0,1fr)]">
         <aside className="flex flex-col gap-6">
-          <TonightCard rows={rows.slice(0, 3)} />
+          <TonightCard rows={rows.slice(0, 3)} stayedWeek={stayedWeek} />
           <UnsortedTray moments={unsortedMoments} onOpen={() => props.onOpen(unsortedId)} />
         </aside>
 
@@ -215,6 +219,7 @@ export function Desk(props: DeskProps) {
                         meta={`${chapters.length} ${chapters.length === 1 ? "chapter" : "chapters"} · ${pages} ${pages === 1 ? "page" : "pages"}`}
                         tabs={recentChapters.length}
                         due={dueCounts.get(root.id) ?? 0}
+                        stayed={props.stayed?.get(root.id)?.count ?? 0}
                         last={
                           latest.id === root.id
                             ? ago(root.updatedAt, now)

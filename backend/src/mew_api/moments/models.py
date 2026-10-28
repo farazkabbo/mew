@@ -69,6 +69,20 @@ class ChecksDue(_Camel):
     checks: list[CheckView]
 
 
+class StayedCount(_Camel):
+    """How many checks stayed in a notebook (NEB_APP_UI §6.4): all of them, and this week's.
+    `notebook_id` is the root notebook (Supabase's view) or the node a check is filed in (local
+    mode); the web app adds them up its tree either way."""
+
+    notebook_id: UUID
+    stayed_count: int = Field(ge=0)
+    stayed_week: int = Field(ge=0)
+
+
+class StayedCounts(_Camel):
+    notebooks: list[StayedCount] = Field(max_length=2000)
+
+
 class CheckWithKey(CheckView):
     """For the web server only, to grade an answer: never sent to the browser before it's
     answered."""
@@ -85,6 +99,9 @@ class CheckSchedule(_Camel):
     fsrs_state: dict[str, Any]
     due_at: datetime
     reps: int = Field(ge=0, le=100_000)
+    #: Answered right, alone, a day or more after it was saved (NEB_APP_UI §6.4): `stayed_at` is
+    #: set the first time and kept after that.
+    stayed: bool = False
 
 
 class SuggestionsRequest(_Camel):

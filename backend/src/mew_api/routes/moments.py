@@ -38,6 +38,8 @@ from ..moments.models import (
     FilingResponse,
     QuizCardsRequest,
     QuizCardsResponse,
+    StayedCount,
+    StayedCounts,
 )
 from ..moments.store import (
     CheckRow,
@@ -253,6 +255,19 @@ def checks_due(request: Request, caller: CurrentCaller, settings: SettingsDep) -
     return ChecksDue(checks=[_view(c) for c in checks])
 
 
+@router.get("/stayed")
+def stayed(request: Request, caller: CurrentCaller, settings: SettingsDep) -> StayedCounts:
+    """What stayed (NEB_APP_UI §6.4), for the desk's ribbons and "stayed this week"."""
+    store = owner_moments(request, caller, settings)
+    rows = _call(lambda: store.stayed_counts(caller.user_id, datetime.now(UTC)))
+    return StayedCounts(
+        notebooks=[
+            StayedCount(notebook_id=node, stayed_count=total, stayed_week=week)
+            for node, total, week in rows
+        ]
+    )
+
+
 @router.get("/checks/{check_id}")
 def get_check(
     check_id: UUID, request: Request, caller: CurrentCaller, settings: SettingsDep
@@ -274,7 +289,9 @@ def schedule_check(
 ) -> None:
     store = owner_moments(request, caller, settings)
     if not _call(
-        lambda: store.schedule(caller.user_id, check_id, body.fsrs_state, body.due_at, body.reps)
+        lambda: store.schedule(
+            caller.user_id, check_id, body.fsrs_state, body.due_at, body.reps, body.stayed
+        )
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
 

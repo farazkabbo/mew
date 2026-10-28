@@ -869,3 +869,32 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **`/dev/ui`** shows U1's components; `e2e/ui.spec.ts` screenshots each section in light and
       night (tolerance 30 pixels: a broken icon must fail) and checks focus, the desk colour and
       the Appearance and Text size settings across a reload.
+19. **U19. Built in U2–U5 (2026-10-28; `feat/ui-u4-desk`, `feat/ui-u2-page`, `feat/ui-u5-show`).**
+    - **Routes:** the desk is `/desk` (`NotebookApp start="desk"`); `/notebook` still opens the
+      latest page, so deep links and the e2e flows keep working.
+    - **The lane:** mark words leave the canvas (`planLiveMarkInk(..., words: "lane")`) and render
+      as DOM notes in `NebLane`; ticks and "?" stay page strokes and tap targets. The K1 tree is
+      the Contents drawer, open when this device's `localStorage["neb:contents"]` is `"1"`.
+    - **Alt + C** checks the work, or unfolds the margin when it's folded. The Notes Check panel
+      sits at the top right of the sheet, clear of the lane.
+    - **Show-then-You:** solution records keep `steps`, `finalAnswer` and `verifiedBy`, so the
+      strip shows the worked steps as text beside the taped your-turn card and folds at the
+      student's first stroke. Records from before U5 have no steps and show no strip.
+    - **Neb's pixel font** has ligatures off (`.neb-voice`): Pixelify draws "fi"/"ff" as a block.
+20. **U20. Built in U6 (2026-10-28, `feat/ui-u6-checks`).**
+    - **`QuickCheck.tsx` keeps its name and logic** (and its test ids); the layout is board 5's:
+      the moment on the left, blurred until an answer or a tap, the index card on the right with
+      progress bars, the serif question, `SpacingTimeline`, and the end line "N of N done · M
+      stayed today". `CheckScreen`/`CheckCard` weren't split out: one file is the screen.
+    - **"I don't know yet"** sends `dontKnow: true`: not graded (no model call), FSRS `again`, the
+      answer shown with "that's fine".
+    - **Stayed** is decided on the web server (`stayedFor` in `@mew/shared`: right, no peek, no
+      hint, ≥ 24 h after the check was made) and returned as `result.stayed`; the PATCH carries
+      `stayed: true` and FastAPI sets `stayed_at` only while it's null. Migration
+      `20261111000000_stayed.sql` adds the column, a check that it's at least a day after
+      `created_at`, a trigger that keeps the first time (a retry can't move or clear it), and the
+      `notebook_stayed` view per root notebook (`security_invoker`). Until it's applied, marking
+      and reading fail softly (logged) and nothing else changes.
+    - **`GET /api/moments/stayed`** feeds the cover ribbons (board 1's white notched ribbon) and
+      "stayed this week: N" on the Tonight card. Local mode counts per node; the web app adds both
+      up its tree (`stayedByNotebook`). "Physics stayed 34 → 35" on the check card is not built.

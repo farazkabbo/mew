@@ -9,7 +9,7 @@ const TAB_TINTS = ["var(--note)", "var(--paper-hi)", "color-mix(in srgb, var(--t
 /**
  * A notebook on the desk (docs/NEB_APP_UI.md §5.1): its colour with a binding shadow, an ivory
  * label plate (name, chapters and pages), up to 3 chapter tabs peeking out, a sticky note when
- * checks are due, and where it was last used under it. Tap opens where you left off; a PDF
+ * checks are due, a ribbon with how many stayed (§6.4), and where it was last used under it. Tap opens where you left off; a PDF
  * dropped on it is imported into it (K4).
  */
 export function DeskCover({
@@ -18,6 +18,7 @@ export function DeskCover({
   meta,
   tabs,
   due,
+  stayed = 0,
   last,
   onOpen,
   onDropPdf,
@@ -27,6 +28,8 @@ export function DeskCover({
   meta: string;
   tabs: number;
   due: number;
+  /** Checks that stayed in it (§6.4): the ribbon, hidden at 0. */
+  stayed?: number;
   last: string;
   onOpen(): void;
   onDropPdf?(file: File): void;
@@ -37,7 +40,7 @@ export function DeskCover({
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`${name}, ${meta}${due > 0 ? `, ${due} ${due === 1 ? "check" : "checks"} due` : ""}`}
+        aria-label={`${name}, ${meta}${stayed > 0 ? `, ${stayed} stayed` : ""}${due > 0 ? `, ${due} ${due === 1 ? "check" : "checks"} due` : ""}`}
         onDragOver={(event) => {
           if (!onDropPdf || !event.dataTransfer.types.includes("Files")) return;
           event.preventDefault();
@@ -68,6 +71,16 @@ export function DeskCover({
             {meta}
           </span>
         </span>
+        {stayed > 0 && (
+          <span
+            aria-hidden
+            data-testid="stayed-ribbon"
+            className="absolute -top-1 right-[18px] flex h-[74px] w-[26px] justify-center bg-[#FFFEFB] pt-2.5 text-[13px] font-semibold text-[#1E1D1A]"
+            style={{ clipPath: "polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%)" }}
+          >
+            {stayed}
+          </span>
+        )}
         {due > 0 && (
           <span
             aria-hidden

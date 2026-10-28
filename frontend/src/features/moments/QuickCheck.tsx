@@ -8,7 +8,6 @@ import {
 } from "@mew/shared";
 import {
   BookOpen,
-  Check,
   ExternalLink,
   Lightbulb,
   Loader2,
@@ -20,10 +19,13 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 
+import { buttonClass } from "@/components/ui/Button";
+
 import { Dialog } from "../notebook/tree/Dialog";
 import { clipImageUrl, momentsApi, MomentApiError } from "./api";
 import { type Moment, momentDay, openSourceLink } from "./moments";
 import { useMomentChecks } from "./store";
+import { SpacingTimeline, timelineDots } from "./SpacingTimeline";
 import { WritePad } from "./WritePad";
 
 type Props = {
@@ -53,7 +55,7 @@ export function QuickCheck(props: Props) {
       open={request !== null}
       onClose={close}
       label="Quick check"
-      className="fixed top-[10vh] mx-auto w-[min(34rem,calc(100vw-2rem))]"
+      className="fixed top-[5vh] mx-auto max-h-[90vh] w-[min(68rem,calc(100vw-2rem))] overflow-y-auto"
     >
       {request && <QuickCheckBody {...props} filter={request.filter} nodeIds={request.nodeIds} />}
     </Dialog>
@@ -95,7 +97,7 @@ function QuickCheckBody({
   const [reply, setReply] = useState("");
   const [peeked, setPeeked] = useState(false);
   const [hinted, setHinted] = useState(false);
-  const [score, setScore] = useState({ asked: 0, right: 0 });
+  const [score, setScore] = useState({ asked: 0, right: 0, stayed: 0 });
   const [writing, setWriting] = useState(false);
   // Said out loud (the notebook's voice hands it here while this is open): it's the answer.
   useEffect(
@@ -124,7 +126,7 @@ function QuickCheckBody({
       <Shell onClose={close} progress={null}>
         <p role="status" data-testid="quick-check-done" className="text-sm">
           {score.asked > 0
-            ? `Done: ${score.right} of ${score.asked} right. They'll come back when they're due again.`
+            ? `${score.asked} of ${score.asked} done · ${score.stayed} stayed today. They come back when they're due.`
             : filter?.since === "today"
               ? "Nothing you saved today has a check yet."
               : "Nothing to check right now. Save a moment from your screen and it'll come back here."}
@@ -138,14 +140,23 @@ function QuickCheckBody({
     );
   }
 
-  const submit = async (answer: string) => {
+  const submit = async (answer: string, dontKnow = false) => {
     const text = answer.trim();
     if (!text || phase.kind === "grading") return;
     setPhase({ kind: "grading" });
     try {
-      const result = await momentsApi.answer(check.id, { answer: text, peeked, hinted });
+      const result = await momentsApi.answer(check.id, {
+        answer: text,
+        peeked,
+        hinted,
+        ...(dontKnow && { dontKnow }),
+      });
       answered(check.id, result.nextDue);
-      setScore((s) => ({ asked: s.asked + 1, right: s.right + (result.correct ? 1 : 0) }));
+      setScore((s) => ({
+        asked: s.asked + 1,
+        right: s.right + (result.correct ? 1 : 0),
+        stayed: s.stayed + (result.stayed ? 1 : 0),
+      }));
       setPhase({ kind: "answered", result });
     } catch (error) {
       setPhase({
@@ -167,186 +178,272 @@ function QuickCheckBody({
   // A "quiz me on this" card (S6) has no saved moment: only the window it was about.
   const clips = [check.clipId, ...check.mergedClipIds].filter((id): id is string => id !== null);
 
+  const firstMoment = clips[0] ? findMoment?.(clips[0]) : undefined;
   return (
-    <Shell onClose={close} progress={`${index + 1} of ${picked.length}`}>
-      <p
-        id={`${ids}-q`}
-        data-testid="quick-check-question"
-        className="font-serif text-xl leading-snug"
-      >
-        {check.prompt}
-      </p>
-      {hinted && check.conceptHints.length > 0 && (
-        <p className="mt-2 text-sm">
-          <span className="text-muted">It&apos;s about: </span>
-          {check.conceptHints.join(", ")}
-        </p>
-      )}
-
-      {!result && check.kind === "mcq" && (
-        <div role="group" aria-labelledby={`${ids}-q`} className="mt-4 flex flex-col gap-2">
-          {check.choices.map((choice) => (
-            <button
-              key={choice}
-              type="button"
-              disabled={phase.kind === "grading"}
-              onClick={() => void submit(choice)}
-              className="rounded-xl border border-line px-4 py-2 text-left text-sm hover:border-ink disabled:opacity-60"
-            >
-              {choice}
-            </button>
-          ))}
-        </div>
-      )}
-      {!result && check.kind !== "mcq" && (
-        <form
-          className="mt-4 flex flex-col gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit(reply);
-          }}
-        >
-          <label htmlFor={`${ids}-answer`} className="text-xs font-medium text-muted">
-            Your answer
-          </label>
-          <textarea
-            id={`${ids}-answer`}
-            data-testid="quick-check-answer"
-            autoFocus
-            rows={check.kind === "work" ? 3 : 2}
-            maxLength={500}
-            value={reply}
-            onChange={(event) => setReply(event.target.value)}
-            onKeyDown={(event) => {
-              // Enter checks; Shift+Enter is a new line (for working).
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void submit(reply);
-              }
-            }}
-            className="w-full resize-y rounded-xl border border-line bg-paper px-3 py-2 text-sm outline-none focus:border-ink"
-          />
-          {writing && (
-            <WritePad
-              onRead={(text) =>
-                setReply((now) => (now.trim() ? `${now.trim()} ${text}` : text).slice(0, 500))
-              }
-            />
-          )}
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {onListen && (
-              <button type="button" onClick={onListen} className={SECONDARY}>
-                <Mic className="size-3.5" aria-hidden />
-                Say it
+    <Shell
+      onClose={close}
+      progress={`${index + 1} of ${picked.length}`}
+      at={index}
+      of={picked.length}
+    >
+      <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Left: the moment this check came from (§5.5), hidden until answered. */}
+        <section aria-label="The saved moment" className="flex min-w-0 flex-col gap-4">
+          <div className="text-xs font-semibold tracking-[0.08em] text-muted uppercase">
+            The moment this check came from
+          </div>
+          <div className="relative h-[270px] overflow-hidden rounded-[10px] bg-[#0F2430] shadow-sh-2">
+            {clips[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a private, signed-in image
+              <img
+                src={clipImageUrl(clips[0])}
+                alt=""
+                className={`h-full w-full object-cover transition-[filter] duration-[220ms] ${showMoment ? "" : "blur-xl"}`}
+              />
+            ) : (
+              <div className="grid h-full place-items-center px-6 text-center text-sm text-white/80">
+                {check.sourceTitle ? `From your screen: ${check.sourceTitle}` : "From your screen"}
+              </div>
+            )}
+            {!showMoment && clips.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setPeeked(true)}
+                className="absolute inset-0 grid place-items-center bg-ink/30 px-6 text-center text-[15px] font-medium text-white"
+              >
+                Try it first. Tap to see the moment.
               </button>
             )}
-            <button
-              type="button"
-              aria-pressed={writing}
-              onClick={() => setWriting((v) => !v)}
-              className={`${SECONDARY} aria-pressed:border-ink`}
+          </div>
+          {showMoment && firstMoment && (
+            <p className="font-serif text-[28px] leading-tight">“{firstMoment.question}”</p>
+          )}
+          {showMoment && clips.length === 0 && check.sourceTitle && (
+            <p data-testid="quick-check-source" className="text-xs text-muted">
+              From your screen: {check.sourceTitle}
+            </p>
+          )}
+          {showMoment && clips.length > 0 && (
+            <ul data-testid="quick-check-moments" className="flex flex-col gap-2">
+              {clips.slice(0, SHOWN_MOMENTS).map((clipId) => (
+                <MomentRow
+                  key={clipId}
+                  clipId={clipId}
+                  moment={findMoment?.(clipId)}
+                  fallbackAt={check.createdAt}
+                  now={now}
+                  {...(onOpenInNeb && {
+                    onOpenInNeb: (moment: Moment) => {
+                      close();
+                      onOpenInNeb(moment);
+                    },
+                  })}
+                  {...(inNeb && { inNeb })}
+                  onReplay={() => {
+                    if (!result) setPeeked(true);
+                    close();
+                    onReplay(clipId);
+                  }}
+                />
+              ))}
+              {clips.length > SHOWN_MOMENTS && (
+                <li className="text-xs text-muted">
+                  and {clips.length - SHOWN_MOMENTS} more moments about this
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+
+        {/* Right: the check on an index card (§5.5). */}
+        <article
+          className="flex min-w-0 flex-col rounded-[4px] px-6 pt-6 pb-5 shadow-sh-2"
+          style={{
+            backgroundColor: "var(--paper-hi)",
+            backgroundImage:
+              "linear-gradient(var(--paper-hi) 18px, var(--margin-red) 18px, var(--margin-red) 19px, transparent 19px), repeating-linear-gradient(transparent 0 33px, var(--rule) 33px 34px)",
+            backgroundPosition: "0 0, 0 19px",
+          }}
+        >
+          <p
+            id={`${ids}-q`}
+            data-testid="quick-check-question"
+            className="mt-3 font-serif text-[32px] leading-tight"
+          >
+            {check.prompt}
+          </p>
+          {hinted && check.conceptHints.length > 0 && (
+            <p className="mt-2 text-sm">
+              <span className="text-muted">It&apos;s about: </span>
+              {check.conceptHints.join(", ")}
+            </p>
+          )}
+
+          {!result && check.kind === "mcq" && (
+            <div role="group" aria-labelledby={`${ids}-q`} className="mt-4 flex flex-col gap-2">
+              {check.choices.map((choice) => (
+                <button
+                  key={choice}
+                  type="button"
+                  disabled={phase.kind === "grading"}
+                  onClick={() => void submit(choice)}
+                  className="rounded-[10px] border border-line bg-paper px-4 py-2 text-left text-sm hover:border-ink disabled:opacity-60"
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          )}
+          {!result && check.kind !== "mcq" && (
+            <form
+              className="mt-4 flex flex-col gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submit(reply);
+              }}
             >
-              <PenLine className="size-3.5" aria-hidden />
-              Write it
-            </button>
-            <button
-              type="submit"
-              disabled={!reply.trim() || phase.kind === "grading"}
-              className={PRIMARY}
-            >
-              Check
-            </button>
-            {phase.kind === "grading" && (
-              <span role="status" className="flex items-center gap-2 text-muted">
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-                Checking…
-              </span>
+              <label htmlFor={`${ids}-answer`} className="text-xs font-medium text-muted">
+                Your answer
+              </label>
+              <textarea
+                id={`${ids}-answer`}
+                data-testid="quick-check-answer"
+                autoFocus
+                rows={check.kind === "work" ? 3 : 2}
+                maxLength={500}
+                value={reply}
+                onChange={(event) => setReply(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter checks; Shift+Enter is a new line (for working).
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void submit(reply);
+                  }
+                }}
+                className="w-full resize-y rounded-[10px] border border-line bg-paper px-3 py-2 font-hand text-[22px] outline-none focus:border-ink"
+              />
+              {writing && (
+                <WritePad
+                  onRead={(text) =>
+                    setReply((now) => (now.trim() ? `${now.trim()} ${text}` : text).slice(0, 500))
+                  }
+                />
+              )}
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                {onListen && (
+                  <button type="button" onClick={onListen} className={SECONDARY}>
+                    <Mic className="size-3.5" aria-hidden />
+                    Say it
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-pressed={writing}
+                  onClick={() => setWriting((v) => !v)}
+                  className={`${SECONDARY} aria-pressed:border-ink`}
+                >
+                  <PenLine className="size-3.5" aria-hidden />
+                  Write it
+                </button>
+                <button
+                  type="submit"
+                  disabled={!reply.trim() || phase.kind === "grading"}
+                  className={buttonClass("neb", { dense: true })}
+                >
+                  Check
+                </button>
+                {phase.kind === "grading" && (
+                  <span role="status" className="flex items-center gap-2 text-muted">
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                    Checking…
+                  </span>
+                )}
+              </div>
+            </form>
+          )}
+
+          {phase.kind === "error" && (
+            <p role="alert" className="mt-3 text-sm text-muted">
+              {phase.text}
+            </p>
+          )}
+
+          {result && (
+            <div role="status" data-testid="quick-check-result" className="mt-4 text-sm">
+              <p className="flex items-start gap-2">
+                <span
+                  aria-hidden
+                  className={`neb-voice text-[30px] leading-none ${result.correct ? "" : "text-muted"}`}
+                >
+                  {result.correct ? "✓" : "○"}
+                </span>
+                <span className={result.correct ? "font-medium" : "text-muted"}>
+                  {result.feedback}
+                </span>
+              </p>
+              {result.stayed && (
+                <p className="neb-voice mt-2 text-[14px]">
+                  that one stayed. you saved it on{" "}
+                  {momentDay(Date.parse(check.createdAt), now).toLowerCase()}.
+                </p>
+              )}
+              <p className="mt-3 rounded-[10px] border border-line bg-paper p-2.5">
+                <span className="text-xs tracking-wide text-muted uppercase">Answer </span>
+                {result.answerKey}
+              </p>
+            </div>
+          )}
+
+          <div className="mt-6">
+            <SpacingTimeline
+              dots={timelineDots({
+                savedAt: Date.parse(check.createdAt),
+                now,
+                nextDue: result ? Date.parse(result.nextDue) : null,
+              })}
+            />
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center gap-2 text-sm">
+            {!result && check.conceptHints.length > 0 && !hinted && (
+              <button type="button" onClick={() => setHinted(true)} className={SECONDARY}>
+                <Lightbulb className="size-3.5" aria-hidden />
+                Hint
+              </button>
+            )}
+            {!result && !peeked && clips.length > 0 && (
+              <button type="button" onClick={() => setPeeked(true)} className={SECONDARY}>
+                Show the moment
+              </button>
+            )}
+            {!result && (
+              <button
+                type="button"
+                onClick={() => void submit("I don't know yet", true)}
+                disabled={phase.kind === "grading"}
+                className={buttonClass("quiet", { dense: true })}
+                title="That's fine: it comes back sooner."
+              >
+                I don&apos;t know yet
+              </button>
+            )}
+            <span className="flex-1" />
+            {result ? (
+              <button
+                type="button"
+                autoFocus
+                onClick={next}
+                className={buttonClass("neb", { dense: true })}
+              >
+                {index + 1 < picked.length ? "Next" : "Finish"}
+              </button>
+            ) : (
+              <button type="button" onClick={next} className="text-muted hover:text-ink">
+                Skip
+              </button>
             )}
           </div>
-        </form>
-      )}
-
-      {phase.kind === "error" && (
-        <p role="alert" className="mt-3 text-sm text-muted">
-          {phase.text}
-        </p>
-      )}
-
-      {result && (
-        <div role="status" data-testid="quick-check-result" className="mt-3 text-sm">
-          <p className={result.correct ? "font-medium text-neb-ink" : "font-medium text-muted"}>
-            {result.correct ? (
-              <Check className="mr-1 inline size-4" aria-hidden />
-            ) : (
-              <X className="mr-1 inline size-4" aria-hidden />
-            )}
-            {result.feedback}
-          </p>
-          <p className="mt-2 rounded-lg border border-line bg-paper p-2.5">
-            <span className="text-xs tracking-wide text-muted uppercase">Answer </span>
-            {result.answerKey}
-          </p>
-        </div>
-      )}
-
-      {showMoment && clips.length === 0 && check.sourceTitle && (
-        <p data-testid="quick-check-source" className="mt-4 text-xs text-muted">
-          From your screen: {check.sourceTitle}
-        </p>
-      )}
-      {showMoment && clips.length > 0 && (
-        <ul data-testid="quick-check-moments" className="mt-4 flex flex-col gap-2">
-          {clips.slice(0, SHOWN_MOMENTS).map((clipId) => (
-            <MomentRow
-              key={clipId}
-              clipId={clipId}
-              moment={findMoment?.(clipId)}
-              fallbackAt={check.createdAt}
-              now={now}
-              {...(onOpenInNeb && {
-                onOpenInNeb: (moment: Moment) => {
-                  close();
-                  onOpenInNeb(moment);
-                },
-              })}
-              {...(inNeb && { inNeb })}
-              onReplay={() => {
-                if (!result) setPeeked(true);
-                close();
-                onReplay(clipId);
-              }}
-            />
-          ))}
-          {clips.length > SHOWN_MOMENTS && (
-            <li className="text-xs text-muted">
-              and {clips.length - SHOWN_MOMENTS} more moments about this
-            </li>
-          )}
-        </ul>
-      )}
-
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-        {!result && check.conceptHints.length > 0 && !hinted && (
-          <button type="button" onClick={() => setHinted(true)} className={SECONDARY}>
-            <Lightbulb className="size-3.5" aria-hidden />
-            Hint
-          </button>
-        )}
-        {!result && !peeked && clips.length > 0 && (
-          <button type="button" onClick={() => setPeeked(true)} className={SECONDARY}>
-            Show the moment
-          </button>
-        )}
-        <span className="flex-1" />
-        {result ? (
-          <button type="button" autoFocus onClick={next} className={PRIMARY}>
-            {index + 1 < picked.length ? "Next" : "Finish"}
-          </button>
-        ) : (
-          <button type="button" onClick={next} className="text-muted hover:text-ink">
-            Skip
-          </button>
-        )}
+        </article>
       </div>
     </Shell>
   );
@@ -414,17 +511,27 @@ function MomentRow({
 function Shell({
   onClose,
   progress,
+  at = 0,
+  of = 0,
   children,
 }: {
   onClose(): void;
   progress: string | null;
+  /** Which check this is, of how many (the progress bars). */
+  at?: number;
+  of?: number;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col p-5" data-testid="quick-check">
-      <header className="mb-3 flex items-center gap-2 text-xs text-muted">
-        <Sparkles className="size-3.5 text-neb-ink" aria-hidden />
-        <span className="flex-1">Quick check{progress && ` · ${progress}`}</span>
+    <div className="flex flex-col bg-desk p-8" data-testid="quick-check">
+      <header className="mb-5 flex items-center gap-3 text-sm text-muted">
+        <Sparkles className="size-4 text-neb-ink" aria-hidden />
+        <span>Quick check{progress && ` · ${progress}`}</span>
+        <span aria-hidden className="flex flex-1 gap-1">
+          {Array.from({ length: of }, (_, i) => (
+            <span key={i} className={`h-1 w-8 rounded-full ${i <= at ? "bg-neb" : "bg-line"}`} />
+          ))}
+        </span>
         <button
           type="button"
           onClick={onClose}

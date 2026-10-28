@@ -13,6 +13,7 @@ import {
   momentsFrom,
   openSourceLink,
   sourceKind,
+  stayedByNotebook,
   subtreeIds,
 } from "./moments";
 
@@ -171,5 +172,19 @@ describe("checks due per chapter (K8 §4.7)", () => {
     expect(counts.get(KINEMATICS)).toBe(2);
     expect(counts.get(PHYSICS)).toBe(2);
     expect(counts.get(CHEMISTRY)).toBeUndefined();
+  });
+
+  it("adds up what stayed per notebook, from a notebook's count or its chapters' (U6)", () => {
+    const counts = stayedByNotebook(
+      [
+        { notebookId: PHYSICS, stayedCount: 3, stayedWeek: 1 },
+        { notebookId: KINEMATICS, stayedCount: 2, stayedWeek: 2 },
+        { notebookId: "99999999-9999-4999-8999-999999999999", stayedCount: 5, stayedWeek: 5 },
+      ],
+      tree,
+    );
+    expect(counts.get(PHYSICS)).toEqual({ count: 5, week: 3 });
+    expect(counts.get(KINEMATICS)).toBeUndefined();
+    expect(counts.size).toBe(1);
   });
 });

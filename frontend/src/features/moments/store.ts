@@ -1,4 +1,9 @@
-import { examSoon, type MomentCheckView, type SavedQuizFilter } from "@mew/shared";
+import {
+  examSoon,
+  type MomentCheckView,
+  type MomentStayed,
+  type SavedQuizFilter,
+} from "@mew/shared";
 import { create } from "zustand";
 
 import { coursesApi } from "../courses/api";
@@ -13,6 +18,8 @@ type MomentChecksState = {
   loadedAt: number;
   /** A course's exam within two weeks: its reviews come first, the Quick check stays short. */
   exam: ReturnType<typeof examSoon>;
+  /** What stayed per notebook (§6.4), or null before it's read (or if it can't be). */
+  stayed: MomentStayed["notebooks"] | null;
   /** The Quick check being taken, with what it was asked for ("…saved today"). */
   quickCheck: { filter: SavedQuizFilter | null; nodeIds: readonly string[] | null } | null;
   load(force?: boolean): Promise<void>;
@@ -34,16 +41,18 @@ export const useMomentChecks = create<MomentChecksState>()((set, get) => ({
   checks: null,
   loadedAt: 0,
   exam: null,
+  stayed: null,
   quickCheck: null,
   load: async (force = false) => {
     if (!force && Date.now() - get().loadedAt < FRESH_MS) return;
     set({ loadedAt: Date.now() });
     try {
-      const [{ checks }, courses] = await Promise.all([
+      const [{ checks }, courses, stayed] = await Promise.all([
         momentsApi.checks(),
         coursesApi.list().catch(() => []),
+        momentsApi.stayed().catch(() => null),
       ]);
-      set({ checks, exam: examSoon(courses, Date.now()) });
+      set({ checks, exam: examSoon(courses, Date.now()), stayed: stayed?.notebooks ?? null });
     } catch {
       // Offline or signed out: the badges just don't show; nothing else depends on them.
       set({ loadedAt: 0 });

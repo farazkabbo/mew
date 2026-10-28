@@ -1,4 +1,4 @@
-"""K8 filing and check planning (pure), and parity with the TypeScript side."""
+"""K8 filing and check planning (pure), parity with the TypeScript side, and U6 stayed."""
 
 import json
 from datetime import UTC, datetime, timedelta
@@ -7,6 +7,7 @@ from uuid import UUID
 
 import pytest
 
+from mew_api.clips.models import CheckQuestion
 from mew_api.moments.checks import NEW_PER_DAY, RecentCard, plan_new_check, room_today
 from mew_api.moments.filing import (
     Correction,
@@ -19,6 +20,7 @@ from mew_api.moments.filing import (
     unsorted_node_id,
 )
 from mew_api.moments.source import source_key
+from mew_api.moments.store import MemoryMomentStore
 
 SHARED = Path(__file__).resolve().parents[2] / "packages" / "shared" / "src"
 
@@ -200,3 +202,35 @@ def test_at_most_15_new_cards_a_day() -> None:
     assert plan_new_check(["x"], NOW, [], NEW_PER_DAY).action == "queued"
     assert room_today(NEW_PER_DAY + 3) == 0
     assert room_today(4) == NEW_PER_DAY - 4
+
+
+def test_a_check_stays_once_and_only_a_day_after_it_was_saved() -> None:
+    store = MemoryMomentStore(lambda _user: {}, lambda _user: {})
+    question = CheckQuestion(
+        kind="short",
+        prompt="Why?",
+        choices=[],
+        answer_key="Because.",
+        answer_latex=None,
+        problem_latex=None,
+    )
+    now = datetime.now(UTC)
+    old = store.add_check("u", UUID(int=1), None, question, ["a"], now - timedelta(days=2))
+    new = store.add_check("u", UUID(int=2), None, question, ["b"], now)
+    assert old is not None and new is not None
+    store.schedule("u", old, {}, now, 1, stayed=True)
+    first = store.get_check("u", old)
+    assert first is not None and first.stayed_at is not None
+    # A retry keeps the first time; a check saved today can't stay yet.
+    store.schedule("u", old, {}, now, 2, stayed=True)
+    again = store.get_check("u", old)
+    assert again is not None and again.stayed_at == first.stayed_at
+    store.schedule("u", new, {}, now, 1, stayed=True)
+    today = store.get_check("u", new)
+    assert today is not None and today.stayed_at is None
+    # Counted on the node it's filed in (the web app adds them up its tree).
+    filed = store.add_check("u", UUID(int=3), PHYSICS, question, ["c"], now - timedelta(days=9))
+    assert filed is not None
+    store.schedule("u", filed, {}, now, 1, stayed=True)
+    assert store.stayed_counts("u", now) == [(PHYSICS, 1, 1)]
+    assert store.stayed_counts("u", now + timedelta(days=8)) == [(PHYSICS, 1, 0)]

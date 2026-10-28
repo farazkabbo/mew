@@ -3,6 +3,7 @@ import {
   type MomentCheckAnswer,
   MomentCheckResult,
   MomentChecksDue,
+  MomentStayed,
   MomentSuggestions,
   TTS_SAMPLE_RATE,
 } from "@mew/shared";
@@ -46,6 +47,8 @@ export const momentsApi = {
   checks: () => call("/api/moments/checks", MomentChecksDue),
   answer: (id: string, answer: MomentCheckAnswer) =>
     call(`/api/moments/checks/${id}/answer`, MomentCheckResult, json("POST", answer)),
+  /** What stayed, per notebook (NEB_APP_UI §6.4). */
+  stayed: () => call("/api/moments/stayed", MomentStayed),
   /** "Quiz me on things I save" turned off, and "clear them" too. */
   clearChecks: () => call("/api/moments/checks", z.undefined(), { method: "DELETE" }),
   /** Unsorted's "File these": a place for each waiting moment. */

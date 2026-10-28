@@ -221,7 +221,7 @@ test("K8: a moment's Moments tab, Open source, Replay in its own voice and a Qui
     VIDEO,
   );
   await quick.getByRole("button", { name: "Finish" }).click();
-  await expect(quick.getByTestId("quick-check-done")).toContainText("1 of 1 right");
+  await expect(quick.getByTestId("quick-check-done")).toContainText("1 of 1 done");
   await quick.getByRole("button", { name: "Close", exact: true }).click();
 
   // "Quiz me on what I saved today" opens one (by voice: the debug panel stands in for Mew).

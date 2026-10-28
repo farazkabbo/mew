@@ -110,6 +110,43 @@ describe("answering a moment's check (K8 §4.7)", () => {
     expect(record).toHaveBeenCalledTimes(1);
   });
 
+  it("marks a check stayed when it's right, alone, a day after it was saved (U6)", async () => {
+    const result = await answerCheck(
+      base.id,
+      { answer: "3", peeked: false, hinted: false },
+      deps().deps,
+    );
+    expect(result.stayed).toBe(true); // saved the 25th at 10:00, answered the 26th at 12:00
+    const patch = calls.find((c) => c.options?.method === "PATCH");
+    expect(patch?.options?.body).toMatchObject({ stayed: true });
+
+    calls.length = 0;
+    check = { ...base, createdAt: "2026-10-26T09:00:00+00:00" };
+    const soon = await answerCheck(
+      base.id,
+      { answer: "3", peeked: false, hinted: false },
+      deps().deps,
+    );
+    expect(soon.stayed).toBe(false);
+    const quiet = calls.find((c) => c.options?.method === "PATCH");
+    expect(quiet?.options?.body).not.toHaveProperty("stayed");
+  });
+
+  it("“I don't know yet” isn't graded and brings the card back sooner (U6)", async () => {
+    const { deps: d, grade, checkMath } = deps();
+    const result = await answerCheck(
+      base.id,
+      { answer: "I don't know yet", peeked: false, hinted: false, dontKnow: true },
+      d,
+    );
+    expect(grade).not.toHaveBeenCalled();
+    expect(checkMath).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ correct: false, evidence: null, stayed: false });
+    expect(Date.parse(result.nextDue) - Date.parse("2026-10-26T12:00:00Z")).toBeLessThanOrEqual(
+      86_400_000,
+    );
+  });
+
   it("counts a peek as a hint, and a wrong answer brings the card back tomorrow", async () => {
     const peeked = await answerCheck(
       base.id,

@@ -144,6 +144,27 @@ export function dueByNode(
   return counts;
 }
 
+/**
+ * What stayed per root notebook (NEB_APP_UI §6.4): the server's counts are per notebook (or per
+ * node in local mode), added up to the notebook each one is in. Unknown nodes are left out.
+ */
+export function stayedByNotebook(
+  rows: readonly { notebookId: string; stayedCount: number; stayedWeek: number }[],
+  tree: NotebookTree<Notebook>,
+): Map<string, { count: number; week: number }> {
+  const counts = new Map<string, { count: number; week: number }>();
+  for (const row of rows) {
+    const notebook = tree.path(row.notebookId)[0];
+    if (!notebook) continue;
+    const was = counts.get(notebook.id) ?? { count: 0, week: 0 };
+    counts.set(notebook.id, {
+      count: was.count + row.stayedCount,
+      week: was.week + row.stayedWeek,
+    });
+  }
+  return counts;
+}
+
 /** "Tue", or "Tue 14 Oct" past a week: "From your moment on Tue". */
 export function momentDay(createdAt: number, now: number): string {
   const date = new Date(createdAt);

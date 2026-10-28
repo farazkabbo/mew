@@ -30,6 +30,7 @@ import { MomentMoves } from "../moments/outbox";
 import {
   circledWords,
   dueByNode,
+  stayedByNotebook,
   type Moment,
   momentsFrom,
   pdfFileName,
@@ -407,6 +408,8 @@ export function NotebookApp({
     [checks, now],
   );
   const exam = useMomentChecks((s) => s.exam);
+  const stayedRows = useMomentChecks((s) => s.stayed);
+  const stayed = useMemo(() => stayedByNotebook(stayedRows ?? [], tree), [stayedRows, tree]);
   const unsortedCount = useMemo(() => {
     const unsorted = unsortedNodeId(userId);
     return new Map([[unsorted, moments.filter((m) => m.nodeId === unsorted).length]]);
@@ -940,6 +943,7 @@ export function NotebookApp({
                       moments={moments}
                       dueCounts={dueCounts}
                       dueTotal={dueTotal}
+                      stayed={stayed}
                       exam={exam ? { title: exam.title, days: exam.daysLeft } : null}
                       loadCounts={loadCounts}
                       keys={{ jump: keys.shown("jump"), newNotebook: keys.shown("new_notebook") }}

@@ -189,6 +189,23 @@ export type MomentCheckView = z.infer<typeof MomentCheckView>;
 export const MomentChecksDue = z.object({ checks: z.array(MomentCheckView).max(200) });
 export type MomentChecksDue = z.infer<typeof MomentChecksDue>;
 
+/**
+ * `GET /api/moments/stayed` (NEB_APP_UI §6.4): what stayed, per notebook (local mode: per node;
+ * `stayedByNotebook` adds them up the tree either way).
+ */
+export const MomentStayed = z.object({
+  notebooks: z
+    .array(
+      z.object({
+        notebookId: z.uuid(),
+        stayedCount: z.number().int().min(0),
+        stayedWeek: z.number().int().min(0),
+      }),
+    )
+    .max(2000),
+});
+export type MomentStayed = z.infer<typeof MomentStayed>;
+
 /** `POST /api/moments/checks/[id]/answer`: the student's answer, and whether they had help. */
 export const MomentCheckAnswer = z.object({
   answer: z.string().trim().min(1).max(L.replyChars),
@@ -196,6 +213,8 @@ export const MomentCheckAnswer = z.object({
   peeked: z.boolean(),
   /** Asked for a hint. */
   hinted: z.boolean(),
+  /** "I don't know yet" (NEB_APP_UI §5.5): not graded, it comes back sooner. */
+  dontKnow: z.boolean().optional(),
 });
 export type MomentCheckAnswer = z.infer<typeof MomentCheckAnswer>;
 
@@ -207,6 +226,8 @@ export const MomentCheckResult = z.object({
   answerKey: z.string(),
   feedback: z.string().max(400),
   nextDue: z.iso.datetime({ offset: true }),
+  /** Right, alone, a day or more after it was saved (§6.4: "that one stayed"). */
+  stayed: z.boolean().default(false),
 });
 export type MomentCheckResult = z.infer<typeof MomentCheckResult>;
 
@@ -218,6 +239,25 @@ export function checkEvidence(answer: {
 }): Evidence | null {
   if (!answer.correct) return null; // logged as an attempt; the card comes back sooner
   return answer.peeked || answer.hinted ? "with_hint" : "independent";
+}
+
+/** A day: a check answered right alone at least this long after it was saved has stayed. */
+export const STAYED_AFTER_MS = 86_400_000;
+
+/** Whether an answer counts as "stayed" (NEB_APP_UI §6.4, decision U10). */
+export function stayedFor(answer: {
+  correct: boolean;
+  peeked: boolean;
+  hinted: boolean;
+  savedAt: number;
+  now: number;
+}): boolean {
+  return (
+    answer.correct &&
+    !answer.peeked &&
+    !answer.hinted &&
+    answer.now - answer.savedAt >= STAYED_AFTER_MS
+  );
 }
 
 /**
