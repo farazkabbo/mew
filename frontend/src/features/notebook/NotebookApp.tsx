@@ -26,6 +26,7 @@ import {
   useMascotState,
   useMewSession,
 } from "../mew/useMewSession";
+import { momentsApi } from "../moments/api";
 import { MomentMoves } from "../moments/outbox";
 import {
   circledWords,
@@ -79,6 +80,7 @@ import { pullTree } from "./tree-api";
 import { useShortcuts } from "./useShortcuts";
 import { DestinationPicker } from "./tree/DestinationPicker";
 import { NodeHome } from "./tree/NodeHome";
+import type { PaletteCommand } from "./tree/JumpPalette";
 import { TreeDialogs } from "./tree/TreeDialogs";
 import { TreeNav } from "./tree/TreeNav";
 import { type TreeNoticeView, useTreeActions } from "./tree/useTreeActions";
@@ -463,6 +465,33 @@ export function NotebookApp({
     [repo, reloadMoments, loadChecks, momentMoves],
   );
   const [choosingFor, setChoosingFor] = useState<Moment | null>(null);
+  // Where filing would put the moment being placed, and why (§5.8: "suggested: matched …").
+  const [filingSuggestion, setFilingSuggestion] = useState<{ id: string; why: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!choosingFor) return;
+    let live = true;
+    void momentsApi
+      .suggestions([choosingFor.imageId])
+      .then(({ suggestions }) => {
+        const best = suggestions.find((s) => s.nodeId);
+        if (!live || !best?.nodeId) return;
+        setFilingSuggestion({
+          id: best.nodeId,
+          why: best.matched
+            ? `matched “${best.matched}”`
+            : best.method === "source_memory"
+              ? "where its source went"
+              : "what it's about",
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+      setFilingSuggestion(null);
+    };
+  }, [choosingFor]);
   /** K8 §4.7: a moment from a PDF that's imported here opens on its page in neb. */
   const inNeb = useCallback(
     (moment: Moment) => {
@@ -537,14 +566,15 @@ export function NotebookApp({
     (...args) => voice.current?.(...args),
     [],
   );
-  const mew = useMewSession(engine, courseId, onNotebookVoice, quizSaved);
+  // "Two keys, max" (NEB_APP_UI §5.6): Shift+?, the ask pill's "?", or "what can I say?".
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const showShortcuts = () => setShortcutsOpen(true);
+  const mew = useMewSession(engine, courseId, onNotebookVoice, quizSaved, showShortcuts);
   const solutionRecords = useMemo(() => new SolutionRecords(db), [db]);
   useEffect(() => {
     mew.setSolutionRecords(solutionRecords);
     return () => mew.setSolutionRecords(null);
   }, [mew, solutionRecords]);
-  // "Two keys, max" (NEB_APP_UI §5.6): Shift+? or the ask pill's "?".
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   useShortcuts(
     {
       ...actions,
@@ -840,6 +870,66 @@ export function NotebookApp({
     keys.platform,
     keys.own,
   );
+
+  const paletteCommands: PaletteCommand[] = [
+    {
+      id: "check",
+      label: "Check my work",
+      keys: keys.shown("check_work"),
+      say: "or say “check this”",
+      run: () => mew.checkWork(),
+    },
+    {
+      id: "new-notebook",
+      label: "New notebook",
+      keys: keys.shown("new_notebook"),
+      say: "or say “new notebook called chemistry”",
+      run: treeActions.startCreating,
+    },
+    ...(rootId
+      ? [
+          {
+            id: "new-chapter",
+            label: "New chapter here",
+            keys: keys.shown("new_chapter"),
+            say: "or say “add a chapter called optics”",
+            run: () => void treeActions.addChild(rootId),
+          },
+        ]
+      : []),
+    ...(notebookId
+      ? [
+          {
+            id: "new-page",
+            label: "New page here",
+            keys: keys.shown("new_page"),
+            say: "or say “new page”",
+            run: () => void treeActions.addPage(notebookId),
+          },
+        ]
+      : []),
+    {
+      id: "import-pdf",
+      label: "Bring in a PDF",
+      keys: keys.shown("import_pdf"),
+      say: "or drop it on a notebook",
+      run: () => setImporting({ nodeId: notebookId, file: null }),
+    },
+    {
+      id: "desk",
+      label: "Go to the desk",
+      keys: "",
+      say: "or say “open my desk”",
+      run: openDesk,
+    },
+    {
+      id: "shortcuts",
+      label: "Every shortcut and what to say",
+      keys: "Shift+?",
+      say: "or say “what can I say?”",
+      run: showShortcuts,
+    },
+  ];
 
   const exportLine = async () => {
     if (!engine) return;
@@ -1220,6 +1310,10 @@ export function NotebookApp({
       <DestinationPicker
         open={choosingFor !== null}
         title="File this moment in…"
+        suggestion={filingSuggestion}
+        onCreate={async (parentId, title) =>
+          (await repo.tree.addChild(parentId, title))?.id ?? null
+        }
         tree={tree}
         topLevel={false}
         refuse={(destination) =>
@@ -1259,6 +1353,7 @@ export function NotebookApp({
         now={now}
         openNode={openNode}
         openPage={openPage}
+        commands={paletteCommands}
       />
       {app.showIntro && (
         <Onboarding

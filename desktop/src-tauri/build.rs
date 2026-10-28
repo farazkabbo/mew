@@ -15,6 +15,7 @@ fn main() {
         "screen_coach_link_finish",
         "screen_coach_disconnect",
         "screen_coach_ask",
+        "screen_coach_onboarding",
         "screen_ink_drawn",
         "screen_ink_pill",
         "screen_clip_ready",

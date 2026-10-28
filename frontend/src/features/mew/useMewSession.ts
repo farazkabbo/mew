@@ -8,6 +8,7 @@ import {
   type MewInput,
   type LiveMarkKind,
   type SavedQuizFilter,
+  asksWhatToSay,
   savedQuizRequest,
   TUTOR_LIMITS,
 } from "@mew/shared";
@@ -546,8 +547,14 @@ export function useMewSession(
   courseId: string | null = null,
   onNotebookVoice: NotebookVoiceHandler | null = null,
   onQuizSaved: ((filter: SavedQuizFilter) => void) | null = null,
+  /** "What can I say?" (U9): the shortcuts sheet opens; the words go nowhere else. */
+  onWhatToSay: (() => void) | null = null,
 ) {
   const [pipeline] = useState(createPipeline);
+  const whatToSay = useRef(onWhatToSay);
+  useEffect(() => {
+    whatToSay.current = onWhatToSay;
+  }, [onWhatToSay]);
   useEffect(() => {
     pipeline.setNotebookVoice(onNotebookVoice);
   }, [pipeline, onNotebookVoice]);
@@ -588,6 +595,7 @@ export function useMewSession(
         if (tutor.isEcho(text)) return;
         // K8: a Quick check is open: what's said is its answer.
         if (useMomentChecks.getState().quickCheck) useMomentChecks.getState().hear(text);
+        else if (whatToSay.current && asksWhatToSay(text)) whatToSay.current();
         else mew.utterance(text);
       },
       onSpeech: (partial) => {
@@ -610,6 +618,7 @@ export function useMewSession(
       tutor.unlockAudio();
       useVoice.getState().commit(text);
       if (useMomentChecks.getState().quickCheck) useMomentChecks.getState().hear(text);
+      else if (whatToSay.current && asksWhatToSay(text)) whatToSay.current();
       else mew.utterance(text);
     },
     [mew, tutor],

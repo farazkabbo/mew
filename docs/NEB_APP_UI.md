@@ -942,3 +942,20 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **The pointer line:** when the card shows beside the marks, the draw overlay draws a 3 px
       violet line from the card's nearest edge into the marks' box (`pointer_line`); it goes
       when the card does. It's set when the card is placed (the card doesn't move after).
+23. **U23. Built in U9 (2026-10-28, `feat/ui-u9-keys-and-voice`): what U7 left in the app.**
+    - **Ctrl + K, "> ":** the palette lists commands (check my work, new notebook, new chapter and
+      page here, bring in a PDF, the desk, every shortcut) with their keys and what to say,
+      narrowed by what's typed after ">". The commands that need a place show only when there
+      is one.
+    - **The destination picker** shows neb's suggestion first with why ("suggested: matched
+      “vectors”", from filing's suggestions when a moment is filed by hand), and "+ New chapter
+      here" (or section) on a row's hover or focus: named inline, made with `addChild`, and
+      picked. Sections hold nothing, so their rows don't offer it.
+    - **"What can I say?"** (and "what can you do?", "show me the shortcuts") is matched on the
+      device (`asksWhatToSay` in `@mew/shared`) before the classifier: the sheet opens and the
+      words go nowhere else. The trained labels are unchanged.
+    - **Onboarding's "Try it"** (desktop app only): a sample slide with an arrow and "double tap
+      Ctrl Alt, pick Select, and circle the arrow". It asks the desktop app through a new
+      command, `screen_coach_onboarding`, which answers only whether Screen Coach is on and,
+      when asked, opens its local settings page; the student turns it on there, with its consent.
+      The web app still can't change a Screen Coach setting (decision 1).

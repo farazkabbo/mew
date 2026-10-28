@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ariaKeyshortcuts,
+  asksWhatToSay,
   bindingsFor,
   checkBinding,
   defaultBindings,
@@ -169,4 +170,19 @@ describe("Neb's shortcuts are two keys at most (K2)", () => {
     expect(ariaKeyshortcuts("Ctrl+K")).toBe("Control+K");
     expect(ariaKeyshortcuts("Alt+B")).toBe("Alt+B");
   });
+});
+
+describe("“what can I say?” opens the shortcuts sheet (U9)", () => {
+  it.each([
+    "What can I say?",
+    "neb, what can I say",
+    "Hey Neb what can you do?",
+    "show me the shortcuts",
+  ])("%s", (said) => expect(asksWhatToSay(said)).toBe(true));
+  it.each([
+    "what can I say about this graph?",
+    "I don't know what to say",
+    "what can you do with a vector",
+    "show me the answer",
+  ])("not %s", (said) => expect(asksWhatToSay(said)).toBe(false));
 });

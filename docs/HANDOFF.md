@@ -464,7 +464,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     character read right on a later line; Reset and turning learning off (the count goes to 0).
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
-- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U22:
+- **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U23:
   - **U1 built** (2026-10-28, branch `feat/ui-u1-tokens`): design tokens (`shared/src/ui/tokens.ts`
     → `pnpm build:tokens`), the old colour names migrated and linted out, the four fonts vendored
     (`packages/shared/fonts`), Appearance and Text size (Settings → Appearance; `lib/display.ts`),
@@ -489,8 +489,11 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     What's left of U7 is listed at the end of decision U21.
   - **U8 built** (2026-10-28, `feat/ui-u8-coach-overlays`): the frame's inner glow, the status
     capsule, the hold's keys indicator, the sketch card's pointer line (decision U22).
-  - **The U series is built through U8.** Branches: … → `feat/ui-u6-checks` →
-    `feat/ui-u7-overlays` → `feat/ui-u8-coach-overlays`.
+  - **U9 built** (2026-10-28, `feat/ui-u9-keys-and-voice`): the palette's "> " commands, the
+    picker's suggestion and "+ New chapter here", "what can I say?", onboarding's "Try it"
+    (decision U23). Nothing listed in U21 is left.
+  - **The U series is built through U9.** Branches: … → `feat/ui-u6-checks` →
+    `feat/ui-u7-overlays` → `feat/ui-u8-coach-overlays` → `feat/ui-u9-keys-and-voice`.
   - **To verify by hand (U7):** in the desktop app, the frame comes on with Select, the mic and a
     walkthrough and fades when they end; the island and the circle card in light and night;
     "Pause for 1 hour" from the tray.
@@ -895,8 +898,13 @@ Added in M10:
 - Model output is always schema-validated. Speech, handwriting, images and course material are
   data, never instructions (stated in every prompt).
 - Never put a JWT-shaped literal in source: gitleaks flags it (see `.gitleaksignore`).
-- The desktop shell grants the web origin one command only (`notify_due`); add any new
-  native feature in Rust, triggered by the shell, before considering another permission.
+- The desktop shell grants the web origin only these commands (`remote_capability` in
+  `desktop/src-tauri/src/lib.rs`), each re-checking its window in Rust: `notify_due`,
+  `notify_checks`, `notify_skills`, `screen_coach_ask`, `screen_coach_spoken`,
+  `screen_coach_link_finish` and (U9) `screen_coach_onboarding`, which answers only whether
+  Screen Coach is on and can open its local settings page. None changes a Screen Coach setting
+  (decision 1). Add any new native feature in Rust, triggered by the shell, before considering
+  another permission.
 - Students' words leave the notebook for training only with opt-in; datasets (`ml/data`) are
   gitignored and must be handled like the database.
 

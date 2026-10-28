@@ -34,3 +34,36 @@ test("holding Alt shows the keys, and Shift+? opens the sheet", async ({ page })
   await sheet.getByRole("button", { name: "Close" }).click();
   await expect(sheet).toBeHidden();
 });
+
+test("“> ” in Ctrl+K lists the commands, and “what can I say?” opens the sheet (U9)", async ({
+  page,
+}) => {
+  await page.route("**/api/stt/token", (route) => route.abort());
+  await page.goto("/notebook");
+  await expect(page.getByTestId("pencil-case")).toBeVisible();
+
+  await page.keyboard.press("Control+KeyK");
+  await page.keyboard.type(">");
+  const palette = page.getByRole("dialog", { name: "Jump to" });
+  await expect(palette.getByRole("option", { name: /New page here/ })).toBeVisible();
+  await page.keyboard.type("every");
+  await expect(palette.getByRole("option")).toHaveCount(1);
+  await page.keyboard.press("Enter");
+  const sheet = page.getByTestId("shortcuts-sheet");
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+
+  // Said (typed into the debug panel's simulated speech): the sheet, and nothing asked of neb.
+  let asked = 0;
+  await page.route("**/api/mew", (route) => {
+    asked += 1;
+    return route.fulfill({ json: { output: { label: "ignore", confidence: 1, reason: "" } } });
+  });
+  await page.getByRole("button", { name: "Debug panel" }).click();
+  const input = page.getByRole("textbox", { name: "Simulated utterance" });
+  await input.fill("Neb, what can I say?");
+  await input.press("Enter");
+  await expect(sheet).toBeVisible();
+  expect(asked).toBe(0);
+});

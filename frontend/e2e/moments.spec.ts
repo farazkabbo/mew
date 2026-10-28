@@ -232,9 +232,8 @@ test("K8: a moment's Moments tab, Open source, Replay in its own voice and a Qui
   await expect(page.getByTestId("quick-check")).toBeVisible({ timeout: 10_000 });
 });
 
-test("K8: a moment waiting in Unsorted is filed with File these, and the server follows", async ({
-  page,
-}) => {
+/** A moment saved to Unsorted (with filing's suggestion mocked), Unsorted's home open. */
+async function waitingInUnsorted(page: Page) {
   await quietServices(page);
   await page.goto("/notebook");
   await expect(page.getByTestId("notebook-canvas")).toBeVisible();
@@ -282,6 +281,13 @@ test("K8: a moment waiting in Unsorted is filed with File these, and the server 
   await expect(row.getByTestId("tree-row-count")).toHaveText("1");
 
   await row.click();
+  return { notebook, row, moves };
+}
+
+test("K8: a moment waiting in Unsorted is filed with File these, and the server follows", async ({
+  page,
+}) => {
+  const { notebook, row, moves } = await waitingInUnsorted(page);
   const tidy = page.getByTestId("file-these");
   await expect(tidy.getByTestId("file-these-row")).toContainText(
     `${notebook.title} · matched “projectile motion”`,
@@ -296,4 +302,25 @@ test("K8: a moment waiting in Unsorted is filed with File these, and the server 
   await page.getByTestId("breadcrumb").getByRole("button", { name: notebook.title }).click();
   await page.getByRole("tab", { name: /Moments/ }).click();
   await expect(page.getByTestId("moment-row")).toContainText("Why is this curved?");
+});
+
+test("U9: the picker suggests a place and why, and makes a chapter to file it in", async ({
+  page,
+}) => {
+  const { notebook, moves } = await waitingInUnsorted(page);
+  await page.getByTestId("file-these").getByRole("button", { name: "Choose…" }).click();
+  const picker = page.getByRole("dialog", { name: "File this moment in…" });
+  await expect(picker.getByTestId("picker-suggestion")).toContainText(
+    "suggested: matched “projectile motion”",
+  );
+  // "+ New chapter here" on the notebook's row: named, made, and the moment filed in it.
+  await picker.getByRole("button", { name: notebook.title, exact: true }).hover();
+  await picker.getByRole("button", { name: "New chapter here" }).click();
+  await picker.getByRole("textbox", { name: "Name the new chapter" }).fill("Projectile motion");
+  await picker.getByRole("button", { name: "Make it" }).click();
+  await expect(picker).toBeHidden();
+  await expect.poll(() => moves.length).toBe(1);
+  const chapter = (await notebookIds(page)).find((n) => n.title === "Projectile motion");
+  expect(chapter).toBeDefined();
+  expect(moves[0]).toEqual({ nodeId: chapter?.id });
 });

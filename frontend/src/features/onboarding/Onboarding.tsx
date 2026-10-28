@@ -4,19 +4,26 @@ import type { MarkLevel } from "@mew/shared";
 import { useEffect, useRef, useState } from "react";
 
 import { buttonClass } from "@/components/ui/Button";
+import { Keys } from "@/components/ui/Keycap";
 import { NebDot } from "@/components/ui/NebDot";
 
 import { useMarkPrefs } from "../annotate/prefs";
+import { isDesktop, screenCoachForOnboarding } from "../desktop/bridge";
 import { Calibration } from "../handwriting/Calibration";
 import { saveWritingHand, type WritingHand } from "../page/PencilCase";
 
-type Step = "hand" | "handwriting" | "level" | "listen";
-const STEPS: readonly Step[] = ["hand", "handwriting", "level", "listen"];
+type Step = "hand" | "handwriting" | "level" | "try" | "listen";
+/** "Try it" is the desktop app's only (§5.10 step 5): Screen Coach is there. */
+const stepsFor = (desktop: boolean): readonly Step[] =>
+  desktop
+    ? ["hand", "handwriting", "level", "try", "listen"]
+    : ["hand", "handwriting", "level", "listen"];
 
 const TITLES: Record<Step, string> = {
   hand: "Which hand do you write with?",
   handwriting: "Teach neb your handwriting",
   level: "How much should neb mark?",
+  try: "Try it on your screen",
   listen: "Talk while you study",
 };
 
@@ -43,8 +50,9 @@ export function Onboarding({
   onHand?(hand: WritingHand): void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [steps] = useState(() => stepsFor(isDesktop()));
   const [index, setIndex] = useState(0);
-  const step = STEPS[index] ?? "listen";
+  const step = steps[index] ?? "listen";
   const level = useMarkPrefs((s) => s.defaultLevel);
   const setLevel = useMarkPrefs((s) => s.setDefaultLevel);
 
@@ -54,7 +62,7 @@ export function Onboarding({
     return () => element?.close();
   }, []);
 
-  const next = () => setIndex((i) => Math.min(i + 1, STEPS.length - 1));
+  const next = () => setIndex((i) => Math.min(i + 1, steps.length - 1));
   const finish = (listen: boolean) => {
     dialog.current?.close();
     if (listen) onStartListening();
@@ -81,7 +89,7 @@ export function Onboarding({
         <header className="flex items-center gap-3">
           <NebDot state="watching" size={26} />
           <span className="flex flex-1 gap-1" aria-hidden>
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <span
                 key={s}
                 className={`h-1 w-8 rounded-full ${i <= index ? "bg-neb" : "bg-line"}`}
@@ -89,7 +97,7 @@ export function Onboarding({
             ))}
           </span>
           <span className="text-xs text-muted" aria-live="polite">
-            {index + 1} of {STEPS.length}
+            {index + 1} of {steps.length}
           </span>
         </header>
         <h2 id="onboarding-title" className="font-serif text-[40px] leading-tight">
@@ -153,6 +161,8 @@ export function Onboarding({
           </div>
         )}
 
+        {step === "try" && <TryIt />}
+
         {step === "listen" && (
           <p className="leading-relaxed text-muted">
             neb listens and stays quiet until you need it. Ask a question, say “is this right?”, or
@@ -178,7 +188,7 @@ export function Onboarding({
                 Back
               </button>
             )}
-            {step === "level" && (
+            {(step === "level" || step === "try") && (
               <button
                 type="button"
                 autoFocus
@@ -202,5 +212,78 @@ export function Onboarding({
         </footer>
       </div>
     </dialog>
+  );
+}
+
+/**
+ * §5.10 step 5, in the desktop app: a sample slide here in neb's window to circle with Screen
+ * Coach's island, whose first circle gets a real answer. With Screen Coach off, it offers its
+ * settings page (where it's turned on, with its consent), or the step is skipped.
+ */
+function TryIt() {
+  const [on, setOn] = useState<boolean | null>(null);
+  const check = (openSettings: boolean) =>
+    void screenCoachForOnboarding(openSettings).then((value) => setOn(value ?? false));
+  useEffect(() => {
+    check(false);
+  }, []);
+  if (on === null) return <p className="text-muted">Asking Screen Coach…</p>;
+  if (!on) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="leading-relaxed text-muted">
+          Screen Coach is off. Turn it on and neb can look at anything you circle on your screen: a
+          slide, a PDF, a video. Its settings say exactly what it sees.
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => check(true)}
+            className={buttonClass("ghost", { dense: true })}
+          >
+            Turn on Screen Coach
+          </button>
+          <button
+            type="button"
+            onClick={() => check(false)}
+            className={buttonClass("quiet", { dense: true })}
+          >
+            Check again
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      <figure
+        data-testid="try-slide"
+        className="rounded-[10px] bg-paper-hi p-5 shadow-sh-1"
+        aria-label="A sample slide: velocity against time, with an arrow at the steepest part"
+      >
+        <p className="font-serif text-[22px]">Lecture 4 · Acceleration</p>
+        <svg viewBox="0 0 320 140" className="mt-2 w-full" aria-hidden>
+          <path d="M20 120 H300 M20 120 V10" stroke="var(--ink)" strokeWidth="2" fill="none" />
+          <path
+            d="M20 115 C90 110 130 40 200 30 S280 25 300 24"
+            stroke="var(--ok-pen)"
+            strokeWidth="3"
+            fill="none"
+          />
+          <path d="M150 105 L132 62" stroke="var(--red-pen)" strokeWidth="3" fill="none" />
+          <path d="M126 70 L132 58 L140 69" stroke="var(--red-pen)" strokeWidth="3" fill="none" />
+          <text x="300" y="136" fontSize="11" textAnchor="end" fill="var(--muted)">
+            time
+          </text>
+          <text x="26" y="14" fontSize="11" fill="var(--muted)">
+            velocity
+          </text>
+        </svg>
+      </figure>
+      <p className="leading-relaxed text-muted">
+        Double tap <Keys keys={["Ctrl", "Alt"]} size="sm" />, pick Select, and circle the arrow. neb
+        answers beside it.
+      </p>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { MomentChecksDue, ReviewQueue, SkillsView } from "@mew/shared";
  * - `notify_due`: show a review reminder;
  * - `notify_checks`: saved moments' checks are due (K8; only when the student turned it on);
  * - `notify_skills`: coach-mode skills are due for a re-check on the computer (S5);
+ * - `screen_coach_onboarding`: whether Screen Coach is on, and its settings page opened (U9);
  * - `screen_coach_ask`: ask Screen Coach about the frame the desktop app captured on the hotkey
  *   (the page sends only the words; it never sees the screenshot);
  * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code;
@@ -85,6 +86,21 @@ export async function remindAboutSkills(
 /** Asks Screen Coach about the captured screen. The answer arrives as `mew:screen-*` events. */
 export async function askAboutScreen(transcript: string): Promise<void> {
   await invoke("screen_coach_ask", { transcript });
+}
+
+/**
+ * Onboarding's "Try it" (NEB_APP_UI §5.10): whether Screen Coach is on, and (`openSettings`) its
+ * local settings page opened so the student can turn it on there. Null outside the desktop app
+ * or if it can't say.
+ */
+export async function screenCoachForOnboarding(openSettings: boolean): Promise<boolean | null> {
+  if (!isDesktop()) return null;
+  try {
+    const on = await invoke("screen_coach_onboarding", { openSettings });
+    return typeof on === "boolean" ? on : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Tells the desktop app the line with `token` has been said (or couldn't be). */

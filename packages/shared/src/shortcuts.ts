@@ -362,6 +362,22 @@ export function formatBinding(binding: string): string {
   return parsed.modifier ? `${parsed.modifier}+${key}` : key;
 }
 
+/**
+ * "What can I say?" (NEB_APP_UI §5.6): the shortcuts sheet, with the phrases to say instead.
+ * Decided here, before the classifier, as a fixed question about neb itself.
+ */
+export function asksWhatToSay(utterance: string): boolean {
+  const text = utterance
+    .toLowerCase()
+    .replace(/[^a-z' ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:hey |ok |okay )?(?:neb|mew)\b ?/, "");
+  return /^(?:so )?(?:what (?:can|do) i say|what can (?:i|you) do|what are (?:the|your) (?:shortcuts|commands)|show (?:me )?(?:the )?(?:shortcuts|commands|keys))(?: here| to you| now)?$/.test(
+    text,
+  );
+}
+
 /** The ARIA `aria-keyshortcuts` value for a binding ("Alt+B", "Control+K"). */
 export function ariaKeyshortcuts(binding: string): string {
   const parsed = parseBinding(binding);

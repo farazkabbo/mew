@@ -397,6 +397,23 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     )
 }
 
+/// Onboarding's "Try it" step (NEB_APP_UI §5.10, U9), from the web app's own window only: whether
+/// Screen Coach is on (yes or no, nothing else), and, when asked, the local settings page opened
+/// so the student can turn it on there. It changes no setting itself (decision 1).
+#[tauri::command]
+pub fn screen_coach_onboarding<R: Runtime>(
+    window: WebviewWindow<R>,
+    open_settings: bool,
+) -> Result<bool, String> {
+    let app = window.app_handle();
+    let coach = coach_of(app)?;
+    super::page::require_app_page(&window, coach.app_url())?;
+    if open_settings {
+        self::open_settings(app);
+    }
+    Ok(usable(&coach))
+}
+
 /// Opens (or brings forward) the local settings page.
 pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {

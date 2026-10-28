@@ -4,6 +4,8 @@ import type { Notebook, NotebookTree, Page } from "@mew/shared";
 import { FileText, Search, Sparkles } from "lucide-react";
 import { Fragment, useId, useMemo, useState } from "react";
 
+import { Keys } from "@/components/ui/Keycap";
+
 import { clipImageUrl } from "../../moments/api";
 import type { Moment } from "../../moments/moments";
 import { Dialog } from "./Dialog";
@@ -14,10 +16,14 @@ import { nodeNoun } from "./tree-labels";
 const MAX_RESULTS = 12;
 
 /** NEB_APP_UI §5.8: results come in these groups, in this order. */
-const GROUPS = ["Notebooks", "Chapters", "Pages", "Moments"] as const;
+const GROUPS = ["Commands", "Notebooks", "Chapters", "Pages", "Moments"] as const;
+
+/** A command typed after "> " (§5.8): what it does, its keys, and what to say instead. */
+export type PaletteCommand = { id: string; label: string; keys: string; say: string; run(): void };
 type Group = (typeof GROUPS)[number];
 
 type Item =
+  | { kind: "command"; id: string; label: string; detail: string; command: PaletteCommand }
   | { kind: "node"; id: string; label: string; detail: string; node: Notebook; root: boolean }
   | { kind: "page"; id: string; label: string; detail: string; nodeId: string }
   | { kind: "moment"; id: string; label: string; detail: string; moment: Moment };
@@ -31,6 +37,8 @@ type Props = {
   onOpenPage(page: Page): void;
   /** K8: saved moments, found by their question and where they came from. */
   moments?: readonly Moment[];
+  /** "> " lists these (U9). */
+  commands?: readonly PaletteCommand[];
   onOpenMoment?(moment: Moment): void;
   onClose(): void;
 };
@@ -56,6 +64,7 @@ function PaletteBody({
   tree,
   pages,
   moments = [],
+  commands = [],
   onOpenNode,
   onOpenPage,
   onOpenMoment,
@@ -66,6 +75,21 @@ function PaletteBody({
   const [active, setActive] = useState(0);
 
   const items = useMemo(() => {
+    // "> " lists the commands (§5.8), the rest of the query narrowing them.
+    if (query.startsWith(">")) {
+      const rest = query.slice(1).trim();
+      return commands
+        .map((command) => ({ command, score: fuzzyScore(rest, `${command.label} ${command.say}`) }))
+        .filter((r) => r.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(({ command }): Item => ({
+          kind: "command",
+          id: command.id,
+          label: command.label,
+          detail: command.say,
+          command,
+        }));
+    }
     const all: Item[] = [];
     const walk = (parentId: string | null) => {
       for (const node of tree.children(parentId)) {
@@ -111,12 +135,13 @@ function PaletteBody({
       .map((r) => r.item);
     // Grouped (the best first within each group); the arrows go through them in this order.
     return GROUPS.flatMap((group) => best.filter((item) => groupOf(item) === group));
-  }, [tree, pages, moments, query]);
+  }, [tree, pages, moments, commands, query]);
 
   const choose = (item: Item | undefined) => {
     if (!item) return;
     onClose();
-    if (item.kind === "node") onOpenNode(item.id);
+    if (item.kind === "command") item.command.run();
+    else if (item.kind === "node") onOpenNode(item.id);
     else if (item.kind === "moment") onOpenMoment?.(item.moment);
     else {
       const page = pages.find((p) => p.id === item.id);
@@ -138,7 +163,7 @@ function PaletteBody({
           aria-controls={`${ids}-list`}
           aria-activedescendant={items[current] ? `${ids}-${items[current].id}` : undefined}
           aria-label="Jump to a notebook, chapter, page or moment"
-          placeholder="Jump to a notebook, chapter, page or moment…"
+          placeholder="Jump to a notebook, chapter, page or moment… (> for commands)"
           onChange={(event) => {
             setQuery(event.target.value);
             setActive(0);
@@ -178,7 +203,11 @@ function PaletteBody({
                 onClick={() => choose(item)}
                 className="flex cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2 text-[15px] aria-selected:bg-ink/[0.06]"
               >
-                {item.kind === "node" ? (
+                {item.kind === "command" ? (
+                  <span aria-hidden className="w-4 shrink-0 text-center font-semibold text-muted">
+                    ›
+                  </span>
+                ) : item.kind === "node" ? (
                   <NodeIcon node={item.node} />
                 ) : item.kind === "moment" ? (
                   // eslint-disable-next-line @next/next/no-img-element -- a private, signed-in image
@@ -191,9 +220,17 @@ function PaletteBody({
                   <FileText className="size-4 shrink-0 text-muted" aria-hidden />
                 )}
                 <span className="min-w-0 flex-1 truncate">
-                  <Matched text={item.label} query={query} />
+                  <Matched
+                    text={item.label}
+                    query={item.kind === "command" ? query.slice(1) : query}
+                  />
                 </span>
-                {item.kind === "moment" ? (
+                {item.kind === "command" ? (
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span className="neb-voice hidden text-xs sm:inline">{item.detail}</span>
+                    {item.command.keys && <Keys keys={item.command.keys.split("+")} size="sm" />}
+                  </span>
+                ) : item.kind === "moment" ? (
                   <Sparkles className="size-3.5 shrink-0 text-neb-ink" aria-hidden />
                 ) : (
                   <span className="text-xs text-muted">{item.detail}</span>
@@ -211,6 +248,7 @@ function PaletteBody({
 }
 
 function groupOf(item: Item): Group {
+  if (item.kind === "command") return "Commands";
   if (item.kind === "node") return item.root ? "Notebooks" : "Chapters";
   return item.kind === "page" ? "Pages" : "Moments";
 }

@@ -9,7 +9,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { CreateNotebookDialog } from "./CreateNotebookDialog";
 import { DestinationPicker } from "./DestinationPicker";
 import type { Moment } from "../../moments/moments";
-import { JumpPalette } from "./JumpPalette";
+import { JumpPalette, type PaletteCommand } from "./JumpPalette";
 import { TrashDialog } from "./TrashDialog";
 import type { TreeActions } from "./useTreeActions";
 
@@ -25,6 +25,8 @@ type Props = {
   /** K8: saved moments, which Ctrl+K finds too. */
   moments: readonly Moment[];
   onOpenMoment(moment: Moment): void;
+  /** What "> " lists in the palette (U9). */
+  commands?: readonly PaletteCommand[];
 };
 
 const MOVE_REASONS = { depth: "too deep", cycle: "inside itself", missing: "gone" } as const;
@@ -40,6 +42,7 @@ export function TreeDialogs({
   onFromPdf,
   moments,
   onOpenMoment,
+  commands,
 }: Props) {
   const [pages, setPages] = useState<Page[]>([]);
   const moving = actions.movingId ? tree.get(actions.movingId) : undefined;
@@ -125,6 +128,7 @@ export function TreeDialogs({
         onOpenPage={openPage}
         moments={moments}
         onOpenMoment={onOpenMoment}
+        {...(commands && { commands })}
         onClose={() => actions.setPaletteOpen(false)}
       />
     </>
