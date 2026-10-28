@@ -2,7 +2,7 @@
 
 Context for a new working session. Read this, then [BUILD_BRIEF.md](BUILD_BRIEF.md) (the
 product brief), then the root [README.md](../README.md) and [backend/README.md](../backend/README.md).
-Last updated 2026-10-21, after M9 and M10 (every milestone of the brief is built).
+Last updated 2026-10-28, after K10 (handwriting) and the U series spec (the UI overhaul).
 
 ## 1. Working agreement (from the project owner)
 
@@ -464,7 +464,24 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     character read right on a later line; Reset and turning learning off (the count goes to 0).
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
-- **Next:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
+- **Where to pick up (2026-10-28):**
+  - **Branches** (none pushed): `feat/ui-desk-overhaul` (the U series spec, `ca68b36`) →
+    `feat/notebooks-k10` (K10, `6e784ec` and `960d16d`) → `feat/ui-u1-tokens` (just created from
+    K10, no U1 work yet).
+  - **Next: U1** of [NEB_APP_UI.md](NEB_APP_UI.md) §12 on `feat/ui-u1-tokens`: `tokens.ts` (light
+    and night) → `globals.css` and the generated `desktop/shell/tokens.css`; migrate the old
+    colour names (the mapping is in §3.1) and lint them out; vendor the four fonts (decision U8);
+    Appearance and Text size settings; the ink focus ring; `Button`, `Keycap`, `NebDot` (replacing
+    `Mascot`); the copy pass (§3.9); `/dev/ui` (use `src/lib/dev-pages.ts`, already made for
+    `/dev/handwriting`). Then U2–U7, one branch each.
+  - **K10 left over:** the stroke-order run (`pnpm eval:handwriting --mode=k10,k10-order
+--no-personalize`) once the Gemini free tier's 500 requests a day allow; real handwriting
+    samples from the team via `/dev/handwriting`. The eval and live recognition share that quota:
+    billing on the key is needed for regular eval runs.
+  - If the notebook shows "Cannot access 'Subject' before initialization", the dev server is
+    holding a stale copy of `packages/shared/src/tutor.ts`: stop `pnpm dev`, delete
+    `frontend/.next`, start it again.
+- **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in
 [SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1–N5 built** (2026-10-23). The

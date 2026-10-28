@@ -54,7 +54,7 @@ binding.
 | Ruled paper                                                       | `PageBackground`: `dot_grid`, `blank`, `lined`, `grid`                                                                           | The page keeps its own background; only the colours change (`--rule`, `--margin-red` for `lined`).                                                                                           |
 | Pencil case: pencil, highlighter, eraser, circle & ask, 3 colours | `Toolbar.tsx`: pen, highlighter, eraser, **lasso**, 4 ink colours, 3 highlighters, S/M/L                                         | The pencil case keeps the lasso and sizes (decision U6).                                                                                                                                     |
 | Screen coach while Ctrl+Alt is **held**                           | The **island** (double tap Ctrl+Alt) with Pen, Eraser, Select, Mic; the hold summons neb only when Screen Coach is off or paused | The frame, capsule and lasso cursor follow the island's sessions, not a held key (**changes the brief's §5.4**, decision U9).                                                                |
-| "Teach neb your handwriting" in onboarding                        | K10 isn't built                                                                                                                  | Onboarding step 3 is left out until K10 ships (decision U12).                                                                                                                                |
+| "Teach neb your handwriting" in onboarding                        | K10 is built (`features/handwriting/Calibration`)                                                                                | Onboarding step 3 uses it (decisions U12, U17).                                                                                                                                              |
 | Stayed count on covers                                            | FSRS on `moment_checks`; no stayed record                                                                                        | New `moment_checks.stayed_at` + view `notebook_stayed` (§6.4, decision U10).                                                                                                                 |
 | Mascot                                                            | `features/mew/Mascot.tsx` (cat face, eyes, breathing)                                                                            | Replaced by `NebDot` everywhere (§3.8).                                                                                                                                                      |
 | Violet `#6B4EE6` for neb                                          | `--tutor #8a7bf0`, also in strokes, the Rust indicator, overlays and `node-style.tsx`                                            | One violet, `--neb`; old stored hex values render as `--neb` (decision U2).                                                                                                                  |
@@ -642,7 +642,7 @@ unchanged).
 
 1. **"Name your first notebook."** (§5.7)
 2. **"Which hand do you write with?"** Two large buttons; sets `writing_hand`.
-3. _(Handwriting calibration: added when K10 ships; decision U12.)_
+3. **"Teach neb your handwriting (60 s)."** K10's `Calibration`, with "skip, neb will learn as you go".
 4. **"How much should neb mark?"** Quiet / Hint / Coach, each a mini page preview. Default Hint.
 5. **Desktop app only, Screen Coach on: "Try it."** A sample slide in the main window: "double
    tap Ctrl Alt, pick Select, and circle the arrow." The first circle gets a real answer. Screen
@@ -822,12 +822,19 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     a notebook) count.
 11. **U11. The Tonight card adds rows the brief didn't know about** (skill re-checks on desktop,
     an exam within 7 days) in the order of §5.1, still at most 3.
-12. **U12. Onboarding has no handwriting step until K10 ships.** "not wrong" keeps logging a
-    correction as now.
+12. **U12. Onboarding's handwriting step is K10's calibration** (it shipped before U started;
+    see U17). "not wrong" logs a correction and teaches the profile, as K10 built it.
 13. **U13. Notes Check findings are restyled, not moved into the lane,** in this series.
 14. **U14. Courses, Review, Teach and Settings get the tokens, type and buttons only;** their
     layouts are out of scope. They're reached from the avatar menu.
 15. **U15. "Archive"** on a cover's menu appears only if the tree gains an archived state; U adds
     none, so the menu is Rename, Colour, Subject, Delete.
-16. **U16. Branch:** this series' spec lives on `feat/ui-desk-overhaul`; each milestone gets its
-    own branch off it.
+16. **U16. Branches:** this series' spec was committed on `feat/ui-desk-overhaul`; K10 was built
+    after it (`feat/notebooks-k10`), and U1 starts from K10 on `feat/ui-u1-tokens`. Each later
+    milestone gets its own branch off the one before (`feat/ui-u2-page`, …), committed, not
+    pushed.
+17. **U17. K10 is in place before U starts.** The page has K10's "neb read: … · Fix" chip (a
+    lassoed line) and the mark menu's "Fix what neb read"; U2 restyles both and moves the
+    reading into the neb lane (§4.2). Settings → Handwriting and the calibration (K10) get the
+    U1 tokens like the other settings sections; onboarding step 3 (§5.10, decision U12) can now
+    use K10's `Calibration`.
