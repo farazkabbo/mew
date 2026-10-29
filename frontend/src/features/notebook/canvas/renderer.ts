@@ -39,8 +39,9 @@ export class CanvasRenderer {
   ) {
     this.grid = context(layers.grid);
     this.ink = context(layers.ink);
-    // Low-latency hint for the layer under the pen; the others favour tear-free compositing.
-    this.live = context(layers.live, { desynchronized: true });
+    // No `desynchronized` hint on the layer under the pen: on GPU compositing (WebView2 in the
+    // desktop app, Chrome on many PCs) such a canvas shows as solid black over the page.
+    this.live = context(layers.live);
   }
 
   get cssSize(): { width: number; height: number } {
