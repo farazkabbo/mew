@@ -16,11 +16,12 @@ export type PagePicture = {
   missing?: string;
 };
 
-const GRID_SPACING = 24; // page units
-const MIN_DOT_SPACING_PX = 12;
+/** The page's ruled lines (board 2): this far apart in page units, never closer than the px. */
+const RULE_SPACING = 44;
+const MIN_RULE_SPACING_PX = 18;
 
 /**
- * Three stacked canvases: the dot grid, committed ink (redrawn only when the page or camera
+ * Three stacked canvases: the ruled lines, committed ink (redrawn only when the page or camera
  * changes), and a live layer for transient things (stroke in progress, eraser cursor, lasso,
  * selection being dragged). Keeping the
  * stroke being drawn on its own layer means a frame costs one outline, not the whole page.
@@ -72,18 +73,16 @@ export class CanvasRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-    let spacing = GRID_SPACING;
-    while (spacing * camera.zoom < MIN_DOT_SPACING_PX) spacing *= 2;
+    let spacing = RULE_SPACING;
+    while (spacing * camera.zoom < MIN_RULE_SPACING_PX) spacing *= 2;
     const step = spacing * camera.zoom * this.dpr;
-    const offsetX = -mod(camera.x, spacing) * camera.zoom * this.dpr;
     const offsetY = -mod(camera.y, spacing) * camera.zoom * this.dpr;
-    const size = Math.max(1, 1.6 * this.dpr);
+    const width = Math.max(1, Math.round(this.dpr));
 
+    // Ruled lines across the whole page, in the rule colour (`--rule`).
     ctx.fillStyle = this.theme.dot;
-    for (let x = offsetX; x < ctx.canvas.width; x += step) {
-      for (let y = offsetY; y < ctx.canvas.height; y += step) {
-        ctx.fillRect(x - size / 2, y - size / 2, size, size);
-      }
+    for (let y = offsetY; y < ctx.canvas.height; y += step) {
+      ctx.fillRect(0, Math.round(y), ctx.canvas.width, width);
     }
   }
 
