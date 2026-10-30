@@ -129,7 +129,7 @@ export function EntryNotes({ canvas, images }: Props) {
                         <li
                           key={s}
                           data-current={(current?.turn === t && current.step === s) || undefined}
-                          className="rounded px-1 data-[current]:bg-[var(--tutor,#8a7bf0)]/20"
+                          className="rounded px-1 data-[current]:bg-neb/20"
                         >
                           {step}
                         </li>

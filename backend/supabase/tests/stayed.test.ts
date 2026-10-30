@@ -55,7 +55,7 @@ const check = async (user: string, clip: string, node: string, daysAgo: number) 
         [user, clip, node, daysAgo],
       ),
     )
-  ).rows[0]!.id;
+  ).rows[0]?.id ?? "";
 
 const clip = (id: string, user: string) =>
   asService(() =>

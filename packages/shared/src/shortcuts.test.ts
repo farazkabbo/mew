@@ -178,11 +178,15 @@ describe("“what can I say?” opens the shortcuts sheet (U9)", () => {
     "neb, what can I say",
     "Hey Neb what can you do?",
     "show me the shortcuts",
-  ])("%s", (said) => expect(asksWhatToSay(said)).toBe(true));
+  ])("%s", (said) => {
+    expect(asksWhatToSay(said)).toBe(true);
+  });
   it.each([
     "what can I say about this graph?",
     "I don't know what to say",
     "what can you do with a vector",
     "show me the answer",
-  ])("not %s", (said) => expect(asksWhatToSay(said)).toBe(false));
+  ])("not %s", (said) => {
+    expect(asksWhatToSay(said)).toBe(false);
+  });
 });

@@ -10,7 +10,7 @@ import type { PageMark } from "./marks";
 
 /** Notes Check's amber ("look at this again"); violet is the tutor's own colour. */
 const AMBER = "#d97706";
-const VIOLET = "var(--tutor, #8a7bf0)";
+const VIOLET = "var(--neb)";
 
 type Props = {
   canvas: RefObject<CanvasHandle | null>;
