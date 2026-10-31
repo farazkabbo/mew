@@ -272,9 +272,16 @@ fn read_qword(key: HKEY, subkey: &str, value: PCWSTR) -> Option<u64> {
 /// Opens an https link in the default browser (a link the web page opened in a new window).
 /// Anything else is refused: no files, no other schemes, nothing with credentials in it.
 pub fn open_in_browser(url: &tauri::Url) -> bool {
-    if !is_openable(url) {
-        return false;
-    }
+    is_openable(url) && shell_open(url)
+}
+
+/// Opens a page of the web app itself in the default browser, for signing in. The caller builds
+/// `url` from the checked app address (`origin::app_url`), which may be http on this machine.
+pub fn open_web_app_page(url: &tauri::Url) -> bool {
+    shell_open(url)
+}
+
+fn shell_open(url: &tauri::Url) -> bool {
     let target = HSTRING::from(url.as_str());
     // SAFETY: plain strings that outlive the call; "open" on an https URL starts the browser.
     let result = unsafe {

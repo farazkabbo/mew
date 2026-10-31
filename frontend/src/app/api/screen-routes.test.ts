@@ -256,6 +256,66 @@ describe("desktop sign-in", () => {
     expect(calls[0]?.path).toBe("/v1/devices/exchange");
   });
 
+  describe("browser sign-in", () => {
+    const createSignInToken = vi.fn();
+    const body = { code: "c".repeat(32), verifier: "v".repeat(43), deviceName: "DESKTOP-1" };
+
+    beforeEach(() => {
+      vi.resetModules();
+      createSignInToken.mockReset();
+      createSignInToken.mockResolvedValue({ token: "clerk-ticket" });
+      vi.doMock("@/lib/auth-mode", () => ({ isClerkConfigured: true }));
+      vi.doMock("@clerk/nextjs/server", () => ({
+        clerkClient: () => Promise.resolve({ signInTokens: { createSignInToken } }),
+      }));
+    });
+    afterEach(() => {
+      vi.doUnmock("@/lib/auth-mode");
+      vi.doUnmock("@clerk/nextjs/server");
+      vi.resetModules();
+    });
+
+    it("gives a token and a one-minute ticket for the user the code belongs to", async () => {
+      api();
+      const { POST } = await import("./devices/sign-in/route");
+      const response = await POST(request("/api/devices/sign-in", body));
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ token: TOKEN, ticket: "clerk-ticket" });
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(createSignInToken).toHaveBeenCalledWith({
+        userId: DEVICE.userId,
+        expiresInSeconds: 60,
+      });
+    });
+
+    it("mints nothing for a refused code", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() => Promise.resolve(new Response(null, { status: 400 }))),
+      );
+      const { POST } = await import("./devices/sign-in/route");
+      const response = await POST(request("/api/devices/sign-in", body));
+
+      expect(response.status).toBe(400);
+      expect(createSignInToken).not.toHaveBeenCalled();
+    });
+
+    it("revokes the token when the ticket can't be made", async () => {
+      const calls = api();
+      createSignInToken.mockRejectedValue(new Error("clerk down"));
+      const { POST } = await import("./devices/sign-in/route");
+      const response = await POST(request("/api/devices/sign-in", body));
+
+      expect(response.status).toBe(503);
+      expect(await response.text()).not.toContain(TOKEN);
+      expect(calls.at(-1)).toMatchObject({
+        path: "/v1/devices/revoke-self",
+        body: { token: TOKEN },
+      });
+    });
+  });
+
   it("explains an expired code", async () => {
     vi.stubGlobal(
       "fetch",

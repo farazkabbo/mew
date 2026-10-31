@@ -5,7 +5,8 @@
 //! Security: the window shows a remote origin (the web app). That origin may call three
 //! commands, each checked in Rust: `notify_due`, and Screen Coach's `screen_coach_ask` (the
 //! words of a question; never pixels), `screen_coach_spoken` (a spoken line ended: Circle & Ask's
-//! timing) and `screen_coach_link_finish` (a one-time sign-in code).
+//! timing) and `screen_coach_link_finish` (a one-time sign-in code), plus the browser sign-in's
+//! `desktop_sign_in_start`, `desktop_sign_in_ticket` and `desktop_sign_out`.
 //! Everything else (the hold gesture, tray, windows, screen capture) happens in Rust. Screen Coach's
 //! settings commands are granted to its bundled local page only, and its overlay commands to
 //! its overlay pages only (each window its own). Links the web page opens in a new window go to
@@ -37,10 +38,20 @@ const SUMMON_SCRIPT: &str = "window.dispatchEvent(new CustomEvent('mew:summon'))
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app_url = origin::app_url(std::env::var("MEW_APP_URL").ok());
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // First, as its docs require: a second launch (a neb:// link opening, say) hands over to the
+    // running app and exits.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        show(app);
+    }));
+    let builder = builder
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
         .manage(Reminders::default())
         .invoke_handler(handlers());
+    #[cfg(windows)]
+    let builder = builder.manage(screen::sign_in::SignIn::default());
     // A clip's preview image, served from memory to the preview window only (S3).
     #[cfg(windows)]
     let builder = builder.register_uri_scheme_protocol(screen::clip::SCHEME, screen::clip::serve);
@@ -56,11 +67,30 @@ pub fn run() {
             // The hold gesture summons Neb (or, with Screen Coach on, circles and talks): K2.
             #[cfg(windows)]
             screen::keys::start(app.handle());
+            #[cfg(windows)]
+            sign_in_links(app.handle())?;
             let _ = window.set_focus();
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running Mew");
+}
+
+/// The website's way back to the app after a browser sign-in. A link that launched the app is
+/// ignored on purpose: that process can't have started the sign-in it answers.
+#[cfg(windows)]
+fn sign_in_links(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    use tauri_plugin_deep_link::DeepLinkExt;
+    // An installed app is registered by its installer; a development build registers itself.
+    #[cfg(debug_assertions)]
+    app.deep_link().register_all()?;
+    let handle = app.clone();
+    app.deep_link().on_open_url(move |event| {
+        for link in event.urls() {
+            screen::sign_in::on_link(&handle, &link);
+        }
+    });
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -85,7 +115,11 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::notes_check::screen_notes_panel;
     use screen::screen_island::screen_island;
     use screen::screen_quiz::screen_quiz_card;
+    use screen::sign_in::{desktop_sign_in_start, desktop_sign_in_ticket, desktop_sign_out};
     tauri::generate_handler![
+        desktop_sign_in_start,
+        desktop_sign_in_ticket,
+        desktop_sign_out,
         reminders::notify_due,
         reminders::notify_checks,
         reminders::notify_skills,
@@ -142,7 +176,10 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
             .permission("allow-screen-coach-ask")
             .permission("allow-screen-coach-onboarding")
             .permission("allow-screen-coach-spoken")
-            .permission("allow-screen-coach-link-finish"),
+            .permission("allow-screen-coach-link-finish")
+            .permission("allow-desktop-sign-in-start")
+            .permission("allow-desktop-sign-in-ticket")
+            .permission("allow-desktop-sign-out"),
     )
 }
 
@@ -177,7 +214,7 @@ fn main_window(app: &AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
 }
 
 /// Brings the window back (from the tray, minimised or behind other apps).
-fn show<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
+pub(crate) fn show<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
     let window = app.get_webview_window(MAIN)?;
     let _ = window.show();
     let _ = window.unminimize();

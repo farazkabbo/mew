@@ -882,6 +882,8 @@ Added in M10:
 
 ## 5. Security model (keep these invariants)
 
+- Desktop sign-in goes through the browser (SCREEN_COACH decision 8a): no password in the app, a
+  Clerk ticket lasts 60 seconds and never enters a URL, and a `neb://` link alone proves nothing.
 - Every POST route: `assertSameOrigin` → `requireUserId` → `enforceRateLimit` → `readJson` /
   `readForm` with a byte cap. GET routes use `assertNotCrossSite` (browsers send no Origin on
   same-origin GETs). Errors go through `handle()`; API failures map to safe messages.

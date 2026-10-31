@@ -121,6 +121,15 @@ pub fn screen_coach_disconnect<R: Runtime>(window: WebviewWindow<R>) -> Result<S
     require_settings_window(&window)?;
     let app = window.app_handle();
     let coach = coach::coach_of(app)?;
+    revoke_saved_token(&coach);
+    coach.set_connected(false);
+    coach::refresh(app);
+    Ok(coach.view())
+}
+
+/// Revokes the saved token on the server (best effort) and forgets it here. Blocks on the network
+/// when there is one.
+pub fn revoke_saved_token(coach: &coach::ScreenCoach) {
     if let Some(token) = credential::load() {
         if let (Ok(url), Ok(token)) = (
             coach.app_url().join("api/devices/revoke-self"),
@@ -135,9 +144,6 @@ pub fn screen_coach_disconnect<R: Runtime>(window: WebviewWindow<R>) -> Result<S
         }
     }
     credential::delete();
-    coach.set_connected(false);
-    coach::refresh(app);
-    Ok(coach.view())
 }
 
 /// Forgets the sign-in after the server said the token is no longer valid (revoked elsewhere).

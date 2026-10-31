@@ -107,9 +107,14 @@ Restart the dev servers after editing `.env.local`.
 
 ### Turning on Screen Coach (once, in the desktop app)
 
+Sign in first: with Clerk configured, the app shows a login screen. **Continue with browser**
+opens the Neb website, where you sign in with your normal account and click **Continue**; the app
+then opens your workspace, and stays signed in until you sign out or the session expires. Signing
+in this way also connects Screen Coach.
+
 1. Right-click the Neb tray icon → **Screen Coach settings**.
 2. Turn it on and accept the privacy notice.
-3. Click **Connect** and approve the device in the Neb window that opens.
+3. If it says it isn't connected, click **Connect** and approve the device in the Neb window.
 4. Hold left Ctrl + left Alt and ask something. The tray menu pauses it or stops a walkthrough.
 
 ---
@@ -184,5 +189,8 @@ Run `pnpm dev` and the desktop app, signed in and connected, then:
    and one picked. The next day they're in Review → Quick check.
 7. **Notes Check:** on a lecture video, "check my notes". The panel lists differences and marks
    appear beside the text.
-8. **Privacy:** "Neb, pause" stops capture; a password field or a blocked app is never sent;
+8. **Browser sign-in:** signed out, Continue with browser, sign in on the website, Continue. The
+   app opens your workspace with the same account's notebooks, and Screen Coach is connected.
+   Quit and reopen: still signed in. Sign out: back to the login screen, Screen Coach disconnected.
+9. **Privacy:** "Neb, pause" stops capture; a password field or a blocked app is never sent;
    Screen Coach's windows don't appear in a Teams or OBS screen share.

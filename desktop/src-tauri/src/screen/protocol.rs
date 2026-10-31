@@ -590,6 +590,25 @@ fn is_url_safe(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'-' || b == b'_'
 }
 
+/// The code in a browser sign-in's link back to the app: exactly
+/// `neb://auth/callback?code=<code>`. Anyone can launch the app with any link, so anything else
+/// is ignored.
+pub fn parse_sign_in_link(link: &tauri::Url) -> Option<String> {
+    if link.scheme() != "neb"
+        || link.host_str() != Some("auth")
+        || link.path() != "/callback"
+        || !link.username().is_empty()
+        || link.password().is_some()
+        || link.port().is_some()
+        || link.fragment().is_some()
+    {
+        return None;
+    }
+    let mut pairs = link.query_pairs();
+    let (name, code) = pairs.next()?;
+    (name == "code" && pairs.next().is_none() && is_link_code(&code)).then(|| code.into_owned())
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExchangeRequest<'a> {
@@ -604,10 +623,40 @@ pub struct IssuedToken {
     pub token: String,
 }
 
+/// A browser sign-in redeemed: Screen Coach's token, and the ticket that signs the window in.
+#[derive(Deserialize)]
+pub struct IssuedSignIn {
+    pub token: String,
+    pub ticket: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::screen::frame::{ScreenRect, Timings};
+
+    #[test]
+    fn accepts_only_the_exact_sign_in_link() {
+        let code = "c".repeat(32);
+        let parse = |link: String| parse_sign_in_link(&tauri::Url::parse(&link).unwrap());
+        assert_eq!(
+            parse(format!("neb://auth/callback?code={code}")),
+            Some(code.clone())
+        );
+        for link in [
+            format!("https://auth/callback?code={code}"),
+            format!("neb://evil/callback?code={code}"),
+            format!("neb://auth/other?code={code}"),
+            format!("neb://user@auth/callback?code={code}"),
+            format!("neb://auth/callback?code={code}&next=x"),
+            format!("neb://auth/callback?next=x&code={code}"),
+            format!("neb://auth/callback?code={code}#x"),
+            "neb://auth/callback?code=short".to_owned(),
+            "neb://auth/callback".to_owned(),
+        ] {
+            assert_eq!(parse(link.clone()), None, "{link}");
+        }
+    }
 
     const TURN: &str = "33333333-3333-4333-8333-333333333333";
 

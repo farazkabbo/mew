@@ -25,6 +25,9 @@ regex = "1.13.1"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-global-shortcut = "=2.4.0"
+# Signing in through the browser: the website's neb:// link back reaches the running app.
+tauri-plugin-deep-link = "=2.6.2"
+tauri-plugin-single-instance = { version = "=2.5.4", features = ["deep-link"] }
 
 # Screen Coach's native code (capture, encoding, the capture indicator). The same version Tauri
 # already depends on, so no new crate enters the tree.
