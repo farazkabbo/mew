@@ -37,7 +37,18 @@ pub fn may_navigate(app: &Url, target: &Url) -> bool {
         return false;
     }
     let host = target.host_str().unwrap_or("");
-    host.ends_with(".clerk.accounts.dev") || host == "clerk.com" || host.ends_with(".clerk.com")
+    host.ends_with(".clerk.accounts.dev")
+        || host == "clerk.com"
+        || host.ends_with(".clerk.com")
+        || is_production_clerk(app, host)
+}
+
+/// A production Clerk instance lives at clerk.<the site's domain>. The window goes there to
+/// refresh its session, so without this a session would stop working when its token expired.
+fn is_production_clerk(app: &Url, host: &str) -> bool {
+    let site = app.host_str().unwrap_or("");
+    let site = site.strip_prefix("www.").unwrap_or(site);
+    host.strip_prefix("clerk.") == Some(site)
 }
 
 /// The URL pattern for the capability that lets the app's pages call `notify_due`.
@@ -92,6 +103,21 @@ mod tests {
         assert!(!may_navigate(
             &app,
             &url("https://clerk.accounts.dev.evil.example/")
+        ));
+    }
+
+    #[test]
+    fn allows_the_sites_own_production_clerk_only() {
+        let app = url("https://www.neb.example/");
+        assert!(may_navigate(
+            &app,
+            &url("https://clerk.neb.example/v1/client/handshake")
+        ));
+        assert!(!may_navigate(&app, &url("http://clerk.neb.example/")));
+        assert!(!may_navigate(&app, &url("https://clerk.evil.example/")));
+        assert!(!may_navigate(
+            &app,
+            &url("https://clerk.neb.example.evil.example/")
         ));
     }
 

@@ -10,6 +10,8 @@ import { MomentChecksDue, ReviewQueue, SkillsView } from "@mew/shared";
  * - `screen_coach_ask`: ask Screen Coach about the frame the desktop app captured on the hotkey
  *   (the page sends only the words; it never sees the screenshot);
  * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code;
+ * - `desktop_sign_in_start`, `desktop_sign_in_ticket`, `desktop_sign_out`: signing the app in
+ *   through the browser, and out;
  * - `screen_coach_spoken`: a line Screen Coach asked to be said has been said (Circle & Ask plays
  *   its steps to that timing).
  * The desktop app's summon (holding Ctrl+Alt while Screen Coach is off) arrives as a
@@ -106,6 +108,27 @@ export async function screenCoachForOnboarding(openSettings: boolean): Promise<b
 /** Tells the desktop app the line with `token` has been said (or couldn't be). */
 export async function reportSpoken(token: number): Promise<void> {
   await invoke("screen_coach_spoken", { token });
+}
+
+/** Fired by the desktop app when the browser's answer to a sign-in couldn't be used. */
+export const SIGN_IN_FAILED_EVENT = "mew:desktop-sign-in-failed";
+
+/** Opens the website in the default browser to sign in. Returns its address, to copy. */
+export async function startDesktopSignIn(): Promise<string> {
+  const url = await invoke("desktop_sign_in_start", {});
+  if (typeof url !== "string") throw new Error("Not running in the Neb desktop app");
+  return url;
+}
+
+/** The ticket from the sign-in the browser just finished; it can only be taken once. */
+export async function takeDesktopSignInTicket(): Promise<string | null> {
+  const ticket = await invoke("desktop_sign_in_ticket", {});
+  return typeof ticket === "string" ? ticket : null;
+}
+
+/** The window has no session, so the desktop app forgets its own sign-in too. */
+export async function signOutOfDesktop(): Promise<void> {
+  await invoke("desktop_sign_out", {});
 }
 
 /** Gives the desktop app the one-time code for the sign-in it started (it redeems it). */

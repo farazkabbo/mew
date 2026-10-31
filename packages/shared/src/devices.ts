@@ -33,6 +33,16 @@ export const IssuedDeviceToken = z.object({
 });
 export type IssuedDeviceToken = z.infer<typeof IssuedDeviceToken>;
 
+/**
+ * A browser sign-in redeemed (SCREEN_COACH decision 8a): Screen Coach's token, and the one-minute
+ * Clerk ticket that starts the desktop window's own session.
+ */
+export const DesktopSignIn = z.object({
+  token: z.string().regex(DEVICE_TOKEN_PATTERN),
+  ticket: z.string().min(1),
+});
+export type DesktopSignIn = z.infer<typeof DesktopSignIn>;
+
 export const VerifiedDevice = z.object({
   userId: z.string().min(1),
   deviceId: z.uuid(),

@@ -5,13 +5,20 @@ import { isClerkConfigured } from "@/lib/auth-mode";
 import { cspDirectives, standaloneCsp } from "@/server/csp";
 import { appEnv } from "@/server/env";
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  // Where the desktop window turns its ticket into a session, so it has none yet.
+  "/desktop/finish",
+]);
 /**
  * Called by the desktop app, which has no browser session: these authenticate with a device
  * token (or, to get one, a one-time link code and its verifier) inside the route.
  */
 const isDeviceRoute = createRouteMatcher([
   "/api/devices/exchange",
+  "/api/devices/sign-in",
   "/api/devices/revoke-self",
   "/api/screen/(.*)",
 ]);

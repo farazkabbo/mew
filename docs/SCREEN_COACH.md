@@ -445,6 +445,37 @@ don't ask them again. Where a decision changes the brief above, the decision win
      "Signed-in devices" list in account settings has Revoke buttons.
    - `last_used_at` is updated at most once per hour. The link and exchange endpoints are
      rate-limited.
+
+   **8a. Signing in to the whole app through the browser** (decided 2026-10-30): nobody types a
+   password into the desktop app. It builds on the link code above, and the device token keeps its
+   Screen-Coach-only scope.
+   - **Flow:** the window's /sign-in shows a login screen → Continue with browser opens
+     `/desktop/authorize?challenge=…` in the default browser → the website's normal sign-in or
+     sign-up, then a click to confirm the account → a one-time code comes back through
+     `neb://auth/callback?code=…` → Rust redeems code + verifier at `/api/devices/sign-in` for a
+     device token and a Clerk sign-in ticket → the window's `/desktop/finish` takes the ticket
+     from Rust and starts its own Clerk session.
+   - **One account:** both sides use the same Clerk instance, and the desktop app has no sign-up
+     of its own. The same email through two sign-in methods stays one account only with Clerk's
+     account linking on; a different email is a different person to Clerk.
+   - **The ticket** grants the whole account, so it lasts 60 seconds (Clerk's default is 30 days),
+     is created only after the verifier is proven, and lives in Rust's memory until the page takes
+     it, once. It's never in a URL, a log or on disk.
+   - **A `neb://` link proves nothing** (any program can launch one): it must have the exact shape,
+     and is only redeemed while a sign-in started here is waiting, with its verifier. So someone
+     else's link can't sign this app in to their account, and a bad link doesn't cancel a real
+     sign-in.
+   - **The challenge is in the query**, not the fragment, to survive the website's sign-in
+     redirect. It's only a hash. The confirming click stops a page from getting a code just by
+     opening the address.
+   - **Signed out means signed out:** a window with no session (signed out, or expired) revokes
+     and forgets the device token, and each new sign-in replaces the previous token.
+   - **Sessions** stay in the window's WebView2 profile; their length is the Clerk instance's
+     setting. Window navigation still allows Clerk's hosts, including `clerk.<site>` in production,
+     because sessions refresh there.
+   - **Screen Coach's Connect** (`/desktop/link`) stays, for a window signed in before this existed
+     and for reconnecting after Disconnect.
+
 9. **S3 is "Annotate on screen + Save to notebook"** (decided 2026-10-22; it replaces the S3
    above and takes the clip half of S6). Its brief is [SCREEN_COACH_S3.md](SCREEN_COACH_S3.md).
    The owner chose these answers to its planning questions:
