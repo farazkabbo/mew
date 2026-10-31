@@ -665,3 +665,13 @@ don't ask them again. Where a decision changes the brief above, the decision win
       are the answer ("skip", "next", "stop" too), or it's typed or picked on the card. The web
       server grades it with the key (which never reaches the device) and doesn't reschedule the
       card: the review asks it again later, cold. Rate limits: 4 quizzes a minute, 40 a day.
+14. **The pointer flies to what it means** (decided 2026-10-31; the owner asked to borrow from
+    [Clicky](https://github.com/farzaa/clicky), MIT): when a screen answer or a walkthrough step
+    has an arrow, neb's nib flies from the cursor to the control on a curved path, facing the way
+    it's going, and the arrow and label are then drawn. It holds for 2.5 s after the arrow is
+    drawn, then fades where it landed; it doesn't fly back, because neb's pointer shows only while
+    neb acts (U series). The flight is 0.6–1.4 s, on the ink overlay, so it's click-through and
+    excluded from captures and clips. Circle & Ask steps don't fly (their ink is timed to the
+    voice), and with Windows' animation effects off nothing flies. Clicky's voice model and its
+    `[POINT:x,y:label]` tags aren't used: Gemini's `point_at` already says where, and Neb stays on
+    Gemini and ElevenLabs.

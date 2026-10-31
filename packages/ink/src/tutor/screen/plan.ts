@@ -78,6 +78,8 @@ export type PlannedScreenAction = {
   strokes: ScreenStroke[];
   /** A sticky note's paper, drawn under its strokes, when there was no free space. */
   card?: BBox;
+  /** The spot an arrow means, snapped onto the control (where neb's pointer flies). */
+  target?: [number, number];
   bbox: BBox;
 };
 
@@ -251,11 +253,10 @@ class ScreenPlanner {
         return this.commit([this.pen(tick)], action.type, index);
       }
       case "point_at": {
-        const arrow = this.arrowTo(
-          this.snapPoint(pointToPixels(action.point, frame)),
-          action.label,
-        );
-        return this.commit(arrow.strokes, action.type, index, arrow.card);
+        const target = this.snapPoint(pointToPixels(action.point, frame));
+        const arrow = this.arrowTo(target, action.label);
+        const planned = this.commit(arrow.strokes, action.type, index, arrow.card);
+        return typeof planned === "string" ? planned : { ...planned, target };
       }
       case "sketch":
         return this.sketch(

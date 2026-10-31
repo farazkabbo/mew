@@ -2,7 +2,7 @@ import { planScreenInk, prepareScreenInk, type ScreenStroke, strokePath } from "
 import { type BBox, HexColor, ScreenAction } from "@mew/shared";
 import { z } from "zod";
 
-import { schedule, visiblePoints } from "./animation";
+import { type Flight, flightAt, planFlight, schedule, visiblePoints } from "./animation";
 import { invoke, on } from "./tauri";
 
 /**
@@ -32,6 +32,8 @@ const InkRequest = z.object({
   colors: z.object({ ink: HexColor, highlight: HexColor, question: HexColor.optional() }),
   animate: z.boolean(),
   step: z.number().int().min(0).max(4).optional(),
+  /** Where neb's pointer sets off for the arrow's target: the cursor, on this monitor. */
+  flyFrom: z.tuple([z.number(), z.number()]).optional(),
 });
 type InkRequest = z.infer<typeof InkRequest>;
 
@@ -41,6 +43,12 @@ const CARD_EDGE = "rgba(107, 78, 230, 0.45)";
 const FADE_MS = 150;
 /** Notes Check's ticks are a quiet "you've got this": they fade on their own (brief §8). */
 const TICK_VISIBLE_MS = 4000;
+/** The pointer stays this long once the arrow is drawn, then fades where it landed. */
+const NIB_HOLD_MS = 2500;
+const NIB_FADE_MS = 300;
+/** A pen nib with its tip at 0, 0, pointing down (`NotebookPointer`'s, in CSS pixels). */
+const NIB = new Path2D("M0 0 L-5 -10 L2 -21 L9 -14 Z");
+const NIB_SLIT = new Path2D("M0 0 L-1 -5 L1 -6 Z");
 
 const canvas = document.querySelector("canvas");
 const ctx = canvas?.getContext("2d") ?? null;
@@ -129,10 +137,19 @@ function paint(request: InkRequest): void {
 
   const timing = schedule(strokes);
   const started = performance.now();
+  const target = plan.actions.find((a) => a.target)?.target;
+  const flight =
+    request.animate && request.flyFrom && target
+      ? planFlight(request.flyFrom, target, request.bounds, request.scale)
+      : null;
+  // The ink waits for the pointer to get there, so it comes out of its pen.
+  const inkDelay = flight?.durationMs ?? 0;
+  const endMs = flight ? inkDelay + timing.totalMs + NIB_HOLD_MS + NIB_FADE_MS : timing.totalMs;
   const render = (now: number) => {
-    const elapsed = request.animate ? now - started : Number.POSITIVE_INFINITY;
+    const elapsed = request.animate ? now - started - inkDelay : Number.POSITIVE_INFINITY;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (const card of [...earlier.cards, ...cards]) paintCard(ctx, card, request.scale);
+    for (const card of earlier.cards) paintCard(ctx, card, request.scale);
+    if (elapsed >= 0) for (const card of cards) paintCard(ctx, card, request.scale);
     for (const stroke of earlier.strokes) {
       ctx.fillStyle = stroke.color;
       ctx.fill(new Path2D(strokePath(stroke, true)));
@@ -146,15 +163,43 @@ function paint(request: InkRequest): void {
       ctx.fillStyle = stroke.color;
       ctx.fill(new Path2D(strokePath({ ...stroke, points }, complete)));
     });
-    if (request.animate && now - started < timing.totalMs) frame = requestAnimationFrame(render);
+    if (flight) paintNib(ctx, flight, now - started, endMs, request);
+    if (request.animate && now - started < endMs) frame = requestAnimationFrame(render);
   };
   frame = requestAnimationFrame(render);
   if (ticks.size > 0) {
-    tickTimer = window.setTimeout(() => {
-      showTicks = false;
-      frame = requestAnimationFrame(render);
-    }, timing.totalMs + TICK_VISIBLE_MS);
+    tickTimer = window.setTimeout(
+      () => {
+        showTicks = false;
+        frame = requestAnimationFrame(render);
+      },
+      inkDelay + timing.totalMs + TICK_VISIBLE_MS,
+    );
   }
+}
+
+function paintNib(
+  context: CanvasRenderingContext2D,
+  flight: Flight,
+  elapsedMs: number,
+  endMs: number,
+  request: InkRequest,
+): void {
+  if (elapsedMs >= endMs) return;
+  const pose = flightAt(flight, elapsedMs);
+  context.save();
+  context.globalAlpha = Math.min((endMs - elapsedMs) / NIB_FADE_MS, 1);
+  context.translate(pose.x, pose.y);
+  context.rotate(pose.heading - Math.PI / 2);
+  context.scale(request.scale * pose.size, request.scale * pose.size);
+  context.shadowColor = request.colors.ink;
+  context.shadowBlur = 8 * request.scale;
+  context.fillStyle = request.colors.ink;
+  context.fill(NIB);
+  context.shadowBlur = 0;
+  context.fillStyle = "#ffffff";
+  context.fill(NIB_SLIT);
+  context.restore();
 }
 
 function paintCard(context: CanvasRenderingContext2D, [x, y, w, h]: number[], scale: number) {

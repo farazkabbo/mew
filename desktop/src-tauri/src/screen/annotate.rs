@@ -193,7 +193,7 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, ink_to_show: ShowInk) {
     };
     state.watch = Some(new_watch);
 
-    let request = ink::ink_request(
+    let mut request = ink::ink_request(
         id,
         &seed,
         &actions,
@@ -202,6 +202,13 @@ pub fn show<R: Runtime>(app: &AppHandle<R>, ink_to_show: ShowInk) {
         super::win::system::animations_enabled(),
         super::win::system::contrast_highlight().as_deref(),
     );
+    if actions
+        .iter()
+        .any(|a| matches!(a, ScreenAction::PointAt { .. }))
+    {
+        request.fly_from =
+            super::win::input::cursor().map(|at| ink::flight_start(at, meta.monitor));
+    }
     state.turn = Some(InkTurn {
         id,
         seed,
