@@ -60,6 +60,9 @@ pub struct InkRequest {
     /// steps' ink (kept clear of it) instead of replacing it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub step: Option<u8>,
+    /// Where neb's pointer sets off for the arrow's target, in overlay pixels (absent: no flight).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fly_from: Option<[f32; 2]>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -112,7 +115,17 @@ pub fn ink_request(
         },
         animate,
         step: None,
+        fly_from: None,
     }
+}
+
+/// Where neb's pointer sets off: the cursor, in overlay pixels. A cursor on another monitor gives
+/// the nearest edge of this one, so the pointer arrives from that side.
+pub fn flight_start(cursor: (i32, i32), monitor: ScreenRect) -> [f32; 2] {
+    [
+        (cursor.0 - monitor.left).clamp(0, monitor.width()) as f32,
+        (cursor.1 - monitor.top).clamp(0, monitor.height()) as f32,
+    ]
 }
 
 // ─── What the overlay drew ───────────────────────────────────────────────────────────────────
@@ -382,6 +395,19 @@ mod tests {
             width: 3.0,
             points: points.iter().map(|[x, y]| [*x, *y, 0.5, 0.0]).collect(),
         }
+    }
+
+    #[test]
+    fn the_pointer_sets_off_from_the_cursor_or_the_nearest_edge() {
+        let monitor = ScreenRect {
+            left: -1920,
+            top: 0,
+            right: 0,
+            bottom: 1080,
+        };
+        assert_eq!(flight_start((-1000, 500), monitor), [920.0, 500.0]);
+        assert_eq!(flight_start((300, 500), monitor), [1920.0, 500.0]);
+        assert_eq!(flight_start((-3000, -20), monitor), [0.0, 0.0]);
     }
 
     #[test]

@@ -183,6 +183,9 @@ describe("videos", () => {
     // The label sits outside the player; the arrow's tip is inside it.
     const tip = arrow?.strokes.at(-1)?.points.at(-1);
     expect(tip && tip[0] > PLAYER[0] && tip[1] > PLAYER[1]).toBe(true);
+    expect(arrow?.target?.[0]).toBeGreaterThan(PLAYER[0]);
+    expect(arrow?.target?.[1]).toBeGreaterThan(PLAYER[1]);
+    expect(plan.actions.find((a) => a.type === "margin_note")?.target).toBeUndefined();
     expect(plan.focus?.kind).toBe("video_frame");
   });
 });
