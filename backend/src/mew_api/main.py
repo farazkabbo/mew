@@ -11,6 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from . import __version__
 from .annotations.store import MemoryAnnotationStore
 from .auth import ClerkTokenVerifier, JwksCache, TokenVerifier
+from .billing.store import MemoryBillingStore
 from .checker.sandbox import CheckerPool, limit_memory
 from .clips.store import MemoryClipStore
 from .config import Settings
@@ -29,6 +30,7 @@ from .pdfs.store import MemoryPdfStore
 from .profiles.store import MemoryProfileStore
 from .routes import (
     annotations,
+    billing,
     check,
     clips,
     courses,
@@ -43,6 +45,7 @@ from .routes import (
     notes,
     pdfs,
     skills,
+    tts,
     walkthroughs,
 )
 from .routes import settings as user_settings
@@ -93,6 +96,7 @@ def create_app(
     app.state.local_courses = MemoryCourseStore()
     app.state.local_profiles = MemoryProfileStore()
     app.state.local_mew_events = MemoryMewEventStore()
+    app.state.local_billing = MemoryBillingStore()
     # Desktop sign-in (Screen Coach): one-time link codes, and local-mode devices.
     app.state.link_codes = LinkCodes()
     app.state.local_devices = MemoryDeviceStore()
@@ -125,6 +129,8 @@ def create_app(
 
     v1 = APIRouter(prefix="/v1", dependencies=[Depends(require_internal_caller)])
     v1.include_router(me.router)
+    v1.include_router(billing.router)
+    v1.include_router(tts.router)
     v1.include_router(check.router)
     v1.include_router(pdfs.router)
     v1.include_router(courses.router)

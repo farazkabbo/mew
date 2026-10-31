@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     )
 
     app_env: Literal["development", "test", "production"] = "development"
+    app_origin: str | None = None  # Public origin for redirects (e.g., http://localhost:3000)
     internal_api_secret: SecretStr = Field(min_length=32)
     # Clerk Frontend API URL, e.g. https://your-app.clerk.accounts.dev (the expected `iss` claim).
     clerk_issuer: str | None = None
@@ -51,11 +52,31 @@ class Settings(BaseSettings):
     pdf_max_mb: int = Field(default=100, ge=1, le=100)
     pdf_max_pages: int = Field(default=400, ge=1, le=1000)
 
+    # Stripe billing
+    stripe_api_key: SecretStr | None = None
+    stripe_webhook_secret: SecretStr | None = None
+    stripe_price_id: str | None = None
+    stripe_publishable_key: str | None = Field(
+        default=None, validation_alias="NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+    )
+
+    # Free tier limits (session-based)
+    free_tier_session_hours: int = Field(default=5, ge=1, le=24)
+    free_tier_cooldown_hours: int = Field(default=5, ge=1, le=24)
+
     @property
     def pdf_max_bytes(self) -> int:
         return self.pdf_max_mb * 1024 * 1024
 
-    @field_validator("gemini_api_key", "supabase_secret_key", mode="before")
+    @property
+    def free_tier_session_seconds(self) -> int:
+        return self.free_tier_session_hours * 3600
+
+    @property
+    def free_tier_cooldown_seconds(self) -> int:
+        return self.free_tier_cooldown_hours * 3600
+
+    @field_validator("gemini_api_key", "supabase_secret_key", "stripe_api_key", "stripe_webhook_secret", mode="before")
     @classmethod
     def _blank_is_none(cls, value: object) -> object:
         return None if value == "" else value

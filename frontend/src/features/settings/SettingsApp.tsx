@@ -218,6 +218,18 @@ export function SettingsApp() {
           <LatencyTable />
         </Section>
 
+        <Section title="Billing">
+          <p className="text-sm text-muted">
+            Manage your subscription, view usage, and upgrade to Premium for unlimited access.
+          </p>
+          <Link
+            href="/billing"
+            className="mt-3 inline-block rounded-full border border-line px-4 py-1.5 text-sm hover:border-ink"
+          >
+            View Billing →
+          </Link>
+        </Section>
+
         <Section title="Introduction">
           <button
             type="button"
