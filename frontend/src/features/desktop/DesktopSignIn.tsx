@@ -18,7 +18,7 @@ export function DesktopSignIn() {
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn) {
-      window.location.replace("/notebook");
+      window.location.replace("/desk");
       return;
     }
     // Signed out, or the session expired: this computer's Screen Coach sign-in ends with it.

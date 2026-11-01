@@ -257,6 +257,16 @@ window.addEventListener("contextmenu", (event) => {
   event.preventDefault();
 });
 
+// Rust can't always see where a Windows Ink pen is, hovering or drawing: its pointer follows this.
+let penSent = 0;
+/** About a frame. By the clock: animation frames may not run in a window that's never activated. */
+const PEN_EVERY_MS = 16;
+window.addEventListener("pointermove", (event) => {
+  if (event.pointerType !== "pen" || event.timeStamp - penSent < PEN_EVERY_MS) return;
+  penSent = event.timeStamp;
+  void invoke("screen_draw_pen", { at: [event.clientX, event.clientY] }).catch(() => undefined);
+});
+
 window.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "mouse") return; // Rust reads the mouse
   // This page can be above the island: a press on its buttons is theirs, never a stroke.

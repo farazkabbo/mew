@@ -31,6 +31,7 @@ fn main() {
         "screen_draw_mark",
         "screen_draw_erase",
         "screen_draw_island_press",
+        "screen_draw_pen",
         "screen_draw_select",
         "screen_draw_note",
         "screen_circle_card",

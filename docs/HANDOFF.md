@@ -483,6 +483,14 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     button; through the draw overlay via `screen_draw_island_press`; `no_marks_view` keeps `drawing`
     true for the pen and eraser with no session; `overlay::keep_top` cuts the island's window to
     what shows, so a pen reaches what's under its clear part. A tool on still takes all pen input.
+  - **The pointer follows a pen** (`win/pen_input.rs`): a hovering Windows Ink pen freezes
+    `GetCursorPos`, so Raw Input (digitizer pens only, while the pointer runs, position only, memory
+    only) feeds `pointer_at`; the digitizer's range is taken to cover the cursor's monitor. It
+    registers plain digitizers too: an XP-Pen driver passes its pen on through a virtual one
+    (`00FF:BACC`, usage 0x01), and short reports are smaller than a `RAWINPUT`. Verified on XP-Pen. Consent
+    version not bumped: the settings page's wording changed, not what's sent. A maximised window no
+    longer counts as full screen (an auto-hiding taskbar made it look like one and hid the pointer).
+    The desktop app now opens on `/desk`, also after sign-in.
   - **To verify by hand:** with the setting on, the island and ink in an OBS or Teams capture but not
     in what Neb's saved clip shows; a real update from one installed version to the next.
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they

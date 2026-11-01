@@ -108,7 +108,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::ask::screen_coach_ask;
     use screen::circle::{
         screen_circle_card, screen_draw_erase, screen_draw_island_press, screen_draw_mark,
-        screen_draw_note, screen_draw_select,
+        screen_draw_note, screen_draw_pen, screen_draw_select,
     };
     use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
@@ -153,6 +153,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_draw_mark,
         screen_draw_erase,
         screen_draw_island_press,
+        screen_draw_pen,
         screen_draw_select,
         screen_draw_note,
         screen_circle_card,
@@ -196,7 +197,7 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
 
 fn main_window(app: &AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
     let allowed = app_url.clone();
-    let start = app_url.join("notebook").unwrap_or(app_url);
+    let start = app_url.join("desk").unwrap_or(app_url);
     let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::External(start))
         .title("Neb")
         .inner_size(1280.0, 840.0)

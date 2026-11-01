@@ -372,6 +372,7 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-draw-mark")
             .permission("allow-screen-draw-erase")
             .permission("allow-screen-draw-island-press")
+            .permission("allow-screen-draw-pen")
             .permission("allow-screen-draw-select")
             .permission("allow-screen-draw-note"),
     )?;

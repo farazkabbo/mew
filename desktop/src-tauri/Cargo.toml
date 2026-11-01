@@ -45,6 +45,8 @@ features = [
   "Foundation_Collections",
   "Foundation_Metadata",
   "Graphics",
+  "Win32_Devices_HumanInterfaceDevice",
+  "Win32_UI_Input",
   "Graphics_Capture",
   "Graphics_DirectX",
   "Graphics_DirectX_Direct3D11",
