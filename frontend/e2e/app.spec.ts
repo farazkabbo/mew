@@ -109,6 +109,18 @@ test("settings are saved to the account and used by the notebook", async ({ page
   await expect(page.getByRole("slider")).toHaveValue("0.85");
 });
 
+test("the language picker offers four languages and remembers the choice", async ({ page }) => {
+  await page.goto("/settings");
+  const picker = page.getByTestId("language-picker");
+  await expect(picker.getByRole("radio")).toHaveCount(4);
+  await expect(picker.getByRole("radio", { name: "English" })).toBeChecked();
+  await picker.getByRole("radio", { name: "Bengali" }).check();
+  await page.reload();
+  await expect(
+    page.getByTestId("language-picker").getByRole("radio", { name: "Bengali" }),
+  ).toBeChecked();
+});
+
 test("the voice picker saves a voice and plays the one asked for", async ({ page }) => {
   await page.route("**/api/voices", (route) =>
     route.fulfill({

@@ -220,6 +220,10 @@ export const ClipDestinationRequest = z.object({
 });
 export type ClipDestinationRequest = z.infer<typeof ClipDestinationRequest>;
 
+/** Saved entries no notebook has a page for yet. */
+export const UnplacedEntries = z.object({ clipIds: z.array(z.uuid()).max(20) });
+export type UnplacedEntries = z.infer<typeof UnplacedEntries>;
+
 export const ClipPatch = z.object({ notebookPageId: z.uuid() });
 export type ClipPatch = z.infer<typeof ClipPatch>;
 

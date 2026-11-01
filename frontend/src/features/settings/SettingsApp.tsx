@@ -16,6 +16,7 @@ import { DevicesSection } from "./DevicesSection";
 import { DisplaySection } from "./DisplaySection";
 import { LatencyTable } from "./LatencyTable";
 import { HandwritingSection } from "../handwriting/HandwritingSection";
+import { LanguagePicker } from "./LanguagePicker";
 import { PrivacySection } from "./PrivacySection";
 import { useSettings } from "./store";
 
@@ -192,6 +193,7 @@ export function SettingsApp() {
         <HandwritingSection />
 
         <Section title="Voice">
+          <LanguagePicker />
           {voices.length === 0 ? (
             <p className="text-sm text-muted">
               The tutor&apos;s voice isn&apos;t set up on this server.

@@ -1,4 +1,4 @@
-import { ClipView, type Page } from "@mew/shared";
+import { ClipView, type Page, UnplacedEntries } from "@mew/shared";
 import { useEffect, useState } from "react";
 
 import {
@@ -62,6 +62,16 @@ export function useClipImport({
     }
     // Entries saved while the notebook wasn't open.
     for (const clipId of takePendingEntries()) queueMicrotask(() => add({ clipId, open: false }));
+    // And any the app was closed or reloaded before adding: the server knows which have no page.
+    let left = false;
+    void fetch("/api/clips/unplaced", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: unknown) => {
+        const unplaced = UnplacedEntries.safeParse(body);
+        if (left || !unplaced.success) return;
+        for (const clipId of unplaced.data.clipIds) add({ clipId, open: false });
+      })
+      .catch(() => undefined); // they're still there next time
 
     const onClip = (event: Event) => {
       const detail = ScreenClipSavedDetail.safeParse((event as CustomEvent<unknown>).detail);
@@ -74,6 +84,7 @@ export function useClipImport({
     window.addEventListener(OPEN_CLIP_EVENT, onClip);
     window.addEventListener(OPEN_ENTRY_EVENT, onEntry);
     return () => {
+      left = true;
       window.removeEventListener(OPEN_CLIP_EVENT, onClip);
       window.removeEventListener(OPEN_ENTRY_EVENT, onEntry);
     };

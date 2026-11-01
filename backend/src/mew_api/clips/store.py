@@ -86,6 +86,10 @@ class ClipWriter(Protocol):
         ...
 
 
+# Entries a notebook brings in at once, newest first; the rest come next time it opens.
+UNPLACED_LIMIT = 20
+
+
 class EntryFullError(ValueError):
     """An entry has as many turns, strokes or points as a clip may hold."""
 
@@ -95,6 +99,7 @@ class ClipReader(Protocol):
     def set_page(self, user: str, clip_id: UUID, page_id: UUID) -> ClipView | None: ...
     def delete(self, user: str, clip_id: UUID) -> bool: ...
     def image(self, user: str, clip_id: UUID) -> bytes | None: ...
+    def unplaced_entries(self, user: str) -> list[UUID]: ...
 
 
 def _row(user: str, clip_id: UUID, clip: ClipCreate) -> dict[str, Any]:
@@ -281,6 +286,18 @@ class MemoryClipStore:
             stored = self._clips.get((user, clip_id))
             return stored.image if stored else None
 
+    def unplaced_entries(self, user: str) -> list[UUID]:
+        with self._lock:
+            found = [
+                (s.row["created_at"], clip_id)
+                for (owner, clip_id), s in self._clips.items()
+                if owner == user
+                and s.row.get("kind") == "entry"
+                and s.row.get("notebook_page_id") is None
+            ]
+        found.sort(key=lambda each: each[0], reverse=True)
+        return [clip_id for _, clip_id in found[:UNPLACED_LIMIT]]
+
     def filing_facts(self, user: str, clip_id: UUID) -> FilingFacts | None:
         with self._lock:
             stored = self._clips.get((user, clip_id))
@@ -387,6 +404,20 @@ class SupabaseClipWriter(SupabaseRest):
 
 class SupabaseClipReader(SupabaseRest):
     """The owner's clips, with their Clerk token (RLS and bucket policies apply)."""
+
+    def unplaced_entries(self, user: str) -> list[UUID]:
+        rows = self._get(
+            "clips",
+            {
+                "user_id": f"eq.{user}",
+                "select": "id",
+                "kind": "eq.entry",
+                "notebook_page_id": "is.null",
+                "order": "created_at.desc",
+                "limit": str(UNPLACED_LIMIT),
+            },
+        )
+        return [UUID(row["id"]) for row in rows]
 
     def _one(self, user: str, clip_id: UUID) -> dict[str, Any] | None:
         rows = self._get("clips", {"user_id": f"eq.{user}", "id": f"eq.{clip_id}"})

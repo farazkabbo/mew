@@ -26,6 +26,7 @@ from ..clips.models import (
     EntryAppend,
     FromScreenPage,
     SavedDestination,
+    UnplacedEntries,
 )
 from ..clips.store import (
     ClipReader,
@@ -315,6 +316,15 @@ def move_from_notebook(
 # ─── The owner ───────────────────────────────────────────────────────────────────────────────
 # Responses leave out empty fields (None): the web app's schemas treat a missing title, link or
 # follow-up question as absent, and refuse a null one.
+
+
+@router.get("/unplaced")
+def unplaced_entries(
+    request: Request, caller: CurrentCaller, settings: SettingsDep
+) -> UnplacedEntries:
+    """Entries saved while no notebook was open to take them: the next one to open adds them."""
+    reader = _reader(request, caller, settings)
+    return UnplacedEntries(clip_ids=_call(lambda: reader.unplaced_entries(caller.user_id)))
 
 
 @router.get("/{clip_id}", response_model_exclude_none=True)

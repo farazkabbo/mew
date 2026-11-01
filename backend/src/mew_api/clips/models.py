@@ -351,6 +351,12 @@ class ClipView(_Camel):
     destination: SavedDestination | None = None
 
 
+class UnplacedEntries(_Camel):
+    """Saved entries no notebook has a page for yet."""
+
+    clip_ids: list[UUID]
+
+
 class ClipPatch(_Camel):
     notebook_page_id: UUID
 
