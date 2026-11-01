@@ -271,3 +271,7 @@ footer {
     animation: none !important;
   }
 }
+
+.check .hint {
+  display: block;
+}

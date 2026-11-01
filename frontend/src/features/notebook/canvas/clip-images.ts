@@ -10,6 +10,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Entry = ImageBitmap | "loading" | "failed";
 
+const LOAD_TRIES = 3;
+const LOAD_RETRY_MS = 1_500;
+
 export class ClipImages {
   private readonly entries = new Map<string, Entry>();
   private disposed = false;
@@ -86,11 +89,13 @@ export class ClipImages {
     }
   }
 
-  private async load(clipId: string): Promise<void> {
+  private async load(clipId: string, tries = 1): Promise<void> {
     try {
       const response = await this.fetchImpl(`/api/clips/${clipId}/image`, { cache: "no-store" });
       const blob = await response.blob();
-      if (!response.ok || blob.type !== "image/jpeg") throw new Error("not an image");
+      if (!response.ok || blob.type !== "image/jpeg") {
+        throw new Error(`the answer was ${response.status} ${blob.type}`);
+      }
       const bitmap = await this.decode(blob);
       if (this.disposed) {
         bitmap.close();
@@ -98,9 +103,19 @@ export class ClipImages {
       }
       this.entries.set(clipId, bitmap);
       this.onLoad();
-    } catch {
-      // Offline, or the clip was deleted: the page shows a placeholder instead.
-      if (!this.disposed) this.entries.set(clipId, "failed");
+    } catch (error) {
+      if (this.disposed) return;
+      // Never the picture or its text: only why it didn't arrive.
+      console.warn(`[notebook] a saved picture didn't load (try ${tries}):`, error);
+      // Just saved, or a moment offline: worth asking again. After that the page shows a
+      // placeholder until it's opened again.
+      if (tries < LOAD_TRIES) {
+        setTimeout(() => {
+          if (!this.disposed) void this.load(clipId, tries + 1);
+        }, LOAD_RETRY_MS * tries);
+      } else {
+        this.entries.set(clipId, "failed");
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { notchPath, parseIslandView, parseMusicView } from "./island-view";
+import { notchPath, parseIslandView, parseMusicView, pressedByPen } from "./island-view";
 
 const VIEW = {
   tool: "select",
@@ -104,5 +104,16 @@ describe("the island as drawn", () => {
     expect(notchPath(476, 58, 0, 22)).toBe(
       "M0 0H476A0 0 0 0 0 476 0V36A22 22 0 0 1 454 58H22A22 22 0 0 1 0 36V0A0 0 0 0 0 0 0Z",
     );
+  });
+});
+
+describe("pressedByPen", () => {
+  it("is true only for a pen", () => {
+    const event = (pointerType?: string) =>
+      Object.assign(new Event("x"), pointerType === undefined ? {} : { pointerType });
+    expect(pressedByPen(event("pen"))).toBe(true);
+    expect(pressedByPen(event("mouse"))).toBe(false);
+    expect(pressedByPen(event("touch"))).toBe(false);
+    expect(pressedByPen(event())).toBe(false);
   });
 });

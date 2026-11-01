@@ -86,6 +86,9 @@ pub struct Privacy {
     pub ask_scope: CaptureScope,
     /// Don't look or listen during calls and screen recordings (on by default, brief §7.10).
     pub pause_during_calls: bool,
+    /// Let screen shares and recordings see Neb's overlays (off by default: they stay out). Neb's
+    /// own pictures leave them out either way (`overlay::hide_for_own_capture`).
+    pub show_in_captures: bool,
 }
 
 impl Default for Privacy {
@@ -95,6 +98,7 @@ impl Default for Privacy {
             redaction: RedactionRules::default(),
             ask_scope: CaptureScope::default(),
             pause_during_calls: true,
+            show_in_captures: false,
         }
     }
 }
@@ -259,6 +263,19 @@ mod tests {
                 "{older}"
             );
         }
+    }
+
+    #[test]
+    fn overlays_stay_out_of_screen_shares_unless_the_student_says_otherwise() {
+        // Files written before the setting existed, and damaged ones, keep them hidden.
+        let older = r#"{"enabled":true,"consentVersion":4,"paused":false,"privacy":{"pauseDuringCalls":true}}"#;
+        assert!(matches!(parse(older), Loaded::Read(c) if !c.privacy.show_in_captures));
+        assert!(!parse("{").into_config().privacy.show_in_captures);
+        let chosen = older.replace(
+            r#""pauseDuringCalls":true"#,
+            r#""pauseDuringCalls":true,"showInCaptures":true"#,
+        );
+        assert!(matches!(parse(&chosen), Loaded::Read(c) if c.privacy.show_in_captures));
     }
 
     #[test]

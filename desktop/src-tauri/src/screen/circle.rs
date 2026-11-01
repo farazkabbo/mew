@@ -532,8 +532,28 @@ fn send_tool<R: Runtime>(app: &AppHandle<R>) {
         app,
         Surface::Draw,
         DRAW_TOOL,
-        &json!({ "tool": tool, "shape": shape }),
+        &json!({ "tool": tool, "shape": shape, "island": island_on_board(app) }),
     );
+}
+
+/// Where the island is on the draw overlay (CSS pixels: left, top, right, bottom), so a pen press
+/// there is a press on its buttons, not a stroke.
+fn island_on_board<R: Runtime>(app: &AppHandle<R>) -> Option<[f32; 4]> {
+    let island = state(app)?.island?;
+    let (monitor, scale) = board(app)?;
+    let x = |at: i32| (at - monitor.left) as f32 / scale;
+    let y = |at: i32| (at - monitor.top) as f32 / scale;
+    Some([
+        x(island.left),
+        y(island.top),
+        x(island.right),
+        y(island.bottom),
+    ])
+}
+
+/// The island moved or changed height: the draw overlay's page is told.
+pub(super) fn island_changed<R: Runtime>(app: &AppHandle<R>) {
+    send_tool(app);
 }
 
 /// The draw overlay's monitor and scale (physical pixels per CSS pixel), once it's placed.
@@ -857,6 +877,26 @@ pub fn screen_draw_mark<R: Runtime>(
     Ok(())
 }
 
+/// A pen pressed the island through the draw overlay (mouse presses are read in `track_drag`).
+/// Only a press that really is on the island counts.
+#[tauri::command(async)]
+pub fn screen_draw_island_press<R: Runtime>(
+    window: WebviewWindow<R>,
+    at: [f32; 2],
+) -> Result<(), String> {
+    require_surface(&window, Surface::Draw)?;
+    let app = window.app_handle();
+    let (Some((monitor, scale)), true) = (board(app), at.iter().all(|v| v.is_finite())) else {
+        return Ok(());
+    };
+    let x = (at[0] * scale) as i32 + monitor.left;
+    let y = (at[1] * scale) as i32 + monitor.top;
+    if state(app).is_some_and(|s| s.island.is_some_and(|r| r.contains(x, y))) {
+        super::screen_island::press(app, x, y);
+    }
+    Ok(())
+}
+
 /// The pen's eraser end: removes the last mark.
 #[tauri::command(async)]
 pub fn screen_draw_erase<R: Runtime>(window: WebviewWindow<R>) -> Result<(), String> {
@@ -1038,6 +1078,12 @@ fn content_changed<R: Runtime>(app: &AppHandle<R>, change: Change) {
     }
 }
 
+/// The draw overlay's view with no session. The pen and eraser need no session, and the page only
+/// takes a pen stroke while `drawing` is true, so it says whether a tool is on, not just "no marks".
+fn no_marks_view(drawing: bool) -> serde_json::Value {
+    json!({ "marks": [], "grey": false, "drawing": drawing, "mode": "draw" })
+}
+
 /// Sends the marks to the draw overlay to show (the one being drawn is the page's own).
 pub(super) fn show_marks<R: Runtime>(app: &AppHandle<R>) {
     let view = state(app).and_then(|state| {
@@ -1061,8 +1107,8 @@ pub(super) fn show_marks<R: Runtime>(app: &AppHandle<R>) {
             .collect();
         Some(json!({ "marks": marks, "grey": grey, "drawing": drawing, "mode": "draw" }))
     });
-    let view = view
-        .unwrap_or_else(|| json!({ "marks": [], "grey": false, "drawing": false, "mode": "draw" }));
+    let drawing = state(app).is_some_and(|s| s.drawing);
+    let view = view.unwrap_or_else(|| no_marks_view(drawing));
     overlay::dispatch(app, Surface::Draw, DRAW_SHOW, &view);
 }
 
@@ -1084,7 +1130,7 @@ pub fn end_session<R: Runtime>(app: &AppHandle<R>) {
         app,
         Surface::Draw,
         DRAW_SHOW,
-        &json!({ "marks": [], "grey": false, "drawing": false, "mode": "draw" }),
+        &no_marks_view(state(app).is_some_and(|s| s.drawing)),
     );
     overlay::dispatch(app, Surface::Ink, "mew:ink-clear", &json!({}));
     overlay::hide_quietly_named(app, Surface::Ink);
@@ -1427,4 +1473,16 @@ pub fn screen_draw_select<R: Runtime>(
     .ok_or("Drag a box around the question.")?;
     ask_about_area(app, area);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_pen_and_eraser_can_draw_without_a_session() {
+        assert_eq!(no_marks_view(true)["drawing"], true);
+        assert_eq!(no_marks_view(false)["drawing"], false);
+        assert_eq!(no_marks_view(true)["marks"], json!([]));
+    }
 }

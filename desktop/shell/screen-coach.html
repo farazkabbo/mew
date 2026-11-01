@@ -43,10 +43,10 @@
             discarded. It is never written to disk.
           </li>
           <li>
-            <strong>Neb draws beside what it explains</strong> in violet ink that only you see (it
-            never shows in screen shares or recordings). While ink is on screen, Neb notices
-            scrolling, switching apps and key presses (never which keys) so the ink can fade when
-            the page moves.
+            <strong>Neb draws beside what it explains</strong> in violet ink. Screen shares and
+            recordings don't show it unless you turn that on under Privacy. While ink is on screen,
+            Neb notices scrolling, switching apps and key presses (never which keys) so the ink can
+            fade when the page moves.
           </li>
           <li>
             <strong>Saving to your notebook is up to you.</strong> Say “save this”, or circle it and
@@ -275,6 +275,22 @@
           <span>Pause during calls and screen recordings</span>
         </label>
 
+        <label class="check">
+          <input type="checkbox" id="show-in-captures" />
+          <span>
+            Show Neb in screen shares and recordings
+            <span class="hint">
+              Viewers will see Neb's bar, ink, cards and pointer, and anything written in them. The
+              violet frame stays visible only to you, and Neb's own pictures still leave all of this
+              out.
+            </span>
+          </span>
+        </label>
+        <p id="show-in-captures-paused" class="hint" hidden>
+          Neb won't look or listen during a call or recording while “Pause during calls and screen
+          recordings” is on. Turn that off to use Neb while you share.
+        </p>
+
         <fieldset>
           <legend>Cover before anything is sent</legend>
           <label class="check">
@@ -329,6 +345,21 @@
         <div class="row buttons">
           <button type="button" id="restore-defaults">Restore the default list</button>
         </div>
+      </section>
+
+      <section aria-labelledby="updates">
+        <h2 id="updates">Updates</h2>
+        <p id="update-state" role="status"></p>
+        <div class="row buttons">
+          <button type="button" id="update-check">Check for updates</button>
+          <button type="button" id="update-install" class="primary" hidden>
+            Restart and update
+          </button>
+        </div>
+        <p class="hint">
+          Neb checks by itself and gets each new version ready in the background. It only restarts
+          when you say so, and only installs versions signed by the Neb team.
+        </p>
       </section>
 
       <footer>

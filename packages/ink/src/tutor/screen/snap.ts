@@ -20,6 +20,10 @@ const TEXT_FILL = 0.35;
 const KEEP = 0.4;
 /** An arrow's tip moves onto a word at most this many word heights away. */
 const POINT_REACH = 1.2;
+/** A target that missed its line: at most this many word heights tall… */
+const MISS_SIZE = 3;
+/** …and at most this many word heights from the line. */
+const MISS_REACH = 2;
 
 /** Typical word height (median), or 0 with no words. */
 function wordHeight(words: readonly BBox[]): number {
@@ -62,14 +66,40 @@ function lines(words: readonly BBox[], height: number): BBox[][] {
 }
 
 /**
+ * The line of words a target just missed: the model read a line's height off a small picture and
+ * landed in the gap above or below it. Only a target about a line's size counts (a bigger one may
+ * be a figure), only words under or over it, and only this close, so a mark isn't dragged to
+ * unrelated text. Null when there's no such line: the target stays where it was.
+ */
+function missedLine(box: BBox, words: readonly BBox[], height: number): BBox | null {
+  if (box[3] > height * MISS_SIZE) return null;
+  const gap = (word: BBox) =>
+    Math.max(word[1] - (box[1] + box[3]), box[1] - (word[1] + word[3]), 0);
+  const beside = words.filter(
+    (word) =>
+      word[0] < box[0] + box[2] && word[0] + word[2] > box[0] && gap(word) <= height * MISS_REACH,
+  );
+  if (beside.length === 0) return null;
+  const nearest = Math.min(...beside.map(gap));
+  const closest = beside.filter((word) => gap(word) === nearest);
+  const [first] = closest;
+  if (!first) return null;
+  const centre = first[1] + first[3] / 2;
+  return beside
+    .filter((word) => Math.abs(word[1] + word[3] / 2 - centre) < height * 0.5)
+    .reduce(unionBBox);
+}
+
+/**
  * A box meant to circle some words: the words it covers, when they're most of what it holds.
- * A box around a figure (few or no words in it) stays as it is.
+ * A box around a figure (few or no words in it) stays as it is. A line-sized box on blank space
+ * right beside a line of text moves onto that line.
  */
 export function snapRegion(box: BBox, words: readonly BBox[]): BBox {
   const height = wordHeight(words);
   if (height <= 0 || area(box) <= 0) return box;
   const covered = coveredWords(box, words, height * 0.5);
-  if (covered.length === 0) return box;
+  if (covered.length === 0) return missedLine(box, words, height) ?? box;
   const snapped = covered.reduce(unionBBox);
   const filled = covered.reduce((sum, w) => sum + overlap(w, box), 0);
   if (filled < TEXT_FILL * area(box)) return box;
@@ -85,7 +115,7 @@ export function snapLine(box: BBox, words: readonly BBox[]): BBox {
   const height = wordHeight(words);
   if (height <= 0 || box[2] <= 0) return box;
   const covered = coveredWords(box, words, height * 0.5);
-  if (covered.length === 0) return box;
+  if (covered.length === 0) return missedLine(box, words, height) ?? box;
   let best: { line: BBox; share: number } | null = null;
   for (const line of lines(covered, height)) {
     const bounds = line.reduce(unionBBox);

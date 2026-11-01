@@ -23,8 +23,16 @@
 //! - The preview is an ordinary focused window: the only WebView that ever sees screen pixels,
 //!   and only for a clip the student asked to save (decision 2, S3 §5).
 //!
+//! The overlays stay out of screen shares and recordings unless the student turns on "Show Neb in
+//! screen shares and recordings"; Neb's own captures leave them out either way.
+//!
 //! Windows are created on first use (off the main thread: building a window from the main
 //! thread can deadlock on Windows) and kept hidden between uses.
+
+use std::any::Any;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc;
+use std::time::Duration;
 
 use serde_json::Value;
 use tauri::{
@@ -32,12 +40,14 @@ use tauri::{
     WebviewWindowBuilder,
 };
 use windows::Win32::Foundation::HWND;
+use windows::Win32::Graphics::Dwm::DwmFlush;
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowLongPtrW, SetForegroundWindow, SetWindowDisplayAffinity, SetWindowLongPtrW,
-    SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE, HWND_TOPMOST, SWP_FRAMECHANGED,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_SHOWNOACTIVATE,
-    WDA_EXCLUDEFROMCAPTURE, WINDOW_STYLE, WS_CAPTION, WS_EX_LAYERED, WS_EX_NOACTIVATE,
-    WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+    GetWindowLongPtrW, IsWindowVisible, SetForegroundWindow, SetWindowDisplayAffinity,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE, GWL_STYLE, HWND_TOPMOST,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE,
+    SW_SHOWNOACTIVATE, WDA_EXCLUDEFROMCAPTURE, WDA_NONE, WINDOW_DISPLAY_AFFINITY, WINDOW_STYLE,
+    WS_CAPTION, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
+    WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
 };
 
 use super::frame::ScreenRect;
@@ -87,6 +97,28 @@ pub fn card_fit(window: ScreenRect, monitor: ScreenRect, wanted: f64, scale: f64
 }
 
 impl Surface {
+    /// Every overlay kept out of captures (the preview is an ordinary window, in them already).
+    const OVERLAYS: [Surface; 11] = [
+        Surface::Ink,
+        Surface::Pill,
+        Surface::Notes,
+        Surface::Coach,
+        Surface::Pointer,
+        Surface::Draw,
+        Surface::Card,
+        Surface::Quiz,
+        Surface::Island,
+        Surface::Capsule,
+        Surface::Keys,
+    ];
+
+    /// The overlays that can paint an empty white box while hidden (seen with the card once the
+    /// student showed Neb in captures; Windows still called it hidden). They take the focus when
+    /// clicked, so they aren't made like the rest, and each is placed whenever it's shown.
+    const fn parks(self) -> bool {
+        matches!(self, Surface::Card | Surface::Quiz | Surface::Notes)
+    }
+
     pub const fn label(self) -> &'static str {
         match self {
             Surface::Ink => "screen-ink",
@@ -284,10 +316,17 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
         let _ = window.set_ignore_cursor_events(true);
     }
     if surface != Surface::Clip {
-        exclude_from_capture(&window);
+        // Nothing else sets it while the window stays hidden.
+        if let Ok(hwnd) = window.hwnd() {
+            let raw = hwnd.0 as isize;
+            let _ = window.run_on_main_thread(move || match_capture_choice(HWND(raw as *mut _)));
+        }
     }
     if surface != Surface::Clip {
         no_title_bar(&window);
+    }
+    if surface.parks() {
+        park(&window);
     }
     Some(window)
 }
@@ -375,19 +414,93 @@ unsafe extern "system" fn overlay_proc(
     }
 }
 
-/// Keeps a window out of every screen capture (ours, screen shares, recordings).
-fn exclude_from_capture<R: Runtime>(window: &WebviewWindow<R>) {
-    let Ok(hwnd) = window.hwnd() else {
-        return;
-    };
-    let raw = hwnd.0 as isize;
-    let _ = window.run_on_main_thread(move || {
-        // SAFETY: a top-level window of this process, on the thread that owns it.
-        if unsafe { SetWindowDisplayAffinity(HWND(raw as *mut _), WDA_EXCLUDEFROMCAPTURE) }.is_err()
-        {
-            eprintln!("[screen] couldn't exclude an overlay from captures");
+/// The student chose to show the overlays in screen shares and recordings.
+static SHOW_IN_CAPTURES: AtomicBool = AtomicBool::new(false);
+/// Neb's own captures under way: the overlays are out of the picture for them, whatever was chosen.
+static OWN_CAPTURES: AtomicUsize = AtomicUsize::new(0);
+/// How long a capture waits for the overlays to leave the picture before going ahead.
+const HIDE_TIMEOUT: Duration = Duration::from_millis(300);
+
+/// What Windows is told about an overlay. Hidden unless the student chose to show it and Neb isn't
+/// taking its own picture this moment.
+fn capture_affinity(show: bool, own_captures: usize) -> WINDOW_DISPLAY_AFFINITY {
+    if show && own_captures == 0 {
+        WDA_NONE
+    } else {
+        WDA_EXCLUDEFROMCAPTURE
+    }
+}
+
+/// Gives a window the current choice. Call on the thread that owns it.
+fn match_capture_choice(hwnd: HWND) {
+    let affinity = capture_affinity(
+        SHOW_IN_CAPTURES.load(Ordering::SeqCst),
+        OWN_CAPTURES.load(Ordering::SeqCst),
+    );
+    // SAFETY: a top-level window of this process, on the thread that owns it.
+    if unsafe { SetWindowDisplayAffinity(hwnd, affinity) }.is_err() {
+        eprintln!("[screen] couldn't set an overlay's capture setting");
+    }
+}
+
+/// Applies the current choice to the overlays on screen. Hidden ones are left alone until they're
+/// shown (`show_quietly`, `show_filled`): changing the setting on a hidden, never-placed overlay is
+/// the suspected cause of its empty window appearing as a white box. The choice is read on the
+/// owning thread, so the last call leaves the windows matching the latest state.
+fn apply_capture_affinity<R: Runtime>(app: &AppHandle<R>, done: Option<mpsc::Sender<()>>) {
+    let windows: Vec<isize> = Surface::OVERLAYS
+        .iter()
+        .filter_map(|surface| app.get_webview_window(surface.label())?.hwnd().ok())
+        .map(|hwnd| hwnd.0 as isize)
+        .collect();
+    let _ = app.run_on_main_thread(move || {
+        for raw in windows {
+            let hwnd = HWND(raw as *mut _);
+            // SAFETY: a window of this process; no pointers.
+            if unsafe { IsWindowVisible(hwnd) }.as_bool() {
+                match_capture_choice(hwnd);
+            }
+        }
+        if let Some(done) = done {
+            let _ = done.send(());
         }
     });
+}
+
+/// Shows the overlays in screen shares and recordings, or keeps them out (the student's setting).
+pub fn set_shown_in_captures<R: Runtime>(app: &AppHandle<R>, show: bool) {
+    SHOW_IN_CAPTURES.store(show, Ordering::SeqCst);
+    apply_capture_affinity(app, None);
+}
+
+/// Keeps the overlays out of Neb's own picture while it's alive. Their ink, cards and tools would
+/// otherwise reach the model and the saved clip when the student shows them in screen shares.
+struct OwnCapture<R: Runtime>(AppHandle<R>);
+
+impl<R: Runtime> Drop for OwnCapture<R> {
+    fn drop(&mut self) {
+        OWN_CAPTURES.fetch_sub(1, Ordering::SeqCst);
+        apply_capture_affinity(&self.0, None);
+    }
+}
+
+/// Call off the main thread, before reading pixels; returns once the overlays have left the
+/// picture. Does nothing while they're hidden anyway.
+pub fn hide_for_own_capture<R: Runtime>(app: &AppHandle<R>) -> Option<Box<dyn Any>> {
+    if !SHOW_IN_CAPTURES.load(Ordering::SeqCst) {
+        return None;
+    }
+    OWN_CAPTURES.fetch_add(1, Ordering::SeqCst);
+    let guard = OwnCapture(app.clone());
+    let (done, applied) = mpsc::channel();
+    apply_capture_affinity(app, Some(done));
+    let _ = applied.recv_timeout(HIDE_TIMEOUT);
+    // The change shows from the next composed frame on: wait until that one's on screen.
+    for _ in 0..2 {
+        // SAFETY: no arguments; waits for the desktop compositor's next pass.
+        let _ = unsafe { DwmFlush() };
+    }
+    Some(Box::new(guard))
 }
 
 /// Moves and sizes a window to `rect` (physical pixels). Twice: moving onto a monitor with a
@@ -409,6 +522,7 @@ pub fn show_quietly<R: Runtime>(window: &WebviewWindow<R>) {
     let raw = hwnd.0 as isize;
     let _ = window.run_on_main_thread(move || {
         let hwnd = HWND(raw as *mut _);
+        match_capture_choice(hwnd);
         strip_frame(hwnd);
         // SAFETY: a window of this process, on its own thread; no pointers.
         unsafe {
@@ -438,6 +552,7 @@ pub fn show_filled<R: Runtime>(window: &WebviewWindow<R>, rect: ScreenRect) {
     let raw = hwnd.0 as isize;
     let _ = window.run_on_main_thread(move || {
         let hwnd = HWND(raw as *mut _);
+        match_capture_choice(hwnd);
         strip_frame(hwnd);
         let (w, h) = (rect.width().max(1), rect.height().max(1));
         // SAFETY: a window of this process, on its own thread; no pointers.
@@ -579,6 +694,25 @@ fn set_ex_style<R: Runtime>(window: &WebviewWindow<R>, bits: u32, on: bool) {
     });
 }
 
+/// Limits a window to its top `height` physical pixels, without resizing it. What's cut off is no
+/// longer part of the window for any input: a pen isn't always passed through clear pixels the way
+/// a mouse is, so it couldn't reach what's under the island's empty space.
+pub fn keep_top<R: Runtime>(window: &WebviewWindow<R>, width: i32, height: i32) {
+    use windows::Win32::Graphics::Gdi::{CreateRectRgn, SetWindowRgn};
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let raw = hwnd.0 as isize;
+    let _ = window.run_on_main_thread(move || {
+        // SAFETY: a window of this process, on its own thread. Windows owns the region once it's
+        // set, so it isn't freed here.
+        unsafe {
+            let region = CreateRectRgn(0, 0, width, height);
+            SetWindowRgn(HWND(raw as *mut _), Some(region), true);
+        }
+    });
+}
+
 /// Turns off Windows 11's own border and rounded corners on an overlay drawn as a shape by its
 /// page (the island): without this a pale frame shows around it.
 pub fn drop_frame<R: Runtime>(window: &WebviewWindow<R>) {
@@ -613,6 +747,32 @@ pub fn drop_frame<R: Runtime>(window: &WebviewWindow<R>) {
     });
 }
 
+/// Off every monitor, in physical pixels. (A builder's `position` is scaled by the display's DPI,
+/// which puts this outside what Windows accepts, and the window lands at its default spot.)
+const PARKED_AT: i32 = -32000;
+
+/// Moves a hidden overlay off every monitor, on its own thread.
+fn park<R: Runtime>(window: &WebviewWindow<R>) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let raw = hwnd.0 as isize;
+    let _ = window.run_on_main_thread(move || {
+        // SAFETY: a window of this process, on its own thread; no pointers.
+        let _ = unsafe {
+            SetWindowPos(
+                HWND(raw as *mut _),
+                None,
+                PARKED_AT,
+                PARKED_AT,
+                0,
+                0,
+                SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        };
+    });
+}
+
 /// Hides an overlay window (shown with `show_quietly`).
 pub fn hide_quietly<R: Runtime>(window: &WebviewWindow<R>) {
     let Ok(hwnd) = window.hwnd() else {
@@ -623,6 +783,12 @@ pub fn hide_quietly<R: Runtime>(window: &WebviewWindow<R>) {
         // SAFETY: a window of this process, on its own thread.
         let _ = unsafe { ShowWindow(HWND(raw as *mut _), SW_HIDE) };
     });
+    if Surface::OVERLAYS
+        .iter()
+        .any(|surface| surface.parks() && surface.label() == window.label())
+    {
+        park(window);
+    }
 }
 
 /// Moves a window to `rect` (physical pixels) from any thread, without activating it, and
@@ -716,6 +882,14 @@ pub fn pill_spot(ink: ScreenRect, monitor: ScreenRect, scale: f64) -> ScreenRect
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlays_are_hidden_unless_chosen_and_always_from_nebs_own_picture() {
+        assert_eq!(capture_affinity(false, 0), WDA_EXCLUDEFROMCAPTURE);
+        assert_eq!(capture_affinity(true, 0), WDA_NONE);
+        assert_eq!(capture_affinity(true, 1), WDA_EXCLUDEFROMCAPTURE);
+        assert_eq!(capture_affinity(false, 2), WDA_EXCLUDEFROMCAPTURE);
+    }
     use windows::Win32::UI::WindowsAndMessaging::{WS_CLIPSIBLINGS, WS_VISIBLE};
 
     fn rect(left: i32, top: i32, right: i32, bottom: i32) -> ScreenRect {

@@ -109,6 +109,48 @@ test("settings are saved to the account and used by the notebook", async ({ page
   await expect(page.getByRole("slider")).toHaveValue("0.85");
 });
 
+test("the voice picker saves a voice and plays the one asked for", async ({ page }) => {
+  await page.route("**/api/voices", (route) =>
+    route.fulfill({
+      json: {
+        voices: [
+          { id: "AAAAAAAAAAAAAAAAAAAA", name: "George" },
+          { id: "BBBBBBBBBBBBBBBBBBBB", name: "Sarah" },
+        ],
+      },
+    }),
+  );
+  const asked: unknown[] = [];
+  await page.route("**/api/tts", (route) => {
+    asked.push(route.request().postDataJSON());
+    return route.fulfill({ status: 402, json: { error: "This voice needs a paid plan." } });
+  });
+
+  await page.goto("/settings");
+  const picker = page.getByTestId("voice-picker");
+  // Nothing chosen yet: the first voice, the server's default.
+  await expect(picker.getByRole("radio", { name: "George" })).toBeChecked();
+
+  // Hearing a voice doesn't choose it, and a refusal is explained.
+  await picker.getByRole("button", { name: "Hear Sarah" }).click();
+  await expect(picker.getByRole("alert")).toHaveText("This voice needs a paid plan.");
+  expect(asked).toEqual([expect.objectContaining({ voiceId: "BBBBBBBBBBBBBBBBBBBB" })]);
+  await expect(picker.getByRole("radio", { name: "George" })).toBeChecked();
+
+  // Saving is debounced: wait for it before reloading.
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/settings") && response.request().method() === "PATCH",
+  );
+  await picker.getByRole("radio", { name: "Sarah" }).check();
+  await expect(picker.getByRole("alert")).toHaveCount(0);
+  await saved;
+  await page.reload();
+  await expect(
+    page.getByTestId("voice-picker").getByRole("radio", { name: "Sarah" }),
+  ).toBeChecked();
+});
+
 test("a busy tutor model says so, and a refused voice is explained", async ({ page }) => {
   const busy =
     "The tutor is busy right now (too many requests to the model). Try again in a minute.";

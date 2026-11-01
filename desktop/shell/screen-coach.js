@@ -145,6 +145,8 @@ function renderPrivacy(view) {
     radio.checked = radio.value === privacy.askScope;
   }
   $("pause-during-calls").checked = privacy.pauseDuringCalls;
+  $("show-in-captures").checked = privacy.showInCaptures;
+  $("show-in-captures-paused").hidden = !(privacy.showInCaptures && privacy.pauseDuringCalls);
   for (const box of document.querySelectorAll("input[data-rule]")) {
     box.checked = privacy.redaction[box.dataset.rule];
   }
@@ -192,6 +194,10 @@ $("pause-during-calls").addEventListener("change", (event) =>
   savePrivacy({ pauseDuringCalls: event.target.checked }),
 );
 
+$("show-in-captures").addEventListener("change", (event) =>
+  savePrivacy({ showInCaptures: event.target.checked }),
+);
+
 for (const box of document.querySelectorAll("input[data-rule]")) {
   box.addEventListener("change", () =>
     savePrivacy({ redaction: { ...current.privacy.redaction, [box.dataset.rule]: box.checked } }),
@@ -212,6 +218,49 @@ $("restore-defaults").addEventListener("click", () =>
 
 $("open-mic").addEventListener("click", () => invoke("screen_coach_open_mic_settings"));
 
+// ─── Updates ─────────────────────────────────────────────────────────────────────────────────
+
+/** What to say about the app's updates; Rust decides the state. */
+function updateWords({ current, phase }) {
+  switch (phase.state) {
+    case "off":
+      return `Version ${current}. This build doesn't update itself.`;
+    case "checking":
+      return `Version ${current}. Checking for updates…`;
+    case "upToDate":
+      return `Version ${current}. You're up to date.`;
+    case "downloading":
+      return `Getting version ${phase.version}… ${phase.percent === null ? "" : `${phase.percent}%`}`;
+    case "ready":
+      return `Version ${phase.version} is ready. You have ${current}.`;
+    case "failed":
+      return `Version ${current}. Couldn't update just now; Neb will try again later.`;
+    default:
+      return `Version ${current}.`;
+  }
+}
+
+function renderUpdates(view) {
+  const { state } = view.phase;
+  $("update-state").textContent = updateWords(view);
+  $("update-check").hidden = state === "off" || state === "ready";
+  $("update-check").disabled = state === "checking" || state === "downloading";
+  $("update-install").hidden = state !== "ready";
+}
+
+async function runUpdates(command) {
+  try {
+    renderUpdates(await invoke(command));
+  } catch {
+    $("update-state").textContent = "Couldn't update just now. Please try again later.";
+  }
+}
+
+$("update-check").addEventListener("click", () => runUpdates("desktop_update_check"));
+$("update-install").addEventListener("click", () => runUpdates("desktop_update_install"));
+
 // Rust tells the page when anything changes elsewhere (tray, voice, the hold gesture).
 window.addEventListener("screen-coach:changed", refresh);
+window.addEventListener("neb:update-changed", () => runUpdates("desktop_update_status"));
 refresh();
+runUpdates("desktop_update_status");

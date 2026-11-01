@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
-import { isDesktop } from "../desktop/bridge";
+import { isDesktop, screenCoachForOnboarding } from "../desktop/bridge";
 import { momentsApi } from "../moments/api";
 import { useMomentChecks } from "../moments/store";
 import { ShortcutsSection } from "../shortcuts/ShortcutsSection";
@@ -199,7 +199,9 @@ export function SettingsApp() {
           ) : (
             <VoicePicker
               voices={voices}
-              value={settings.voice_id ?? voices[0]?.id ?? ""}
+              value={
+                voices.find((voice) => voice.id === settings.voice_id)?.id ?? voices[0]?.id ?? ""
+              }
               onChange={(voice_id) => void update({ voice_id })}
             />
           )}
@@ -210,6 +212,22 @@ export function SettingsApp() {
         <PrivacySection />
 
         <DevicesSection />
+
+        {desktop && (
+          <Section title="This computer">
+            <p className="text-sm text-muted">
+              Screen Coach, showing Neb in screen shares and recordings, and updates to the app are
+              set here on this computer.
+            </p>
+            <button
+              type="button"
+              onClick={() => void screenCoachForOnboarding(true)}
+              className="rounded-full border border-line px-4 py-1.5 text-sm hover:border-ink"
+            >
+              Open desktop settings
+            </button>
+          </Section>
+        )}
 
         <Section title="Performance">
           <p className="text-sm text-muted">
@@ -249,73 +267,84 @@ function VoicePicker({
   onChange(id: string): void;
 }) {
   const [player] = useState(() => new PcmStreamPlayer());
-  const [state, setState] = useState<"idle" | "playing" | string>("idle");
+  /** The voice whose sample is playing, if any. */
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
 
-  const sample = async () => {
+  const sample = async (voiceId: string) => {
     player.unlock(); // inside the click
-    setState("playing");
+    setPlaying(voiceId);
+    setProblem(null);
     try {
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: "Hi, I'm Neb. I'll stay quiet until you need me.",
-          voiceId: value,
+          voiceId,
         }),
         cache: "no-store",
       });
       if (!response.ok || !response.body) {
         const body = (await response.json().catch(() => null)) as { error?: unknown } | null;
-        setState(typeof body?.error === "string" ? body.error : "That voice couldn't be played.");
+        setProblem(typeof body?.error === "string" ? body.error : "That voice couldn't be played.");
         return;
       }
       await player.play(response.body, { sampleRate: TTS_SAMPLE_RATE });
-      setState("idle");
     } catch {
-      setState("That voice couldn't be played.");
+      setProblem("That voice couldn't be played.");
+    } finally {
+      setPlaying(null);
     }
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2">
-          <span className="font-medium">Tutor&apos;s voice</span>
-          <select
-            value={value}
-            onChange={(e) => {
-              setState("idle");
-              onChange(e.target.value);
-            }}
-            className="rounded-lg border border-line bg-paper px-3 py-1.5 outline-none focus:border-ink"
+    <fieldset className="space-y-3" data-testid="voice-picker">
+      <legend className="font-medium">Neb&apos;s voice</legend>
+      <p className="text-sm text-muted">Neb uses it in your notebook and on your screen.</p>
+      <div className="flex flex-wrap gap-2">
+        {voices.map((voice) => (
+          <div
+            key={voice.id}
+            className="flex items-center gap-1 rounded-full border border-line py-1 pr-1 pl-4 text-sm has-checked:border-ink has-checked:bg-paper-hi"
           >
-            {voices.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          onClick={() => void sample()}
-          disabled={state === "playing"}
-          className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-sm hover:border-ink disabled:opacity-50"
-        >
-          {state === "playing" ? (
-            <Loader2 className="size-4 animate-spin" aria-hidden />
-          ) : (
-            <Volume2 className="size-4" aria-hidden />
-          )}
-          Play a sample
-        </button>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="voice"
+                value={voice.id}
+                checked={value === voice.id}
+                onChange={() => {
+                  setProblem(null);
+                  onChange(voice.id);
+                }}
+                className="accent-(--ink)"
+              />
+              {voice.name}
+            </label>
+            <button
+              type="button"
+              onClick={() => void sample(voice.id)}
+              disabled={playing !== null}
+              aria-label={`Hear ${voice.name}`}
+              title={`Hear ${voice.name}`}
+              className="ml-1 inline-flex size-8 items-center justify-center rounded-full hover:bg-paper-hi disabled:opacity-50"
+            >
+              {playing === voice.id ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Volume2 className="size-4" aria-hidden />
+              )}
+            </button>
+          </div>
+        ))}
       </div>
-      {state !== "idle" && state !== "playing" && (
+      {problem !== null && (
         <p role="alert" className="text-sm text-muted">
-          {state}
+          {problem}
         </p>
       )}
-    </div>
+    </fieldset>
   );
 }
 

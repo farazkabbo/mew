@@ -263,6 +263,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     let loaded = config::load(&config_path);
     let config_reset = matches!(loaded, Loaded::Reset(_));
     let config = loaded.into_config();
+    let show_in_captures = config.privacy.show_in_captures;
     let shortcuts_notice = config.shortcuts_notice && config.is_on();
     let state = State {
         config,
@@ -295,6 +296,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         state.status = coach.resting_status(&state);
     }
     app.manage(coach);
+    super::overlay::set_shown_in_captures(app, show_in_captures);
     super::screen_music::setup(app, &config_dir);
     settings_capability(app)?;
     overlay_capabilities(app)?;
@@ -324,7 +326,10 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-set-circle")
             .permission("allow-screen-coach-open-mic-settings")
             .permission("allow-screen-coach-link-start")
-            .permission("allow-screen-coach-disconnect"),
+            .permission("allow-screen-coach-disconnect")
+            .permission("allow-desktop-update-status")
+            .permission("allow-desktop-update-check")
+            .permission("allow-desktop-update-install"),
     )
 }
 
@@ -366,6 +371,7 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .window(Surface::Draw.label())
             .permission("allow-screen-draw-mark")
             .permission("allow-screen-draw-erase")
+            .permission("allow-screen-draw-island-press")
             .permission("allow-screen-draw-select")
             .permission("allow-screen-draw-note"),
     )?;
@@ -741,6 +747,10 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
 
     let handle = app.clone();
     let queued = on_worker(app, move |tools| {
+        let overlays = handle.clone();
+        tools.hide_overlays = Some(Box::new(move || {
+            super::overlay::hide_for_own_capture(&overlays)
+        }));
         let result = pipeline::run(tools, &request);
         finish_capture(&handle, origin, result);
     });
@@ -1148,7 +1158,9 @@ pub fn screen_coach_set_privacy<R: Runtime>(
     let app = window.app_handle();
     let coach = coach_of(app)?;
     let privacy = privacy.normalized()?;
+    let show_in_captures = privacy.show_in_captures;
     coach.update(|config| config.privacy = privacy)?;
+    super::overlay::set_shown_in_captures(app, show_in_captures);
     refresh(app);
     Ok(coach.view())
 }

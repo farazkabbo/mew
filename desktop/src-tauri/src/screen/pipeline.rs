@@ -72,6 +72,9 @@ impl ScreenError {
     }
 }
 
+/// Takes Neb's overlays out of the picture until what it returns is dropped.
+type HideOverlays = Box<dyn Fn() -> Option<Box<dyn std::any::Any>>>;
+
 /// Windows objects that are slow to create, kept by the worker thread between captures.
 #[derive(Default)]
 pub struct Tools {
@@ -79,6 +82,8 @@ pub struct Tools {
     automation: Option<Automation>,
     ocr: Option<Ocr>,
     media: Option<MediaSessions>,
+    /// Takes Neb's overlays out of the picture until what it returns is dropped.
+    pub hide_overlays: Option<HideOverlays>,
 }
 
 impl Tools {
@@ -233,6 +238,7 @@ fn capture(
     if tools.capturer.is_none() {
         tools.capturer = Capturer::new().ok();
     }
+    let _overlays_hidden = tools.hide_overlays.as_ref().and_then(|hide| hide());
     let capturer = tools.capturer.as_ref().ok_or(ScreenError::Failed)?;
     capturer.capture(target).map_err(|error| match error {
         CaptureError::TargetGone => ScreenError::NothingToSee,

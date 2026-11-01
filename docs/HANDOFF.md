@@ -462,6 +462,29 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     editor on 2026-10-28; the security advisor reports nothing).
   - **To verify by hand:** the calibration with a real pen; fixing a reading, then the same
     character read right on a later line; Reset and turning learning off (the count goes to 0).
+- **Updates, voice picker, showing Neb in shares** (2026-11-01, branch
+  `feat/desktop-updater-voice-capture-settings`; the owner's request):
+  - **Updates:** `desktop/src-tauri/src/updates.rs` with `tauri-plugin-updater` (signed `latest.json`
+    and installer, background download, restart only when the student says). Only
+    `pnpm bundle:release` builds update, from `tauri.release.conf.json`. Release steps: desktop/README.md.
+    **Host:** the waitlist site (`https://www.myneb.si/`, another repo, on Vercel) serves
+    `/desktop/latest.json` and the installer, so each release also deploys that repo. It isn't the
+    app: `MEW_APP_URL` must be the deployed web app.
+    **Not done yet:** the owner generates the signing key and fills in `tauri.release.conf.json`.
+  - **Voice:** Settings → Voice shows the allowlisted voices as pills, each with its own sample.
+    Only one shows until `ELEVENLABS_VOICES` lists more.
+  - **Show Neb in screen shares and recordings** (`privacy.showInCaptures`, local page only, off by
+    default; decision 1): sets the overlays to `WDA_NONE`. `pipeline::capture` puts them back to
+    `WDA_EXCLUDEFROMCAPTURE` for each of Neb's own pictures. The capture frame stays excluded always.
+    With the setting on, the hidden card paints a white box where it waits (Windows still says it's
+    hidden; why is unknown), so the card, quiz and notes windows are parked off-screen while hidden
+    (`overlay::park`, native coordinates: a builder's `position` is DPI-scaled and overflows).
+  - **Pen on the island** (Windows Ink pens aren't mouse presses): the tip's `pointerdown` presses a
+    button; through the draw overlay via `screen_draw_island_press`; `no_marks_view` keeps `drawing`
+    true for the pen and eraser with no session; `overlay::keep_top` cuts the island's window to
+    what shows, so a pen reaches what's under its clear part. A tool on still takes all pen input.
+  - **To verify by hand:** with the setting on, the island and ink in an OBS or Teams capture but not
+    in what Neb's saved clip shows; a real update from one installed version to the next.
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
 - **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U23:

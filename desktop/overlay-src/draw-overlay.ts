@@ -12,6 +12,7 @@ import {
   type Rect,
   rectPath,
   shapeStroke,
+  insideBox,
 } from "./draw-view";
 import { invoke, on } from "./tauri";
 
@@ -75,6 +76,8 @@ const NEB = "#6b4ee6";
 let tool: DrawTool = "none";
 let shape: DrawShape = "free";
 let notes: Pt[][] = [];
+/** Where the island is on this page (left, top, right, bottom), while it shows. */
+let island: unknown = null;
 /**
  * How far the page under the notes has scrolled since they were begun (CSS px, from Rust's
  * `note_scroll.rs`): notes are kept where they'd be with no scrolling and drawn moved by this,
@@ -247,8 +250,22 @@ function rubOut(at: Pt): void {
   if (left.length !== notes.length) notes = left;
 }
 
+// A pen or finger draws here: Windows mustn't take the stroke for a pan, or a long press for a
+// right click (either ends the stroke early, or opens a menu over the screen).
+document.documentElement.style.touchAction = "none";
+window.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
+
 window.addEventListener("pointerdown", (event) => {
   if (event.pointerType === "mouse") return; // Rust reads the mouse
+  // This page can be above the island: a press on its buttons is theirs, never a stroke.
+  if (insideBox(island, event.clientX, event.clientY)) {
+    void invoke("screen_draw_island_press", { at: [event.clientX, event.clientY] }).catch(
+      () => undefined,
+    );
+    return;
+  }
   if (isEraser(event) && tool === "pen") {
     rubOut([event.clientX, event.clientY]);
     paint();
@@ -319,6 +336,15 @@ window.addEventListener("pointerup", (event) => {
   paint();
 });
 
+// Windows took the pen back mid-stroke: nothing half-drawn stays, and the next stroke starts clean.
+window.addEventListener("pointercancel", (event) => {
+  if (event.pointerType === "mouse") return;
+  window.removeEventListener("pointermove", onMove);
+  box = null;
+  stroke = null;
+  paint();
+});
+
 /** A pen or eraser stroke ended: the pen's becomes a note (on this page only). */
 function endNote(): void {
   if (stroke && tool === "pen" && stroke.length > 0) {
@@ -372,6 +398,7 @@ on("mew:draw-live", (detail) => {
 on("mew:draw-tool", (detail) => {
   const next = parseTool(detail);
   if (!next) return;
+  island = (detail as { island?: unknown }).island ?? null;
   if (next.tool !== tool) stroke = null;
   ({ tool, shape } = next);
   document.body.dataset.tool = tool;

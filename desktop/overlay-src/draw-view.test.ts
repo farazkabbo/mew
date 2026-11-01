@@ -8,6 +8,7 @@ import {
   parseTool,
   rectPath,
   shapeStroke,
+  insideBox,
 } from "./draw-view";
 
 describe("the draw overlay's view", () => {
@@ -132,5 +133,22 @@ describe("the island's tools", () => {
     ] as [number, number][][];
     expect(erase(notes, [12, 3], 5)).toEqual([notes[1]]);
     expect(erase(notes, [50, 50], 5)).toEqual(notes);
+  });
+});
+
+describe("insideBox", () => {
+  const box = [100, 0, 620, 58];
+
+  it("is true inside the box, up to but not including its far edges", () => {
+    expect(insideBox(box, 100, 0)).toBe(true);
+    expect(insideBox(box, 619, 57)).toBe(true);
+    expect(insideBox(box, 620, 10)).toBe(false);
+    expect(insideBox(box, 300, 58)).toBe(false);
+  });
+
+  it("is false with no island or a malformed box, so strokes still draw", () => {
+    expect(insideBox(null, 300, 10)).toBe(false);
+    expect(insideBox([100, 0, 620], 300, 10)).toBe(false);
+    expect(insideBox(["100", 0, 620, 58], 300, 10)).toBe(false);
   });
 });

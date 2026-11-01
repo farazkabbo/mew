@@ -33,6 +33,7 @@ and WebView2 (built into Windows 11). From this folder:
 ```sh
 pnpm app      # debug build, opens a window on MEW_APP_URL (default http://localhost:3000)
 pnpm bundle   # release build: src-tauri/target/release/bundle/{msi,nsis}/
+pnpm bundle:release   # a signed, updatable release (see "Releasing an update")
 pnpm icons    # regenerate src-tauri/icons from icon.svg
 pnpm build:shell   # bundle Screen Coach's overlay pages (runs before app/bundle by itself)
 ```
@@ -52,6 +53,54 @@ MEW_APP_URL=https://mew.example.com pnpm bundle
 
 Windows only shows notifications for installed apps: in `pnpm app` they appear under
 PowerShell's name.
+
+## Releasing an update
+
+The window shows the web app, so **web changes reach everyone when the site deploys**. A desktop
+release is only needed when something in `desktop/` changes.
+
+How the app updates (`src-tauri/src/updates.rs`, the official Tauri updater plugin):
+
+1. 30 seconds after start, then every 6 hours, or from the tray or the settings page, it fetches
+   the `latest.json` named in `src-tauri/tauri.release.conf.json` (https only).
+2. If that version is newer, it downloads the installer in the background and checks its signature
+   against the public key built into the app. A bad signature is discarded.
+3. The student sees one notification, and the tray and settings page offer "Restart to update". It
+   never restarts by itself. The installer then runs with a progress bar and reopens Neb.
+
+Only `pnpm bundle:release` builds update themselves; `pnpm bundle` and debug builds don't.
+
+**Once, before the first release:**
+
+```sh
+pnpm tauri signer generate -w ~/.tauri/neb-updater.key
+```
+
+Keep the private key and its password in a password manager and out of the repo: **if the key is
+lost, installed apps can't accept another update, and if it leaks, anyone can sign one.** Then
+choose a public https folder for releases (not GitHub Releases while the repo is private; its files
+need a login). Put both in `src-tauri/tauri.release.conf.json` and commit it: `pubkey` is the
+contents of `neb-updater.key.pub` (public, safe to commit), `endpoints` is
+`["https://<host>/desktop/latest.json"]`. The release build refuses to run with an empty key.
+
+**Each release:**
+
+1. Raise the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json`.
+2. Build, with the private key and the production site in the environment:
+
+   ```sh
+   TAURI_SIGNING_PRIVATE_KEY="<contents of neb-updater.key>" \
+   TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<its password>" \
+   MEW_APP_URL="https://<the site>" \
+   pnpm bundle:release
+   pnpm update-manifest --base-url "https://<host>/desktop" --notes "What changed"
+   ```
+
+3. Upload `Neb_<version>_x64-setup.exe` to the folder first, then `latest.json`, which goes live
+   the moment it's replaced. The website's download button points at the same `.exe`.
+
+The `.exe` should also be Authenticode-signed before it goes on the website, or Windows SmartScreen
+warns about an unknown publisher. That certificate is separate from the update key.
 
 ## Security
 
@@ -75,7 +124,9 @@ PowerShell's name.
   - Frames live in `SecretBytes` (zeroed on drop) and expire after 60 s.
   - JPEG encoding uses WIC into our own buffer, so there are no temp files.
   - Crash reports exclude the heap (`WerSetFlags(NOHEAP)`).
-  - The capture glow is excluded from captures (`WDA_EXCLUDEFROMCAPTURE`).
+  - The capture glow is excluded from captures (`WDA_EXCLUDEFROMCAPTURE`), always. The other
+    overlays are too, unless the student turns on "Show Neb in screen shares and recordings" on
+    the local settings page; Neb's own captures still leave them out (`overlay.rs`).
   - Windows' yellow capture border can't be turned off by an unpackaged app; it doubles as
     part of the capture indicator.
   - `windows` is the version Tauri already uses (`=0.62.2`), and `regex` was already in the

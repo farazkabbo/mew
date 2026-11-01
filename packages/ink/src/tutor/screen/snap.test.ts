@@ -48,3 +48,32 @@ describe("snapPoint", () => {
     expect(snapPoint([5, 5], [])).toEqual([5, 5]);
   });
 });
+
+describe("a target that landed on blank space beside a line", () => {
+  // Words 20 tall on one line, with blank space above it.
+  const line: BBox[] = [
+    [100, 200, 60, 20],
+    [170, 200, 60, 20],
+    [240, 200, 60, 20],
+  ];
+
+  it("moves a circle in the gap above onto the words under it", () => {
+    expect(snapRegion([100, 165, 130, 25], line)).toEqual([100, 200, 130, 20]);
+  });
+
+  it("moves a line in the gap below onto the words over it", () => {
+    expect(snapLine([170, 232, 130, 10], line)).toEqual([170, 200, 130, 20]);
+  });
+
+  it("leaves a figure-sized box alone, even right above text", () => {
+    const figure: BBox = [100, 60, 200, 130];
+    expect(snapRegion(figure, line)).toEqual(figure);
+  });
+
+  it("leaves a mark too far from any text, or off to the side of it", () => {
+    const far: BBox = [100, 100, 130, 25];
+    expect(snapRegion(far, line)).toEqual(far);
+    const aside: BBox = [400, 170, 80, 25];
+    expect(snapRegion(aside, line)).toEqual(aside);
+  });
+});
