@@ -1,7 +1,8 @@
 import { SttSession } from "@mew/shared";
 
 import { type MicrophoneHandle, startMicrophone } from "../voice/microphone";
-import { ScribeClient } from "../voice/scribe-client";
+import { useSettings } from "../settings/store";
+import { ScribeClient, scribeLanguage } from "../voice/scribe-client";
 
 /** How long to wait for the transcript after the key comes up before using what was heard. */
 const COMMIT_TIMEOUT_MS = 2500;
@@ -62,7 +63,10 @@ export class HoldToTalk {
         onError: () => this.release(),
         onClose: () => undefined,
       },
-      { commitStrategy: "manual" },
+      {
+        commitStrategy: "manual",
+        ...scribeLanguage(useSettings.getState().settings.language),
+      },
     );
     this.mic = await startMicrophone((pcm) => this.scribe?.sendAudio(pcm));
   }

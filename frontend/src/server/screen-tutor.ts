@@ -3,9 +3,11 @@ import "server-only";
 import {
   checkScreenReply,
   type CourseExcerpt,
+  type NebLanguage,
   renderScreenInput,
   SAFE_FALLBACK,
   SCREEN_LIMITS,
+  inLanguage,
   SCREEN_TUTOR_PROMPT,
   type ScreenAskRequest,
   type ScreenStreamEvent,
@@ -62,7 +64,7 @@ const defaultDeps: ScreenTutorDeps = {
  * The screenshot is only forwarded to the model (`store: false`), never kept.
  */
 export async function* runScreenTutor(
-  request: ScreenQuestion,
+  request: ScreenQuestion & { language?: NebLanguage },
   signal?: AbortSignal,
   deps: ScreenTutorDeps = defaultDeps,
 ): AsyncGenerator<ScreenStreamEvent> {
@@ -70,7 +72,7 @@ export async function* runScreenTutor(
   const elapsed = () => Math.round(deps.now() - started);
   const generation = {
     model: screenModel(),
-    system: SCREEN_TUTOR_PROMPT.system,
+    system: inLanguage(SCREEN_TUTOR_PROMPT.system, request.language),
     input: [
       {
         type: "text" as const,

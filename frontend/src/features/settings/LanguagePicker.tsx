@@ -1,38 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { NEB_LANGUAGES, NebLanguage } from "@mew/shared";
 
-const LANGUAGES = ["Bengali", "English", "French", "Mandarin"] as const;
-type Language = (typeof LANGUAGES)[number];
-
-const STORAGE_KEY = "neb.language";
-
-function readLanguage(): Language {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    return LANGUAGES.find((language) => language === stored) ?? "English";
-  } catch {
-    return "English";
-  }
-}
-
-/**
- * Neb's language. Only the choice for now, kept on this device: nothing reads it yet, so Neb still
- * speaks and writes English.
- */
-export function LanguagePicker() {
-  const [language, setLanguage] = useState<Language>("English");
-  useEffect(() => {
-    // localStorage exists only in the browser: read it after the first render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLanguage(readLanguage());
-  }, []);
-
+/** The language neb listens and speaks in, saved to the account so the desktop app follows it. */
+export function LanguagePicker({
+  value,
+  onChange,
+}: {
+  value: NebLanguage;
+  onChange: (language: NebLanguage) => void;
+}) {
   return (
     <fieldset className="space-y-3" data-testid="language-picker">
       <legend className="font-medium">Neb&apos;s language</legend>
       <div className="flex flex-wrap gap-2">
-        {LANGUAGES.map((choice) => (
+        {NebLanguage.options.map((choice) => (
           <label
             key={choice}
             className="flex cursor-pointer items-center gap-2 rounded-full border border-line px-4 py-2 text-sm has-checked:border-ink has-checked:bg-paper-hi"
@@ -41,21 +23,20 @@ export function LanguagePicker() {
               type="radio"
               name="language"
               value={choice}
-              checked={language === choice}
-              onChange={() => {
-                setLanguage(choice);
-                try {
-                  window.localStorage.setItem(STORAGE_KEY, choice);
-                } catch {
-                  // Not kept this time; the choice still shows until the page closes.
-                }
-              }}
+              checked={value === choice}
+              onChange={() => onChange(choice)}
               className="accent-(--ink)"
             />
-            {choice}
+            {NEB_LANGUAGES[choice].label}
           </label>
         ))}
       </div>
+      {value !== "en" && (
+        <p className="text-sm text-muted">
+          Neb listens and speaks in {NEB_LANGUAGES[value].name}. What it draws on the page stays in
+          English.
+        </p>
+      )}
     </fieldset>
   );
 }

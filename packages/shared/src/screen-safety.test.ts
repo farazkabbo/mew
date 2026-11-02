@@ -11,6 +11,43 @@ import {
 const reply = (speech: string, actions: ScreenTutorResponse["actions"] = []) =>
   ({ speech, actions, mode: "answer" }) as const satisfies ScreenTutorResponse;
 
+describe("screen reply safety in other languages", () => {
+  it.each([
+    ["Entrez votre mot de passe ici.", "asks_for_secrets"],
+    ["Saisissez le numéro de carte bancaire.", "asks_for_payment"],
+    ["Réinstallez le logiciel.", "install_software"],
+    ["Ouvrez l'invite de commandes.", "run_commands"],
+    ["Ouvrez l'éditeur du registre.", "edit_registry"],
+    ["Désactivez le pare-feu.", "disable_security"],
+    ["请在这里输入你的密码。", "asks_for_secrets"],
+    ["请将您的密码输入方框中。", "asks_for_secrets"],
+    ["请把银行卡号填写在这里。", "asks_for_payment"],
+    ["Veuillez taper votre mot de passe dans la boite.", "asks_for_secrets"],
+    ["Veuillez desactiver le pare-feu.", "disable_security"],
+    ["请填写你的信用卡信息。", "asks_for_payment"],
+    ["先安装这个程序。", "install_software"],
+    ["打开命令提示符。", "run_commands"],
+    ["打开注册表。", "edit_registry"],
+    ["关闭防火墙。", "disable_security"],
+    ["এখানে আপনার পাসওয়ার্ড লিখুন।", "asks_for_secrets"],
+    ["আপনার ক্রেডিট কার্ড নম্বর দিন।", "asks_for_payment"],
+    ["এই প্রোগ্রামটি ইনস্টল করুন।", "install_software"],
+    ["কমান্ড প্রম্পট খুলুন।", "run_commands"],
+    ["রেজিস্ট্রি খুলুন।", "edit_registry"],
+    ["ফায়ারওয়াল বন্ধ করুন।", "disable_security"],
+  ])("blocks %s", (text, reason) => {
+    expect(unsafeReasons(text)).toEqual([reason]);
+  });
+
+  it.each([
+    "Cliquez sur Insertion, puis sur Tableau croisé dynamique.",
+    "点击插入，然后选择数据透视表。",
+    "সন্নিবেশ ট্যাবে ক্লিক করুন, তারপর সূত্রটি দেখুন।",
+  ])("lets ordinary help through: %s", (text) => {
+    expect(unsafeReasons(text)).toEqual([]);
+  });
+});
+
 describe("screen reply safety", () => {
   it.each([
     ["Please type your password here so I can check it.", "asks_for_secrets"],

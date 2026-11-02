@@ -1,4 +1,4 @@
-import { SCRIBE_REALTIME_URL, type SttSession } from "@mew/shared";
+import { NEB_LANGUAGES, type NebLanguage, SCRIBE_REALTIME_URL, type SttSession } from "@mew/shared";
 import { z } from "zod";
 
 export type ScribeHandlers = {
@@ -21,6 +21,12 @@ export type ScribeOptions = {
   /** ISO language code; omitted = automatic detection. */
   languageCode?: string;
 };
+
+/** Scribe's language option for neb's language. English stays on automatic detection. */
+export function scribeLanguage(language: NebLanguage): Pick<ScribeOptions, "languageCode"> {
+  const code = NEB_LANGUAGES[language].scribeCode;
+  return code ? { languageCode: code } : {};
+}
 
 const SAMPLE_RATE = 16000;
 /** Audio queued while the socket opens (≈ 3 s of 100 ms chunks); older chunks are dropped. */

@@ -99,6 +99,8 @@ export const elevenLabsEnv = defineEnv(
   { defaults: { ELEVENLABS_STT_MODEL: "scribe_v2_realtime" } },
 );
 
+const VoiceIdEnv = z.string().regex(/^[A-Za-z0-9]{8,64}$/, "must be an ElevenLabs voice ID");
+
 export const ttsEnv = defineEnv(
   z.object({
     ELEVENLABS_API_KEY: z.string().min(1),
@@ -113,6 +115,10 @@ export const ttsEnv = defineEnv(
         'must look like "Name:voiceId,Name:voiceId"',
       )
       .optional(),
+    /** A voice for each other language (optional; library voices need a paid plan). */
+    ELEVENLABS_VOICE_FR: VoiceIdEnv.optional(),
+    ELEVENLABS_VOICE_BN: VoiceIdEnv.optional(),
+    ELEVENLABS_VOICE_ZH: VoiceIdEnv.optional(),
   }),
   { defaults: { ELEVENLABS_TTS_MODEL: "eleven_flash_v2_5" } },
 );

@@ -42,6 +42,7 @@ from ..devices.tokens import (
     hash_token,
     new_device_token,
 )
+from ..profiles.store import ProfileStore, SupabaseProfileStore
 from ..supabase_rest import StoreError
 
 logger = logging.getLogger(__name__)
@@ -199,7 +200,29 @@ def verify_device_token(
     device = find_device(body.token, request, settings)
     if device is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
+    device.language = _owner_language(device, request, settings)
     return device
+
+
+def _owner_language(device: VerifiedDevice, request: Request, settings: Settings) -> str:
+    """The language the device's owner chose. English if it can't be read: a screen answer in the
+    wrong language is better than none."""
+    store: ProfileStore
+    if device.local:
+        store = request.app.state.local_profiles
+    elif settings.supabase_url and settings.supabase_secret_key is not None:
+        store = SupabaseProfileStore(
+            settings.supabase_url,
+            api_key=settings.supabase_secret_key.get_secret_value(),
+            user_token=None,
+        )
+    else:
+        return "en"
+    try:
+        return store.get_settings(device.user_id).language
+    except (PermissionError, StoreError, ValueError):
+        logger.warning("Couldn't read a device owner's language (%s)", device.device_id)
+        return "en"
 
 
 @router.post("/revoke-self", status_code=status.HTTP_204_NO_CONTENT)

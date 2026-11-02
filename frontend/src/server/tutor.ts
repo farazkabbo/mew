@@ -3,6 +3,7 @@ import "server-only";
 import {
   renderTutorInput,
   TUTOR_LIMITS,
+  inLanguage,
   TUTOR_PROMPT,
   type TutorRequest,
   TutorResponse,
@@ -51,7 +52,7 @@ export async function* runTutor(
   const elapsed = () => Math.round(deps.now() - started);
   const generation = {
     model: geminiEnv().GEMINI_TUTOR_MODEL,
-    system: TUTOR_PROMPT.system,
+    system: inLanguage(TUTOR_PROMPT.system, request.language),
     input: tutorInput(request),
     schema: TutorResponse,
     thinkingLevel: request.depth === "deep" ? ("high" as const) : ("low" as const),

@@ -1,7 +1,8 @@
 import { SttSession } from "@mew/shared";
 
 import { type MicrophoneHandle, MicrophoneStartError, startMicrophone } from "./microphone";
-import { ScribeClient } from "./scribe-client";
+import { useSettings } from "../settings/store";
+import { ScribeClient, scribeLanguage } from "./scribe-client";
 import { useVoice } from "./store";
 
 export type VoiceCallbacks = {
@@ -46,7 +47,10 @@ export class VoiceSession {
           onError: (message) => this.fail(message),
           onClose: () => !this.stopped && this.fail("Speech-to-text disconnected"),
         },
-        { vadSilenceSecs: VAD_SILENCE_SECS },
+        {
+          vadSilenceSecs: VAD_SILENCE_SECS,
+          ...scribeLanguage(useSettings.getState().settings.language),
+        },
       );
       this.mic = await startMicrophone((pcm, level) => {
         this.scribe?.sendAudio(pcm);

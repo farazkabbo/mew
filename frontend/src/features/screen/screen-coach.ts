@@ -82,7 +82,11 @@ export function defaultDeps(spoken: SpokenLines | null = null): ScreenCoachDeps 
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voiceId: useSettings.getState().settings.voice_id }),
+        body: JSON.stringify({
+          text,
+          voiceId: useSettings.getState().settings.voice_id,
+          language: useSettings.getState().settings.language,
+        }),
         cache: "no-store",
       }).catch(() => null);
       if (!response?.ok || !response.body) return;

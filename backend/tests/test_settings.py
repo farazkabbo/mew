@@ -35,6 +35,7 @@ def test_settings_start_with_defaults_and_merge_changes(client: TestClient) -> N
         "auto_check": True,
         "listen_on_open": False,
         "voice_id": None,
+        "language": "en",
         "mew_logging_opt_in": False,
         "notes_index": True,
         "onboarded": False,

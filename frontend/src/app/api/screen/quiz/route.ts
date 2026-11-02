@@ -27,6 +27,10 @@ export const POST = handle(async (request: Request) => {
   const body = await readJson(request, ScreenQuizRequest, MAX_BODY_BYTES);
   assertJpeg(body.image.jpeg);
   geminiEnv();
-  const reply = await makeScreenQuiz(body, screenQuizDeps(deviceToken(request)), request.signal);
+  const reply = await makeScreenQuiz(
+    body,
+    screenQuizDeps(deviceToken(request), device.language),
+    request.signal,
+  );
   return NextResponse.json(reply, { headers: { "Cache-Control": "no-store" } });
 });

@@ -15,7 +15,7 @@ const MAX_BODY_BYTES = 4096;
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
-  const { text, voiceId } = await readJson(request, TtsRequest, MAX_BODY_BYTES);
+  const { text, voiceId, language } = await readJson(request, TtsRequest, MAX_BODY_BYTES);
   ttsEnv();
   enforceRateLimit(
     userId,
@@ -24,7 +24,7 @@ export const POST = handle(async (request: Request) => {
   );
 
   // Cancelling the request (barge-in) aborts the upstream synthesis too.
-  const audio = await streamSpeech(text, request.signal, resolveVoice(voiceId));
+  const audio = await streamSpeech(text, request.signal, resolveVoice(voiceId, language), language);
   return new Response(audio, {
     headers: {
       "Content-Type": `audio/pcm;rate=${TTS_SAMPLE_RATE};encoding=s16le;channels=1`,

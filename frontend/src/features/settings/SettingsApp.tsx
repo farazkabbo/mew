@@ -1,6 +1,6 @@
 "use client";
 
-import { TTS_SAMPLE_RATE } from "@mew/shared";
+import { NEB_LANGUAGES, type NebLanguage, TTS_SAMPLE_RATE } from "@mew/shared";
 import { Loader2, Volume2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -193,7 +193,10 @@ export function SettingsApp() {
         <HandwritingSection />
 
         <Section title="Voice">
-          <LanguagePicker />
+          <LanguagePicker
+            value={settings.language}
+            onChange={(language) => void update({ language })}
+          />
           {voices.length === 0 ? (
             <p className="text-sm text-muted">
               The tutor&apos;s voice isn&apos;t set up on this server.
@@ -205,6 +208,7 @@ export function SettingsApp() {
                 voices.find((voice) => voice.id === settings.voice_id)?.id ?? voices[0]?.id ?? ""
               }
               onChange={(voice_id) => void update({ voice_id })}
+              language={settings.language}
             />
           )}
         </Section>
@@ -263,9 +267,11 @@ function VoicePicker({
   voices,
   value,
   onChange,
+  language,
 }: {
   voices: { id: string; name: string }[];
   value: string;
+  language: NebLanguage;
   onChange(id: string): void;
 }) {
   const [player] = useState(() => new PcmStreamPlayer());
@@ -282,8 +288,9 @@ function VoicePicker({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: "Hi, I'm Neb. I'll stay quiet until you need me.",
+          text: NEB_LANGUAGES[language].sample,
           voiceId,
+          language,
         }),
         cache: "no-store",
       });

@@ -3,6 +3,7 @@ import {
   type BoardAction,
   type ImageBlock,
   type LineCheck,
+  type NebLanguage,
   type QuizContext,
   reconcileMarks,
   TTS_SAMPLE_RATE,
@@ -41,6 +42,8 @@ export type TutorDeps = {
   quiz?: () => QuizContext | null;
   /** The student's chosen voice (null: the server's default). */
   voiceId?: () => string | null;
+  /** The language neb speaks (omitted: English). */
+  language?: () => NebLanguage;
   /** The page on screen, if any. */
   doc(): PageDocument | null;
   /** Images on that page (clips saved from the screen). */
@@ -100,6 +103,7 @@ export class TutorController {
       }
       if (checks.length > 0) useTutor.getState().update(id, { checks });
       const request = await buildTutorRequest({
+        language: this.deps.language?.(),
         intent,
         utterance,
         transcript: useVoice.getState().segments.map((s) => s.text),
@@ -252,7 +256,11 @@ export class TutorController {
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: turn.speech, voiceId: this.deps.voiceId?.() ?? null }),
+        body: JSON.stringify({
+          text: turn.speech,
+          voiceId: this.deps.voiceId?.() ?? null,
+          language: this.deps.language?.(),
+        }),
         cache: "no-store",
         signal: turn.abort.signal,
       });

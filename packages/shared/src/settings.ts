@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { NebLanguage } from "./language";
 import { ShortcutBindings } from "./shortcuts";
 
 /**
@@ -19,6 +20,8 @@ export const UserSettings = z.object({
   listen_on_open: z.boolean(),
   /** null: the server's default voice. */
   voice_id: VoiceId.nullable(),
+  /** The language neb listens and speaks in. */
+  language: NebLanguage,
   /** Keep Mew's decisions (with what was said) so they can be labelled to improve Mew (M10). */
   mew_logging_opt_in: z.boolean(),
   /**
@@ -53,6 +56,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   auto_check: true,
   listen_on_open: false,
   voice_id: null,
+  language: "en",
   mew_logging_opt_in: false,
   notes_index: true,
   onboarded: false,

@@ -136,6 +136,7 @@ def test_a_linked_device_acts_for_its_owner(client: TestClient) -> None:
     assert verified.status_code == 200
     assert verified.json()["userId"] == "local"
     assert verified.json()["scopes"] == ["screen"]
+    assert verified.json()["language"] == "en"
 
     devices = client.get("/v1/devices", headers=LOCAL).json()["devices"]
     assert [d["deviceName"] for d in devices] == ["DESKTOP-1 (Windows)"]

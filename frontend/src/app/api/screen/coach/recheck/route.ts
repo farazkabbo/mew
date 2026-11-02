@@ -30,7 +30,7 @@ export const POST = handle(async (request: Request) => {
 
   const store = deviceWalkthroughs(deviceToken(request));
   try {
-    return coachReply(await recheckCoaching(body, defaultCoachDeps(store)));
+    return coachReply(await recheckCoaching(body, defaultCoachDeps(store, device.language)));
   } catch (error) {
     throw coachFailure(error);
   }

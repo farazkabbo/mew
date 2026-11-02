@@ -44,6 +44,80 @@ const RULES: readonly { reason: SafetyReason; pattern: RegExp }[] = [
     pattern:
       /\b(?:disable|turn off|switch off|deactivate|bypass|pause)\b[^.!?]{0,30}\b(?:defender|windows security|firewall|smartscreen|smart screen|uac|user account control|antivirus|anti-virus)\b/i,
   },
+  // French.
+  {
+    reason: "asks_for_secrets",
+    pattern:
+      /\b(?:entre[zr]?|saisi[sr]|saisissez|tape[zr]?|partage[zr]?|envoie[zr]?|envoyer|colle[zr]?|donne[zr]?|dites?|indique[zr]?|fournir|fournissez|communique[zr]?)\b[^.!?]{0,40}(?:mots? de passe|codes? (?:pin|secrets?|de s[ée]curit[ée]|de v[ée]rification|[àa] usage unique)|phrases? de (?:r[ée]cup[ée]ration|secours)|cl[ée]s? (?:api|priv[ée]es?)|cvv|cvc)/i,
+  },
+  {
+    reason: "asks_for_payment",
+    pattern:
+      /\b(?:entre[zr]?|saisi[sr]|saisissez|tape[zr]?|partage[zr]?|envoie[zr]?|envoyer|donne[zr]?|fournir|fournissez|ajoute[zr]?|confirme[zr]?)\b[^.!?]{0,40}(?:num[ée]ros? de carte|cartes? (?:bancaires?|de cr[ée]dit|de d[ée]bit)|coordonn[ée]es bancaires|compte bancaire|informations? de paiement)/i,
+  },
+  {
+    reason: "install_software",
+    pattern:
+      /\b(?:r[ée])?install(?:e[zr]?|ons)\b|\bt[ée]l[ée]charge[zr]?\b[^.!?]{0,15}\b(?:lance[zr]?|ex[ée]cute[zr]?|ouvre[zr]?|ouvrez)\b/i,
+  },
+  {
+    reason: "run_commands",
+    pattern:
+      /invite de commandes?|\bex[ée]cute[zr]?\b[^.!?]{0,15}\bcommandes?\b|\blance[zr]?\b[^.!?]{0,15}\bcommandes?\b/i,
+  },
+  {
+    reason: "edit_registry",
+    pattern: /(?:base de registre|[ée]diteur du registre|registre windows)/i,
+  },
+  {
+    reason: "disable_security",
+    pattern:
+      /\b(?:d[ée]sactive[zr]?|coupe[zr]?|contourne[zr]?|arr[êe]te[zr]?|suspend(?:re|ez))\b[^.!?]{0,30}(?:defender|s[ée]curit[ée] windows|pare-feu|smartscreen|contr[ôo]le de compte|antivirus|anti-virus)/i,
+  },
+  // Mandarin: no word boundaries, and the verb comes before the thing.
+  {
+    reason: "asks_for_secrets",
+    pattern:
+      /(?:输入|填写|键入|告诉|发送|提供|分享|粘贴|说出|念出|给我)[^。！？]{0,20}(?:密码|验证码|安全码|校验码|一次性代码|助记词|恢复短语|恢复码|私钥|API ?密钥|CVV|CVC|PIN)|(?:密码|验证码|安全码|校验码|助记词|恢复码|私钥|API ?密钥|CVV|CVC|PIN)[^。！？]{0,20}(?:输入|填写|键入|告诉|发送|提供|分享|粘贴|说出|念出|给我)/i,
+  },
+  {
+    reason: "asks_for_payment",
+    pattern:
+      /(?:输入|填写|键入|告诉|发送|提供|分享|添加|确认)[^。！？]{0,20}(?:卡号|信用卡|借记卡|银行卡|银行账户|银行账号|支付信息|付款信息)|(?:卡号|信用卡|借记卡|银行卡|银行账户|银行账号|支付信息|付款信息)[^。！？]{0,20}(?:输入|填写|键入|告诉|发送|提供|分享|添加)/,
+  },
+  { reason: "install_software", pattern: /安装|下载并(?:运行|打开)/ },
+  {
+    reason: "run_commands",
+    pattern: /命令提示符|终端窗口|(?:运行|执行)[^。！？]{0,6}命令/,
+  },
+  { reason: "edit_registry", pattern: /注册表/ },
+  {
+    reason: "disable_security",
+    pattern:
+      /(?:关闭|禁用|停用|绕过|暂停)[^。！？]{0,15}(?:Defender|Windows ?安全|防火墙|SmartScreen|用户账户控制|杀毒|防病毒)/i,
+  },
+  // Bengali: no word boundaries, and the verb comes after the thing.
+  {
+    reason: "asks_for_secrets",
+    pattern:
+      /(?:পাসওয়ার্ড|পিন|ওটিপি|OTP|যাচাইকরণ কোড|ভেরিফিকেশন কোড|সিকিউরিটি কোড|নিরাপত্তা কোড|রিকভারি (?:ফ্রেজ|কোড)|প্রাইভেট কী|এপিআই কী|সিভিভি|CVV)[^।!?]{0,30}(?:লিখুন|লিখে|টাইপ|দিন|দিয়ে|পাঠান|পাঠিয়ে|বলুন|জানান|শেয়ার|পেস্ট)/i,
+  },
+  {
+    reason: "asks_for_payment",
+    pattern:
+      /(?:কার্ড নম্বর|কার্ডের নম্বর|ক্রেডিট কার্ড|ডেবিট কার্ড|ব্যাংক (?:অ্যাকাউন্ট|তথ্য)|পেমেন্ট(?:ের)? তথ্য)[^।!?]{0,30}(?:লিখুন|লিখে|টাইপ|দিন|দিয়ে|পাঠান|পাঠিয়ে|জানান|শেয়ার|যোগ করুন)/,
+  },
+  { reason: "install_software", pattern: /ইনস্টল|ডাউনলোড করে (?:চালান|খুলুন)/ },
+  {
+    reason: "run_commands",
+    pattern: /কমান্ড প্রম্পট|টার্মিনাল|পাওয়ারশেল|কমান্ড[^।!?]{0,8}(?:চালান|চালিয়ে)/,
+  },
+  { reason: "edit_registry", pattern: /রেজিস্ট্রি/ },
+  {
+    reason: "disable_security",
+    pattern:
+      /(?:ডিফেন্ডার|উইন্ডোজ সিকিউরিটি|ফায়ারওয়াল|স্মার্টস্ক্রিন|অ্যান্টিভাইরাস)[^।!?]{0,30}(?:বন্ধ|নিষ্ক্রিয়|বাইপাস)/,
+  },
 ];
 
 /** What is said instead of a blocked reply. */
@@ -56,7 +130,7 @@ export const SAFE_FALLBACK: ScreenTutorResponse = {
 
 /** Every reason `text` breaks a rule (empty when it's fine). */
 export function unsafeReasons(text: string): SafetyReason[] {
-  return RULES.filter((rule) => rule.pattern.test(text)).map((rule) => rule.reason);
+  return [...new Set(RULES.filter((rule) => rule.pattern.test(text)).map((rule) => rule.reason))];
 }
 
 /** All the text of a reply that the student would hear or see. */

@@ -72,6 +72,7 @@ export const POST = handle(async (request: Request) => {
     : runCircleAsk(
         {
           ...placed.request,
+          language: device.language,
           // The student's course passages about what they marked (S5), named when it's the same idea.
           courseContext: await screenCourseContext(
             token,

@@ -3,6 +3,7 @@ export * from "./auth";
 export * from "./check";
 export * from "./chemistry";
 export * from "./circle";
+export * from "./language";
 export * from "./clips";
 export * from "./coach";
 export * from "./coach-machine";

@@ -3,6 +3,7 @@ import "server-only";
 import {
   checkedStep,
   CIRCLE_ASK_PROMPT,
+  inLanguage,
   CIRCLE_LIMITS,
   type CircleAskRequest,
   CircleAskModelResponse,
@@ -13,6 +14,7 @@ import {
   type CircleStreamEvent,
   type CourseExcerpt,
   marksBox,
+  type NebLanguage,
   READ_QUESTION_PROMPT,
   type ReadQuestionRequest,
   ReadQuestionResponse,
@@ -70,7 +72,10 @@ const defaultDeps: CircleAskDeps = {
 export type OnAnswer = (answer: CircleAskModelResponse) => Promise<readonly CircleStreamEvent[]>;
 
 export async function* runCircleAsk(
-  request: CircleAskRequest & { courseContext?: readonly CourseExcerpt[] },
+  request: CircleAskRequest & {
+    courseContext?: readonly CourseExcerpt[];
+    language?: NebLanguage;
+  },
   signal?: AbortSignal,
   deps: CircleAskDeps = defaultDeps,
   onAnswer?: OnAnswer,
@@ -84,7 +89,7 @@ export async function* runCircleAsk(
   };
   const generation = {
     model: screenModel(),
-    system: CIRCLE_ASK_PROMPT.system,
+    system: inLanguage(CIRCLE_ASK_PROMPT.system, request.language),
     input: [
       { type: "text" as const, text: renderCircleInput(request, request.courseContext) },
       { type: "image" as const, base64: request.focus.image.jpeg, mimeType: "image/jpeg" as const },

@@ -134,6 +134,7 @@ function createPipeline() {
     courseId: () => courseId,
     quiz: () => quiz?.context() ?? null,
     voiceId: () => useSettings.getState().settings.voice_id,
+    language: () => useSettings.getState().settings.language,
     doc: () => engine?.doc ?? null,
     images: () => engine?.images ?? [],
     takeCircled,

@@ -46,7 +46,7 @@ export const POST = handle(async (request: Request) => {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       for await (const event of runScreenTutor(
-        { ...body, ...(walkthrough && { walkthrough }), courseContext },
+        { ...body, ...(walkthrough && { walkthrough }), courseContext, language: device.language },
         request.signal,
       )) {
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
