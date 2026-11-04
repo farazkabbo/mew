@@ -873,6 +873,14 @@ export function NotebookApp({
     keys.platform,
     keys.own,
   );
+  // /desk?jump=1: the jump search on pages outside the notebook (Review's header) opens it here.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("jump") !== "1") return;
+    url.searchParams.delete("jump");
+    window.history.replaceState(window.history.state, "", url);
+    treeActions.setPaletteOpen(true);
+  }, [treeActions]);
 
   const paletteCommands: PaletteCommand[] = [
     {

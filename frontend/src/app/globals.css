@@ -94,6 +94,52 @@ body {
   }
 }
 
+/* Review's course folders (decision U25, board 7): a tab lifts on hover; a picked folder comes up
+   out of the stack and drops in front. Reduced motion just swaps them. */
+.folder-tab {
+  transition: transform 160ms ease-out;
+}
+
+.folder-back .folder-tab:hover {
+  transform: translateY(-4px);
+}
+
+.folder-pull-out {
+  transform-origin: 50% 100%;
+  animation: folder-pull-out 640ms both;
+}
+
+@keyframes folder-pull-out {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    z-index: 0;
+    animation-timing-function: cubic-bezier(0.3, 0, 0.25, 1);
+  }
+  47% {
+    transform: translateY(-140px) rotate(-1deg);
+    z-index: 0;
+    animation-timing-function: steps(1, end);
+  }
+  50% {
+    transform: translateY(-140px) rotate(-1deg);
+    z-index: 20;
+    animation-timing-function: cubic-bezier(0.3, 0.6, 0.2, 1);
+  }
+  100% {
+    transform: none;
+    z-index: 20;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-pull-out {
+    animation: none;
+  }
+  .folder-tab {
+    transition: none;
+  }
+}
+
 @keyframes skeleton-pulse {
   0%,
   100% {

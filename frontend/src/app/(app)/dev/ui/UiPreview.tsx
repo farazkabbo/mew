@@ -1,10 +1,14 @@
 "use client";
 
-import { COLORS, type ColorName } from "@mew/shared";
+import { COLORS, type ColorName, type SkillView } from "@mew/shared";
 
 import { Button, type ButtonVariant } from "@/components/ui/Button";
 import { Keycap, Keys } from "@/components/ui/Keycap";
 import { NebDot, type NebDotState } from "@/components/ui/NebDot";
+import { ReviewFolders } from "@/features/courses/ReviewFolders";
+import type { FolderCourse, FolderRow } from "@/features/courses/review-folders";
+import { SkillsCard } from "@/features/courses/SkillsToRecheck";
+import { UpNextCard } from "@/features/courses/UpNextCard";
 
 const VARIANTS: { variant: ButtonVariant; label: string }[] = [
   { variant: "ink", label: "Resume" },
@@ -21,6 +25,82 @@ const DOTS: { state: NebDotState; notes?: number }[] = [
   { state: "has-note", notes: 2 },
   { state: "speaking" },
   { state: "listening" },
+];
+
+/** Review (decision U25): fixed data, so the screenshots don't move with the date. */
+const NOW = new Date("2026-11-04T12:00:00Z");
+const row = (title: string, kind: FolderRow["kind"], detail: string, i: number): FolderRow => ({
+  conceptId: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+  title,
+  kind,
+  detail,
+});
+const FOLDERS: FolderCourse[] = [
+  {
+    id: "00000000-0000-4000-8000-000000000101",
+    title: "EECS 4101 · Advanced Data Structures",
+    color: "#C98B6B",
+    quiz: 3,
+    rows: [
+      row("Amortized analysis", "revisit", "Due since 2 days ago", 1),
+      row("Red-black tree deletion", "revisit", "Due since yesterday", 2),
+      row("Splay trees", "new", "Not practised yet", 3),
+      row("Skip lists", "hint", "Right with a hint · comes back tomorrow", 4),
+      row("Binomial heaps", "checked", "Comes back in 5 days", 5),
+    ],
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000102",
+    title: "Business Mathematics",
+    color: "#9DB8D9",
+    quiz: 2,
+    rows: [
+      row("Simple Discount", "revisit", "Due since yesterday", 6),
+      row("Simple Interest", "new", "Not practised yet", 7),
+    ],
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000103",
+    title: "NATS 1610 · The Living Body",
+    color: "#8FA98B",
+    quiz: 1,
+    rows: [
+      row("Membrane transport", "revisit", "Due today", 8),
+      row("Homeostasis", "checked", "Comes back in 3 days", 9),
+    ],
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000104",
+    title: "Modern History",
+    color: "#C99AA4",
+    quiz: 0,
+    rows: [row("The Treaty of Versailles", "checked", "Comes back in 4 days", 10)],
+  },
+];
+const MANY: FolderCourse[] = [
+  ...FOLDERS,
+  ...["Statistics", "Organic Chemistry", "Linear Algebra", "Microeconomics", "Philosophy"].map(
+    (title, i) => ({
+      id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, "0")}`,
+      title,
+      color: ["#D4B45A", "#7DA4AF", "#6F7C86", "#C98B6B", "#8FA98B"][i] ?? "#7DA4AF",
+      quiz: 1,
+      rows: [row(`${title} basics`, "new", "Not practised yet", 20 + i)],
+    }),
+  ),
+];
+const SKILLS: SkillView[] = [
+  {
+    id: "00000000-0000-4000-8000-000000000301",
+    title: "Pivot tables",
+    app: "Excel",
+    conceptTitle: "Summarising data",
+    lastEvidence: "independent",
+    lastHints: 0,
+    lastAt: "2026-10-31T12:00:00Z",
+    solo: 1,
+    dueAt: "2026-11-03T12:00:00Z",
+  },
 ];
 
 function Block({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
@@ -99,6 +179,24 @@ export function UiPreview() {
             <NebDot key={state} state={state} label {...(notes ? { notes } : {})} />
           ))}
         </div>
+      </Block>
+
+      <Block id="review" title="Review">
+        <div className="flex flex-wrap items-start gap-10">
+          <div className="flex max-w-[420px] min-w-0 flex-[1_1_340px] flex-col gap-6">
+            <UpNextCard due={4} exam={null} onStart={() => undefined} />
+            <UpNextCard due={0} exam={null} onStart={() => undefined} />
+            <SkillsCard skills={[]} now={NOW} onForget={() => undefined} />
+          </div>
+          <div className="min-w-0 flex-[999_1_480px]">
+            <ReviewFolders courses={FOLDERS} />
+          </div>
+        </div>
+      </Block>
+
+      <Block id="review-more" title="Review · many courses">
+        <ReviewFolders courses={MANY} />
+        <SkillsCard skills={SKILLS} now={NOW} onForget={() => undefined} />
       </Block>
     </main>
   );

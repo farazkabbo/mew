@@ -168,14 +168,20 @@ test("practice moves a concept from not started to checked, with a plan and revi
   // (Other tests' courses share this API's store: look at this course only.)
   const courseId = new URL(page.url()).pathname.split("/")[2] ?? "";
   await page.goto("/review");
-  const section = page
-    .getByTestId("review-course")
-    .filter({ has: page.locator(`a[href="/courses/${courseId}"]`) });
+  // Each course is a folder (decision U25): bring this one to the front by its tab.
+  await page.locator(`#folder-tab-${courseId}`).click();
+  const section = page.locator(`#folder-${courseId}`);
+  await expect(section.locator(`a[href="/courses/${courseId}"]`)).toBeVisible();
+  // The folder lists every concept started: new first, then the checked one (Friction).
   const items = section.getByTestId("review-item");
-  await expect(items).toHaveCount(1);
+  await expect(items).toHaveCount(2);
   await expect(items.first()).toContainText("Forces");
-  await expect(items.first()).toContainText("new · not practised yet");
-  await expect(section.getByRole("link", { name: "Quiz me (1)" })).toBeVisible();
+  await expect(items.first()).toContainText("Not practised yet");
+  await expect(items.first()).toContainText("New");
+  await expect(items.last()).toContainText("Friction");
+  await expect(items.last()).toContainText("Checked");
+  // Quiz me asks about what's due: Forces only.
+  await expect(section.getByRole("link", { name: /Quiz me/ })).toContainText("1");
 });
 
 test("Quiz me asks in the notebook, grades the written answer and records the evidence", async ({

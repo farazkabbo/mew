@@ -1,7 +1,7 @@
 "use client";
 
 import type { SkillEvidence, SkillView } from "@mew/shared";
-import { X } from "lucide-react";
+import { Monitor, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { coursesApi, formatDue } from "./api";
@@ -33,9 +33,7 @@ export function SkillsToRecheck({ now }: { now: Date }) {
     };
   }, []);
 
-  if (!skills || skills.length === 0) return null;
-  const sorted = [...skills].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
-  const due = sorted.filter((s) => Date.parse(s.dueAt) <= now.getTime()).length;
+  if (!skills) return null;
 
   const forget = async (id: string) => {
     setError(null);
@@ -47,50 +45,76 @@ export function SkillsToRecheck({ now }: { now: Date }) {
     }
   };
 
+  return <SkillsCard skills={skills} now={now} error={error} onForget={forget} />;
+}
+
+/** The card itself (board 8), for the page and /dev/ui. */
+export function SkillsCard({
+  skills,
+  now,
+  error = null,
+  onForget,
+}: {
+  skills: readonly SkillView[];
+  now: Date;
+  error?: string | null;
+  onForget(id: string): void;
+}) {
+  const sorted = [...skills].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
+  const due = sorted.filter((s) => Date.parse(s.dueAt) <= now.getTime()).length;
   return (
     <section
-      aria-label="Skills to re-check"
+      aria-labelledby="review-skills-title"
       data-testid="review-skills"
-      className="mb-8 rounded-2xl border border-line bg-paper-hi p-4"
+      className="rounded-xl border border-line bg-paper px-[22px] py-5"
     >
-      <h2 className="font-serif text-2xl">Skills to re-check</h2>
-      <p className="text-sm text-muted">
-        {due === 0
-          ? "Nothing to re-check today."
-          : `${due === 1 ? "1 skill is" : `${due} skills are`} due. On your computer, hold the key and say “let me try ${sorted[0]?.title.toLowerCase()} on my own”.`}
+      <h2 id="review-skills-title" className="flex items-center gap-2.5 font-semibold">
+        <Monitor className="size-5" strokeWidth={1.8} aria-hidden />
+        Skills to re-check
+      </h2>
+      <p className="mt-2 text-sm text-muted">
+        {sorted.length === 0
+          ? "None due. Finish a walkthrough in the desktop app and its re-check shows up here."
+          : due === 0
+            ? "Nothing to re-check today."
+            : `${due === 1 ? "1 skill is" : `${due} skills are`} due. On your computer, say “let me try ${sorted[0]?.title.toLowerCase()} on my own”.`}
       </p>
       {error && (
         <p role="alert" className="mt-2 text-sm text-muted">
           {error}
         </p>
       )}
-      <ul className="mt-3 divide-y divide-line border-y border-line">
-        {sorted.map((skill) => (
-          <li key={skill.id} data-testid="review-skill" className="flex items-center gap-4 py-3">
-            <span className="min-w-0 flex-1">
-              <span className="font-medium">{skill.title}</span>
-              <span className="block text-sm text-muted">
-                {[
-                  skill.conceptTitle && `Part of ${skill.conceptTitle}`,
-                  skill.lastEvidence && `Last time: ${LAST[skill.lastEvidence]}`,
-                  skill.solo > 0 && `${skill.solo === 1 ? "once" : `${skill.solo} times`} alone`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
+      {sorted.length > 0 && (
+        <ul className="mt-3 divide-y divide-line border-t border-line">
+          {sorted.map((skill) => (
+            <li key={skill.id} data-testid="review-skill" className="flex items-center gap-3 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="text-[15px] font-medium">{skill.title}</span>
+                <span className="block text-[13px] text-muted">
+                  {[
+                    skill.conceptTitle && `Part of ${skill.conceptTitle}`,
+                    skill.lastEvidence && `Last time: ${LAST[skill.lastEvidence]}`,
+                    skill.solo > 0 && `${skill.solo === 1 ? "once" : `${skill.solo} times`} alone`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
               </span>
-            </span>
-            <span className="text-sm text-muted">{formatDue(skill.dueAt, now)}</span>
-            <button
-              type="button"
-              onClick={() => void forget(skill.id)}
-              aria-label={`Forget ${skill.title}`}
-              className="rounded-full p-1 text-muted hover:text-ink"
-            >
-              <X className="size-4" aria-hidden />
-            </button>
-          </li>
-        ))}
-      </ul>
+              <span className="text-[13px] whitespace-nowrap text-muted">
+                {formatDue(skill.dueAt, now)}
+              </span>
+              <button
+                type="button"
+                onClick={() => onForget(skill.id)}
+                aria-label={`Forget ${skill.title}`}
+                className="rounded-full p-1 text-muted hover:text-ink"
+              >
+                <X className="size-4" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

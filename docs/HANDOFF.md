@@ -537,6 +537,9 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
 - If the notebook shows "Cannot access 'Subject' before initialization", the dev server is holding
   a stale copy of `packages/shared/src/tutor.ts`: stop `pnpm dev`, delete `frontend/.next`, start
   it again.
+- **U25 built** (2026-11-04, `feat/ui-u10-review`): the Review page restyled to boards 7 and 8
+  (the desk's header, the Up next card and skills, courses as file folders). NEB_APP_UI.md decision
+  U25; it overrides U14 for Review only.
 - **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in

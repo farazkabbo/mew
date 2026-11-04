@@ -285,7 +285,7 @@ function SectionTitle({ id, title, note }: { id: string; title: string; note: st
 }
 
 /** The neb wordmark (board 1). */
-function Wordmark() {
+export function Wordmark() {
   return (
     <svg width="58" height="22" viewBox="0 0 256 96" role="img" aria-label="neb">
       <g

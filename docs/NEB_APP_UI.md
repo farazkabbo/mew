@@ -974,3 +974,30 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **neb's pointer** shows only while neb writes, as a violet nib; the old Mew cat is gone.
     - **Next's development badge** is off (`devIndicators: false`); it was the black circle in
       every page's corner.
+25. **U25. Review gets a new layout (2026-11-04, `feat/ui-u10-review`; boards 7 and 8).** This
+    overrides U14 for Review only; Courses, Teach and Settings still keep their layouts.
+    - **Header:** the desk's: ‹ Desk, neb's mark, the jump search and the avatar menu. The jump
+      palette needs the notebook tree, so the search (and the jump key on Review) opens
+      `/desk?jump=1`, which opens the palette on the desk.
+    - **Left column, "Up next":** the index card for moment and screen-quiz checks (Start is the
+      neb button; it opens the existing Quick check), then Skills to re-check (`SkillsCard`, shown
+      empty as board 8's "None due" card). Board 8's "Not now" and the source thumbnail aren't
+      built: Not now has no behaviour behind it, and the check's moment stays hidden until the
+      student tries.
+    - **Right column, the folders:** one folder per course with started concepts or reviews due,
+      tinted with the cover colour of the course's notebook on this device (a stable cover colour
+      from the course id when there's none). Tabs sit in fixed slots, ordered by most to revisit,
+      then most new; a course with an exam close still comes first. A picked tab pulls its folder
+      up and drops it in front (`folder-pull-out`, 640 ms); reduced motion swaps. Past 7 courses a
+      "More" tab lists the rest, and one picked from it takes the last slot. Arrows, Home and End
+      move between tabs.
+    - **Rows:** every concept the student has started, from `conceptStatus`: revisit (ink disc ↺),
+      explored as new (dashed ring), checked (violet-washed disc ✓), in that order. Practised with a
+      hint isn't checked, so it shows between new and checked as "With a hint" (washed disc, muted
+      ✓). Never-opened concepts aren't listed.
+    - **Quiz me** per course is the existing quiz (`quizHref`); its count is the course's concepts
+      in the review queue, as before.
+    - **Unchanged:** behaviour, data and FSRS (no API change: the page reads the course list, each
+      course's detail and progress, and the review queue). No score line.
+    - **Previews:** `/dev/ui`'s Review and Review · many courses sections, screenshotted in light
+      and night by `e2e/ui.spec.ts`, which also tests the tabs and More.

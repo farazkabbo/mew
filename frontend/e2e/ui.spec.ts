@@ -14,7 +14,7 @@ test.beforeEach(({ page }) => {
   });
 });
 
-const SECTIONS = ["colors", "type", "buttons", "keycaps", "dot"] as const;
+const SECTIONS = ["colors", "type", "buttons", "keycaps", "dot", "review", "review-more"] as const;
 
 for (const colorScheme of ["light", "dark"] as const) {
   test(`every U1 component renders in the ${colorScheme === "light" ? "light" : "night"} theme`, async ({
@@ -32,6 +32,41 @@ for (const colorScheme of ["light", "dark"] as const) {
     }
   });
 }
+
+test("Review's folders: a tab brings its folder to the front, arrows move along, More holds the rest", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  await page.goto("/dev/ui");
+  const folders = page.getByTestId("ui-review").getByTestId("review-folders");
+  const tabs = folders.getByRole("tab");
+  await expect(tabs).toHaveCount(4);
+  // Most to revisit first: EECS (2), then Business Maths and NATS (1 each, Business has more new).
+  await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+  await expect(folders.getByRole("tabpanel").first()).toContainText("Amortized analysis");
+
+  await tabs.nth(1).click();
+  await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
+  const front = folders.locator('[role="tabpanel"][aria-hidden="false"]');
+  await expect(front).toContainText("Business Mathematics");
+  await expect(front.getByTestId("review-item").first()).toContainText("Simple Discount");
+  await expect(front.getByRole("link", { name: /Quiz me/ })).toContainText("2");
+
+  await page.keyboard.press("ArrowRight");
+  await expect(tabs.nth(2)).toBeFocused();
+  await expect(tabs.nth(2)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Home");
+  await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+
+  // Nine courses: seven tabs, and More with the other two.
+  const many = page.getByTestId("ui-review-more").getByTestId("review-folders");
+  await expect(many.getByRole("tab")).toHaveCount(7);
+  await many.getByRole("button", { name: /More/ }).click();
+  await many.getByRole("button", { name: /Philosophy/ }).click();
+  const last = many.getByRole("tab").last();
+  await expect(last).toContainText("Philosophy");
+  await expect(last).toHaveAttribute("aria-selected", "true");
+});
 
 test("the page background is the desk, and night follows the OS", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
