@@ -79,7 +79,7 @@ import { useClipImport } from "./useClipImport";
 import { pullTree } from "./tree-api";
 import { useShortcuts } from "./useShortcuts";
 import { DestinationPicker } from "./tree/DestinationPicker";
-import { NodeHome } from "./tree/NodeHome";
+import { type HomeTab, NodeHome } from "./tree/NodeHome";
 import type { PaletteCommand } from "./tree/JumpPalette";
 import { TreeDialogs } from "./tree/TreeDialogs";
 import { TreeNav } from "./tree/TreeNav";
@@ -152,6 +152,8 @@ export function NotebookApp({
   const canvas = useRef<CanvasHandle>(null);
   /** "Quiz me" from a course screen: /notebook?course=…&quiz=1 starts a quiz once open. */
   const quizRequested = useRef(false);
+  /** U26: a quiz asked for from the Study tab (the page may already be open). */
+  const [quizAsked, setQuizAsked] = useState(0);
   const debugOpen = useMew((s) => s.debugOpen);
   const quizActive = useQuiz((s) => s.active);
 
@@ -194,6 +196,8 @@ export function NotebookApp({
     setNotebookId(id);
     setView("home");
   }, []);
+  /** The tab a home opens on when asked for one (U26: a course link opens Study). */
+  const [homeTab, setHomeTab] = useState<{ nodeId: string; tab: HomeTab } | null>(null);
 
   const openPage = useCallback((page: Page) => {
     wantedPage.current = page.id;
@@ -216,6 +220,8 @@ export function NotebookApp({
       const params = new URLSearchParams(window.location.search);
       const course = params.get("course");
       quizRequested.current = params.get("quiz") === "1";
+      // U26: `&tab=study` opens the course notebook's home on its Study tab.
+      const study = params.get("tab") === "study";
       const title = (params.get("title") ?? "").trim().slice(0, 200) || "Course notes";
       // A device with no notebooks yet (a new browser, a second computer) takes the account's
       // first, so it never makes a "My first notebook" of its own beside them.
@@ -228,12 +234,16 @@ export function NotebookApp({
         course && UUID.test(course)
           ? await repo.notebookForCourse(course, title)
           : await repo.openLatestNotebook();
-      if (!cancelled) openNode(latest.id);
+      if (cancelled) return;
+      if (study) {
+        setHomeTab({ nodeId: latest.id, tab: "study" });
+        openHome(latest.id);
+      } else openNode(latest.id);
     })().catch(report);
     return () => {
       cancelled = true;
     };
-  }, [repo, report, openNode, start]);
+  }, [repo, report, openNode, openHome, start]);
 
   // The open node's pages; a page view always has one (a node from another device may have
   // none here yet).
@@ -669,7 +679,7 @@ export function NotebookApp({
     if (!courseId || !engine || !quizRequested.current) return;
     quizRequested.current = false;
     void quiz.start(courseId);
-  }, [courseId, engine, quiz]);
+  }, [courseId, engine, quiz, quizAsked]);
 
   // A quiz belongs to its course's notebook: switching notebooks ends it.
   useEffect(() => {
@@ -1074,7 +1084,20 @@ export function NotebookApp({
                   )
                 ) : view === "home" && node ? (
                   <NodeHome
+                    key={node.id}
                     node={node}
+                    {...(homeTab?.nodeId === node.id && { initialTab: homeTab.tab })}
+                    onQuiz={() => {
+                      // The quiz runs on a page: open the notebook's, and it starts there.
+                      quizRequested.current = true;
+                      setQuizAsked((n) => n + 1);
+                      setView("page");
+                    }}
+                    onLinkCourse={(courseId) =>
+                      void repo.tree
+                        .setCourse(tree.path(node.id)[0]?.id ?? node.id, courseId)
+                        .catch(report)
+                    }
                     tree={tree}
                     pages={pages.filter((p) => p.notebookId === node.id)}
                     now={now}

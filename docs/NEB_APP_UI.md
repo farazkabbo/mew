@@ -1001,3 +1001,25 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       course's detail and progress, and the review queue). No score line.
     - **Previews:** `/dev/ui`'s Review and Review · many courses sections, screenshotted in light
       and night by `e2e/ui.spec.ts`, which also tests the tabs and More.
+26. **U26. A notebook is the whole class; Review stays the one place for what's due
+    (2026-11-04, the owner's request; `feat/ui-u26-study`, then `feat/ui-u26-review`).** Courses
+    and notebooks were two things to find; students think of one, "my DSA class". This overrides
+    U14 for Courses, and U25 where it names courses.
+    - **No Courses page.** `/courses` goes to the desk; `/courses/<id>` opens the course's
+      notebook on its Study tab (making the notebook, as `/notebook?course=` always did, for a
+      course that has none). Lessons keep their pages.
+    - **A notebook's home has at most three tabs:** Pages (always; "Contents" before), Study (on
+      the notebook itself, once it has course material: what the course page showed, its build
+      progress, the scope review, the study plan, the exam date and Quiz me) and Moments (once
+      something was saved, and always in Unsorted). Chapters have no Study tab: the course is the
+      notebook's, and chapter cards keep their progress.
+    - **Until a notebook has material,** one card on its Pages tab says what adding it unlocks.
+      "Add course material" is the PDF import, whose "Use as course material" (on by default)
+      makes and links the course (K4). A course made before this, on the old page, can be picked
+      from the same card ("Use a course you have…"); a deleted course unlinks.
+    - **"Review topics"** opens the Study tab instead of the course page.
+    - **Review** keeps its look (U25). In `feat/ui-u26-review` its folders become notebooks
+      (named and coloured as on the desk; a course with no notebook keeps its own folder), and it
+      moves from the avatar menu to a button with a due count in the desk's header.
+    - **Unchanged:** the data. Courses, concepts, attempts and FSRS stay as they are; a notebook
+      still links to a course by `courseId`.

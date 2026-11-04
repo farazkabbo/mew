@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "./fixtures";
 
+import { createCourse } from "./helpers/course";
 import { CHAPTER, makePdf } from "./helpers/pdf";
 
 /**
@@ -65,20 +66,14 @@ function dateIn(days: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** A course in its notebook's Study tab (decision U26); returns its link, which opens there. */
 async function startCourse(page: Page, examDate?: string) {
-  await page.goto("/courses");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "chapter-3.pdf",
-    mimeType: "application/pdf",
-    buffer: makePdf(CHAPTER),
-  });
-  await page.getByLabel("Course title").fill("Forces and motion");
-  await page.getByRole("button", { name: "Build course" }).click();
+  const id = await createCourse(page, makePdf(CHAPTER), "Forces and motion");
   await expect(page.getByText("Needs review")).toBeVisible({ timeout: 30_000 });
   if (examDate) await page.getByLabel("Exam date (optional)").fill(examDate);
   await page.getByRole("button", { name: /Start studying/ }).click();
   await expect(page.getByTestId("plan-concept")).toHaveCount(3);
-  return page.url();
+  return `/courses/${id}`;
 }
 
 const planRow = (page: Page, title: string) =>
@@ -205,8 +200,9 @@ test("Quiz me asks in the notebook, grades the written answer and records the ev
     });
   });
   const courseUrl = await startCourse(page);
-  await page.getByRole("link", { name: "Quiz me" }).click();
-  await expect(page).toHaveURL(/\/notebook\?course=.*&quiz=1/);
+  // The Study tab is in the notebook (decision U26): Quiz me starts on the notebook's page.
+  await page.getByRole("button", { name: "Quiz me" }).click();
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
 
   const card = page.getByTestId("quiz-card");
   await expect(card).toContainText("Quiz · Forces and motion");
@@ -260,8 +256,10 @@ test("without a grader, the student compares with the model answer themselves", 
   page,
 }) => {
   test.setTimeout(90_000);
-  await startCourse(page);
-  await page.getByRole("link", { name: "Open the course notebook" }).click();
+  const courseUrl = await startCourse(page);
+  // The course's notebook, on its page (the Study tab is its home).
+  const courseId = courseUrl.split("/").pop() ?? "";
+  await page.goto(`/notebook?course=${courseId}&title=Forces%20and%20motion`);
 
   // "Quiz me" from Ctrl+K's commands, in the course's own notebook.
   await expect(page.getByTestId("pencil-case")).toBeVisible();

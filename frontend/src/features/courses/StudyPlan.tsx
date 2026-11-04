@@ -22,9 +22,15 @@ import { StatusChip } from "./StatusChip";
 export function StudyPlan({
   detail,
   onChange,
+  inNotebook = false,
+  onQuiz,
 }: {
   detail: CourseDetail;
   onChange(detail: CourseDetail): void;
+  /** Shown as a notebook's Study tab (U26): no button back to the notebook it's in. */
+  inNotebook?: boolean;
+  /** In the notebook (U26), Quiz me starts the quiz there instead of navigating to it. */
+  onQuiz?: () => void;
 }) {
   const { course, concepts, edges } = detail;
   const [known, setKnown] = useState<ConceptProgress[] | null>(null);
@@ -67,20 +73,33 @@ export function StudyPlan({
             ` · exam ${plan.daysLeft > 0 ? `in ${plan.daysLeft} day${plan.daysLeft === 1 ? "" : "s"}` : plan.daysLeft === 0 ? "today" : "passed"}`}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Link
-            href={quizHref(course)}
-            className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium hover:border-ink"
-          >
-            <Sparkles className="size-4 text-neb-ink" aria-hidden />
-            Quiz me
-          </Link>
-          <Link
-            href={notebookHref(course)}
-            className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
-          >
-            <NotebookPen className="size-4" aria-hidden />
-            Open the course notebook
-          </Link>
+          {onQuiz ? (
+            <button
+              type="button"
+              onClick={onQuiz}
+              className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium hover:border-ink"
+            >
+              <Sparkles className="size-4 text-neb-ink" aria-hidden />
+              Quiz me
+            </button>
+          ) : (
+            <Link
+              href={quizHref(course)}
+              className="inline-flex items-center gap-2 rounded-full border border-line px-5 py-2 text-sm font-medium hover:border-ink"
+            >
+              <Sparkles className="size-4 text-neb-ink" aria-hidden />
+              Quiz me
+            </Link>
+          )}
+          {!inNotebook && (
+            <Link
+              href={notebookHref(course)}
+              className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper"
+            >
+              <NotebookPen className="size-4" aria-hidden />
+              Open the course notebook
+            </Link>
+          )}
         </div>
       </div>
 

@@ -10,10 +10,10 @@ import {
   TREE_LIMITS,
 } from "@mew/shared";
 import { FileText, FileUp, GraduationCap, Plus, Sparkles } from "lucide-react";
-import Link from "next/link";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { coursesApi } from "../../courses/api";
+import { CourseStudy } from "../../courses/CourseStudy";
 import { FileThese } from "../../moments/FileThese";
 import { type Moment, subtreeIds } from "../../moments/moments";
 import { MomentsList } from "../../moments/MomentsList";
@@ -36,6 +36,12 @@ type Props = {
   onAddPage(): void;
   /** K4: "Import PDF" into this node. */
   onImportPdf(): void;
+  /** U26: the tab to open on (a course link opens Study). */
+  initialTab?: HomeTab;
+  /** U26: links the notebook to a course the student already has, or unlinks it (null). */
+  onLinkCourse(courseId: string | null): void;
+  /** U26: the Study tab's Quiz me, started on the notebook's page. */
+  onQuiz(): void;
   /** K8: the moments saved in this node and everything under it, newest first. */
   moments: readonly Moment[];
   /** K8: checks due now on each node (counted up the tree). */
@@ -66,12 +72,16 @@ const SUBJECT_LABELS: Record<Subject, string> = {
   other: "Other",
 };
 
-type Tab = "contents" | "moments";
+export type HomeTab = "pages" | "study" | "moments";
 
 /**
  * A notebook's (or chapter's) home (K1, docs/NOTEBOOKS_K.md §2.2): a card per chapter with its
  * page count, when it was last edited and its course progress (when the notebook has a course),
  * its own "Loose pages", and a card to add a chapter.
+ *
+ * Decision U26 (docs/NEB_APP_UI.md): a notebook is the whole class. Its home has Pages always,
+ * Study once it has course material (the course's lessons, plan, exam date and Quiz me), and
+ * Moments once something was saved. Until then, one card offers to add the material.
  */
 export function NodeHome({
   node,
@@ -82,11 +92,12 @@ export function NodeHome({
   moments,
   dueCounts,
   unsorted,
+  initialTab,
   ...actions
 }: Props) {
   const keys = useShortcutKeys();
   // Unsorted is where moments wait: they're what it's for, so they come first there.
-  const [tab, setTab] = useState<Tab>(unsorted ? "moments" : "contents");
+  const [tab, setTab] = useState<HomeTab>(initialTab ?? (unsorted ? "moments" : "pages"));
   const root = tree.path(node.id)[0] ?? node;
   const children = tree.children(node.id);
   const childIds = children.map((c) => c.id).join(",");
@@ -104,8 +115,10 @@ export function NodeHome({
   // K4 decision 8: once a PDF's topics are found, a card says so (the import never waits).
   const [topics, setTopics] = useState<"processing" | "review" | null>(null);
   const courseId = root.courseId ?? null;
+  // The Study tab shows the course's state itself (and polls it): no card, no second poll.
+  const onStudy = tab === "study";
   useEffect(() => {
-    if (!courseId) return;
+    if (!courseId || onStudy) return;
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const check = () =>
@@ -124,7 +137,7 @@ export function NodeHome({
       live = false;
       clearTimeout(timer);
     };
-  }, [courseId]);
+  }, [courseId, onStudy]);
   // K1 §2.2: each chapter card shows its course progress (the topics in it that are checked).
   const [progress, setProgress] = useState<CourseProgress | null>(null);
   useEffect(() => {
@@ -141,6 +154,12 @@ export function NodeHome({
   const progressOf = (id: string) =>
     courseId && progress ? chapterProgress(subtreeIds(tree, id), progress) : null;
   const canAdd = tree.depth(node.id) < TREE_LIMITS.maxDepth;
+  const isRoot = node.parentId === null;
+  const hasStudy = isRoot && courseId !== null;
+  const hasMoments = moments.length > 0 || unsorted !== undefined;
+  // A tab that went away (the course was removed, the last moment moved) falls back to Pages.
+  const shown: HomeTab =
+    (tab === "study" && !hasStudy) || (tab === "moments" && !hasMoments) ? "pages" : tab;
   const noun = childNoun(tree, node.id);
   const totalPages = children.reduce((sum, c) => sum + (pageCounts.get(c.id) ?? 0), pages.length);
 
@@ -178,19 +197,10 @@ export function NodeHome({
                 </select>
               </label>
             )}
-            {root.courseId && (
-              <Link
-                href={`/courses/${root.courseId}`}
-                className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
-              >
-                <GraduationCap className="size-4" aria-hidden />
-                Course notebook
-              </Link>
-            )}
           </p>
         </header>
 
-        {courseId && topics && (
+        {courseId && topics && shown !== "study" && (
           <aside
             data-testid="review-topics"
             className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-paper-hi p-4"
@@ -201,12 +211,13 @@ export function NodeHome({
                 : "Neb is finding the topics in your PDF. You can write on its pages meanwhile."}
             </span>
             {topics === "review" && (
-              <Link
-                href={`/courses/${courseId}`}
+              <button
+                type="button"
+                onClick={() => setTab("study")}
                 className="shrink-0 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
               >
                 Review topics
-              </Link>
+              </button>
             )}
           </aside>
         )}
@@ -231,15 +242,31 @@ export function NodeHome({
         )}
 
         <div role="tablist" aria-label="Show" className="flex gap-1 border-b border-line">
-          <TabButton selected={tab === "contents"} onSelect={() => setTab("contents")}>
-            Contents
+          <TabButton selected={shown === "pages"} onSelect={() => setTab("pages")}>
+            Pages
           </TabButton>
-          <TabButton selected={tab === "moments"} onSelect={() => setTab("moments")}>
-            Moments{moments.length > 0 && ` (${moments.length})`}
-          </TabButton>
+          {hasStudy && (
+            <TabButton selected={shown === "study"} onSelect={() => setTab("study")}>
+              Study
+            </TabButton>
+          )}
+          {hasMoments && (
+            <TabButton selected={shown === "moments"} onSelect={() => setTab("moments")}>
+              Moments{moments.length > 0 && ` (${moments.length})`}
+            </TabButton>
+          )}
         </div>
 
-        {tab === "moments" ? (
+        {shown === "study" && courseId ? (
+          <div role="tabpanel" aria-label="Study">
+            <CourseStudy
+              id={courseId}
+              inNotebook
+              onQuiz={actions.onQuiz}
+              onRemoved={() => actions.onLinkCourse(null)}
+            />
+          </div>
+        ) : shown === "moments" ? (
           <div role="tabpanel" aria-label="Moments" className="flex flex-col gap-6">
             {unsorted && (
               <FileThese
@@ -267,7 +294,10 @@ export function NodeHome({
             />
           </div>
         ) : (
-          <div role="tabpanel" aria-label="Contents" className="flex flex-col gap-8">
+          <div role="tabpanel" aria-label="Pages" className="flex flex-col gap-8">
+            {isRoot && !courseId && !unsorted && (
+              <AddMaterial tree={tree} onAdd={actions.onImportPdf} onLink={actions.onLinkCourse} />
+            )}
             <section aria-labelledby="chapters-heading" className="flex flex-col gap-3">
               <h2 id="chapters-heading" className="text-xs tracking-wide text-muted uppercase">
                 {root.childLabel}
@@ -388,6 +418,82 @@ export function NodeHome({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * U26: a notebook without course material says once what adding it unlocks. A course the student
+ * already has (made before courses lived in notebooks) can be linked instead.
+ */
+function AddMaterial({
+  tree,
+  onAdd,
+  onLink,
+}: {
+  tree: NotebookTree<Notebook>;
+  onAdd(): void;
+  onLink(courseId: string): void;
+}) {
+  const [courses, setCourses] = useState<{ id: string; title: string }[]>([]);
+  const linked = tree
+    .children(null)
+    .map((n) => n.courseId)
+    .filter(Boolean)
+    .join(",");
+  useEffect(() => {
+    let live = true;
+    const taken = new Set(linked.split(","));
+    void coursesApi
+      .list()
+      .then((all) => live && setCourses(all.filter((c) => !taken.has(c.id))))
+      .catch(() => undefined); // offline: only the PDF button
+    return () => {
+      live = false;
+    };
+  }, [linked]);
+  return (
+    <aside
+      data-testid="add-material"
+      className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-dashed border-line p-5"
+    >
+      <span className="flex min-w-0 flex-[1_1_320px] items-start gap-3">
+        <GraduationCap className="mt-0.5 size-5 shrink-0 text-muted" aria-hidden />
+        <span className="text-sm">
+          <span className="font-medium">Have the syllabus or slides?</span>{" "}
+          <span className="text-muted">
+            Add them and neb builds lessons, a study plan and quizzes for this notebook.
+          </span>
+        </span>
+      </span>
+      <span className="flex flex-wrap items-center gap-3">
+        {courses.length > 0 && (
+          <label className="text-sm text-muted">
+            <span className="sr-only">Use a course you already have</span>
+            <select
+              data-testid="link-course"
+              value=""
+              onChange={(event) => event.target.value && onLink(event.target.value)}
+              className="rounded-full border border-line bg-paper px-3 py-2"
+            >
+              <option value="">Use a course you have…</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper"
+        >
+          <FileUp className="size-4" aria-hidden />
+          Add course material
+        </button>
+      </span>
+    </aside>
   );
 }
 

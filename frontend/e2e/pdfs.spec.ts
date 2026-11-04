@@ -100,11 +100,17 @@ test("a PDF is split into chapters, drawn under the ink, kept offline, and becom
   expect(response.headers()["content-type"]).toBe("image/png");
   await expect.poll(() => cachedPages(page)).toBeGreaterThan(0);
 
-  // The notebook is now a course notebook; "Review topics" shows once its topics are found.
+  // The notebook has course material now (decision U26): a Study tab, and "Review topics" once its
+  // topics are found, which opens it.
   await page.getByRole("treeitem", { name }).click();
   await expect(page.getByTestId("node-home")).toBeVisible();
-  await expect(page.getByText("Course notebook")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Review topics" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("add-material")).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Study" })).toBeVisible();
+  const reviewTopics = page.getByRole("button", { name: "Review topics" });
+  await expect(reviewTopics).toBeVisible({ timeout: 30_000 });
+  await reviewTopics.click();
+  await expect(page.getByRole("tab", { name: "Study" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("course-study")).toContainText("Needs review");
 });
 
 test("refuses a password-protected PDF with a clear message", async ({ page }) => {

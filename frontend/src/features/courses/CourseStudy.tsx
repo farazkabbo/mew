@@ -2,19 +2,32 @@
 
 import type { CourseDetail } from "@mew/shared";
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { coursesApi, CourseApiError } from "./api";
-import { CourseShell, StatusPill } from "./CourseShell";
+import { StatusPill } from "./CourseShell";
 import { ScopeReview } from "./ScopeReview";
 import { StudyPlan } from "./StudyPlan";
 
 const POLL_MS = 1500;
 
-/** One course: progress while it's built, then the scope review, then the study plan. */
-export function CourseApp({ id }: { id: string }) {
-  const router = useRouter();
+/**
+ * A course's study view (docs/NEB_APP_UI.md decision U26): progress while it's built, then the
+ * scope review, then the study plan. It's a notebook's Study tab; `inNotebook` leaves out the
+ * way back to the notebook it's already in.
+ */
+export function CourseStudy({
+  id,
+  inNotebook = false,
+  onQuiz,
+  onRemoved,
+}: {
+  id: string;
+  inNotebook?: boolean;
+  /** Quiz me, in the notebook it's shown in. */
+  onQuiz?: () => void;
+  onRemoved(): void;
+}) {
   const [detail, setDetail] = useState<CourseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,31 +67,26 @@ export function CourseApp({ id }: { id: string }) {
 
   const remove = async () => {
     await coursesApi.remove(id).catch(() => undefined);
-    router.push("/courses");
+    onRemoved();
   };
 
   if (!detail) {
     return (
-      <CourseShell back={{ href: "/courses", label: "Courses" }} title="Course">
-        <p role={error ? "alert" : undefined} className="text-sm text-muted">
-          {error ?? "Loading…"}
-        </p>
-      </CourseShell>
+      <p role={error ? "alert" : undefined} className="text-sm text-muted">
+        {error ?? "Loading…"}
+      </p>
     );
   }
 
   const { course } = detail;
   return (
-    <CourseShell
-      back={{ href: "/courses", label: "Courses" }}
-      title={course.title}
-      subtitle={
-        <span className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-6" data-testid="course-study">
+      {course.status !== "ready" && (
+        <p className="flex flex-wrap items-center gap-3 text-muted">
           <StatusPill status={course.status} />
           {course.status_detail && <span className="text-sm">{course.status_detail}</span>}
-        </span>
-      }
-    >
+        </p>
+      )}
       {course.status === "processing" && (
         <div
           role="status"
@@ -100,7 +108,14 @@ export function CourseApp({ id }: { id: string }) {
         </div>
       )}
       {course.status === "review" && <ScopeReview detail={detail} onSaved={setDetail} />}
-      {course.status === "ready" && <StudyPlan detail={detail} onChange={setDetail} />}
-    </CourseShell>
+      {course.status === "ready" && (
+        <StudyPlan
+          detail={detail}
+          onChange={setDetail}
+          inNotebook={inNotebook}
+          {...(onQuiz && { onQuiz })}
+        />
+      )}
+    </div>
   );
 }

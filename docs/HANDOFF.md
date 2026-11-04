@@ -540,6 +540,11 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
 - **U25 built** (2026-11-04, `feat/ui-u10-review`): the Review page restyled to boards 7 and 8
   (the desk's header, the Up next card and skills, courses as file folders). NEB_APP_UI.md decision
   U25; it overrides U14 for Review only.
+- **U26, first half, built** (2026-11-04, `feat/ui-u26-study`): a notebook is the whole class.
+  No Courses page (`/courses` → the desk, `/courses/<id>` → its notebook's Study tab); a
+  notebook's home has Pages, Study (the course: build progress, scope review, plan, exam date,
+  Quiz me started on the page) and Moments; "Add course material" until it has one, with "Use a
+  course you have…" for courses made before. NEB_APP_UI.md decision U26.
 - **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in

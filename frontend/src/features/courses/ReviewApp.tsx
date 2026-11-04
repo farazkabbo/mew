@@ -148,11 +148,11 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
             {!folders && !error && <p className="text-muted">Loading…</p>}
             {folders?.length === 0 && (
               <p className="rounded-xl border border-line bg-paper p-6">
-                Nothing is due right now. Open a lesson or{" "}
-                <Link href="/courses" className="underline hover:text-ink">
-                  pick a course
+                Nothing is due right now. Add course material to a notebook on{" "}
+                <Link href="/desk" className="underline hover:text-ink">
+                  your desk
                 </Link>{" "}
-                to start something new.
+                and open a lesson to start something new.
               </p>
             )}
             {folders && folders.length > 0 && (
