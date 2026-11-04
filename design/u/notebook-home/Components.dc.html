@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notebook home · components</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="min-height: 100vh; background: #ECE6D8; color: #1E1D1A; font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.5; padding: 56px 48px 72px; box-sizing: border-box">
+<div style="max-width: 1240px; margin: 0 auto">
+<h1 style="margin: 0; font: 400 56px/1 'Instrument Serif', serif">New components</h1>
+<p style="margin: 12px 0 0; color: #5F5A50; max-width: 720px">What the notebook home adds, and which tokens each one uses. Behaviour stays as it is today; only the look and layout change.</p>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; margin-top: 36px">
+<sc-for list="{{items}}" as="c" hint-placeholder-count="12">
+<article style="background: #FBF8F0; border-radius: 14px; padding: 22px 24px; box-shadow: 0 10px 24px -14px #1E1D1A66">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font: 400 26px/1.1 'Instrument Serif', serif">{{c.name}}</h2>
+<code style="font: 500 12px ui-monospace, monospace; color: #5F5A50">{{c.file}}</code>
+</div>
+<p style="margin: 8px 0 0; font-size: 14px">{{c.what}}</p>
+<p style="margin: 10px 0 0; font-size: 13px; color: #5F5A50"><strong style="color: #1E1D1A; font-weight: 600">Tokens · </strong>{{c.tokens}}</p>
+</article>
+</sc-for>
+</div>
+
+<h2 style="margin: 48px 0 0; font: 400 32px/1 'Instrument Serif', serif">Rules these boards follow</h2>
+<ul style="margin: 14px 0 0; padding-left: 20px; max-width: 860px; display: flex; flex-direction: column; gap: 6px">
+<li>Violet appears only where neb acts or speaks: the notice card, Quick check, "Read it again", checks due, checked ticks and the building spinner. Quiz me, Add course material and Start studying are ink, because the student starts them.</li>
+<li>One breadcrumb, in the top bar. The title block holds the cover, the name, the meta line and Subject.</li>
+<li>Tabs are dividers. The active tab is the same paper as the sheet under it; the others are the darker desk tone (--sunk). A tab exists only when its feature applies.</li>
+<li>Page numbers and prerequisites stay but move out of the way: the prerequisite becomes "after 1" with the full name on hover, and pages sit in a quiet right-hand column.</li>
+<li>Moments are grouped by source by default, so the source line is shown once per group, not on every row. "Day" grouping is the alternative. "Check against my notes" lives on each moment, not at the top of the page.</li>
+<li>The old violet mascot blob is gone. The ask pill (bottom right) is unchanged and not drawn here.</li>
+</ul>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+renderVals() {
+var items = [
+['NotebookHeader', 'NodeHome', 'Top bar (back, one breadcrumb, level switch) and the title block: cover, name, meta, Subject.', '--desk, --line hairline under the bar; name in Instrument Serif 56; meta in --muted Inter 14.'],
+['CoverMark', 'node-style', 'The notebook icon drawn as a small cover: cover colour, a darker binding, a paper label with the icon.', 'Cover colour from the notebook; label #FFFEFB with --ink icon in both themes; --sh-2.'],
+['SubjectSelect', 'NodeHome', 'A pill select with its chevron inside, right next to the label.', '--paper fill, --line border, --ink text, --muted chevron; 34 px high.'],
+['NebNotice', 'NodeHome', 'One card above the tabs for what neb has for you: checks due, reading a PDF, topics found.', '--neb-wash fill; neb dot in --neb; first line Pixelify Sans in --neb-ink, lowercase; action is the neb button only when neb starts something.'],
+['DividerTabs', 'NodeHome', 'Tabs that join the sheet below, like notebook dividers. Counts after the label.', 'Active: --paper, Inter 600, 52 px. Inactive: --sunk, --muted, 44 px. Sheet: --paper, radius 16, --sh-2.'],
+['ChapterCard', 'tree/ChapterCard', 'Number, title, checks-due badge, course progress, meta. Has a drop state for pages.', '--paper-hi; 6 px top edge in the cover colour; badge --neb-wash/--neb-ink; progress bar --ink on --line; drop state 2 px dashed --ink outline and --sh-3.'],
+['PageTile', 'tree/PageTile', 'A loose page as a small ruled sheet with a move button; lifts and tilts while dragged.', '--paper-hi with --rule lines and a --margin-red margin; --line border; move button --paper. Dragged: rotate −5°, scale 1.04, shadow; its slot shows a dashed outline.'],
+['AddTile', 'NodeHome', 'Dashed tiles for Add chapter, New page and Import PDF, with keycaps.', '1.5 px dashed --line, transparent fill, --ink label, keycaps in --muted.'],
+['CourseMaterialCard', 'courses/AddMaterial', 'The "Have the syllabus or slides?" card, with Add course material and Use a course you have.', '--paper-hi, --line border; title Instrument Serif 28; ink button and an ink-outline select.'],
+['StudySummary', 'courses/StudyPlan', 'Big serif numbers (concepts, checked, to revisit, exam in) with a status bar under them, and Quiz me.', 'Numbers Instrument Serif 44; labels --muted 13. Bar: checked --neb, hint --neb-wash with --neb ring, revisit --ink, explored --muted ring, not started --line.'],
+['ConceptRow', 'courses/StudyPlan', 'Status disc, number, title, when it comes back, "after N", pages, status chip. Opens the lesson.', 'Discs and chips as on Review; Not started is a plain --line ring with a --muted label; rows on --paper-hi with --line dividers.'],
+['ExamPlan', 'courses/ExamPlanView', 'Exam date field and a day-by-day list: today highlighted, the eve dashed, the exam day in ink.', 'Card --paper-hi; today --note; eve 1 px dashed --line; exam --ink with --on-ink text.'],
+['PlanEditorRow', 'courses/ScopeReview', 'Editable concept name with up, down, merge into the one above, and remove.', 'Input --paper with --line border; icon buttons 36 px, --ink; disabled at 30 % opacity.'],
+['MomentGroup', 'moments/MomentsList', 'A source header (icon, title, kind, count, day, Open PDF) with its moments in a grid.', 'Icon tile --sunk; title Inter 600 16; meta --muted 13; ghost button --ink outline.'],
+['MomentCard', 'moments/MomentsList', 'Large thumbnail with neb’s circle, the question, Replay, day, and icon buttons for Open source and Check against my notes.', 'Card --paper-hi, --sh-2; thumbnail stays light in night (it is a screenshot); "check due" pill --neb-wash with Pixelify --neb-ink.'],
+['FilterChips', 'moments/MomentsList', 'All, Videos, Web pages, PDFs, Apps with counts; zero counts dimmed. Group by Source or Day.', 'Active chip --ink fill with --on-ink text; others --line border; group switch on --sunk.']
+];
+return { items: items.map(function (x) { return { name: x[0], file: x[1], what: x[2], tokens: x[3] }; }) };
+}
+}
+</script>
+</body>
+</html>

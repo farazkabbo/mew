@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notebook home · Study</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@500&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="{{rootStyle}}">
+
+<aside style="width: 240px; flex: none; background: var(--paper); border-right: 1px solid var(--line); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+<span style="width: 26px; height: 26px; border-radius: 999px; background: var(--neb); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+<span style="font-size: 19px; font-weight: 600; letter-spacing: 0.02em">neb</span>
+</div>
+<nav aria-label="Notebooks">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 0 8px 8px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted)">Notebooks</span>
+<button type="button" aria-label="New notebook" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--muted); border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+</div>
+<a href="#" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; color: var(--ink)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"></path><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"></path></svg>My first notebook</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; color: var(--ink)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 7V4H6l6 8-6 8h12v-3"></path></svg>Business Mathematics</a>
+<a href="#" aria-current="page" style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; color: var(--ink); background: var(--sunk)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"></path><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"></path></svg>Advanced DSA</a>
+<a href="#" style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px 0 36px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px"><span style="width: 5px; height: 5px; border-radius: 999px; background: var(--line)"></span>Chapter 1</a>
+</nav>
+</aside>
+
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<div style="height: 64px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 28px 0 20px; border-bottom: 1px solid var(--line)">
+<a href="#" aria-label="Back to the desk" style="width: 44px; height: 44px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></a>
+<nav aria-label="Breadcrumb" style="font-size: 14px; display: flex; align-items: center; gap: 8px">
+<a href="#" style="color: var(--muted); text-decoration: none">Notebooks</a>
+<span style="color: var(--muted)" aria-hidden="true">›</span>
+<span style="font-weight: 600">Advanced DSA</span>
+</nav>
+<div style="flex: 1"></div>
+<div role="radiogroup" aria-label="How much neb marks" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunk)">
+<button type="button" role="radio" aria-checked="false" style="height: 34px; padding: 0 14px; border-radius: 999px; border: none; background: transparent; color: var(--muted); font: 500 13px Inter, sans-serif; cursor: pointer">Quiet</button>
+<button type="button" role="radio" aria-checked="false" style="height: 34px; padding: 0 14px; border-radius: 999px; border: none; background: transparent; color: var(--muted); font: 500 13px Inter, sans-serif; cursor: pointer">Hint</button>
+<button type="button" role="radio" aria-checked="true" style="height: 34px; padding: 0 14px; border-radius: 999px; border: none; background: var(--paper-hi); color: var(--ink); font: 600 13px Inter, sans-serif; cursor: pointer; box-shadow: 0 1px 2px rgba(30,29,26,.18)">Coach</button>
+</div>
+</div>
+
+<main style="flex: 1; padding: 40px 40px 64px; box-sizing: border-box">
+<div style="max-width: 1080px; margin: 0 auto">
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px">
+<div style="width: 52px; height: 68px; flex: none; border-radius: 3px 9px 9px 3px; background: #C98B6B; box-shadow: inset 7px 0 0 rgba(0,0,0,.14), var(--sh-2); display: flex; align-items: center; justify-content: center" aria-hidden="true">
+<span style="width: 30px; height: 30px; border-radius: 4px; background: #FFFEFB; display: inline-flex; align-items: center; justify-content: center; color: #1E1D1A; margin-left: 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"></path><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"></path></svg></span>
+</div>
+<div style="min-width: 0">
+<h1 style="margin: 0; font: 400 56px/1 'Instrument Serif', serif; letter-spacing: -0.01em">Advanced DSA</h1>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 12px; font-size: 14px; color: var(--muted)">
+<span>1 chapter · 47 pages</span>
+<span style="width: 4px; height: 4px; border-radius: 999px; background: var(--line)" aria-hidden="true"></span>
+<label style="display: inline-flex; align-items: center; gap: 8px">Subject
+<span style="position: relative; display: inline-flex">
+<select value="Programming" onChange="{{noop}}" style="appearance: none; -webkit-appearance: none; height: 34px; padding: 0 34px 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: 500 14px Inter, sans-serif; cursor: pointer">
+<option>Not set</option><option>Maths</option><option>Physics</option><option>Chemistry</option><option>Biology</option><option>Programming</option><option>History</option><option>Languages</option><option>Other</option>
+</select>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; right: 12px; top: 9px; pointer-events: none; color: var(--muted)"><path d="M6 9l6 6 6-6"></path></svg>
+</span>
+</label>
+</div>
+</div>
+</div>
+
+<sc-if value="{{notice.show}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px 14px 14px 16px; border-radius: 14px; background: var(--neb-wash)">
+<span style="width: 34px; height: 34px; flex: none; border-radius: 999px; background: var(--neb); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true">
+<sc-if value="{{notice.thinking}}" hint-placeholder-val="{{ false }}">
+<svg width="18" height="6" viewBox="0 0 18 6"><rect x="0" y="0" width="4" height="4" fill="#FFFFFF"><animate attributeName="opacity" values="1;.25;1" dur="1.2s" repeatCount="indefinite"></animate></rect><rect x="7" y="0" width="4" height="4" fill="#FFFFFF"><animate attributeName="opacity" values="1;.25;1" dur="1.2s" begin=".2s" repeatCount="indefinite"></animate></rect><rect x="14" y="0" width="4" height="4" fill="#FFFFFF"><animate attributeName="opacity" values="1;.25;1" dur="1.2s" begin=".4s" repeatCount="indefinite"></animate></rect></svg>
+</sc-if>
+<sc-if value="{{notice.done}}" hint-placeholder-val="{{ true }}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+</sc-if>
+</span>
+<div style="flex: 1 1 280px; min-width: 0">
+<div style="font: 500 15px 'Pixelify Sans', monospace; color: var(--neb-ink)">{{notice.voice}}</div>
+<div style="font-size: 14px; color: var(--ink); opacity: .8">{{notice.text}}</div>
+</div>
+</div>
+</sc-if>
+
+<div role="tablist" aria-label="Notebook" style="display: flex; gap: 6px; align-items: flex-end; margin-top: 36px">
+<button type="button" role="tab" aria-selected="false" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border: none; border-radius: 12px 12px 0 0; background: var(--sunk); color: var(--muted); font: 500 15px Inter, sans-serif; cursor: pointer">Pages<span style="opacity: .7">47</span></button>
+<button type="button" role="tab" aria-selected="true" style="display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 22px; border: none; border-radius: 12px 12px 0 0; background: var(--paper); color: var(--ink); font: 600 15px Inter, sans-serif; cursor: pointer">Study<span style="font-weight: 500; opacity: .7">{{studyCount}}</span></button>
+</div>
+<div role="tabpanel" style="background: var(--paper); border-radius: 0 16px 16px 16px; box-shadow: var(--sh-2); padding: 32px 32px 40px">
+
+<sc-if value="{{isReady}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px">
+<dl style="display: flex; flex-wrap: wrap; gap: 12px 40px; margin: 0">
+<div><dt style="font-size: 13px; color: var(--muted)">Concepts</dt><dd style="margin: 2px 0 0; font: 400 44px/1 'Instrument Serif', serif">12</dd></div>
+<div><dt style="font-size: 13px; color: var(--muted)">Checked</dt><dd style="margin: 2px 0 0; font: 400 44px/1 'Instrument Serif', serif">1</dd></div>
+<div><dt style="font-size: 13px; color: var(--muted)">To revisit</dt><dd style="margin: 2px 0 0; font: 400 44px/1 'Instrument Serif', serif">1</dd></div>
+<div><dt style="font-size: 13px; color: var(--muted)">Exam in</dt><dd style="margin: 2px 0 0; font: 400 44px/1 'Instrument Serif', serif">9 <span style="font-size: 24px">days</span></dd></div>
+</dl>
+<button type="button" style="height: 48px; padding: 0 26px; border-radius: 999px; border: none; background: var(--ink); color: var(--on-ink); font: 600 15px Inter, sans-serif; cursor: pointer">Quiz me</button>
+</div>
+<div role="img" aria-label="1 checked, 1 with a hint, 1 to revisit, 1 explored, 8 not started" style="display: flex; gap: 3px; height: 10px; margin-top: 24px">
+<span style="flex: 1; border-radius: 999px; background: var(--neb)"></span>
+<span style="flex: 1; border-radius: 999px; background: var(--neb-wash); box-shadow: inset 0 0 0 1.5px var(--neb)"></span>
+<span style="flex: 1; border-radius: 999px; background: var(--ink)"></span>
+<span style="flex: 1; border-radius: 999px; box-shadow: inset 0 0 0 1.5px var(--muted)"></span>
+<span style="flex: 8; border-radius: 999px; background: var(--line)"></span>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 32px; margin-top: 32px; align-items: flex-start">
+<section aria-labelledby="cl" style="flex: 999 1 520px; min-width: 0">
+<h2 id="cl" style="margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted)">In course order</h2>
+<ol style="list-style: none; margin: 0; padding: 0; background: var(--paper-hi); border-radius: 12px; box-shadow: var(--sh-2); overflow: hidden">
+<sc-for list="{{concepts}}" as="k" hint-placeholder-count="8">
+<li style="border-bottom: 1px solid var(--line)">
+<a href="#" style="display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 10px 18px; text-decoration: none; color: var(--ink)">
+<sc-if value="{{k.isRevisit}}" hint-placeholder-val="{{ false }}"><span style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: var(--ink); color: var(--on-ink); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg></span></sc-if>
+<sc-if value="{{k.isChecked}}" hint-placeholder-val="{{ false }}"><span style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: var(--neb-wash); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--neb)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"></path></svg></span></sc-if>
+<sc-if value="{{k.isHint}}" hint-placeholder-val="{{ false }}"><span style="width: 32px; height: 32px; flex: none; border-radius: 999px; background: var(--neb-wash); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"></path></svg></span></sc-if>
+<sc-if value="{{k.isExplored}}" hint-placeholder-val="{{ false }}"><span style="width: 32px; height: 32px; flex: none; border-radius: 999px; border: 1.5px dashed var(--muted); box-sizing: border-box" aria-hidden="true"></span></sc-if>
+<sc-if value="{{k.isNot}}" hint-placeholder-val="{{ true }}"><span style="width: 32px; height: 32px; flex: none; border-radius: 999px; border: 1.5px solid var(--line); box-sizing: border-box" aria-hidden="true"></span></sc-if>
+<span style="width: 20px; flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right">{{k.num}}</span>
+<span style="flex: 1; min-width: 0">
+<span style="display: block; font-size: 16px; font-weight: 600">{{k.title}}</span>
+<span style="display: block; font-size: 13px; color: var(--muted)">{{k.when}}</span>
+</span>
+<sc-if value="{{k.hasAfter}}" hint-placeholder-val="{{ false }}"><span title="Needs: {{k.afterName}}" style="flex: none; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px">after {{k.after}}</span></sc-if>
+<span style="flex: none; width: 64px; text-align: right; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums">{{k.pages}}</span>
+<span style="{{k.chipStyle}}">{{k.chip}}</span>
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none"><path d="M9 6l6 6-6 6"></path></svg>
+</a>
+</li>
+</sc-for>
+<li><button type="button" style="width: 100%; height: 52px; border: none; background: transparent; color: var(--ink); font: 500 14px Inter, sans-serif; cursor: pointer">Show 4 more concepts</button></li>
+</ol>
+</section>
+
+<aside aria-labelledby="ex" style="flex: 1 1 280px; max-width: 340px; min-width: 0; background: var(--paper-hi); border-radius: 12px; box-shadow: var(--sh-2); padding: 22px">
+<h2 id="ex" style="margin: 0; font: 400 26px/1 'Instrument Serif', serif">Exam plan</h2>
+<label style="display: flex; flex-direction: column; gap: 6px; margin-top: 16px; font-size: 13px; color: var(--muted)">Exam date
+<input type="date" value="2026-11-13" onChange="{{noop}}" style="height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: 500 14px Inter, sans-serif; color-scheme: {{scheme}}">
+</label>
+<ol style="list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{plan}}" as="d" hint-placeholder-count="9">
+<li style="{{d.style}}">
+<span style="width: 56px; flex: none; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums">{{d.day}}</span>
+<span style="flex: 1; min-width: 0; font-size: 14px">{{d.what}}</span>
+</li>
+</sc-for>
+</ol>
+<p style="margin: 14px 0 0; font-size: 12px; color: var(--muted)">Revisit first, then what's left in course order. The eve is a final review.</p>
+</aside>
+</div>
+</sc-if>
+
+<sc-if value="{{isBuilding}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 0 8px">
+<svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="18" fill="none" stroke="var(--neb-wash)" stroke-width="4"></circle><path d="M22 4a18 18 0 0 1 18 18" fill="none" stroke="var(--neb)" stroke-width="4" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 22 22" to="360 22 22" dur="1s" repeatCount="indefinite"></animateTransform></path></svg>
+<p style="margin: 16px 0 0; font: 500 16px 'Pixelify Sans', monospace; color: var(--neb-ink)">reading your material and finding the key concepts…</p>
+<p style="margin: 6px 0 0; font-size: 14px; color: var(--muted)">You can keep writing while neb reads.</p>
+</div>
+<div aria-hidden="true" style="margin-top: 28px; background: var(--paper-hi); border-radius: 12px; overflow: hidden">
+<sc-for list="{{skeleton}}" as="s" hint-placeholder-count="6">
+<div style="display: flex; align-items: center; gap: 14px; height: 68px; padding: 0 18px; border-bottom: 1px solid var(--line); opacity: {{s.o}}">
+<span style="width: 32px; height: 32px; border-radius: 999px; background: var(--sunk)"></span>
+<span style="flex: 1; display: flex; flex-direction: column; gap: 8px"><span style="height: 12px; border-radius: 6px; background: var(--sunk); width: {{s.w}}"></span><span style="height: 8px; width: 120px; border-radius: 4px; background: var(--sunk)"></span></span>
+<span style="width: 72px; height: 24px; border-radius: 999px; background: var(--sunk)"></span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{isPlan}}" hint-placeholder-val="{{ false }}">
+<h2 style="margin: 0; font: 400 34px/1.05 'Instrument Serif', serif">Review the plan</h2>
+<p style="margin: 8px 0 0; font-size: 15px; color: var(--muted); max-width: 640px">neb proposed 12 concepts from your PDF. Rename, reorder, merge or remove any of them before you start.</p>
+<ol style="list-style: none; margin: 24px 0 0; padding: 0; background: var(--paper-hi); border-radius: 12px; box-shadow: var(--sh-2); overflow: hidden">
+<sc-for list="{{planRows}}" as="p" hint-placeholder-count="8">
+<li style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 14px 10px 18px; border-bottom: 1px solid var(--line)">
+<span style="width: 20px; flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right">{{p.num}}</span>
+<input type="text" value="{{p.title}}" aria-label="Concept {{p.num}} name" onChange="{{noop}}" style="flex: 1 1 260px; min-width: 0; height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: 500 15px Inter, sans-serif">
+<span style="width: 72px; flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums">{{p.pages}}</span>
+<span style="display: inline-flex; gap: 2px; flex: none">
+<button type="button" aria-label="Move up" disabled="{{p.first}}" style="{{p.btnFirst}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"></path></svg></button>
+<button type="button" aria-label="Move down" style="width: 36px; height: 36px; border-radius: 8px; border: none; background: transparent; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"></path></svg></button>
+<button type="button" aria-label="Merge into the one above" disabled="{{p.first}}" style="{{p.btnFirst}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6 4-4 4 4"></path><path d="M12 2v10.3a4 4 0 0 1-1.17 2.87L4 22"></path><path d="m20 22-5-5"></path></svg></button>
+<button type="button" aria-label="Remove" style="width: 36px; height: 36px; border-radius: 8px; border: none; background: transparent; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+</span>
+</li>
+</sc-for>
+<li><button type="button" style="width: 100%; height: 52px; border: none; background: transparent; color: var(--ink); font: 500 14px Inter, sans-serif; cursor: pointer">Show 4 more concepts</button></li>
+</ol>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line)">
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted)">Exam date · optional
+<input type="date" value="" onChange="{{noop}}" style="height: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper-hi); color: var(--ink); font: 500 14px Inter, sans-serif; color-scheme: {{scheme}}">
+</label>
+<span style="flex: 1"></span>
+<button type="button" style="height: 48px; padding: 0 26px; border-radius: 999px; border: none; background: var(--ink); color: var(--on-ink); font: 600 15px Inter, sans-serif; cursor: pointer">Start studying (12 concepts)</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isFailed}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 48px 0 32px">
+<span style="width: 64px; height: 64px; border-radius: 16px; background: var(--sunk); display: inline-flex; align-items: center; justify-content: center; color: var(--muted)" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="m14.5 12.5-5 5M9.5 12.5l5 5"></path></svg></span>
+<h2 style="margin: 20px 0 0; font: 400 34px/1.1 'Instrument Serif', serif">This course couldn't be built.</h2>
+<p style="margin: 8px 0 0; font-size: 15px; color: var(--muted); max-width: 440px">Your notebook and its pages aren't affected.</p>
+<button type="button" style="margin-top: 24px; height: 44px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--danger); font: 600 15px Inter, sans-serif; cursor: pointer">Delete and try another file</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isEmpty}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: center; text-align: center; padding: 48px 0 32px">
+<span style="width: 64px; height: 64px; border-radius: 16px; background: var(--sunk); display: inline-flex; align-items: center; justify-content: center; color: var(--muted)" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M9 15h6"></path></svg></span>
+<h2 style="margin: 20px 0 0; font: 400 34px/1.1 'Instrument Serif', serif">No concepts in this course yet.</h2>
+<p style="margin: 8px 0 0; font-size: 15px; color: var(--muted); max-width: 460px">neb didn't find concepts in this material. Read it again, or add another file.</p>
+<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 24px">
+<button type="button" style="height: 44px; padding: 0 22px; border-radius: 999px; border: none; background: var(--neb); color: #FFFFFF; font: 600 15px Inter, sans-serif; cursor: pointer">Read it again</button>
+<button type="button" style="height: 44px; padding: 0 22px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; color: var(--ink); font: 600 15px Inter, sans-serif; cursor: pointer">Add another file</button>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["ready","building","plan","failed","empty"],"default":"ready"},"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+renderVals() {
+var night = !!this.props.night;
+var state = this.props.state || 'ready';
+var t = night
+? { desk: '#1B1F23', paper: '#22272C', 'paper-hi': '#2A3036', ink: '#ECE6D8', muted: '#A9A294', line: '#3A4047', rule: '#2F3A40', neb: '#9C86FF', 'neb-ink': '#C9BCFF', 'neb-wash': '#2C2550', note: '#5A5230', 'on-ink': '#1B1F23', sunk: '#2E3439', danger: '#E8907F', 'sh-2': '0 10px 24px -14px #000000AA' }
+: { desk: '#ECE6D8', paper: '#FBF8F0', 'paper-hi': '#FFFEFB', ink: '#1E1D1A', muted: '#5F5A50', line: '#D3CAB7', rule: '#D6E2E6', neb: '#6B4EE6', 'neb-ink': '#3F2BA0', 'neb-wash': '#F1EDFF', note: '#F1E5AE', 'on-ink': '#FBF8F0', sunk: '#E2DACA', danger: '#A8402F', 'sh-2': '0 10px 24px -14px #1E1D1A66' };
+var vars = Object.keys(t).map(function (k) { return '--' + k + ': ' + t[k]; }).join('; ');
+
+var chip = {
+checked: ['Checked', 'background: var(--neb-wash); color: var(--neb-ink); padding: 4px 10px'],
+hint: ['With a hint', 'border: 1px solid var(--line); color: var(--muted); padding: 3px 10px'],
+revisit: ['Revisit', 'background: var(--note); color: var(--ink); padding: 4px 10px'],
+explored: ['Explored', 'border: 1px solid var(--line); color: var(--ink); padding: 3px 10px'],
+not: ['Not started', 'color: var(--muted); padding: 4px 4px']
+};
+var A = 'Arrays and Two Pointers';
+var data = [
+['1', 'Arrays and Two Pointers', 'checked', 'Checked on your own · review in 3 days', '', '', 'pp. 2–4, 6'],
+['2', 'Binary Search', 'hint', 'Practised with a hint · review tomorrow', '1', A, 'p. 5'],
+['3', 'Matrix Manipulation', 'revisit', 'Due today', '1', A, 'pp. 8–9'],
+['4', 'Sliding Window and Strings', 'explored', 'Lesson opened · not practised yet', '1', A, 'pp. 10–14'],
+['5', 'Linked Lists', 'not', 'Not started', '1', A, 'pp. 15–17'],
+['6', 'Binary Trees and BST', 'not', 'Not started', '1', A, 'pp. 18–23'],
+['7', 'Tries', 'not', 'Not started', '6', 'Binary Trees and BST', 'pp. 23–24'],
+['8', 'Heaps and Priority Queues', 'not', 'Not started', '', '', '']
+];
+var concepts = data.map(function (d) {
+var c = chip[d[2]];
+return {
+num: d[0], title: d[1], when: d[3], after: d[4], afterName: d[5], hasAfter: !!d[4], pages: d[6],
+isChecked: d[2] === 'checked', isHint: d[2] === 'hint', isRevisit: d[2] === 'revisit', isExplored: d[2] === 'explored', isNot: d[2] === 'not',
+chip: c[0], chipStyle: 'flex: none; font-size: 13px; font-weight: 600; border-radius: 999px; white-space: nowrap; ' + c[1]
+};
+});
+var planData = [
+['Today', 'Matrix Manipulation (revisit)', 'today'],
+['Thu 5', 'Binary Search', ''],
+['Fri 6', 'Sliding Window and Strings', ''],
+['Sat 7', 'Linked Lists · Arrays and Two Pointers comes back', ''],
+['Sun 8', 'Binary Trees and BST', ''],
+['Mon 9', 'Tries', ''],
+['Tue 10', 'Heaps and Priority Queues', ''],
+['Wed 11', '4 more concepts', ''],
+['Thu 12', 'Final review', 'eve'],
+['Fri 13', 'Exam', 'exam']
+];
+var plan = planData.map(function (p) {
+var base = 'display: flex; gap: 10px; align-items: baseline; padding: 9px 10px; border-radius: 8px; ';
+var s = p[2] === 'today' ? 'background: var(--note)' : p[2] === 'exam' ? 'background: var(--ink); color: var(--on-ink); margin-top: 4px' : p[2] === 'eve' ? 'border: 1px dashed var(--line)' : '';
+return { day: p[0], what: p[1], style: base + s };
+});
+var planRows = data.map(function (d, i) {
+return { num: d[0], title: d[1], pages: d[6], first: i === 0, btnFirst: 'width: 36px; height: 36px; border-radius: 8px; border: none; background: transparent; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center' + (i === 0 ? '; opacity: .3; cursor: default' : '') };
+});
+var notice = { show: false, thinking: false, done: false, voice: '', text: '' };
+if (state === 'building') notice = { show: true, thinking: true, done: false, voice: 'neb is finding the topics in your pdf…', text: 'Study fills in when it’s done.' };
+if (state === 'plan') notice = { show: true, thinking: false, done: true, voice: 'neb found the topics in your pdf.', text: 'Check them below before you start.' };
+return {
+rootStyle: vars + '; min-height: 100vh; display: flex; background: var(--desk); color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.45',
+scheme: night ? 'dark' : 'light',
+noop: function () {},
+notice: notice,
+studyCount: state === 'ready' || state === 'plan' ? '12' : '',
+isReady: state === 'ready', isBuilding: state === 'building', isPlan: state === 'plan', isFailed: state === 'failed', isEmpty: state === 'empty',
+concepts: concepts, plan: plan, planRows: planRows,
+skeleton: [{ w: '48%', o: 1 }, { w: '36%', o: .85 }, { w: '56%', o: .7 }, { w: '40%', o: .55 }, { w: '50%', o: .4 }, { w: '32%', o: .25 }]
+};
+}
+}
+</script>
+</body>
+</html>

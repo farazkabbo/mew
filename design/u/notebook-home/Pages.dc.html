@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notebook home · Pages</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@500&amp;family=Caveat:wght@500;600&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div style="{{rootStyle}}">
+
+<aside style="width: 240px; flex: none; background: var(--paper); border-right: 1px solid var(--line); padding: 20px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 8px">
+<span style="width: 26px; height: 26px; border-radius: 999px; background: var(--neb); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></span>
+<span style="font-size: 19px; font-weight: 600; letter-spacing: 0.02em">neb</span>
+</div>
+<nav aria-label="Notebooks">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 0 8px 8px">
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted)">Notebooks</span>
+<button type="button" aria-label="New notebook" style="width: 32px; height: 32px; border: none; background: transparent; color: var(--muted); border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+</div>
+<sc-for list="{{nbs}}" as="b" hint-placeholder-count="3">
+<a href="#" style="{{b.style}}">
+<sc-if value="{{b.sigma}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 7V4H6l6 8-6 8h12v-3"></path></svg></sc-if>
+<sc-if value="{{b.book}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"></path><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"></path></svg></sc-if>
+<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{b.name}}</span>
+</a>
+<sc-if value="{{b.hasChild}}" hint-placeholder-val="{{ false }}">
+<a href="#" style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px 0 36px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 14px"><span style="width: 5px; height: 5px; border-radius: 999px; background: var(--line)"></span>Chapter 1</a>
+</sc-if>
+</sc-for>
+</nav>
+</aside>
+
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<div style="height: 64px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 28px 0 20px; border-bottom: 1px solid var(--line)">
+<a href="#" aria-label="Back to the desk" style="width: 44px; height: 44px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg></a>
+<nav aria-label="Breadcrumb" style="font-size: 14px; display: flex; align-items: center; gap: 8px; min-width: 0">
+<a href="#" style="color: var(--muted); text-decoration: none">Notebooks</a>
+<span style="color: var(--muted)" aria-hidden="true">›</span>
+<span style="font-weight: 600; white-space: nowrap">{{nb.name}}</span>
+</nav>
+<div style="flex: 1"></div>
+<div role="radiogroup" aria-label="How much neb marks" style="display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--sunk)">
+<sc-for list="{{levels}}" as="l" hint-placeholder-count="3">
+<button type="button" role="radio" aria-checked="{{l.on}}" style="{{l.style}}">{{l.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<main style="flex: 1; padding: 40px 40px 64px; box-sizing: border-box">
+<div style="max-width: 1080px; margin: 0 auto">
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px">
+<div style="width: 52px; height: 68px; flex: none; border-radius: 3px 9px 9px 3px; background: {{nb.cover}}; box-shadow: inset 7px 0 0 rgba(0,0,0,.14), var(--sh-2); display: flex; align-items: center; justify-content: center" aria-hidden="true">
+<span style="width: 30px; height: 30px; border-radius: 4px; background: #FFFEFB; display: inline-flex; align-items: center; justify-content: center; color: #1E1D1A; margin-left: 6px">
+<sc-if value="{{nb.sigma}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 7V4H6l6 8-6 8h12v-3"></path></svg></sc-if>
+<sc-if value="{{nb.book}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"></path><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"></path></svg></sc-if>
+</span>
+</div>
+<div style="min-width: 0">
+<h1 style="margin: 0; font: 400 56px/1 'Instrument Serif', serif; letter-spacing: -0.01em">{{nb.name}}</h1>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 12px; font-size: 14px; color: var(--muted)">
+<span style="font-variant-numeric: tabular-nums">{{nb.meta}}</span>
+<span style="width: 4px; height: 4px; border-radius: 999px; background: var(--line)" aria-hidden="true"></span>
+<label style="display: inline-flex; align-items: center; gap: 8px">Subject
+<span style="position: relative; display: inline-flex">
+<select value="{{nb.subject}}" onChange="{{noop}}" style="appearance: none; -webkit-appearance: none; height: 34px; padding: 0 34px 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: 500 14px Inter, sans-serif; cursor: pointer">
+<option>Not set</option><option>Maths</option><option>Physics</option><option>Chemistry</option><option>Biology</option><option>Programming</option><option>History</option><option>Languages</option><option>Other</option>
+</select>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; right: 12px; top: 9px; pointer-events: none; color: var(--muted)"><path d="M6 9l6 6 6-6"></path></svg>
+</span>
+</label>
+</div>
+</div>
+</div>
+
+<div role="tablist" aria-label="Notebook" style="display: flex; gap: 6px; align-items: flex-end; margin-top: 36px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="2">
+<button type="button" role="tab" aria-selected="{{t.on}}" style="{{t.style}}">{{t.label}}<span style="font-weight: 500; opacity: .7; font-variant-numeric: tabular-nums">{{t.count}}</span></button>
+</sc-for>
+</div>
+<div role="tabpanel" style="background: var(--paper); border-radius: 0 16px 16px 16px; box-shadow: var(--sh-2); padding: 32px 32px 40px; display: flex; flex-direction: column; gap: 40px">
+
+<sc-if value="{{showCourseCard}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Add course material" style="display: flex; flex-wrap: wrap; align-items: center; gap: 28px; padding: 28px; border-radius: 14px; background: var(--paper-hi); border: 1px solid var(--line)">
+<div style="position: relative; width: 120px; height: 96px; flex: none" aria-hidden="true">
+<div style="position: absolute; left: 6px; top: 14px; width: 92px; height: 66px; border-radius: 6px; background: var(--sunk); transform: rotate(-7deg)"></div>
+<div style="position: absolute; left: 16px; top: 10px; width: 92px; height: 66px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); transform: rotate(3deg)"></div>
+<div style="position: absolute; left: 22px; top: 18px; width: 92px; height: 66px; border-radius: 6px; background: var(--paper-hi); border: 1px solid var(--line); box-shadow: var(--sh-2); display: flex; flex-direction: column; gap: 6px; padding: 12px; box-sizing: border-box">
+<span style="height: 6px; width: 50px; border-radius: 3px; background: var(--ink)"></span>
+<span style="height: 4px; width: 64px; border-radius: 2px; background: var(--line)"></span>
+<span style="height: 4px; width: 56px; border-radius: 2px; background: var(--line)"></span>
+<span style="height: 4px; width: 40px; border-radius: 2px; background: var(--line)"></span>
+</div>
+</div>
+<div style="flex: 1 1 320px; min-width: 0">
+<h2 style="margin: 0; font: 400 28px/1.1 'Instrument Serif', serif">Have the syllabus or slides?</h2>
+<p style="margin: 8px 0 0; font-size: 15px; color: var(--muted); max-width: 520px">Add them and neb builds lessons, a study plan and quizzes for this notebook.</p>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px">
+<button type="button" style="height: 44px; padding: 0 22px; border-radius: 999px; border: none; background: var(--ink); color: var(--on-ink); font: 600 15px Inter, sans-serif; cursor: pointer">Add course material</button>
+<span style="position: relative; display: inline-flex">
+<select aria-label="Use a course you have" value="" onChange="{{noop}}" style="appearance: none; -webkit-appearance: none; height: 44px; padding: 0 40px 0 18px; border-radius: 999px; border: 1px solid var(--ink); background: transparent; color: var(--ink); font: 500 15px Inter, sans-serif; cursor: pointer">
+<option value="">Use a course you have…</option><option>Business Mathematics</option><option>Advanced DSA</option>
+</select>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position: absolute; right: 16px; top: 14px; pointer-events: none"><path d="M6 9l6 6 6-6"></path></svg>
+</span>
+</div>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{showChapters}}" hint-placeholder-val="{{ true }}">
+<section aria-labelledby="ch-h">
+<div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px">
+<h2 id="ch-h" style="margin: 0; font: 400 28px/1 'Instrument Serif', serif">Chapters</h2>
+<span style="font-size: 14px; color: var(--muted)">{{chapterCount}}</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px">
+<sc-for list="{{chapters}}" as="c" hint-placeholder-count="1">
+<a href="#" style="{{c.style}}">
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 34px; height: 34px; flex: none; border-radius: 999px; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font: 400 20px/1 'Instrument Serif', serif">{{c.n}}</span>
+<span style="font: 400 26px/1.1 'Instrument Serif', serif">{{c.title}}</span>
+</div>
+<sc-if value="{{c.hasDue}}" hint-placeholder-val="{{ false }}">
+<span style="align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--neb-wash); color: var(--neb-ink); font-size: 13px; font-weight: 600"><span style="width: 7px; height: 7px; border-radius: 999px; background: var(--neb)"></span>{{c.due}}</span>
+</sc-if>
+<sc-if value="{{c.hasProgress}}" hint-placeholder-val="{{ true }}">
+<div>
+<div style="font-size: 13px; color: var(--ink)">{{c.progress}}</div>
+<div style="height: 4px; border-radius: 999px; background: var(--line); margin-top: 6px; overflow: hidden"><div style="{{c.bar}}"></div></div>
+</div>
+</sc-if>
+<div style="font-size: 13px; color: var(--muted)">{{c.meta}}</div>
+<sc-if value="{{c.drop}}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; left: 20px; bottom: -18px; height: 32px; padding: 0 14px; border-radius: 999px; background: var(--ink); color: var(--on-ink); font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; box-shadow: var(--sh-2)">Drop to move Page 5 here</span>
+<div style="position: absolute; right: 28px; top: 34px; width: 96px; transform: rotate(-5deg) scale(1.04); filter: drop-shadow(0 18px 18px rgba(30,29,26,.28)); cursor: grabbing" aria-hidden="true">
+<div style="height: 120px; border-radius: 5px; border: 1px solid var(--line); background-color: var(--paper-hi); background-image: linear-gradient(to right, transparent 15px, var(--margin-red) 15px, var(--margin-red) 16px, transparent 16px), repeating-linear-gradient(to bottom, transparent 0, transparent 13px, var(--rule) 13px, var(--rule) 14px); background-position: 0 0, 0 18px"></div>
+<div style="margin-top: 6px; text-align: center; font-size: 13px; font-weight: 600">Page 5</div>
+</div>
+</sc-if>
+</a>
+</sc-for>
+<button type="button" style="min-height: 168px; border-radius: 12px; border: 1.5px dashed var(--line); background: transparent; color: var(--ink); font: 500 15px Inter, sans-serif; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px">
+<span style="display: inline-flex; align-items: center; gap: 8px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add chapter</span>
+<span style="display: inline-flex; gap: 4px"><kbd style="font: 600 12px Inter, sans-serif; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 5px; padding: 1px 6px">Alt</kbd><kbd style="font: 600 12px Inter, sans-serif; color: var(--muted); background: var(--paper); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 5px; padding: 1px 6px">N</kbd></span>
+</button>
+</div>
+</section>
+</sc-if>
+
+<section aria-labelledby="lp-h">
+<sc-if value="{{showLooseHead}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin-bottom: 16px">
+<h2 id="lp-h" style="margin: 0; font: 400 28px/1 'Instrument Serif', serif">Loose pages</h2>
+<span style="font-size: 14px; color: var(--muted)">{{looseCount}}</span>
+<span style="flex: 1"></span>
+<span style="font-size: 13px; color: var(--muted)">Drag a page onto a chapter to put it there.</span>
+</div>
+</sc-if>
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 20px 14px">
+<button type="button" style="height: 124px; border-radius: 6px; border: 1.5px dashed var(--line); background: transparent; color: var(--ink); font: 500 14px Inter, sans-serif; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M12 18v-6M9 15h6"></path></svg>
+New page
+<span style="display: inline-flex; gap: 3px"><kbd style="font: 600 11px Inter, sans-serif; color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px">Alt</kbd><kbd style="font: 600 11px Inter, sans-serif; color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px">P</kbd></span>
+</button>
+<sc-if value="{{showImport}}" hint-placeholder-val="{{ true }}">
+<button type="button" style="height: 124px; border-radius: 6px; border: 1.5px dashed var(--line); background: transparent; color: var(--ink); font: 500 14px Inter, sans-serif; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M12 18v-6M9 15l3-3 3 3"></path></svg>
+Import PDF
+<span style="display: inline-flex; gap: 3px"><kbd style="font: 600 11px Inter, sans-serif; color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px">Ctrl</kbd><kbd style="font: 600 11px Inter, sans-serif; color: var(--muted); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px">O</kbd></span>
+</button>
+</sc-if>
+<sc-for list="{{pages}}" as="p" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<sc-if value="{{p.real}}" hint-placeholder-val="{{ true }}">
+<div style="position: relative">
+<a href="#" aria-label="{{p.label}}" style="display: block; height: 124px; border-radius: 5px; border: 1px solid var(--line); background-color: var(--paper-hi); background-image: linear-gradient(to right, transparent 15px, var(--margin-red) 15px, var(--margin-red) 16px, transparent 16px), repeating-linear-gradient(to bottom, transparent 0, transparent 13px, var(--rule) 13px, var(--rule) 14px); background-position: 0 0, 0 18px; box-shadow: 0 1px 0 var(--line)"></a>
+<button type="button" aria-label="Move {{p.label}}" style="position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"></path><path d="M2 13h10"></path><path d="m9 16 3-3-3-3"></path></svg></button>
+</div>
+<span style="font-size: 13px; text-align: center">{{p.label}}</span>
+</sc-if>
+<sc-if value="{{p.ghost}}" hint-placeholder-val="{{ false }}">
+<div style="height: 124px; border-radius: 5px; border: 1.5px dashed var(--line); box-sizing: border-box" aria-hidden="true"></div>
+<span style="font-size: 13px; text-align: center; color: var(--muted)">{{p.label}}</span>
+</sc-if>
+<sc-if value="{{p.more}}" hint-placeholder-val="{{ false }}">
+<button type="button" style="height: 124px; border-radius: 5px; border: 1px solid var(--line); background: var(--sunk); color: var(--ink); font: 600 15px Inter, sans-serif; cursor: pointer">{{p.label}}</button>
+<span style="font-size: 13px; text-align: center; color: var(--muted)">Show all</span>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"state":{"editor":"enum","options":["ready","nocourse","dragging","empty"],"default":"ready"},"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+renderVals() {
+var night = !!this.props.night;
+var state = this.props.state || 'ready';
+var t = night
+? { desk: '#1B1F23', paper: '#22272C', 'paper-hi': '#2A3036', ink: '#ECE6D8', muted: '#A9A294', line: '#3A4047', rule: '#2F3A40', 'margin-red': '#6A3E3A', neb: '#9C86FF', 'neb-ink': '#C9BCFF', 'neb-wash': '#2C2550', note: '#5A5230', 'on-ink': '#1B1F23', sunk: '#2E3439', 'sh-2': '0 10px 24px -14px #000000AA', 'sh-3': '0 24px 50px -30px #000000CC' }
+: { desk: '#ECE6D8', paper: '#FBF8F0', 'paper-hi': '#FFFEFB', ink: '#1E1D1A', muted: '#5F5A50', line: '#D3CAB7', rule: '#D6E2E6', 'margin-red': '#E9B9B2', neb: '#6B4EE6', 'neb-ink': '#3F2BA0', 'neb-wash': '#F1EDFF', note: '#F1E5AE', 'on-ink': '#FBF8F0', sunk: '#E2DACA', 'sh-2': '0 10px 24px -14px #1E1D1A66', 'sh-3': '0 24px 50px -30px #1E1D1A99' };
+var vars = Object.keys(t).map(function (k) { return '--' + k + ': ' + t[k]; }).join('; ');
+var rootStyle = vars + '; min-height: 100vh; display: flex; background: var(--desk); color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.45';
+
+var nb, tabs, level = 'Coach';
+if (state === 'nocourse') {
+nb = { name: 'My first notebook', cover: '#7DA4AF', book: true, sigma: false, meta: '0 chapters · 2 pages', subject: 'Not set' };
+tabs = [['Pages', '2', true]]; level = 'Hint';
+} else if (state === 'empty') {
+nb = { name: 'Physics', cover: '#8FA98B', book: true, sigma: false, meta: '0 chapters · 0 pages', subject: 'Physics' };
+tabs = [['Pages', '', true]]; level = 'Hint';
+} else {
+nb = { name: 'Advanced DSA', cover: '#C98B6B', book: true, sigma: false, meta: '1 chapter · 47 pages', subject: 'Programming' };
+tabs = [['Pages', '47', true], ['Study', '12', false]];
+}
+var names = ['My first notebook', 'Business Mathematics', 'Advanced DSA'];
+if (state === 'empty') names.push('Physics');
+var nbs = names.map(function (n) {
+var on = n === nb.name;
+return {
+name: n, sigma: n === 'Business Mathematics', book: n !== 'Business Mathematics',
+hasChild: on && n === 'Advanced DSA',
+style: 'display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 8px; text-decoration: none; font-size: 14px; color: var(--ink); ' + (on ? 'background: var(--sunk); font-weight: 600' : 'font-weight: 400')
+};
+});
+var levels = ['Quiet', 'Hint', 'Coach'].map(function (l) {
+var on = l === level;
+return { label: l, on: on, style: 'height: 34px; padding: 0 14px; border-radius: 999px; border: none; cursor: pointer; font: ' + (on ? '600' : '500') + ' 13px Inter, sans-serif; ' + (on ? 'background: var(--paper-hi); color: var(--ink); box-shadow: 0 1px 2px rgba(30,29,26,.18)' : 'background: transparent; color: var(--muted)') };
+});
+var tabObjs = tabs.map(function (x) {
+return { label: x[0], count: x[1], on: x[2], style: 'display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: 12px 12px 0 0; font-family: Inter, sans-serif; font-size: 15px; cursor: pointer; ' + (x[2] ? 'height: 52px; padding: 0 22px; background: var(--paper); color: var(--ink); font-weight: 600' : 'height: 44px; padding: 0 18px; background: var(--sunk); color: var(--muted); font-weight: 500') };
+});
+
+var dragging = state === 'dragging';
+var chapters = [];
+if (state === 'ready' || dragging) {
+chapters = [{ n: '1', title: 'Chapter 1', hasDue: false, due: '', hasProgress: true, progress: '1 of 12 topics checked', bar: 'width: 8%; height: 100%; background: var(--ink); border-radius: 999px', meta: '2 pages · edited 27 minutes ago', drop: dragging }];
+}
+chapters = chapters.map(function (c) {
+c.style = 'position: relative; display: flex; flex-direction: column; gap: 14px; min-height: 168px; box-sizing: border-box; padding: 20px 20px 18px; border-radius: 12px; text-decoration: none; color: var(--ink); background: var(--paper-hi); border-top: 6px solid ' + nb.cover + '; ' + (c.drop ? 'outline: 2px dashed var(--ink); outline-offset: 4px; box-shadow: var(--sh-3)' : 'box-shadow: var(--sh-2)');
+return c;
+});
+
+var pages = [];
+if (state === 'ready' || dragging) {
+for (var i = 2; i <= 15; i++) pages.push({ label: 'Page ' + i, real: !(dragging && i === 5), ghost: dragging && i === 5, more: false });
+pages.push({ label: '+31', real: false, ghost: false, more: true });
+} else if (state === 'nocourse') {
+pages = [{ label: 'Page 1', real: true, ghost: false, more: false }, { label: 'Page 2', real: true, ghost: false, more: false }];
+}
+
+return {
+rootStyle: rootStyle, nb: nb, nbs: nbs, levels: levels, tabs: tabObjs,
+noop: function () {},
+showCourseCard: state === 'nocourse' || state === 'empty',
+showChapters: state !== 'empty',
+chapterCount: chapters.length ? String(chapters.length) : '',
+chapters: chapters,
+showLooseHead: state !== 'empty',
+looseCount: state === 'nocourse' ? '2' : '45',
+showImport: state !== 'empty',
+pages: pages
+};
+}
+}
+</script>
+</body>
+</html>
