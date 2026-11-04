@@ -42,6 +42,8 @@ const Y_USAGE: u16 = 0x31;
 
 static ACTIVE: AtomicBool = AtomicBool::new(false);
 static LATEST: Mutex<Option<PenSeen>> = Mutex::new(None);
+/// A pen report arrived since the typing check last looked (`moved_since`).
+static MOVED: AtomicBool = AtomicBool::new(false);
 static START: Once = Once::new();
 
 /// Starts listening, once, on a thread of its own.
@@ -66,6 +68,12 @@ pub fn set_active(active: bool) {
     if !active {
         *latest_slot() = None;
     }
+}
+
+/// Whether the pen moved since this was last asked. A pen moves Windows' last-input time without
+/// moving the mouse, so the typing check (`watch.rs`) would take it for a key press.
+pub fn moved_since() -> bool {
+    MOVED.swap(false, Ordering::SeqCst)
 }
 
 /// Where the pen was last heard, and the mouse position then.
@@ -300,6 +308,7 @@ fn on_report(input: HRAWINPUT) {
     let Some((x, y)) = values else {
         return;
     };
+    MOVED.store(true, Ordering::SeqCst);
     let cursor = input::cursor();
     let Some((monitor, _)) = cursor.and_then(|(cx, cy)| target::monitor_at(cx, cy)) else {
         return;

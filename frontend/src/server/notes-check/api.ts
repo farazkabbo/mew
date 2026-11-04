@@ -8,6 +8,13 @@ import { HttpError } from "../http-error";
 import { userApi } from "../user-api";
 
 /**
+ * Searching the notes embeds every screen block and compares it with every note line: 16 s was
+ * seen with 30 blocks (the 10 s other calls get turned it into a 503). Still inside the desktop
+ * app's 30 s wait, with the comparison after it.
+ */
+const RETRIEVE_TIMEOUT_MS = 25_000;
+
+/**
  * Notes Check's calls to the API service, as whoever asked: the signed-in student (their Clerk
  * session, so RLS applies) or the desktop app (its device token, checked there again).
  */
@@ -60,10 +67,16 @@ export async function retrieveNotes(
     return userApi("/v1/notes/retrieve", NotesRetrieval, {
       method: "POST",
       body,
-      timeoutMs: 10_000,
+      timeoutMs: RETRIEVE_TIMEOUT_MS,
     });
   }
-  return deviceCall("/v1/notes/device/retrieve", NotesRetrieval, asker.token, body);
+  return deviceCall(
+    "/v1/notes/device/retrieve",
+    NotesRetrieval,
+    asker.token,
+    body,
+    RETRIEVE_TIMEOUT_MS,
+  );
 }
 
 export async function saveCheck(asker: Asker, check: CheckToStore): Promise<CheckCreated> {
@@ -82,13 +95,14 @@ async function deviceCall<T>(
   schema: z.ZodType<T>,
   token: string,
   body: unknown,
+  timeoutMs = 10_000,
 ): Promise<T> {
   try {
     return await apiFetch(path, schema, {
       method: "POST",
       body,
       headers: { "X-Mew-Device-Token": token },
-      timeoutMs: 10_000,
+      timeoutMs,
     });
   } catch (error) {
     if (!(error instanceof ApiError)) throw error;

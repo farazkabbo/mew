@@ -129,6 +129,8 @@ pub(super) struct Session {
     pub paused_for_words: bool,
     /// The card's last view (besides the picker), to go back to.
     pub last_view: Option<serde_json::Value>,
+    /// A save that didn't get through: Save sends it again.
+    pub unsent: Option<circle_answer::Unsent>,
 }
 
 impl Session {
@@ -217,9 +219,10 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
     let pointer = overlay::ensure(app, Surface::Pointer);
     let _ = overlay::ensure(app, Surface::Draw);
     // Made now, so their pages have loaded by the time they're first shown (a card made at the
-    // first mark missed what it was sent, and showed empty).
+    // first mark missed what it was sent, and showed empty; so did the first Notes Check panel).
     let _ = overlay::ensure(app, Surface::Card);
     let _ = overlay::ensure(app, Surface::Island);
+    let _ = overlay::ensure(app, Surface::Notes);
     let mut last_cursor = None;
     let mut moved_at = Instant::now() - MOVING_FOR;
     let mut hide = Hide::default();
@@ -403,11 +406,17 @@ fn track_drag<R: Runtime>(app: &AppHandle<R>, cursor: Option<(i32, i32)>) -> boo
             overlay::dispatch(app, Surface::Draw, DRAW_NOTE_END, &json!({}));
         }
         DragLook::Finished(points) => {
+            let points_len = points.len();
             let marked = shape_path(shape, &points)
                 .and_then(|points| with_session(app, |s| on_monitor(s.monitor, points)));
             if let Some(points) = marked {
                 add_mark(app, points, shape != Shape::Free);
             } else {
+                eprintln!(
+                    "[screen] mark dropped: {} points, session {}",
+                    points_len,
+                    in_session(app)
+                );
                 // A shape too small to be one: what was drawn of it goes.
                 show_marks(app);
             }
@@ -820,6 +829,7 @@ fn begin_session_if_needed<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindo
             save_only_pending: false,
             paused_for_words: false,
             last_view: None,
+            unsent: None,
         });
     }
     place_board(app, window, monitor, dpi);
@@ -878,6 +888,7 @@ pub fn screen_draw_mark<R: Runtime>(
         s.drag.active() || s.dragged_at.is_some_and(|at| at.elapsed() < SAME_STROKE)
     });
     if mouse_drew {
+        eprintln!("[screen] pen mark ignored: the mouse drew the same stroke");
         return Ok(());
     }
     let points = to_screen_points(app, &stroke.points).ok_or("Not allowed.")?;
@@ -1000,6 +1011,16 @@ fn add_mark<R: Runtime>(app: &AppHandle<R>, points: Vec<Pt>, dashed: bool) {
         }
     });
     show_marks(app);
+    eprintln!(
+        "[screen] mark: {}",
+        match &outcome {
+            Some(MarkOutcome::Capture) => "capturing",
+            Some(MarkOutcome::Added) => "added",
+            Some(MarkOutcome::Full) => "full",
+            Some(MarkOutcome::Refused) => "refused",
+            None => "no session",
+        }
+    );
     match outcome {
         Some(MarkOutcome::Capture) => coach::capture_for_circle(app),
         Some(MarkOutcome::Full) => circle_answer::show_card_message(
@@ -1066,6 +1087,7 @@ pub fn on_captured<R: Runtime>(app: &AppHandle<R>, captured: Captured) {
 
 /// The capture for the marks was refused or failed (the reason was shown).
 pub fn capture_failed<R: Runtime>(app: &AppHandle<R>) {
+    eprintln!("[screen] the capture for the marks failed: the session ends");
     with_session(app, |s| s.capturing = false);
     end_session(app);
 }

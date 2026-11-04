@@ -278,10 +278,32 @@ pub fn save_entry<R: Runtime>(
     capture: EntryCapture,
     include_link: bool,
     open: bool,
-) -> Result<Saved, String> {
+) -> Result<Saved, NotSaved> {
+    let not_prepared = |message: String| NotSaved {
+        message,
+        unsent: None,
+    };
     let crop = capture.crop;
-    let draft = entry_draft(tools, capture).ok_or("I couldn't prepare that for your notebook.")?;
-    save(app, draft, crop, Saving::Entry { include_link, open })
+    let draft = entry_draft(tools, capture)
+        .ok_or_else(|| not_prepared("I couldn't prepare that for your notebook.".to_owned()))?;
+    let prepared =
+        prepare(app, draft, crop, Saving::Entry { include_link, open }).map_err(not_prepared)?;
+    send(app, &prepared).map_err(|message| NotSaved {
+        message,
+        unsent: Some(prepared),
+    })
+}
+
+/// An entry that failed to send, tried again (the student pressed Save or Open this time).
+pub fn resend_entry<R: Runtime>(
+    app: &AppHandle<R>,
+    prepared: &mut Prepared,
+    open: bool,
+) -> Result<Saved, String> {
+    if let Saving::Entry { open: opening, .. } = &mut prepared.saving {
+        *opening = open;
+    }
+    send(app, prepared)
 }
 
 /// "Edit crop": the explanation in the preview, to save with a different crop (or not at all).
@@ -681,13 +703,38 @@ pub struct Saved {
     pub scale: f32,
 }
 
+/// A clip ready to send: cropped, encoded and redacted, so sending it again is the same clip.
+pub struct Prepared {
+    body: SecretBytes,
+    crop: Rect,
+    scale: f32,
+    width: u32,
+    height: u32,
+    saving: Saving,
+}
+
+/// An entry that wasn't saved: why, and the entry if it can be sent again.
+pub struct NotSaved {
+    pub message: String,
+    pub unsent: Option<Prepared>,
+}
+
 /// Crops, encodes and uploads (on the capture worker: WIC needs its COM apartment).
 fn save<R: Runtime>(
+    app: &AppHandle<R>,
+    draft: ClipDraft,
+    crop_rect: Rect,
+    saving: Saving,
+) -> Result<Saved, String> {
+    send(app, &prepare(app, draft, crop_rect, saving)?)
+}
+
+fn prepare<R: Runtime>(
     app: &AppHandle<R>,
     mut draft: ClipDraft,
     crop_rect: Rect,
     saving: Saving,
-) -> Result<Saved, String> {
+) -> Result<Prepared, String> {
     let (include_notes, include_link) = match saving {
         Saving::Clip {
             include_notes,
@@ -792,10 +839,19 @@ fn save<R: Runtime>(
     drop(head);
     drop(jpeg);
     drop(draft);
+    Ok(Prepared {
+        body,
+        crop: crop_rect,
+        scale,
+        width,
+        height,
+        saving,
+    })
+}
 
-    let clip_id = upload(app, &body)?;
-    drop(body);
-    match saving {
+fn send<R: Runtime>(app: &AppHandle<R>, prepared: &Prepared) -> Result<Saved, String> {
+    let clip_id = upload(app, &prepared.body)?;
+    match prepared.saving {
         Saving::Clip { .. } => {
             page::dispatch(app, page::CLIP_SAVED, json!({ "clipId": clip_id }));
             show_notebook(app);
@@ -812,11 +868,14 @@ fn save<R: Runtime>(
             }
         }
     }
-    eprintln!("[screen] clip saved ({width}x{height})");
+    eprintln!(
+        "[screen] clip saved ({}x{})",
+        prepared.width, prepared.height
+    );
     Ok(Saved {
         clip_id,
-        crop: crop_rect,
-        scale,
+        crop: prepared.crop,
+        scale: prepared.scale,
     })
 }
 
@@ -827,6 +886,20 @@ pub fn show_notebook<R: Runtime>(app: &AppHandle<R>) {
         let _ = main.unminimize();
         let _ = main.set_focus();
     }
+}
+
+/// How long to wait before each new try of an upload that met a passing failure.
+const UPLOAD_RETRY_WAITS: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(3)];
+/// No new try after this long: the preview's Save gives up waiting at 30 seconds.
+const UPLOAD_RETRY_WITHIN: Duration = Duration::from_secs(12);
+
+/// The network or the server failed in passing. Trying again is safe: the server keeps one entry
+/// per session, and any other answer (signed out, too big, too many) won't change.
+fn worth_retrying(status: &Result<u16, http::HttpError>) -> bool {
+    matches!(
+        status,
+        Err(http::HttpError::Network(_)) | Ok(500 | 502 | 503 | 504)
+    )
 }
 
 fn upload<R: Runtime>(app: &AppHandle<R>, body: &SecretBytes) -> Result<String, String> {
@@ -844,12 +917,27 @@ fn upload<R: Runtime>(app: &AppHandle<R>, body: &SecretBytes) -> Result<String, 
         "Content-Type: application/json".to_owned(),
         format!("Authorization: Bearer {token}"),
     ];
-    let mut reply = Vec::with_capacity(1024);
-    let status = http::post(&url, &headers, body.as_slice(), |chunk| {
-        if reply.len() < 4096 {
-            reply.extend_from_slice(chunk)
+    let started = Instant::now();
+    let mut waits = UPLOAD_RETRY_WAITS.iter();
+    let (status, reply) = loop {
+        let mut reply = Vec::with_capacity(1024);
+        let status = http::post(&url, &headers, body.as_slice(), |chunk| {
+            if reply.len() < 4096 {
+                reply.extend_from_slice(chunk)
+            }
+        });
+        eprintln!(
+            "[screen] clip upload: {:?} in {} ms",
+            status,
+            started.elapsed().as_millis()
+        );
+        match waits.next() {
+            Some(wait) if worth_retrying(&status) && started.elapsed() < UPLOAD_RETRY_WITHIN => {
+                std::thread::sleep(*wait)
+            }
+            _ => break (status, reply),
         }
-    });
+    };
     headers.iter_mut().for_each(|header| wipe_string(header));
     match status.map_err(|_| "I couldn't reach Neb to save the clip. Check your connection.")? {
         200 | 201 => {
@@ -907,6 +995,29 @@ mod tests {
             page: Page::FromScreen,
             create: None,
             root: false,
+        }
+    }
+
+    #[test]
+    fn only_a_passing_failure_is_uploaded_again() {
+        for status in [
+            Err(http::HttpError::Network(12002)),
+            Ok(500),
+            Ok(502),
+            Ok(503),
+            Ok(504),
+        ] {
+            assert!(worth_retrying(&status), "{status:?}");
+        }
+        for status in [
+            Ok(201),
+            Ok(400),
+            Ok(401),
+            Ok(413),
+            Ok(429),
+            Err(http::HttpError::BadUrl),
+        ] {
+            assert!(!worth_retrying(&status), "{status:?}");
         }
     }
 

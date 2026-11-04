@@ -900,6 +900,7 @@ fn crop_touches_blackout(captured: &Captured, focus: ScreenRect) -> bool {
 /// Undo: this explanation isn't saved (nothing was uploaded).
 pub fn undo<R: Runtime>(app: &AppHandle<R>) {
     with_session(app, |s| {
+        s.unsent = None;
         if let Some(answer) = s.answer.as_mut() {
             answer.settled = true;
             answer.toast_until = None;
@@ -911,9 +912,11 @@ pub fn undo<R: Runtime>(app: &AppHandle<R>) {
 /// Saves the explanation now: the toast ended, or Open (`open`) or Save was pressed.
 pub fn save_now<R: Runtime>(app: &AppHandle<R>, open: bool) {
     let settings = coach::circle_settings(app);
-    let Some(save) =
-        with_session(app, |s| take_for_saving(s, settings.include_source_link)).flatten()
-    else {
+    let Some(save) = with_session(app, |s| match s.unsent.take() {
+        Some(unsent) => Some(Saving::Again(unsent)),
+        None => take_for_saving(s, settings.include_source_link),
+    })
+    .flatten() else {
         return;
     };
     let handle = app.clone();
@@ -923,11 +926,34 @@ pub fn save_now<R: Runtime>(app: &AppHandle<R>, open: bool) {
                 capture,
                 include_link,
             } => save_first(&handle, tools, *capture, include_link, open),
-            Saving::More { body, clip_id } => append(&handle, &body, &clip_id, open),
+            Saving::More { body, clip_id } => send_more(&handle, body, clip_id, open),
+            Saving::Again(Unsent::First {
+                mut prepared,
+                meta,
+                place,
+            }) => match clip::resend_entry(&handle, &mut prepared, open) {
+                Ok(saved) => {
+                    remember_entry(&handle, saved, *meta);
+                    move_if_replaced(&handle, place.as_deref());
+                    Ok(())
+                }
+                Err(message) => Err((
+                    message,
+                    Some(Unsent::First {
+                        prepared,
+                        meta,
+                        place,
+                    }),
+                )),
+            },
+            Saving::Again(Unsent::More { body, clip_id }) => {
+                send_more(&handle, body, clip_id, open)
+            }
         };
         match outcome {
             Ok(()) => show_card(&handle, json!({ "mode": "saved", "open": open })),
-            Err(message) => show_card_message(&handle, &message),
+            Err((message, None)) => show_card_message(&handle, &message),
+            Err((message, Some(unsent))) => offer_again(&handle, &message, unsent),
         }
     });
     if !queued {
@@ -935,7 +961,35 @@ pub fn save_now<R: Runtime>(app: &AppHandle<R>, open: bool) {
     }
 }
 
+/// A save that didn't get through stays with the session, and the card's Save tries it again.
+fn offer_again<R: Runtime>(app: &AppHandle<R>, message: &str, unsent: Unsent) {
+    with_session(app, |s| s.unsent = Some(unsent));
+    show_card(
+        app,
+        json!({ "mode": "toast", "seconds": null, "canSave": true, "note": message }),
+    );
+}
+
+/// What didn't get through to the notebook, ready to send again as it was.
+pub(super) enum Unsent {
+    First {
+        prepared: Box<clip::Prepared>,
+        meta: Box<FrameMeta>,
+        /// The place it was prepared for: the student can pick another before trying again.
+        place: Option<String>,
+    },
+    More {
+        body: Vec<u8>,
+        clip_id: String,
+    },
+}
+
+/// Why a save failed, and what can be sent again (nothing, if it never got as far as sending).
+type SaveFailed = (String, Option<Unsent>);
+
 enum Saving {
+    /// A save that failed, tried again.
+    Again(Unsent),
     /// The session's first entry: the capture is cut and uploaded with it.
     First {
         capture: Box<EntryCapture>,
@@ -1059,9 +1113,31 @@ fn save_first<R: Runtime>(
     capture: EntryCapture,
     include_link: bool,
     open: bool,
-) -> Result<(), String> {
+) -> Result<(), SaveFailed> {
     let meta = capture.meta.clone();
-    let saved = clip::save_entry(app, tools, capture, include_link, open)?;
+    let place = capture
+        .entry
+        .destination
+        .as_ref()
+        .map(|p| p.node_id.clone());
+    match clip::save_entry(app, tools, capture, include_link, open) {
+        Ok(saved) => {
+            remember_entry(app, saved, meta);
+            move_if_replaced(app, place.as_deref());
+            Ok(())
+        }
+        Err(clip::NotSaved { message, unsent }) => Err((
+            message,
+            unsent.map(|prepared| Unsent::First {
+                prepared: Box::new(prepared),
+                meta: Box::new(meta),
+                place,
+            }),
+        )),
+    }
+}
+
+fn remember_entry<R: Runtime>(app: &AppHandle<R>, saved: clip::Saved, meta: FrameMeta) {
     with_session(app, |s| {
         s.entry = Some(SavedEntry {
             clip_id: saved.clip_id,
@@ -1070,7 +1146,34 @@ fn save_first<R: Runtime>(
             scale: saved.scale,
         });
     });
-    Ok(())
+}
+
+/// The student picked another place while the save was on its way: the saved entry moves there.
+fn move_if_replaced<R: Runtime>(app: &AppHandle<R>, sent_to: Option<&str>) {
+    let moving = with_session(app, |s| {
+        let (entry, place) = s.entry.as_ref().zip(s.place.as_ref())?;
+        (sent_to != Some(place.node_id.as_str())).then(|| {
+            (
+                entry.clip_id.clone(),
+                DestinationOut::from(place),
+                entry.meta.app.clone(),
+            )
+        })
+    })
+    .flatten();
+    if let Some((clip_id, destination, source_app)) = moving {
+        move_entry(app, &clip_id, &destination, source_app);
+    }
+}
+
+fn send_more<R: Runtime>(
+    app: &AppHandle<R>,
+    body: Vec<u8>,
+    clip_id: String,
+    open: bool,
+) -> Result<(), SaveFailed> {
+    append(app, &body, &clip_id, open)
+        .map_err(|message| (message, Some(Unsent::More { body, clip_id })))
 }
 
 /// Adds a follow-up's words and ink to the session's entry.
@@ -1418,6 +1521,11 @@ fn post<R: Runtime>(
             }
         }
     });
+    if result.is_ok() {
+        if let Some(line) = lines.finish().filter(|l| l.len() <= MAX_REPLY_LINE_BYTES) {
+            on_line(&line);
+        }
+    }
     headers.iter_mut().for_each(|header| wipe_string(header));
     // Timings and statuses only: never what was asked or said.
     eprintln!(
@@ -1641,13 +1749,24 @@ pub fn change_place<R: Runtime>(app: &AppHandle<R>) {
     let _ = std::thread::Builder::new()
         .name("mew-circle-places".into())
         .spawn(move || {
-            let mut reply = Vec::new();
-            let places = match post_capped(&handle, "api/screen/destinations", b"{}", &mut reply) {
-                Ok(200) => parse_places(&reply),
-                _ => None,
+            let ask = || {
+                let mut reply = Vec::new();
+                match post_capped(&handle, "api/screen/destinations", b"{}", &mut reply) {
+                    Ok(200) => parse_places(&reply),
+                    _ => None,
+                }
             };
+            let places = ask().or_else(|| {
+                std::thread::sleep(Duration::from_secs(1));
+                ask()
+            });
             let Some(places) = places else {
-                return show_card_message(&handle, "I couldn't reach your notebooks just now.");
+                // The card stays as it was, with its Save and its place: only the list failed.
+                let mut view = with_session(&handle, |s| s.last_view.clone())
+                    .flatten()
+                    .unwrap_or_else(|| json!({ "mode": "ask" }));
+                view["note"] = json!("I couldn't reach your notebooks just now. Try Change again.");
+                return show_card(&handle, view);
             };
             let labels: Vec<String> = places.iter().map(Place::label).collect();
             with_session(&handle, |s| {

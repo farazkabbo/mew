@@ -488,6 +488,13 @@ impl LineSplitter {
         }
         lines
     }
+
+    /// The reply ended: what's left is its last line. A JSON reply is one line with no newline.
+    pub fn finish(&mut self) -> Option<String> {
+        let line = std::str::from_utf8(&self.pending).ok().map(str::to_owned);
+        self.pending.clear();
+        line.filter(|line| !line.trim().is_empty())
+    }
 }
 
 // ─── Clips ───────────────────────────────────────────────────────────────────────────────────
@@ -905,6 +912,16 @@ mod tests {
             vec!["{\"a\":1}", "{\"b\":2}"]
         );
         assert_eq!(splitter.push(b":3}\n"), vec!["{\"c\":3}"]);
+    }
+
+    #[test]
+    fn a_reply_with_no_newline_is_still_its_last_line() {
+        let mut splitter = LineSplitter::default();
+        assert!(splitter.push(b"{\"places\":[]}").is_empty());
+        assert_eq!(splitter.finish().as_deref(), Some("{\"places\":[]}"));
+        assert_eq!(splitter.finish(), None);
+        splitter.push(b"{\"a\":1}\n");
+        assert_eq!(splitter.finish(), None);
     }
 
     #[test]

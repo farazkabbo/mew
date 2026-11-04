@@ -125,8 +125,10 @@ pub fn run_on(
     let checks_ms = elapsed_ms(started);
 
     // The frame is on the monitor before a pixel is read, or nothing is read (decision U9).
-    let frame =
-        indicator::Frame::hold(target.monitor_rect, target.dpi).ok_or(ScreenError::Failed)?;
+    let frame = indicator::Frame::hold(target.monitor_rect, target.dpi).ok_or_else(|| {
+        eprintln!("[screen] capture failed: the on-screen frame wouldn't show");
+        ScreenError::Failed
+    })?;
     let started = Instant::now();
     let mut raw = capture(tools, target, &frame.token())?;
     drop(frame);
@@ -239,15 +241,22 @@ fn capture(
         tools.capturer = Capturer::new().ok();
     }
     let _overlays_hidden = tools.hide_overlays.as_ref().and_then(|hide| hide());
-    let capturer = tools.capturer.as_ref().ok_or(ScreenError::Failed)?;
+    let capturer = tools.capturer.as_ref().ok_or_else(|| {
+        eprintln!("[screen] capture failed: couldn't start the capturer");
+        ScreenError::Failed
+    })?;
     capturer.capture(target).map_err(|error| match error {
         CaptureError::TargetGone => ScreenError::NothingToSee,
-        CaptureError::Windows(_) => {
+        CaptureError::Windows(ref cause) => {
+            eprintln!("[screen] capture failed: Windows said {cause:?}");
             // A lost device (driver update, GPU reset) is recreated on the next capture.
             tools.capturer = None;
             ScreenError::Failed
         }
-        CaptureError::Timeout | CaptureError::TooLarge => ScreenError::Failed,
+        CaptureError::Timeout | CaptureError::TooLarge => {
+            eprintln!("[screen] capture failed: timed out or too large");
+            ScreenError::Failed
+        }
     })
 }
 

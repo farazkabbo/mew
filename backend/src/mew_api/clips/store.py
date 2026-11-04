@@ -72,6 +72,10 @@ def _filing_facts(row: dict[str, Any]) -> FilingFacts:
 class ClipWriter(Protocol):
     def create(self, user: str, clip_id: UUID, clip: ClipCreate, image: bytes) -> None: ...
 
+    def session_entry(self, user: str, session_id: UUID) -> UUID | None:
+        """The clip the user's session already saved (a save sent again keeps that one)."""
+        ...
+
     def append(self, user: str, entry: EntryAppend) -> UUID | None:
         """Adds a follow-up to the session's entry; its clip id, or None if there's no such entry.
         Raises `EntryFullError` if it would go over the caps."""
@@ -248,6 +252,13 @@ class MemoryClipStore:
         with self._lock:
             self._clips[(user, clip_id)] = _Stored(row, image)
 
+    def session_entry(self, user: str, session_id: UUID) -> UUID | None:
+        with self._lock:
+            for (owner, clip_id), stored in self._clips.items():
+                if owner == user and stored.row.get("session_id") == str(session_id):
+                    return clip_id
+        return None
+
     def append(self, user: str, entry: EntryAppend) -> UUID | None:
         with self._lock:
             for (owner, clip_id), stored in self._clips.items():
@@ -338,6 +349,13 @@ class SupabaseClipWriter(SupabaseRest):
                 "DELETE", f"/storage/v1/object/{BUCKET}", json={"prefixes": [path]}, ok=(200, 404)
             )
             raise
+
+    def session_entry(self, user: str, session_id: UUID) -> UUID | None:
+        rows = self._get(
+            "clips",
+            {"select": "id", "user_id": f"eq.{user}", "session_id": f"eq.{session_id}"},
+        )
+        return UUID(rows[0]["id"]) if rows else None
 
     def append(self, user: str, entry: EntryAppend) -> UUID | None:
         if not self.service:

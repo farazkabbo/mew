@@ -9,7 +9,7 @@ type LanguageProfile = {
   label: string;
   /** Its name in the instruction to the model. */
   name: string;
-  /** Scribe's language code; null: automatic detection. */
+  /** Scribe's language code (always set: detecting it misheard short English phrases). */
   scribeCode: string | null;
   /** The speech model when the configured one can't speak it (Flash has no Bengali). */
   ttsModel: string | null;
@@ -21,7 +21,7 @@ export const NEB_LANGUAGES: Record<NebLanguage, LanguageProfile> = {
   en: {
     label: "English",
     name: "English",
-    scribeCode: null,
+    scribeCode: "eng",
     ttsModel: null,
     sample: "Hi, I'm Neb. I'll stay quiet until you need me.",
   },

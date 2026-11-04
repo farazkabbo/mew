@@ -73,6 +73,16 @@ def test_an_entry_is_saved_and_read_back_with_its_explanation(client: TestClient
     assert entry["conceptHints"] == ["Acceleration"]
 
 
+def test_an_entry_sent_again_is_the_same_entry(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    first = save(client, token, entry_body()).json()["clipId"]
+    again = save(client, token, entry_body())
+    assert again.status_code == 201
+    assert again.json()["clipId"] == first
+    other = save(client, token, entry_body(sessionId=str(uuid.uuid4()))).json()["clipId"]
+    assert other != first
+
+
 def test_an_ordinary_clip_has_no_entry(client: TestClient) -> None:  # noqa: F811
     token = link_device(client)
     clip_id = save(client, token).json()["clipId"]

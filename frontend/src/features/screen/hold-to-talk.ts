@@ -48,6 +48,7 @@ export class HoldToTalk {
   }
 
   private async open(): Promise<void> {
+    this.heard = "";
     const session = await fetchSession();
     this.scribe = new ScribeClient(
       session,
@@ -57,8 +58,9 @@ export class HoldToTalk {
           if (text.trim()) this.heard = text;
         },
         onCommitted: (text) => {
-          this.heard = text;
-          this.onCommitted?.(text);
+          // An empty commit never wipes words already heard.
+          if (text.trim()) this.heard = text;
+          this.onCommitted?.(this.heard);
         },
         onError: () => this.release(),
         onClose: () => undefined,

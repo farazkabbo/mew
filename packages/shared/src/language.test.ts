@@ -21,8 +21,8 @@ describe("neb's language", () => {
     expect(UserSettings.safeParse({ ...DEFAULT_SETTINGS, language: "de" }).success).toBe(false);
   });
 
-  it("only Bengali needs another speech model, and English keeps automatic detection", () => {
+  it("only Bengali needs another speech model, and every language is transcribed as itself", () => {
     expect(NebLanguage.options.filter((l) => NEB_LANGUAGES[l].ttsModel)).toEqual(["bn"]);
-    expect(NEB_LANGUAGES.en.scribeCode).toBeNull();
+    expect(NEB_LANGUAGES.en.scribeCode).toBe("eng");
   });
 });

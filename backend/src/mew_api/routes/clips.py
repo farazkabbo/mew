@@ -123,6 +123,12 @@ def create_clip(
 
     clip_id = uuid4()
     writer = _writer(request, settings, device.local)
+    entry = body.entry
+    if entry:
+        # A save sent again (its reply was lost) is the entry the first one made, not a second.
+        saved = _call(lambda: writer.session_entry(device.user_id, entry.session_id))
+        if saved:
+            return ClipCreated(clip_id=saved)
     _call(lambda: writer.create(device.user_id, clip_id, body, image))
     # Ids and sizes only: never titles, links or text.
     logger.info("Saved a clip (%s, %d KB)", clip_id, len(image) // 1024)

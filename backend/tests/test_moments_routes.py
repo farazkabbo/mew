@@ -215,7 +215,9 @@ def test_a_moments_voice_is_kept_for_replay(client: TestClient) -> None:  # noqa
 
 def waiting_moment(client: TestClient, token: str, **moment: Any) -> str:  # noqa: F811
     """A moment saved into Unsorted, with what its answer said it's about."""
-    body = entry_body(conceptHints=moment.pop("hints", ["projectile motion"]))
+    body = entry_body(
+        sessionId=str(uuid.uuid4()), conceptHints=moment.pop("hints", ["projectile motion"])
+    )
     body["entry"]["moment"] = {"subject": moment.get("subject"), "checkQuestion": QUESTION}
     body["destination"] = {
         "nodeId": str(unsorted_node_id("local")),

@@ -686,8 +686,11 @@ export function NotebookApp({
     const result = await carryOutImport(info, choice, { repo, tree, makeCourseMaterial });
     setImporting(null);
     const first = result.firstPageId ? await repo.getPage(result.firstPageId) : null;
-    if (first) openPage(first);
-    else openNode(choice.nodeId);
+    if (first) {
+      openPage(first);
+      // Into the notebook already open, nothing reads its pages again: every new one is listed here.
+      setPages(await repo.listPages(first.notebookId));
+    } else openNode(choice.nodeId);
     const pages =
       (choice.plan.loose ? choice.plan.loose.lastPage - choice.plan.loose.firstPage + 1 : 0) +
       choice.plan.chapters.reduce((n, c) => n + c.lastPage - c.firstPage + 1, 0);

@@ -46,6 +46,8 @@ pub fn screen_coach_ask<R: Runtime>(
     let coach = coach::coach_of(app)?;
     require_app_page(&window, coach.app_url())?;
     let transcript = clean_transcript(&transcript);
+    // Its length only: never what was said.
+    eprintln!("[screen] heard {} characters", transcript.chars().count());
     // Held without a word or a mark: nothing to ask (K2 §11.1). Its capture is wiped unused.
     // (During a walkthrough, the bare gesture means "done": coach mode's own rule.)
     let nothing = transcript.trim().is_empty()

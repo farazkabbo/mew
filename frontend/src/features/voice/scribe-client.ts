@@ -22,7 +22,7 @@ export type ScribeOptions = {
   languageCode?: string;
 };
 
-/** Scribe's language option for neb's language. English stays on automatic detection. */
+/** Scribe's language option for neb's language (always one: detection misheard short phrases). */
 export function scribeLanguage(language: NebLanguage): Pick<ScribeOptions, "languageCode"> {
   const code = NEB_LANGUAGES[language].scribeCode;
   return code ? { languageCode: code } : {};

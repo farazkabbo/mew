@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { AccountControls } from "@/components/AccountControls";
+import { SignOutMenuItem } from "@/components/AccountControls";
 
 const LINKS = [
   { href: "/courses", label: "Courses" },
@@ -58,9 +58,8 @@ export function DeskMenu({ name }: { name: string | null }) {
               {link.label}
             </Link>
           ))}
-          <div className="mt-1 flex items-center justify-between border-t border-line px-3 pt-2 pb-1">
-            <span className="text-xs text-muted">Account</span>
-            <AccountControls />
+          <div className="mt-1 flex flex-col border-t border-line pt-1">
+            <SignOutMenuItem />
           </div>
         </div>
       )}

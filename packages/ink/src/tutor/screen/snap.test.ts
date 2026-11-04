@@ -61,6 +61,10 @@ describe("a target that landed on blank space beside a line", () => {
     expect(snapRegion([100, 165, 130, 25], line)).toEqual([100, 200, 130, 20]);
   });
 
+  it("moves a circle that only clips the top of a line onto its words", () => {
+    expect(snapRegion([100, 165, 130, 40], line)).toEqual([100, 200, 130, 20]);
+  });
+
   it("moves a line in the gap below onto the words over it", () => {
     expect(snapLine([170, 232, 130, 10], line)).toEqual([170, 200, 130, 20]);
   });

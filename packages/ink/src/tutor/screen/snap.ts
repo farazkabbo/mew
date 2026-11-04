@@ -93,7 +93,8 @@ function missedLine(box: BBox, words: readonly BBox[], height: number): BBox | n
 /**
  * A box meant to circle some words: the words it covers, when they're most of what it holds.
  * A box around a figure (few or no words in it) stays as it is. A line-sized box on blank space
- * right beside a line of text moves onto that line.
+ * right beside a line of text moves onto that line, and one that only clips a line's edge (mostly
+ * the gap above it) moves onto the words it reaches: a box that size isn't a figure.
  */
 export function snapRegion(box: BBox, words: readonly BBox[]): BBox {
   const height = wordHeight(words);
@@ -101,6 +102,7 @@ export function snapRegion(box: BBox, words: readonly BBox[]): BBox {
   const covered = coveredWords(box, words, height * 0.5);
   if (covered.length === 0) return missedLine(box, words, height) ?? box;
   const snapped = covered.reduce(unionBBox);
+  if (box[3] <= height * MISS_SIZE) return snapped;
   const filled = covered.reduce((sum, w) => sum + overlap(w, box), 0);
   if (filled < TEXT_FILL * area(box)) return box;
   if (overlap(snapped, box) < KEEP * Math.min(area(box), area(snapped))) return box;

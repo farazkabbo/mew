@@ -725,10 +725,12 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
         }
         if !state.connected {
             drop(state);
+            eprintln!("[screen] no capture: not connected to an account");
             notify(app, "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.");
             return false;
         }
         if coach.capturing.swap(true, Ordering::SeqCst) {
+            eprintln!("[screen] no capture: another one is still running");
             return false;
         }
         state.status = Status::Looking;
@@ -886,7 +888,10 @@ fn finish_capture<R: Runtime>(
                 kept = true;
             }
         }
-        Err(error) => notify(app, &error.message()),
+        Err(error) => {
+            eprintln!("[screen] capture refused: {}", error.message());
+            notify(app, &error.message());
+        }
     }
     // Only now: an ask waiting for this capture reads the flag first, then the slot.
     coach.capturing.store(false, Ordering::SeqCst);
@@ -953,6 +958,8 @@ fn log_capture(meta: &FrameMeta, bytes: usize) {
 }
 
 pub fn notify<R: Runtime>(app: &AppHandle<R>, message: &str) {
+    // Our own wording, never the student's: a notification can be hidden (Focus, recording).
+    eprintln!("[screen] notified: {message}");
     let _ = app
         .notification()
         .builder()
@@ -1003,9 +1010,15 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         let state = coach.lock();
         (state.status, state.config.is_on(), state.config.paused)
     };
-    if let Some(tray) = app.tray_by_id(crate::TRAY_ID) {
+    // On the main thread: the tray icon is reference-counted for one thread, and this is called
+    // from others (two at once corrupted its count and aborted the app).
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(tray) = handle.tray_by_id(crate::TRAY_ID) else {
+            return;
+        };
         let _ = tray.set_tooltip(Some(status.tooltip()));
-        if let Some(icon) = app.default_window_icon() {
+        if let Some(icon) = handle.default_window_icon() {
             let image = match status.badge() {
                 Some(colour) => Image::new_owned(
                     with_badge(icon.rgba(), icon.width(), icon.height(), colour),
@@ -1016,7 +1029,7 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
             };
             let _ = tray.set_icon(Some(image));
         }
-    }
+    });
     if let Some(items) = app.try_state::<TrayItems<R>>() {
         let _ = items.look.set_enabled(on && !paused);
         let _ = items.pause.set_enabled(on);

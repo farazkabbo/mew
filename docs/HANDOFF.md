@@ -406,7 +406,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     `mew:card-mic`).
   - **Ink snapping:** `packages/ink/src/tutor/screen/snap.ts` moves circles, underlines,
     highlights and arrows aimed at text onto the OCR word boxes (`ScreenInkInput.words`; the
-    overlay passes its word obstacles). Prompt `circle-ask.v6` asks the model to start from the
+    overlay passes its word obstacles). Prompt `circle-ask.v7` asks the model to start from the
     given boxes.
   - **Notebook:** `EntryNotes` mounts with the page's canvas (keyed by page), so the note under a
     screen entry scrolls with the page instead of floating over it.
