@@ -185,12 +185,13 @@ test("K8: a moment's Moments tab, Open source, Replay in its own voice and a Qui
   await page.getByRole("tab", { name: /Moments/ }).click();
   const row = page.getByTestId("moment-row");
   await expect(row).toContainText("Why is this curved?");
-  await expect(row).toContainText("Projectile motion lecture");
+  // Grouped by source (U28): the source is the group's heading.
+  await expect(page.getByTestId("moment-group")).toContainText("Projectile motion lecture");
   // Open source: the video at that exact second.
   await expect(row.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", VIDEO);
-  await page.getByPlaceholder("Search moments…").fill("mitosis");
+  await page.getByPlaceholder("Search what you asked or saved").fill("mitosis");
   await expect(page.getByTestId("moment-row")).toHaveCount(0);
-  await page.getByPlaceholder("Search moments…").fill("parabola");
+  await page.getByPlaceholder("Search what you asked or saved").fill("parabola");
   await expect(page.getByTestId("moment-row")).toHaveCount(1);
 
   // Opening it shows it on its page; Replay says each step in its stored voice.

@@ -1040,3 +1040,36 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       picker) and can be dragged onto a chapter card; the page's "⋯" has "Move this page to…".
       Every move says where it went and offers Undo. From a home the view stays put (its lists
       and the cards' page counts read again); from a page, the page opens where it went.
+28. **U28. The notebook home matches its boards (2026-11-04, `feat/ui-u11-notebook-home`;
+    design/u/notebook-home, extending U14).** Look and layout only; data, stores, routes and
+    models are unchanged, and where a board and the code disagree on behaviour, the code wins.
+    - **Header:** one breadcrumb (the top bar's; the home's own is gone), the cover mark (the
+      notebook's colour, a binding, a paper label with its icon), the name, the meta line and a
+      pill Subject select. The level control stays the top bar's. One neb notice sits above the
+      tabs: the PDF being read or its topics found (Review topics, ink), else checks due (Quick
+      check, the neb button).
+    - **Tabs are dividers** joined to the paper sheet, with counts (pages, concepts, moments);
+      a tab shows only when it applies (U26). Arrows, Home and End move between them. A new
+      `--sunk` token (#E2DACA / #2E3439) is the inactive tabs' and icon tiles' tone.
+    - **Pages:** chapter cards with the cover colour along the top, a checks-due badge, progress
+      and meta, and a dashed drop state; loose pages as ruled sheets with a move button, their
+      slot dashed while dragged; dashed add tiles with their keys; at most 14 loose pages, then
+      "+N · Show all"; the course-material card (U26).
+    - **Study:** the summary as big serif numbers (its plain sentence is the group's accessible
+      name) with a status bar; concepts as rows with a status disc, "after N" (the full name on
+      hover), pages in a quiet column and the chip, eight at a time; the exam plan as a card
+      beside them (the date, today on a note, the eve dashed, the exam day in ink). The plan
+      editor, building, failed and empty states are restyled; a moved row keeps the keyboard.
+      The empty state's "Read it again" isn't built (nothing re-reads a course); it offers
+      "Delete and try another file", as failed does.
+    - **Moments:** search, filter chips with counts (a radio group: arrows, Home, End), group by
+      source (default, the source line once per group) or day, and cards with the picture,
+      "check due", the question, Replay, Open source and Check against my notes (it opens the
+      moment and runs Notes Check there). Six per group, then "Show N more". "Open in neb" moved
+      to a PDF group's header.
+    - **Strays removed:** the clip's source pill ("… · Check against my notes") showed on the home
+      too; it's on pages only now. The violet blob was the desktop app's Circle & Ask pointer,
+      still the old Mew head: its ears are gone, so it's the neb dot.
+    - **Previews:** `/dev/ui` sections home-header, home-pages, home-study and home-moments, in
+      light and night screenshots; keyboard tests for the divider tabs, the plan editor and the
+      filter chips (`e2e/ui.spec.ts`).

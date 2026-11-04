@@ -548,6 +548,10 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
 - **U26, second half, built** (2026-11-04, `feat/ui-u26-review`): Review's folders are notebooks
   (checks-only notebooks get their own Quick check), Review is a button with a due count in the
   desk's header, and Tonight lists concepts to review.
+- **U27 and U28 built** (2026-11-04): a notebook opens on its home and loose pages go into
+  chapters (`feat/notebook-home-and-page-moves`); the notebook home restyled to
+  design/u/notebook-home, with a `--sunk` token (`feat/ui-u11-notebook-home`). NEB_APP_UI.md
+  decisions U27 and U28.
 - **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in

@@ -10,6 +10,8 @@ import type { FolderCourse, FolderRow } from "@/features/courses/review-folders"
 import { SkillsCard } from "@/features/courses/SkillsToRecheck";
 import { UpNextCard } from "@/features/courses/UpNextCard";
 
+import { HomePreview } from "./HomePreview";
+
 const VARIANTS: { variant: ButtonVariant; label: string }[] = [
   { variant: "ink", label: "Resume" },
   { variant: "neb", label: "Check my work" },
@@ -213,6 +215,8 @@ export function UiPreview() {
         <ReviewFolders courses={MANY} onQuickCheck={() => undefined} />
         <SkillsCard skills={SKILLS} now={NOW} onForget={() => undefined} />
       </Block>
+
+      <HomePreview Block={Block} />
     </main>
   );
 }

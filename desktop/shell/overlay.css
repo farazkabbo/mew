@@ -404,7 +404,6 @@ body.pointer {
   opacity: 0;
 }
 
-.mew-pointer .ears,
 .mew-pointer .face {
   fill: var(--violet);
 }
@@ -448,7 +447,6 @@ body.pointer {
   opacity: 0.6;
 }
 
-.mew-pointer[data-look="blocked"] .ears,
 .mew-pointer[data-look="blocked"] .face {
   fill: var(--muted);
 }
@@ -804,7 +802,6 @@ body.card {
   .draw-hint {
     border: 1px solid CanvasText;
   }
-  .mew-pointer .ears,
   .mew-pointer .face {
     fill: CanvasText;
   }

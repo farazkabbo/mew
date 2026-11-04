@@ -124,7 +124,7 @@ test("practice moves a concept from not started to checked, with a plan and revi
     "Not started",
     "Not started",
   ]);
-  await expect(page.getByTestId("plan-summary")).toContainText("0 checked · exam in 4 days");
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/0 checked · exam in 4 days/);
   const days = page.getByTestId("plan-day");
   await expect(days.first()).toContainText("Today");
   await expect(days.first()).toContainText("Work on: Forces");
@@ -151,7 +151,7 @@ test("practice moves a concept from not started to checked, with a plan and revi
   await page.getByRole("link", { name: "Forces and motion" }).click();
   await expect(planRow(page, "Friction").getByTestId("concept-status")).toHaveText("Checked");
   await expect(planRow(page, "Friction")).toContainText("review in 3 days");
-  await expect(page.getByTestId("plan-summary")).toContainText("1 checked");
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/1 checked/);
   await expect(days.first()).not.toContainText("Friction");
 
   // Opening a lesson puts its concept in the review queue; Friction isn't due yet.

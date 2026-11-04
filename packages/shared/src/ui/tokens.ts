@@ -18,6 +18,7 @@ export type ColorName =
   | "neb-ink"
   | "neb-wash"
   | "note"
+  | "sunk"
   | "teal"
   | "ok-pen"
   | "red-pen"
@@ -39,6 +40,8 @@ export const COLORS: Record<"light" | "night", Record<ColorName, string>> = {
     "neb-ink": "#3F2BA0",
     "neb-wash": "#F1EDFF",
     note: "#F1E5AE",
+    /** U28: inactive divider tabs and icon tiles, a shade under the desk. */
+    sunk: "#E2DACA",
     teal: "#7DA4AF",
     "ok-pen": "#3E6DB5",
     "red-pen": "#C2453A",
@@ -58,6 +61,7 @@ export const COLORS: Record<"light" | "night", Record<ColorName, string>> = {
     "neb-ink": "#C9BCFF",
     "neb-wash": "#2C2550",
     note: "#5A5230",
+    sunk: "#2E3439",
     teal: "#7DA4AF",
     "ok-pen": "#7FA6E8",
     "red-pen": "#E07B70",

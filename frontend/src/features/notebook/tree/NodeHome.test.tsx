@@ -86,7 +86,10 @@ describe("a notebook's home is the whole class (decision U26)", () => {
   });
 
   it("shows Moments once something was saved", () => {
-    expect(tabs(home([node(ROOT, null)], ROOT, undefined, true))).toEqual(["Pages", "Moments (1)"]);
+    const html = home([node(ROOT, null)], ROOT, undefined, true);
+    expect(tabs(html)).toEqual(["Pages", "Moments"]);
+    // Divider tabs carry their count after the label (U28).
+    expect(html).toMatch(/>Moments<span[^>]*>1<\/span>/);
   });
 
   it("keeps the course to the notebook: a chapter has no Study tab and no card", () => {

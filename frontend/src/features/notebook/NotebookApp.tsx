@@ -432,6 +432,17 @@ export function NotebookApp({
     return () => window.removeEventListener("focus", again);
   }, [loadChecks, momentsVersion, view]);
   const dueCounts = useMemo(() => dueByNode(checks ?? [], tree, now), [checks, tree, now]);
+  /** Moments with a check due (U28: their cards say so). */
+  const dueClipIds = useMemo(
+    () =>
+      new Set(
+        (checks ?? [])
+          .filter((c) => Date.parse(c.dueAt) <= now)
+          .flatMap((c) => [c.clipId, ...c.mergedClipIds])
+          .filter((id): id is string => id !== null),
+      ),
+    [checks, now],
+  );
   /** Every check due now, anywhere (the desk's Tonight card). */
   const dueTotal = useMemo(
     () => (checks ?? []).filter((c) => Date.parse(c.dueAt) <= now).length,
@@ -1157,6 +1168,13 @@ export function NotebookApp({
                     moments={moments.filter((m) => subtreeIds(tree, node.id).has(m.nodeId))}
                     dueCounts={dueCounts}
                     onOpenMoment={(moment) => openMoment(moment)}
+                    onReplayMoment={(moment) => openMoment(moment, true)}
+                    onCheckMoment={(moment) => {
+                      // Its page, then Notes Check on it (what "Check against my notes" does there).
+                      openMoment(moment);
+                      checkAgainstNotes(moment.image);
+                    }}
+                    dueClipIds={dueClipIds}
                     inNeb={inNeb}
                     onOpenInNeb={openInNeb}
                     onQuickCheck={() => openQuickCheck({ nodeIds: [...subtreeIds(tree, node.id)] })}
@@ -1231,7 +1249,7 @@ export function NotebookApp({
                   <HoldCircle key={holding} canvas={canvas} onLoop={mew.hold.circle} />
                 )}
 
-                {clipImage && !quizActive && (
+                {view === "page" && clipImage && !quizActive && (
                   <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-4">
                     <ClipSource
                       image={clipImage}

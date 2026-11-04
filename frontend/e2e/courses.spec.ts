@@ -50,8 +50,13 @@ test("a chapter PDF becomes an ordered plan, reviewed by the student", async ({ 
   await expect(plan.nth(0)).toContainText("Forces and Newton's laws");
   await expect(plan.nth(0)).toContainText("pp. 1–2");
   // The merged concept's prerequisite edge followed it.
-  await expect(plan.nth(1)).toContainText("Needs: Forces and Newton's laws");
-  await expect(page.getByText(/exam in \d+ days/)).toBeVisible();
+  // What it needs is "after 1", with the name on hover (U28).
+  await expect(plan.nth(1).getByTestId("concept-after")).toHaveText("after 1");
+  await expect(plan.nth(1).getByTestId("concept-after")).toHaveAttribute(
+    "title",
+    "Needs: Forces and Newton's laws",
+  );
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/exam in \d+ days/);
 
   // A lesson, grounded in its pages (no model key: the summary and the source passage).
   await plan.nth(1).getByRole("link", { name: "Friction" }).click();
@@ -61,7 +66,7 @@ test("a chapter PDF becomes an ordered plan, reviewed by the student", async ({ 
 
   // The course lives in its notebook: a course link opens its Study tab, ready.
   await page.goto(`/courses/${courseId}`);
-  await expect(page.getByTestId("plan-summary")).toContainText("2 concepts");
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/2 concepts/);
   await expect(page.getByRole("heading", { name: "Forces and motion", level: 1 })).toBeVisible();
 });
 

@@ -30,7 +30,7 @@ async function serverTitles(page: Page): Promise<string[]> {
 
 /** The home view shows these chapter cards, in this order (waits for them). */
 async function expectCards(page: Page, titles: string[]) {
-  await expect(page.getByTestId("chapter-card").locator("span.font-serif")).toHaveText(titles);
+  await expect(page.getByTestId("chapter-card").getByTestId("chapter-title")).toHaveText(titles);
 }
 
 test("a notebook is named as it's made, with its chapters, and stays after a reload", async ({
