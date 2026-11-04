@@ -1,9 +1,9 @@
 import type { ConceptProgress, ConceptStatus } from "@mew/shared";
 
 /**
- * The Review page's course folders (docs/NEB_APP_UI.md decision U25, boards 7 and 8): which
- * concepts each folder lists, in what order, and the order of the folders' tabs. Pure, so the page
- * and /dev/ui render the same thing.
+ * The Review page's folders (docs/NEB_APP_UI.md decisions U25 and U26, boards 7 and 8): one per
+ * notebook (its course's concepts and its checks due), which concepts each lists, in what order,
+ * and the order of the tabs. Pure, so the page and /dev/ui render the same thing.
  */
 
 /** A row's shape on the board; `hint` is right with help, not yet checked. */
@@ -12,14 +12,75 @@ export type RowKind = "revisit" | "new" | "hint" | "checked";
 export type FolderRow = { conceptId: string; title: string; kind: RowKind; detail: string };
 
 export type FolderCourse = {
+  /** The notebook's id, or the course's for a course with no notebook. */
   id: string;
   title: string;
-  /** The cover colour of the course's notebook (a CSS colour). */
+  /** The notebook's cover colour (a CSS colour). */
   color: string;
+  /** The notebook's course, when it has one (its concepts, lessons and Quiz me). */
+  courseId: string | null;
   rows: FolderRow[];
   /** Concepts in the review queue: what "Quiz me" asks about. */
   quiz: number;
+  /** Checks due from moments saved in the notebook (K8): its own Quick check. */
+  checks: number;
 };
+
+/** A course as Review read it: its started concepts and what's in the review queue. */
+export type CourseInput = { id: string; title: string; rows: FolderRow[]; quiz: number };
+
+/** A notebook on this device (a root of the tree). */
+export type NotebookInput = { id: string; title: string; color: string; courseId: string | null };
+
+/**
+ * U26: a folder per notebook. A course takes its notebook's name and colour; a notebook with
+ * nothing but checks due gets a folder for them; a course no notebook links keeps its own
+ * (`colorFor` picks its colour). Folders with nothing in them are left out.
+ */
+export function notebookFolders(
+  courses: readonly CourseInput[],
+  notebooks: readonly NotebookInput[],
+  checksByNotebook: ReadonlyMap<string, number>,
+  colorFor: (courseId: string) => string,
+): FolderCourse[] {
+  const byCourse = new Map<string, NotebookInput>();
+  for (const notebook of notebooks) {
+    if (notebook.courseId && !byCourse.has(notebook.courseId)) {
+      byCourse.set(notebook.courseId, notebook);
+    }
+  }
+  const used = new Set<string>();
+  const folders: FolderCourse[] = [];
+  for (const course of courses) {
+    const notebook = byCourse.get(course.id);
+    if (notebook) used.add(notebook.id);
+    const checks = notebook ? (checksByNotebook.get(notebook.id) ?? 0) : 0;
+    if (course.rows.length === 0 && course.quiz === 0 && checks === 0) continue;
+    folders.push({
+      id: notebook?.id ?? course.id,
+      title: notebook?.title ?? course.title,
+      color: notebook?.color ?? colorFor(course.id),
+      courseId: course.id,
+      rows: course.rows,
+      quiz: course.quiz,
+      checks,
+    });
+  }
+  for (const notebook of notebooks) {
+    const checks = checksByNotebook.get(notebook.id) ?? 0;
+    if (used.has(notebook.id) || checks === 0) continue;
+    folders.push({
+      id: notebook.id,
+      title: notebook.title,
+      color: notebook.color,
+      courseId: null,
+      rows: [],
+      quiz: 0,
+      checks,
+    });
+  }
+  return folders;
+}
 
 /** Tabs shown before the rest go under "More". */
 export const MAX_TABS = 7;
@@ -109,6 +170,7 @@ export function countRows(rows: readonly FolderRow[]): Record<RowKind, number> {
 /** "2 to revisit · 1 new · 1 checked", or "all 2 checked · nothing due". */
 export function folderSummary(rows: readonly FolderRow[]): string {
   const { revisit, new: fresh, hint, checked } = countRows(rows);
+  if (rows.length === 0) return "no course material yet";
   const parts: string[] = [];
   if (revisit) parts.push(`${revisit} to revisit`);
   if (fresh) parts.push(`${fresh} new`);
@@ -123,18 +185,26 @@ export function folderSummary(rows: readonly FolderRow[]): string {
   return parts.join(" · ");
 }
 
-/** Most to revisit first, then most new; a course with an exam close comes first of all. */
+/**
+ * Most to revisit first, then most new, then most checks due; the folder of a course with an exam
+ * close comes first of all (`firstId` is that course's id).
+ */
 export function orderFolders(
   courses: readonly FolderCourse[],
   firstId: string | null = null,
 ): FolderCourse[] {
   const key = (course: FolderCourse) => countRows(course.rows);
   return [...courses].sort((a, b) => {
-    if (a.id === firstId) return -1;
-    if (b.id === firstId) return 1;
+    if (firstId && a.courseId === firstId) return -1;
+    if (firstId && b.courseId === firstId) return 1;
     const ka = key(a);
     const kb = key(b);
-    return kb.revisit - ka.revisit || kb.new - ka.new || a.title.localeCompare(b.title, undefined);
+    return (
+      kb.revisit - ka.revisit ||
+      kb.new - ka.new ||
+      b.checks - a.checks ||
+      a.title.localeCompare(b.title, undefined)
+    );
   });
 }
 

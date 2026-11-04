@@ -6,14 +6,14 @@ import { useEffect, useRef, useState } from "react";
 import { SignOutMenuItem } from "@/components/AccountControls";
 
 const LINKS = [
-  { href: "/review", label: "Review" },
   { href: "/teach", label: "Teach neb" },
   { href: "/settings", label: "Settings" },
 ] as const;
 
 /**
  * The avatar on the desk (docs/NEB_APP_UI.md §5.1, decisions U14 and U26): the student's
- * initial, opening Review, Teach neb, Settings and the account (courses live in their notebooks).
+ * initial, opening Teach neb, Settings and the account. Courses live in their notebooks, and
+ * Review has its own button in the header.
  */
 export function DeskMenu({ name }: { name: string | null }) {
   const [open, setOpen] = useState(false);

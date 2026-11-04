@@ -545,6 +545,9 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   notebook's home has Pages, Study (the course: build progress, scope review, plan, exam date,
   Quiz me started on the page) and Moments; "Add course material" until it has one, with "Use a
   course you have…" for courses made before. NEB_APP_UI.md decision U26.
+- **U26, second half, built** (2026-11-04, `feat/ui-u26-review`): Review's folders are notebooks
+  (checks-only notebooks get their own Quick check), Review is a button with a due count in the
+  desk's header, and Tonight lists concepts to review.
 - **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in

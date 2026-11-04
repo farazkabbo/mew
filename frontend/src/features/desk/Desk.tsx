@@ -1,7 +1,7 @@
 "use client";
 
 import type { Notebook, NotebookTree } from "@mew/shared";
-import { Plus, Search } from "lucide-react";
+import { Layers, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
@@ -29,6 +29,8 @@ export type DeskProps = {
   dueCounts: ReadonlyMap<string, number>;
   /** All checks due now, anywhere. */
   dueTotal: number;
+  /** U26: course concepts due for review (the review queue), across notebooks. */
+  conceptsDue: number;
   /** What stayed per root notebook (§6.4): all of it, and this week's. */
   stayed?: ReadonlyMap<string, { count: number; week: number }>;
   /** A course's exam within two weeks, if any (its reviews come first). */
@@ -112,6 +114,14 @@ export function Desk(props: DeskProps) {
       action: { label: "Start", variant: "neb", run: props.onQuickCheck },
     });
   }
+  if (props.conceptsDue > 0) {
+    rows.push({
+      id: "concepts",
+      title: `${props.conceptsDue} ${props.conceptsDue === 1 ? "concept" : "concepts"} to review`,
+      detail: "from your courses · Quiz me on each",
+      action: { label: "Review", variant: "ghost", href: "/review" },
+    });
+  }
   const lastUsed = notebooks.map(latestIn).sort((a, b) => b.updatedAt - a.updatedAt)[0];
   if (lastUsed) {
     rows.push({
@@ -163,6 +173,7 @@ export function Desk(props: DeskProps) {
           <span className="min-w-0 flex-1 truncate text-left">Jump to any page or moment</span>
           <Keys keys={props.keys.jump.split("+")} size="md" />
         </button>
+        <ReviewButton due={props.dueTotal + props.conceptsDue} />
         <button
           type="button"
           onClick={props.onNewNotebook}
@@ -285,6 +296,29 @@ function SectionTitle({ id, title, note }: { id: string; title: string; note: st
 }
 
 /** The neb wordmark (board 1). */
+/**
+ * U26: Review in the desk's header, with what's due (checks from saved moments and course
+ * concepts); no count when nothing is.
+ */
+function ReviewButton({ due }: { due: number }) {
+  return (
+    <Link
+      href="/review"
+      data-testid="desk-review"
+      aria-label={due > 0 ? `Review, ${due} due` : "Review"}
+      className="flex h-11 shrink-0 items-center gap-2 rounded-full border border-line bg-paper px-3.5 text-sm font-medium whitespace-nowrap text-ink no-underline transition-colors duration-[120ms] hover:border-ink/40"
+    >
+      <Layers className="size-4" strokeWidth={1.8} aria-hidden />
+      Review
+      {due > 0 && (
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1.5 text-xs font-semibold text-paper">
+          {due}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 export function Wordmark() {
   return (
     <svg width="58" height="22" viewBox="0 0 256 96" role="img" aria-label="neb">

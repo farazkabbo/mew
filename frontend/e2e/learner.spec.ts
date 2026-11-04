@@ -162,10 +162,22 @@ test("practice moves a concept from not started to checked, with a plan and revi
   await expect(page.getByTestId("concept-status")).toHaveCount(0);
   // (Other tests' courses share this API's store: look at this course only.)
   const courseId = new URL(page.url()).pathname.split("/")[2] ?? "";
-  await page.goto("/review");
-  // Each course is a folder (decision U25): bring this one to the front by its tab.
-  await page.locator(`#folder-tab-${courseId}`).click();
-  const section = page.locator(`#folder-${courseId}`);
+  // Review is on the desk's header now (decision U26), with what's due.
+  await page.goto("/desk");
+  const review = page.getByTestId("desk-review");
+  await expect(review).toHaveAccessibleName(/Review, \d+ due/);
+  await review.click();
+  await expect(page).toHaveURL(/\/review$/);
+  // Each notebook is a folder (decisions U25, U26); this course's is its notebook's. The tab is
+  // in the folders, or under More past seven.
+  const tab = page.locator(`[role="tab"][data-course-id="${courseId}"]`);
+  await expect(page.getByTestId("review-folders")).toBeVisible();
+  if ((await tab.count()) === 0) {
+    await page.getByRole("button", { name: /More/ }).click();
+    await page.locator(`button[data-course-id="${courseId}"]`).click();
+  }
+  await tab.click();
+  const section = page.locator(`#${await tab.getAttribute("aria-controls")}`);
   await expect(section.locator(`a[href="/courses/${courseId}"]`)).toBeVisible();
   // The folder lists every concept started: new first, then the checked one (Friction).
   const items = section.getByTestId("review-item");

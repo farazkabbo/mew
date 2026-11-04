@@ -6,6 +6,7 @@ import {
   folderRows,
   folderSummary,
   MAX_TABS,
+  notebookFolders,
   orderFolders,
   rowDetail,
   rowKind,
@@ -35,6 +36,8 @@ function course(n: number, kinds: string, quiz = 0): FolderCourse {
     id: id(100 + n),
     title: `Course ${n}`,
     color: "#7DA4AF",
+    courseId: id(100 + n),
+    checks: 0,
     quiz,
     rows: [...kinds].map((k, i) => ({
       conceptId: id(n * 10 + i),
@@ -120,5 +123,41 @@ describe("the Review page's folders (decision U25)", () => {
     expect(shortTitle("EECS 4101 · Advanced Data Structures")).toBe("EECS 4101");
     expect(shortTitle("Physics: Mechanics")).toBe("Physics");
     expect(shortTitle("Business Mathematics")).toBe("Business Mathematics");
+  });
+
+  it("makes a folder per notebook: a course takes its notebook's name and colour (U26)", () => {
+    const rows = course(1, "rn").rows;
+    const folders = notebookFolders(
+      [
+        { id: id(201), title: "EECS 4101 course", rows, quiz: 2 },
+        { id: id(202), title: "Orphan course", rows, quiz: 1 },
+        { id: id(203), title: "Nothing started", rows: [], quiz: 0 },
+      ],
+      [
+        { id: id(301), title: "Advanced DSA", color: "#C98B6B", courseId: id(201) },
+        { id: id(302), title: "Philosophy", color: "#8FA98B", courseId: null },
+        { id: id(303), title: "Empty", color: "#7DA4AF", courseId: null },
+      ],
+      new Map([
+        [id(301), 1],
+        [id(302), 2],
+      ]),
+      () => "#9DB8D9",
+    );
+    expect(folders.map((f) => [f.id, f.title, f.color, f.courseId, f.quiz, f.checks])).toEqual([
+      [id(301), "Advanced DSA", "#C98B6B", id(201), 2, 1],
+      // A course no notebook links keeps its own folder, in a colour of its own.
+      [id(202), "Orphan course", "#9DB8D9", id(202), 1, 0],
+      // A notebook with checks due and no course gets a folder for them.
+      [id(302), "Philosophy", "#8FA98B", null, 0, 2],
+    ]);
+  });
+
+  it("orders by revisit, then new, then checks due; an exam's course still first", () => {
+    const a = { ...course(1, "n"), checks: 0 };
+    const b = { ...course(2, "n"), checks: 3 };
+    const c = { ...course(3, ""), courseId: null, checks: 5 };
+    expect(orderFolders([a, c, b]).map((f) => f.id)).toEqual([b.id, a.id, c.id]);
+    expect(orderFolders([a, c, b], a.courseId)[0]?.id).toBe(a.id);
   });
 });

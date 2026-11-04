@@ -16,6 +16,7 @@ import { ReadAsChip } from "../annotate/ReadAsChip";
 import { MarksMenu } from "../annotate/MarksMenu";
 import { useMarkPrefs } from "../annotate/prefs";
 import { AnnotationRecords } from "../annotate/records";
+import { coursesApi } from "../courses/api";
 import { AnnotationSync } from "../annotate/sync";
 import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
@@ -421,6 +422,19 @@ export function NotebookApp({
     () => (checks ?? []).filter((c) => Date.parse(c.dueAt) <= now).length,
     [checks, now],
   );
+  // U26: course concepts due (the review queue), for the desk's Review button and Tonight card.
+  const [conceptsDue, setConceptsDue] = useState(0);
+  useEffect(() => {
+    if (view !== "desk") return;
+    let live = true;
+    void coursesApi
+      .dueReviews()
+      .then((queue) => live && setConceptsDue(queue.items.length))
+      .catch(() => undefined); // offline or signed out: the checks still count
+    return () => {
+      live = false;
+    };
+  }, [view]);
   const exam = useMomentChecks((s) => s.exam);
   const stayedRows = useMomentChecks((s) => s.stayed);
   const stayed = useMemo(() => stayedByNotebook(stayedRows ?? [], tree), [stayedRows, tree]);
@@ -1068,6 +1082,7 @@ export function NotebookApp({
                       moments={moments}
                       dueCounts={dueCounts}
                       dueTotal={dueTotal}
+                      conceptsDue={conceptsDue}
                       stayed={stayed}
                       exam={exam ? { title: exam.title, days: exam.daysLeft } : null}
                       loadCounts={loadCounts}

@@ -19,11 +19,18 @@ import {
 const TAB_BAND = 50;
 
 /**
- * The Review page's courses as file folders (docs/NEB_APP_UI.md decision U25, board 7). Each
- * course is a folder in its cover colour with its tab in a fixed slot; picking a tab pulls that
- * folder up out of the stack and drops it in front (just a swap with reduced motion).
+ * The Review page's notebooks as file folders (docs/NEB_APP_UI.md decisions U25 and U26, board 7).
+ * Each notebook is a folder in its cover colour with its tab in a fixed slot; picking a tab pulls
+ * that folder up out of the stack and drops it in front (just a swap with reduced motion).
  */
-export function ReviewFolders({ courses }: { courses: readonly FolderCourse[] }) {
+export function ReviewFolders({
+  courses,
+  onQuickCheck,
+}: {
+  courses: readonly FolderCourse[];
+  /** The Quick check of the checks due in one folder's notebook. */
+  onQuickCheck?: (folderId: string) => void;
+}) {
   const [picked, setPicked] = useState<string | null>(null);
   const [prev, setPrev] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -106,6 +113,7 @@ export function ReviewFolders({ courses }: { courses: readonly FolderCourse[] })
                 aria-selected={open}
                 aria-controls={`folder-${course.id}`}
                 tabIndex={open ? 0 : -1}
+                data-course-id={course.courseId ?? undefined}
                 onClick={() => pick(course.id)}
                 title={course.title}
                 className={`folder-tab absolute top-0 flex h-[51px] items-center gap-2 rounded-t-[10px] pr-3 pb-px pl-3.5 text-sm text-ink ${open ? "font-semibold" : "font-medium shadow-[inset_0_-10px_12px_-10px_rgba(30,29,26,.28)]"}`}
@@ -119,12 +127,12 @@ export function ReviewFolders({ courses }: { courses: readonly FolderCourse[] })
                 <span className="min-w-0 flex-1 truncate text-left">
                   {shortTitle(course.title)}
                 </span>
-                {course.quiz > 0 && (
+                {course.quiz + course.checks > 0 && (
                   <span
-                    aria-label={`${course.quiz} to practise`}
+                    aria-label={`${course.quiz + course.checks} to practise`}
                     className="inline-flex h-5 min-w-5 flex-none items-center justify-center rounded-full bg-ink px-1.5 text-xs font-semibold text-paper"
                   >
-                    {course.quiz}
+                    {course.quiz + course.checks}
                   </span>
                 )}
               </button>
@@ -138,7 +146,12 @@ export function ReviewFolders({ courses }: { courses: readonly FolderCourse[] })
                 className={`box-border p-7 pb-8 shadow-sh-3 ${i === 0 ? "rounded-[0_14px_14px_14px]" : "rounded-[14px]"} ${open ? "min-h-[380px]" : "flex-1"}`}
                 style={{ background: tint }}
               >
-                {(open || isPrev) && <FolderBody course={course} />}
+                {(open || isPrev) && (
+                  <FolderBody
+                    course={course}
+                    {...(onQuickCheck && { onQuickCheck: () => onQuickCheck(course.id) })}
+                  />
+                )}
               </section>
             </div>
           );
@@ -158,43 +171,50 @@ export function ReviewFolders({ courses }: { courses: readonly FolderCourse[] })
   );
 }
 
-function FolderBody({ course }: { course: FolderCourse }) {
+function FolderBody({ course, onQuickCheck }: { course: FolderCourse; onQuickCheck?: () => void }) {
   const counts = countRows(course.rows);
+  const { courseId } = course;
   return (
     <>
       <div className="mb-[22px] flex flex-wrap items-start gap-x-6 gap-y-4">
         <div className="min-w-0 flex-[1_1_260px]">
           <h3 className="font-serif text-[34px] leading-[1.05]">
-            <Link href={`/courses/${course.id}`} className="hover:text-ink">
-              {course.title}
-            </Link>
+            {courseId ? (
+              <Link href={`/courses/${courseId}`} className="hover:text-ink">
+                {course.title}
+              </Link>
+            ) : (
+              course.title
+            )}
           </h3>
-          <div
-            className="mt-3.5 flex h-2 max-w-80 gap-0.5"
-            role="img"
-            aria-label={folderSummary(course.rows)}
-          >
-            {counts.revisit > 0 && (
-              <span className="rounded-full bg-ink" style={{ flex: counts.revisit }} />
-            )}
-            {counts.new > 0 && (
-              <span
-                className="box-border rounded-full border-[1.5px] border-dashed border-muted"
-                style={{ flex: counts.new }}
-              />
-            )}
-            {counts.hint + counts.checked > 0 && (
-              <span
-                className="rounded-full bg-neb"
-                style={{ flex: counts.hint + counts.checked }}
-              />
-            )}
-          </div>
+          {course.rows.length > 0 && (
+            <div
+              className="mt-3.5 flex h-2 max-w-80 gap-0.5"
+              role="img"
+              aria-label={folderSummary(course.rows)}
+            >
+              {counts.revisit > 0 && (
+                <span className="rounded-full bg-ink" style={{ flex: counts.revisit }} />
+              )}
+              {counts.new > 0 && (
+                <span
+                  className="box-border rounded-full border-[1.5px] border-dashed border-muted"
+                  style={{ flex: counts.new }}
+                />
+              )}
+              {counts.hint + counts.checked > 0 && (
+                <span
+                  className="rounded-full bg-neb"
+                  style={{ flex: counts.hint + counts.checked }}
+                />
+              )}
+            </div>
+          )}
           <div className="mt-2 text-[13px] text-ink/80">{folderSummary(course.rows)}</div>
         </div>
-        {course.quiz > 0 && (
+        {courseId && course.quiz > 0 && (
           <Link
-            href={quizHref({ id: course.id, title: course.title })}
+            href={quizHref({ id: courseId, title: course.title })}
             className="inline-flex h-11 flex-none items-center gap-2.5 rounded-full bg-ink pr-4 pl-[22px] text-[15px] font-semibold text-paper transition-opacity duration-[120ms] hover:opacity-90"
           >
             Quiz me
@@ -204,17 +224,41 @@ function FolderBody({ course }: { course: FolderCourse }) {
           </Link>
         )}
       </div>
-      {course.rows.length > 0 ? (
+      {course.checks > 0 && (
+        <div
+          data-testid="folder-checks"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md bg-paper-hi px-[22px] py-4 shadow-sh-2"
+        >
+          <span className="text-[15px]">
+            <span className="font-semibold">
+              {course.checks === 1 ? "1 quick check" : `${course.checks} quick checks`}
+            </span>{" "}
+            <span className="text-muted">from what you saved here</span>
+          </span>
+          {onQuickCheck && (
+            <button
+              type="button"
+              onClick={onQuickCheck}
+              className="h-10 rounded-full bg-neb px-5 text-sm font-semibold text-white transition-opacity duration-[120ms] hover:opacity-90"
+            >
+              Start
+            </button>
+          )}
+        </div>
+      )}
+      {courseId && course.rows.length > 0 ? (
         <div className="overflow-hidden rounded-md bg-paper-hi shadow-sh-2">
           <ul>
             {course.rows.map((row) => (
-              <ConceptRow key={row.conceptId} courseId={course.id} row={row} />
+              <ConceptRow key={row.conceptId} courseId={courseId} row={row} />
             ))}
           </ul>
         </div>
       ) : (
         <p className="rounded-md bg-paper-hi p-5 text-sm text-muted shadow-sh-2">
-          Open a lesson in this course and it shows up here.
+          {courseId
+            ? "Open a lesson in this course and it shows up here."
+            : "Add course material to this notebook, and its lessons and quizzes show up here."}
         </p>
       )}
     </>
@@ -339,6 +383,7 @@ function MoreTab({
             <li key={course.id}>
               <button
                 type="button"
+                data-course-id={course.courseId ?? undefined}
                 onClick={() => onPick(course.id)}
                 className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm hover:bg-paper"
               >

@@ -1018,8 +1018,16 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       makes and links the course (K4). A course made before this, on the old page, can be picked
       from the same card ("Use a course you have…"); a deleted course unlinks.
     - **"Review topics"** opens the Study tab instead of the course page.
-    - **Review** keeps its look (U25). In `feat/ui-u26-review` its folders become notebooks
-      (named and coloured as on the desk; a course with no notebook keeps its own folder), and it
-      moves from the avatar menu to a button with a due count in the desk's header.
+    - **Review** keeps its look (U25); built in `feat/ui-u26-review`:
+      - **Its folders are notebooks:** a course's folder takes its notebook's name and cover
+        colour; a notebook with checks due from saved moments and no course gets a folder with
+        "N quick checks from what you saved here" and Start (its own Quick check); a course no
+        notebook links keeps its own folder. Tabs order by revisit, then new, then checks due; a
+        tab's count is its quiz plus its checks.
+      - **It's reached from the desk's header:** a Review button, with what's due (checks plus
+        course concepts in the review queue) and no count when nothing is. The avatar menu keeps
+        Teach neb, Settings and the account.
+      - **The Tonight card** gains "N concepts to review" (Review) after the quick checks, still at
+        most three rows.
     - **Unchanged:** the data. Courses, concepts, attempts and FSRS stay as they are; a notebook
       still links to a course by `courseId`.

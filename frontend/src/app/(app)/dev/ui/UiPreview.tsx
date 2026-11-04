@@ -35,55 +35,70 @@ const row = (title: string, kind: FolderRow["kind"], detail: string, i: number):
   kind,
   detail,
 });
-const FOLDERS: FolderCourse[] = [
-  {
-    id: "00000000-0000-4000-8000-000000000101",
-    title: "EECS 4101 · Advanced Data Structures",
-    color: "#C98B6B",
-    quiz: 3,
-    rows: [
-      row("Amortized analysis", "revisit", "Due since 2 days ago", 1),
-      row("Red-black tree deletion", "revisit", "Due since yesterday", 2),
-      row("Splay trees", "new", "Not practised yet", 3),
-      row("Skip lists", "hint", "Right with a hint · comes back tomorrow", 4),
-      row("Binomial heaps", "checked", "Comes back in 5 days", 5),
-    ],
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000102",
-    title: "Business Mathematics",
-    color: "#9DB8D9",
-    quiz: 2,
-    rows: [
-      row("Simple Discount", "revisit", "Due since yesterday", 6),
-      row("Simple Interest", "new", "Not practised yet", 7),
-    ],
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000103",
-    title: "NATS 1610 · The Living Body",
-    color: "#8FA98B",
-    quiz: 1,
-    rows: [
-      row("Membrane transport", "revisit", "Due today", 8),
-      row("Homeostasis", "checked", "Comes back in 3 days", 9),
-    ],
-  },
-  {
-    id: "00000000-0000-4000-8000-000000000104",
-    title: "Modern History",
-    color: "#C99AA4",
-    quiz: 0,
-    rows: [row("The Treaty of Versailles", "checked", "Comes back in 4 days", 10)],
-  },
-];
+type Folder = Omit<FolderCourse, "courseId" | "checks">;
+const withCourse = (f: Folder): FolderCourse => ({ ...f, courseId: f.id, checks: 0 });
+const FOLDERS: FolderCourse[] = (
+  [
+    {
+      id: "00000000-0000-4000-8000-000000000101",
+      title: "EECS 4101 · Advanced Data Structures",
+      color: "#C98B6B",
+      quiz: 3,
+      rows: [
+        row("Amortized analysis", "revisit", "Due since 2 days ago", 1),
+        row("Red-black tree deletion", "revisit", "Due since yesterday", 2),
+        row("Splay trees", "new", "Not practised yet", 3),
+        row("Skip lists", "hint", "Right with a hint · comes back tomorrow", 4),
+        row("Binomial heaps", "checked", "Comes back in 5 days", 5),
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000102",
+      title: "Business Mathematics",
+      color: "#9DB8D9",
+      quiz: 2,
+      rows: [
+        row("Simple Discount", "revisit", "Due since yesterday", 6),
+        row("Simple Interest", "new", "Not practised yet", 7),
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000103",
+      title: "NATS 1610 · The Living Body",
+      color: "#8FA98B",
+      quiz: 1,
+      rows: [
+        row("Membrane transport", "revisit", "Due today", 8),
+        row("Homeostasis", "checked", "Comes back in 3 days", 9),
+      ],
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000104",
+      title: "Modern History",
+      color: "#C99AA4",
+      quiz: 0,
+      rows: [row("The Treaty of Versailles", "checked", "Comes back in 4 days", 10)],
+    },
+  ] as Folder[]
+).map(withCourse);
+/** U26: a notebook with checks due and no course material yet, first in the stack. */
+const CHECKS_ONLY: FolderCourse = {
+  id: "00000000-0000-4000-8000-000000000150",
+  title: "Philosophy",
+  color: "#8FA98B",
+  courseId: null,
+  rows: [],
+  quiz: 0,
+  checks: 2,
+};
 const MANY: FolderCourse[] = [
+  CHECKS_ONLY,
   ...FOLDERS,
-  ...["Statistics", "Organic Chemistry", "Linear Algebra", "Microeconomics", "Philosophy"].map(
-    (title, i) => ({
+  ...["Statistics", "Organic Chemistry", "Linear Algebra", "Microeconomics"].map((title, i) =>
+    withCourse({
       id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, "0")}`,
       title,
-      color: ["#D4B45A", "#7DA4AF", "#6F7C86", "#C98B6B", "#8FA98B"][i] ?? "#7DA4AF",
+      color: ["#D4B45A", "#7DA4AF", "#6F7C86", "#C98B6B"][i] ?? "#7DA4AF",
       quiz: 1,
       rows: [row(`${title} basics`, "new", "Not practised yet", 20 + i)],
     }),
@@ -195,7 +210,7 @@ export function UiPreview() {
       </Block>
 
       <Block id="review-more" title="Review · many courses">
-        <ReviewFolders courses={MANY} />
+        <ReviewFolders courses={MANY} onQuickCheck={() => undefined} />
         <SkillsCard skills={SKILLS} now={NOW} onForget={() => undefined} />
       </Block>
     </main>

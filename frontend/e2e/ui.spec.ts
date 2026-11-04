@@ -58,13 +58,13 @@ test("Review's folders: a tab brings its folder to the front, arrows move along,
   await page.keyboard.press("Home");
   await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
 
-  // Nine courses: seven tabs, and More with the other two.
+  // Nine notebooks: seven tabs, and More with the other two.
   const many = page.getByTestId("ui-review-more").getByTestId("review-folders");
   await expect(many.getByRole("tab")).toHaveCount(7);
   await many.getByRole("button", { name: /More/ }).click();
-  await many.getByRole("button", { name: /Philosophy/ }).click();
+  await many.getByRole("button", { name: /Microeconomics/ }).click();
   const last = many.getByRole("tab").last();
-  await expect(last).toContainText("Philosophy");
+  await expect(last).toContainText("Microeconomics");
   await expect(last).toHaveAttribute("aria-selected", "true");
 });
 

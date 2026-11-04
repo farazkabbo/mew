@@ -1,10 +1,18 @@
 "use client";
 
-import type { ConceptProgress, Course, CourseDetail, Notebook, ReviewItem } from "@mew/shared";
+import {
+  type ConceptProgress,
+  type Course,
+  type CourseDetail,
+  type Notebook,
+  NotebookTree,
+  type ReviewItem,
+} from "@mew/shared";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { subtreeIds } from "../moments/moments";
 import { QuickCheck } from "../moments/QuickCheck";
 import { useMomentChecks } from "../moments/store";
 import { NotebookDb } from "../notebook/db";
@@ -13,7 +21,7 @@ import { COLORS, PICKABLE_COLORS } from "../notebook/tree/node-style";
 import { coursesApi, CourseApiError } from "./api";
 import { ReviewFolders } from "./ReviewFolders";
 import { ReviewHeader } from "./ReviewHeader";
-import { fallbackColor, type FolderCourse, folderRows, orderFolders } from "./review-folders";
+import { fallbackColor, folderRows, notebookFolders, orderFolders } from "./review-folders";
 import { SkillsToRecheck } from "./SkillsToRecheck";
 import { UpNextCard } from "./UpNextCard";
 
@@ -22,10 +30,11 @@ type Loaded = { course: Course; detail: CourseDetail; progress: ConceptProgress[
 const PALETTE = PICKABLE_COLORS.map((c) => COLORS[c].hex);
 
 /**
- * What's due for another look (docs/NEB_APP_UI.md decision U25, boards 7 and 8): on the left, the
- * checks of moments saved from the screen (K8 §4.7) and of "quiz me on this" (S6) as an index
- * card, and the skills learned in coach mode with their re-checks (S5); on the right, each course
- * as a file folder with its concepts by status (FSRS, M8) and a quiz.
+ * What's due for another look (docs/NEB_APP_UI.md decisions U25 and U26, boards 7 and 8): on the
+ * left, the checks of moments saved from the screen (K8 §4.7) and of "quiz me on this" (S6) as an
+ * index card, and the skills learned in coach mode with their re-checks (S5); on the right, each
+ * notebook as a file folder with its course's concepts by status (FSRS, M8), a quiz, and the
+ * checks due from what was saved in it.
  */
 export function ReviewApp({ userId, name }: { userId: string; name: string | null }) {
   const router = useRouter();
@@ -63,7 +72,7 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
         ),
       )
       .then((all) => !cancelled && setLoaded(all.filter((x): x is Loaded => x !== null)), failed);
-    // The folders take the colour of the course's notebook on this device.
+    // The folders are this device's notebooks: their names, colours and what's saved in them.
     const db = new NotebookDb(userId);
     new NotebookRepository(db).listNotebooks().then(
       (list) => !cancelled && setNotebooks(list),
@@ -75,25 +84,36 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
     };
   }, [userId]);
 
+  const tree = useMemo(() => new NotebookTree(notebooks), [notebooks]);
   const folders = useMemo(() => {
     if (!loaded || !items) return null;
     const quiz = new Map<string, number>();
     for (const item of items) quiz.set(item.courseId, (quiz.get(item.courseId) ?? 0) + 1);
-    const colorOf = (courseId: string) => {
-      const notebook = notebooks.find((n) => n.parentId === null && n.courseId === courseId);
-      return notebook ? COLORS[notebook.color ?? "slate"].hex : fallbackColor(courseId, PALETTE);
-    };
-    const courses: FolderCourse[] = loaded
-      .map(({ course, detail, progress }) => ({
+    // Checks due now, by the notebook their moment was saved in.
+    const checksByNotebook = new Map<string, number>();
+    for (const check of checks ?? []) {
+      if (!check.nodeId || Date.parse(check.dueAt) > now.getTime()) continue;
+      const root = tree.path(check.nodeId)[0]?.id;
+      if (root) checksByNotebook.set(root, (checksByNotebook.get(root) ?? 0) + 1);
+    }
+    const folders = notebookFolders(
+      loaded.map(({ course, detail, progress }) => ({
         id: course.id,
         title: course.title,
-        color: colorOf(course.id),
         rows: folderRows(detail.concepts, progress, now),
         quiz: quiz.get(course.id) ?? 0,
-      }))
-      .filter((course) => course.rows.length > 0 || course.quiz > 0);
-    return orderFolders(courses, exam?.courseId ?? null);
-  }, [loaded, items, notebooks, now, exam]);
+      })),
+      tree.children(null).map((n) => ({
+        id: n.id,
+        title: n.title,
+        color: COLORS[n.color ?? "slate"].hex,
+        courseId: n.courseId ?? null,
+      })),
+      checksByNotebook,
+      (courseId) => fallbackColor(courseId, PALETTE),
+    );
+    return orderFolders(folders, exam?.courseId ?? null);
+  }, [loaded, items, tree, checks, now, exam]);
 
   return (
     <div className="min-h-dvh bg-desk text-[15px] leading-[1.45] text-ink">
@@ -157,7 +177,10 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
             )}
             {folders && folders.length > 0 && (
               <>
-                <ReviewFolders courses={folders} />
+                <ReviewFolders
+                  courses={folders}
+                  onQuickCheck={(id) => openQuickCheck({ nodeIds: [...subtreeIds(tree, id)] })}
+                />
                 <p className="mt-2 text-[13px] text-muted">
                   A concept counts as checked once you get it right on your own. Hints and shown
                   answers bring it back sooner.
