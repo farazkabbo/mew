@@ -4,7 +4,15 @@ import { planCrop } from "./crop";
 import { fnv1a, strokeGroupHash } from "./hash";
 import { hasRealPressure, outlineToPath, strokePath } from "./outline";
 import { strokeThrough } from "./test-helpers";
-import { MAX_ZOOM, MIN_ZOOM, pageToScreen, panBy, screenToPage, zoomAt } from "./viewport";
+import {
+  keepBelowTop,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  pageToScreen,
+  panBy,
+  screenToPage,
+  zoomAt,
+} from "./viewport";
 
 describe("planCrop", () => {
   it("pads the region and upscales small crops up to the max scale", () => {
@@ -109,5 +117,14 @@ describe("viewport", () => {
 
   it("pans opposite to the drag direction in page space, scaled by zoom", () => {
     expect(panBy({ x: 0, y: 0, zoom: 2 }, 20, -10)).toEqual({ x: -10, y: 5, zoom: 2 });
+  });
+
+  it("stops at the page's top edge but never at the bottom", () => {
+    const top = { x: 0, y: 0, zoom: 1 };
+    expect(keepBelowTop(panBy(top, 0, 300))).toEqual(top); // dragging down at the top: no gap
+    expect(keepBelowTop(zoomAt(top, [400, 300], 0.5)).y).toBe(0); // zooming out at the top
+    const far = keepBelowTop(panBy(top, 0, -1_000_000));
+    expect(far.y).toBe(1_000_000); // as far down as you like
+    expect(keepBelowTop(far)).toBe(far);
   });
 });

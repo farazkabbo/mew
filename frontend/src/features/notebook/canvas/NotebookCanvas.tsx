@@ -7,6 +7,7 @@ import {
   bboxesIntersect,
   type Camera,
   DEFAULT_CAMERA,
+  keepBelowTop,
   panBy,
   screenToPage,
   zoomAt,
@@ -179,8 +180,9 @@ export const NotebookCanvas = forwardRef<CanvasHandle, CanvasProps>(function Not
       },
     );
 
+    // Every pan, scroll and zoom goes through here: the page stops at its top edge only.
     const setCamera = (next: Camera) => {
-      camera = next;
+      camera = keepBelowTop(next);
       useNotebookUi.getState().setView({ zoom: camera.zoom });
       announceCamera();
       schedule(all);
