@@ -22,7 +22,13 @@ function node(id: string, parentId: string | null, extra: Partial<Notebook> = {}
   };
 }
 
-function home(nodes: Notebook[], at: string, initialTab?: HomeTab, withMoments = false) {
+function home(
+  nodes: Notebook[],
+  at: string,
+  initialTab?: HomeTab,
+  withMoments = false,
+  pages: Parameters<typeof NodeHome>[0]["pages"] = [],
+) {
   const tree = new NotebookTree(nodes);
   const shown = tree.get(at);
   if (!shown) throw new Error("no such node");
@@ -35,12 +41,14 @@ function home(nodes: Notebook[], at: string, initialTab?: HomeTab, withMoments =
       node={shown}
       tree={tree}
       loadCounts={() => Promise.resolve(new Map())}
-      pages={[]}
+      pages={pages}
       now={0}
       onOpen={() => undefined}
       onOpenPage={() => undefined}
       onAddChild={() => undefined}
       onAddPage={() => undefined}
+      onMovePage={() => undefined}
+      onMovePageTo={() => undefined}
       onImportPdf={() => undefined}
       onLinkCourse={() => undefined}
       onQuiz={() => undefined}
@@ -90,5 +98,21 @@ describe("a notebook's home is the whole class (decision U26)", () => {
   it("falls back to Pages when asked for a Study tab it doesn't have", () => {
     const html = home([node(ROOT, null)], ROOT, "study");
     expect(html).toMatch(/aria-selected="true"[^>]*>Pages</);
+  });
+
+  it("lets a loose page go into a chapter: a move button, and a hint to drag it", () => {
+    const page = {
+      id: "00000000-0000-4000-8000-000000000401",
+      notebookId: ROOT,
+      index: 0,
+    } as unknown as Parameters<typeof NodeHome>[0]["pages"][number];
+    const html = home([node(ROOT, null), node(CHAPTER, ROOT)], ROOT, undefined, false, [page]);
+    expect(html).toContain('aria-label="Move page 1 to…"');
+    expect(html).toContain("Drag a page onto a chapter to put it there");
+    expect(html).toContain('draggable="true"');
+    // With no chapters there's nowhere to drag to: no hint (the button still opens the picker).
+    const alone = home([node(ROOT, null)], ROOT, undefined, false, [page]);
+    expect(alone).not.toContain("Drag a page onto");
+    expect(alone).toContain('aria-label="Move page 1 to…"');
   });
 });

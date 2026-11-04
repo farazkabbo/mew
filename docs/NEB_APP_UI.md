@@ -1031,3 +1031,12 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
         most three rows.
     - **Unchanged:** the data. Courses, concepts, attempts and FSRS stay as they are; a notebook
       still links to a course by `courseId`.
+27. **U27. A notebook opens on its home; loose pages go into chapters (2026-11-04,
+    `feat/notebook-home-and-page-moves`; the owner's request).**
+    - **Opening:** a notebook picked in the sidebar or on a desk cover opens its home (the
+      breadcrumb, its tabs, chapter cards and loose pages), not its latest page. Resume, the
+      chapter tabs, a chapter picked in the sidebar and `/notebook` still open pages as before.
+    - **Loose pages into chapters:** on a home, each loose page has a move button (the destination
+      picker) and can be dragged onto a chapter card; the page's "⋯" has "Move this page to…".
+      Every move says where it went and offers Undo. From a home the view stays put (its lists
+      and the cards' page counts read again); from a page, the page opens where it went.

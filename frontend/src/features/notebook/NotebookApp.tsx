@@ -197,6 +197,21 @@ export function NotebookApp({
     setNotebookId(id);
     setView("home");
   }, []);
+  /**
+   * A notebook picked in the sidebar or on the desk opens its home (its tabs, chapters and loose
+   * pages); a chapter or section opens as before (its home when it has sections, else its page).
+   */
+  const openPlace = useCallback(
+    (id: string) => {
+      if (tree.get(id)?.parentId !== null) {
+        openNode(id);
+        return;
+      }
+      void repo.touchNotebook(id).catch(report);
+      openHome(id);
+    },
+    [tree, repo, report, openNode, openHome],
+  );
   /** The tab a home opens on when asked for one (U26: a course link opens Study). */
   const [homeTab, setHomeTab] = useState<{ nodeId: string; tab: HomeTab } | null>(null);
 
@@ -701,7 +716,18 @@ export function NotebookApp({
     if (running.active && running.courseId !== courseId) void quiz.stop();
   }, [courseId, quiz]);
 
-  const treeActions = useTreeActions({ repo, tree, notify, report, openNode, openPage });
+  const treeActions = useTreeActions({
+    repo,
+    tree,
+    notify,
+    report,
+    openNode,
+    openPage,
+    // A loose page moved from a home: that home's pages are read again (its cards count theirs).
+    onPagesMoved: () => {
+      if (notebookId) void repo.listPages(notebookId).then(setPages, report);
+    },
+  });
   // K4: importing a PDF (Ctrl+O, "Import PDF", or a PDF dropped on the sidebar or a page).
   const [importing, setImporting] = useState<{ nodeId: string | null; file: File | null } | null>(
     null,
@@ -1001,7 +1027,7 @@ export function NotebookApp({
               trashCount={tree.trash().length}
               counts={unsortedCount}
               newNotebookShortcut={keys.shown("new_notebook")}
-              onOpen={openNode}
+              onOpen={openPlace}
               onCreateNotebook={treeActions.startCreating}
               onAddChild={treeActions.addChild}
               onAddPage={treeActions.addPage}
@@ -1088,6 +1114,7 @@ export function NotebookApp({
                       loadCounts={loadCounts}
                       keys={{ jump: keys.shown("jump"), newNotebook: keys.shown("new_notebook") }}
                       onOpen={openNode}
+                      onOpenNotebook={openPlace}
                       onOpenMoment={(moment) => openMoment(moment, true)}
                       onQuickCheck={() => openQuickCheck()}
                       onJump={() => treeActions.setPaletteOpen(true)}
@@ -1124,6 +1151,8 @@ export function NotebookApp({
                     }}
                     onAddChild={() => treeActions.addChild(node.id)}
                     onAddPage={() => treeActions.addPage(node.id)}
+                    onMovePage={(id) => treeActions.startMovingPage(id, false)}
+                    onMovePageTo={(id, nodeId) => treeActions.movePage(id, nodeId, false)}
                     onImportPdf={() => setImporting({ nodeId: node.id, file: null })}
                     moments={moments.filter((m) => subtreeIds(tree, node.id).has(m.nodeId))}
                     dueCounts={dueCounts}
@@ -1309,6 +1338,7 @@ export function NotebookApp({
                   onZoom={actions.zoom}
                   onResetView={actions.resetView}
                   onExportLine={() => void exportLine().catch(report)}
+                  onMovePage={() => pageId && treeActions.startMovingPage(pageId)}
                   marks={<MarksMenu notebookId={rootId} pageId={pageId} />}
                   pageNav={
                     pageId && (

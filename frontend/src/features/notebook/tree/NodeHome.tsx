@@ -9,7 +9,7 @@ import {
   Subject,
   TREE_LIMITS,
 } from "@mew/shared";
-import { FileText, FileUp, GraduationCap, Plus, Sparkles } from "lucide-react";
+import { FileText, FileUp, FolderInput, GraduationCap, Plus, Sparkles } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 import { coursesApi } from "../../courses/api";
@@ -34,6 +34,10 @@ type Props = {
   onOpenPage(pageId: string): void;
   onAddChild(): void;
   onAddPage(): void;
+  /** Picks where a loose page goes (the destination picker). */
+  onMovePage(pageId: string): void;
+  /** Puts a page into a chapter (a loose page dropped on its card). */
+  onMovePageTo(pageId: string, nodeId: string): void;
   /** K4: "Import PDF" into this node. */
   onImportPdf(): void;
   /** U26: the tab to open on (a course link opens Study). */
@@ -74,6 +78,9 @@ const SUBJECT_LABELS: Record<Subject, string> = {
 
 export type HomeTab = "pages" | "study" | "moments";
 
+/** The drag type of a loose page on its way into a chapter. */
+const PAGE_DRAG = "application/x-neb-page";
+
 /**
  * A notebook's (or chapter's) home (K1, docs/NOTEBOOKS_K.md §2.2): a card per chapter with its
  * page count, when it was last edited and its course progress (when the notebook has a course),
@@ -101,6 +108,8 @@ export function NodeHome({
   const root = tree.path(node.id)[0] ?? node;
   const children = tree.children(node.id);
   const childIds = children.map((c) => c.id).join(",");
+  // A loose page moved into a chapter changes its count: read the counts again when they move.
+  const loose = pages.length;
   const [pageCounts, setPageCounts] = useState<ReadonlyMap<string, number>>(new Map());
 
   useEffect(() => {
@@ -111,7 +120,7 @@ export function NodeHome({
     return () => {
       live = false;
     };
-  }, [childIds, loadCounts]);
+  }, [childIds, loadCounts, loose]);
   // K4 decision 8: once a PDF's topics are found, a card says so (the import never waits).
   const [topics, setTopics] = useState<"processing" | "review" | null>(null);
   const courseId = root.courseId ?? null;
@@ -154,6 +163,8 @@ export function NodeHome({
   const progressOf = (id: string) =>
     courseId && progress ? chapterProgress(subtreeIds(tree, id), progress) : null;
   const canAdd = tree.depth(node.id) < TREE_LIMITS.maxDepth;
+  // A loose page being dragged onto a chapter card, and the card it's over.
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const isRoot = node.parentId === null;
   const hasStudy = isRoot && courseId !== null;
   const hasMoments = moments.length > 0 || unsorted !== undefined;
@@ -310,8 +321,23 @@ export function NodeHome({
                       <button
                         type="button"
                         onClick={() => actions.onOpen(child.id)}
+                        onDragOver={(event) => {
+                          if (!event.dataTransfer.types.includes(PAGE_DRAG)) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = "move";
+                          setDropTarget(child.id);
+                        }}
+                        onDragLeave={() => setDropTarget((t) => (t === child.id ? null : t))}
+                        onDrop={(event) => {
+                          const pageId = event.dataTransfer.getData(PAGE_DRAG);
+                          setDropTarget(null);
+                          if (!pageId) return;
+                          event.preventDefault();
+                          actions.onMovePageTo(pageId, child.id);
+                        }}
                         data-testid="chapter-card"
-                        className="flex h-full w-full flex-col gap-2 rounded-2xl border border-line bg-paper-hi p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 motion-reduce:transition-none"
+                        data-drop={dropTarget === child.id || undefined}
+                        className="flex h-full w-full flex-col gap-2 rounded-2xl border border-line bg-paper-hi p-4 text-left shadow-[0_8px_24px_-18px_rgba(0,0,0,0.35)] transition-colors hover:border-ink/25 data-drop:border-ink data-drop:bg-paper motion-reduce:transition-none"
                       >
                         <span className="flex items-center justify-between gap-2 text-xs text-muted tabular-nums">
                           {index + 1}
@@ -373,16 +399,36 @@ export function NodeHome({
               <h2 id="pages-heading" className="text-xs tracking-wide text-muted uppercase">
                 Loose pages
               </h2>
+              {pages.length > 0 && children.length > 0 && (
+                <p className="-mt-1 text-sm text-muted">
+                  Drag a page onto a {noun} to put it there, or use its move button.
+                </p>
+              )}
               <ul className="flex flex-wrap gap-3">
                 {pages.map((page) => (
-                  <li key={page.id}>
+                  <li key={page.id} className="group relative" data-testid="loose-page">
                     <button
                       type="button"
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData(PAGE_DRAG, page.id);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => setDropTarget(null)}
                       onClick={() => actions.onOpenPage(page.id)}
                       className="flex h-28 w-24 flex-col items-center justify-center gap-2 rounded-xl border border-line bg-paper-hi text-sm text-muted hover:border-ink/25 hover:text-ink"
                     >
                       <FileText className="size-5" aria-hidden />
                       Page {page.index + 1}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => actions.onMovePage(page.id)}
+                      aria-label={`Move page ${page.index + 1} to…`}
+                      title="Move to…"
+                      className="absolute top-1 right-1 grid size-7 place-items-center rounded-full text-muted opacity-60 hover:bg-ink/5 hover:text-ink hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <FolderInput className="size-4" strokeWidth={1.8} aria-hidden />
                     </button>
                   </li>
                 ))}

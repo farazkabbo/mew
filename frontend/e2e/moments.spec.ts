@@ -298,8 +298,9 @@ test("K8: a moment waiting in Unsorted is filed with File these, and the server 
   await expect(row.getByTestId("tree-row-count")).toHaveCount(0);
 
   // It's in its new notebook's moments now.
+  // A notebook clicked in the sidebar opens its home.
   await page.getByRole("treeitem", { name: notebook.title }).click();
-  await page.getByTestId("breadcrumb").getByRole("button", { name: notebook.title }).click();
+  await expect(page.getByTestId("node-home")).toBeVisible();
   await page.getByRole("tab", { name: /Moments/ }).click();
   await expect(page.getByTestId("moment-row")).toContainText("Why is this curved?");
 });

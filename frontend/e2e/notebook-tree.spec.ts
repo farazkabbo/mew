@@ -112,6 +112,50 @@ test("a chapter opens on its page with a breadcrumb; Alt+N adds one ready to nam
   await expectCards(page, ["Chapter 1", "Chapter 2", "Acids and bases"]);
 });
 
+test("a notebook opens on its home, and loose pages go into chapters by picker or by drag", async ({
+  page,
+}) => {
+  const name = `Biology ${unique()}`;
+  await openNotebook(page);
+  await page.keyboard.press("Alt+b");
+  const dialog = page.getByRole("dialog", { name: "New notebook" });
+  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByLabel("Number of chapters").fill("2");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  const home = page.getByTestId("node-home");
+  await expect(home).toBeVisible();
+
+  // Two loose pages on the notebook itself.
+  for (let i = 0; i < 2; i++) {
+    await home.getByRole("button", { name: "New page" }).click();
+    await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+    // Clicking the notebook in the sidebar opens its home, not a page.
+    await page.getByRole("treeitem", { name }).click();
+    await expect(home).toBeVisible();
+  }
+  const loose = home.getByTestId("loose-page");
+  await expect(loose).toHaveCount(2);
+  await expect(home).toContainText("Drag a page onto a chapter to put it there");
+
+  // The move button: the picker, then Chapter 1.
+  await loose
+    .first()
+    .getByRole("button", { name: /^Move page \d+ to…$/ })
+    .click();
+  const picker = page.getByRole("dialog", { name: "Move this page to…" });
+  await picker.getByRole("button", { name: "Chapter 1", exact: true }).click();
+  await expect(picker).toBeHidden();
+  await expect(loose).toHaveCount(1);
+  const cards = home.getByTestId("chapter-card");
+  // (each chapter starts with a page of its own)
+  await expect(cards.nth(0)).toContainText("2 pages");
+
+  // Dragged onto Chapter 2's card.
+  await loose.first().getByRole("button").first().dragTo(cards.nth(1));
+  await expect(loose).toHaveCount(0);
+  await expect(cards.nth(1)).toContainText("2 pages");
+});
+
 test("rename, jump, delete with undo, and the trash", async ({ page }) => {
   const name = `Biology ${unique()}`;
   await openNotebook(page);

@@ -39,6 +39,8 @@ export type DeskProps = {
   loadCounts(ids: readonly string[]): Promise<Map<string, number>>;
   keys: { jump: string; newNotebook: string };
   onOpen(id: string): void;
+  /** A cover: the notebook's home (its tabs, chapters and loose pages). */
+  onOpenNotebook(id: string): void;
   onOpenMoment(moment: Moment): void;
   onQuickCheck(): void;
   onJump(): void;
@@ -238,7 +240,7 @@ export function Desk(props: DeskProps) {
                             ? ago(root.updatedAt, now)
                             : `${latest.title} · ${ago(latest.updatedAt, now)}`
                         }
-                        onOpen={() => props.onOpen(latest.id)}
+                        onOpen={() => props.onOpenNotebook(root.id)}
                         {...(props.onDropPdf && {
                           onDropPdf: (file: File) => props.onDropPdf?.(root.id, file),
                         })}
