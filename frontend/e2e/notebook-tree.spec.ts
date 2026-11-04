@@ -156,6 +156,49 @@ test("a notebook opens on its home, and loose pages go into chapters by picker o
   await expect(cards.nth(1)).toContainText("2 pages");
 });
 
+test("F5 and Back come back to where you were, not to the latest notebook (U29)", async ({
+  page,
+}) => {
+  const name = `History ${unique()}`;
+  await openNotebook(page);
+  await page.keyboard.press("Alt+b");
+  const dialog = page.getByRole("dialog", { name: "New notebook" });
+  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByLabel("Number of chapters").fill("2");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  const home = page.getByTestId("node-home");
+  await expect(home).toBeVisible();
+  await expect(page).toHaveURL(/\/notebook\?node=/);
+
+  // F5 on a notebook's home: its home again.
+  await page.reload();
+  await expect(home).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+
+  // F5 on a chapter's page: that page again.
+  await home.getByTestId("chapter-card").nth(1).click();
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+  await expect(page).toHaveURL(/\/notebook\?page=/);
+  const crumbs = page.getByTestId("breadcrumb");
+  await expect(crumbs).toContainText("Chapter 2");
+  await page.reload();
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+  await expect(crumbs).toContainText("Chapter 2");
+
+  // Away and Back: the same page.
+  await page.goto("/review");
+  await page.goBack();
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
+  await expect(crumbs).toContainText("Chapter 2");
+
+  // The desk stays the desk.
+  await page.getByRole("button", { name: "Back to the desk" }).click();
+  await expect(page.getByTestId("desk")).toBeVisible();
+  await expect(page).toHaveURL(/\/desk$/);
+  await page.reload();
+  await expect(page.getByTestId("desk")).toBeVisible();
+});
+
 test("rename, jump, delete with undo, and the trash", async ({ page }) => {
   const name = `Biology ${unique()}`;
   await openNotebook(page);

@@ -113,7 +113,7 @@ test("the tutor gets the right pages of the course for a question", async ({ pag
 
   // The dev server compiles a route on its first call, which can outlast the tutor's 2.5 s wait
   // for course pages: call it once first (a production build has nothing to compile).
-  const courseId = new URL(page.url()).searchParams.get("course");
+  const courseId = id;
   await page.evaluate(
     (id) =>
       fetch(`/api/courses/${id}/retrieve`, {

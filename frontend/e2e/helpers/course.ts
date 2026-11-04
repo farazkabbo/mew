@@ -22,7 +22,8 @@ export async function createCourse(page: Page, pdf: Buffer, title: string): Prom
     { bytes: [...pdf], title },
   );
   await page.goto(`/courses/${id}`);
-  await expect(page).toHaveURL(/\/notebook\?course=.*tab=study/);
+  // The address becomes the notebook's home once it's open (U29).
+  await expect(page).toHaveURL(/\/notebook\?/);
   await expect(page.getByRole("tab", { name: "Study" })).toHaveAttribute("aria-selected", "true");
   return id;
 }

@@ -239,6 +239,9 @@ export function NotebookApp({
       // U26: `&tab=study` opens the course notebook's home on its Study tab.
       const study = params.get("tab") === "study";
       const title = (params.get("title") ?? "").trim().slice(0, 200) || "Course notes";
+      // U29: F5 or Back: the page or home the address names (written below as it changes).
+      const pageParam = params.get("page");
+      const nodeParam = params.get("node");
       // A device with no notebooks yet (a new browser, a second computer) takes the account's
       // first, so it never makes a "My first notebook" of its own beside them.
       if (navigator.onLine && (await repo.listNotebooks()).length === 0) {
@@ -246,6 +249,21 @@ export function NotebookApp({
         if (server) await repo.tree.applyServerTree(server);
       }
       if (start === "desk" && !(course && UUID.test(course))) return;
+      if (!(course && UUID.test(course))) {
+        const tree = await repo.tree.tree();
+        if (pageParam && UUID.test(pageParam)) {
+          const page = await repo.getPage(pageParam);
+          if (cancelled) return;
+          if (page && tree.isLive(page.notebookId)) {
+            openPage(page);
+            return;
+          }
+        }
+        if (nodeParam && UUID.test(nodeParam) && tree.isLive(nodeParam)) {
+          if (!cancelled) openHome(nodeParam);
+          return;
+        }
+      }
       const latest =
         course && UUID.test(course)
           ? await repo.notebookForCourse(course, title)
@@ -259,7 +277,7 @@ export function NotebookApp({
     return () => {
       cancelled = true;
     };
-  }, [repo, report, openNode, openHome, start]);
+  }, [repo, report, openNode, openHome, openPage, start]);
 
   // The open node's pages; a page view always has one (a node from another device may have
   // none here yet).
@@ -942,6 +960,22 @@ export function NotebookApp({
     window.history.replaceState(window.history.state, "", url);
     treeActions.setPaletteOpen(true);
   }, [treeActions]);
+  // U29: the address says where the student is: the desk, a node's home, or a page. F5 and Back
+  // come back to it, never to the latest notebook or to a one-off link's course, tab or quiz
+  // again (those were read when the app started, in the effects above). Replaced, not pushed: the
+  // notebook's own moves don't fill the browser's history.
+  useEffect(() => {
+    const target =
+      view === "desk"
+        ? "/desk"
+        : view === "home" && notebookId
+          ? `/notebook?node=${notebookId}`
+          : view === "page" && pageId
+            ? `/notebook?page=${pageId}`
+            : null;
+    if (!target || window.location.pathname + window.location.search === target) return;
+    window.history.replaceState(window.history.state, "", target);
+  }, [view, notebookId, pageId]);
 
   const paletteCommands: PaletteCommand[] = [
     {

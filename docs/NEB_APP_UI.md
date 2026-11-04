@@ -1073,3 +1073,11 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **Previews:** `/dev/ui` sections home-header, home-pages, home-study and home-moments, in
       light and night screenshots; keyboard tests for the divider tabs, the plan editor and the
       filter chips (`e2e/ui.spec.ts`).
+29. **U29. The address says where you are (2026-11-04, `fix/notebook-reload-and-back`).** F5
+    and Back used to open the latest notebook's page, or replay a one-off link (a course, its
+    Study tab, a quiz). The notebook app now replaces the address as the view changes: `/desk`,
+    `/notebook?node=<id>` for a home, `/notebook?page=<id>` for a page. On load it opens that page
+    or home while it's still there (else the latest notebook, as before). One-off parameters
+    (`course`, `title`, `tab`, `quiz`, `moment`, `jump`) are read at start, before the address is
+    replaced, so they never fire twice. Replaced, not pushed: moving around the notebook doesn't
+    fill the browser's history.
