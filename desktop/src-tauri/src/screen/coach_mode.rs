@@ -326,6 +326,11 @@ fn send<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Coach
         "[screen] coach {path}: status {status} in {} ms",
         started.elapsed().as_millis()
     );
+    if status != 200 {
+        if let Some(message) = super::protocol::limit_message(&reply) {
+            return Err(message);
+        }
+    }
     match status {
         200 if !too_large => {}
         401 => {

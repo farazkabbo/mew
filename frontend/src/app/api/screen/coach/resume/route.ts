@@ -1,6 +1,6 @@
 import { CoachResumeRequest } from "@mew/shared";
 
-import { coachFailure, coachReply } from "@/server/coach/http";
+import { coachQuestion } from "@/server/coach/http";
 import { defaultCoachDeps, resumeCoaching } from "@/server/coach/run";
 import { deviceWalkthroughs } from "@/server/coach/store";
 import { deviceToken, requireDevice } from "@/server/device-auth";
@@ -8,6 +8,7 @@ import { geminiEnv } from "@/server/env";
 import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { askerOf, startQuestion } from "@/server/question-gate";
 
 /** The JSON body: a base64 JPEG (~1 MB at most) and the app's name. */
 const MAX_BODY_BYTES = 1_500_000;
@@ -28,11 +29,9 @@ export const POST = handle(async (request: Request) => {
   geminiEnv();
 
   const store = deviceWalkthroughs(deviceToken(request));
-  try {
-    return coachReply(
-      await resumeCoaching(body, defaultCoachDeps(store, device.language), request.signal),
-    );
-  } catch (error) {
-    throw coachFailure(error);
-  }
+  // One of the learner's questions (docs/LAUNCH_LIMITS.md); its steps come free.
+  const question = await startQuestion(askerOf(request, device.userId));
+  return coachQuestion(question, device.userId, () =>
+    resumeCoaching(body, defaultCoachDeps(store, device.language), request.signal),
+  );
 });

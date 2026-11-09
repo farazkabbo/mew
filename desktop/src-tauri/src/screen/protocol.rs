@@ -486,7 +486,23 @@ pub(super) fn within(text: &str, max: usize) -> bool {
     !text.trim().is_empty() && text.chars().count() <= max && !text.chars().any(char::is_control)
 }
 
-pub(super) fn is_uuid(text: &str) -> bool {
+/// The server's own words for a limit (docs/DESKTOP_API.md): `{"error": …, "code": …}` with one
+/// of the known codes. None for anything else, so the caller says its usual message.
+pub fn limit_message(body: &[u8]) -> Option<String> {
+    #[derive(Deserialize)]
+    struct Limited {
+        error: String,
+        code: String,
+    }
+    let limited: Limited = serde_json::from_slice(body).ok()?;
+    let known = matches!(
+        limited.code.as_str(),
+        "RATE_LIMITED" | "QUOTA_EXCEEDED" | "AT_CAPACITY" | "EMAIL_UNVERIFIED"
+    );
+    (known && within(&limited.error, 300)).then_some(limited.error)
+}
+
+pub(crate) fn is_uuid(text: &str) -> bool {
     text.len() == 36
         && text.char_indices().all(|(i, c)| {
             if matches!(i, 8 | 13 | 18 | 23) {
@@ -990,5 +1006,26 @@ mod tests {
             "[40,300,-5,60]"
         ))
         .is_none());
+    }
+
+    #[test]
+    fn says_the_servers_own_words_for_a_limit_and_nothing_else() {
+        let limited = br#"{"error":"You've used your 8 free questions. We'll email you when more open up.","code":"QUOTA_EXCEEDED"}"#;
+        assert_eq!(
+            limit_message(limited).as_deref(),
+            Some("You've used your 8 free questions. We'll email you when more open up.")
+        );
+        assert!(limit_message(br#"{"error":"Internal error"}"#).is_none());
+        assert!(limit_message(br#"{"error":"x","code":"SOMETHING_ELSE"}"#).is_none());
+        assert!(limit_message(b"not json").is_none());
+        let long = format!(r#"{{"error":"{}","code":"AT_CAPACITY"}}"#, "x".repeat(400));
+        assert!(limit_message(long.as_bytes()).is_none());
+    }
+
+    #[test]
+    fn a_device_id_is_a_version_4_uuid() {
+        let id = crate::screen::win::credential::uuid_v4([0xab; 16]);
+        assert!(is_uuid(&id));
+        assert_eq!(&id[14..15], "4");
     }
 }

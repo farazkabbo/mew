@@ -5,6 +5,7 @@ import { ttsEnv } from "@/server/env";
 import { assertSameOrigin, handle, readJson, requireUserId } from "@/server/http";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { resolveVoice } from "@/server/voices";
+import { noteSpeech, requireAllowance } from "@/server/question-gate";
 
 const MAX_BODY_BYTES = 4096;
 
@@ -15,6 +16,8 @@ const MAX_BODY_BYTES = 4096;
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(userId);
   const { text, voiceId, language } = await readJson(request, TtsRequest, MAX_BODY_BYTES);
   ttsEnv();
   enforceRateLimit(
@@ -23,6 +26,7 @@ export const POST = handle(async (request: Request) => {
     { cost: text.length },
   );
 
+  noteSpeech(text.length); // what it costs counts toward the day's cap
   // Cancelling the request (barge-in) aborts the upstream synthesis too.
   const audio = await streamSpeech(text, request.signal, resolveVoice(voiceId, language), language);
   return new Response(audio, {

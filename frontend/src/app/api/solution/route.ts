@@ -8,6 +8,7 @@ import { assertPng } from "@/server/png";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { solve } from "@/server/solution";
 import { unavailableMessage } from "@/server/tutor";
+import { requireAllowance } from "@/server/question-gate";
 
 const MAX_BODY_BYTES = 1_700_000;
 
@@ -18,6 +19,8 @@ const MAX_BODY_BYTES = 1_700_000;
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(userId);
   enforceRateLimit(userId, {
     solution: RATE_RULES.solution,
     solutionDaily: RATE_RULES.solutionDaily,

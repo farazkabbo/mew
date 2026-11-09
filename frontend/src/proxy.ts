@@ -21,6 +21,8 @@ const isDeviceRoute = createRouteMatcher([
   "/api/devices/sign-in",
   "/api/devices/revoke-self",
   "/api/screen/(.*)",
+  // Clerk's own webhooks: signed with Svix, checked inside the route.
+  "/api/webhooks/clerk",
 ]);
 const production = process.env.NODE_ENV === "production";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

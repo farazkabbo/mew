@@ -3,12 +3,15 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import type { InputPart, StreamStructuredText } from "./gemini";
+import { LIMITS } from "./limits";
+import { getJson, resetRedis, setJson } from "./redis";
 
 /**
  * Reuses an answer when the same question comes back about the same picture (docs/PLAN.md,
  * Part 4.9): asking twice, or a retry after a dropped connection, costs no second model call.
  * The key covers everything the model saw (prompt, words, images), so two questions share an
- * answer only when their whole input is identical. Kept in this process's memory, briefly.
+ * answer only when their whole input is identical. Kept in this process for 10 minutes and in
+ * Redis for 7 days (docs/LAUNCH_LIMITS.md); a reused answer still counts as a question.
  */
 const TTL_MS = 10 * 60_000;
 const MAX_ENTRIES = 200;
@@ -37,11 +40,14 @@ export function reusingAnswers(
   return async function* (request) {
     const key = keyOf(request);
     const kept = answers.get(key);
-    if (kept && now() - kept.at < TTL_MS) {
+    // Here first (this process, 10 minutes), then Redis (every instance, 7 days).
+    const fresh = kept && now() - kept.at < TTL_MS ? kept.chunks : null;
+    const reuse = fresh ?? (await getJson<string[]>(`answer:${key}`));
+    if (reuse) {
       console.info(
         `[usage] ${JSON.stringify({ purpose: request.purpose ?? "unnamed", reused: true })}`,
       );
-      yield* kept.chunks;
+      yield* reuse;
       return;
     }
     const chunks: string[] = [];
@@ -53,10 +59,13 @@ export function reusingAnswers(
     answers.delete(key);
     answers.set(key, { chunks, at: now() });
     if (answers.size > MAX_ENTRIES) answers.delete(answers.keys().next().value ?? "");
+    // The model's words only: no account, no device, nothing that says whose question it was.
+    await setJson(`answer:${key}`, chunks, LIMITS.cacheTtlS);
   };
 }
 
 /** Forgets every kept answer (tests). */
 export function forgetAnswers(): void {
   answers.clear();
+  resetRedis();
 }

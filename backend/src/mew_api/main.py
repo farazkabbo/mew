@@ -27,6 +27,7 @@ from .notes.checks import MemoryCheckStore
 from .notes.store import MemoryNoteLineStore
 from .pdfs.store import MemoryPdfStore
 from .profiles.store import MemoryProfileStore
+from .quota import MemoryQuotaStore
 from .routes import (
     annotations,
     check,
@@ -42,6 +43,7 @@ from .routes import (
     notebooks,
     notes,
     pdfs,
+    quota,
     skills,
     walkthroughs,
 )
@@ -119,6 +121,7 @@ def create_app(
     )
     app.state.local_annotations = MemoryAnnotationStore()
     app.state.local_handwriting = MemoryHandwritingStore()
+    app.state.local_quota = MemoryQuotaStore()
 
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.trusted_hosts))
     app.middleware("http")(_security_headers)
@@ -132,6 +135,7 @@ def create_app(
     v1.include_router(user_settings.router)
     v1.include_router(mew_events.router)
     v1.include_router(devices.router)
+    v1.include_router(quota.router)
     v1.include_router(clips.router)
     v1.include_router(notebooks.router)
     v1.include_router(notes.router)

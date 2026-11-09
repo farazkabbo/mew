@@ -5,6 +5,7 @@ import { deviceTree, resolveForUser } from "@/server/destinations";
 import { deviceToken, requireDevice } from "@/server/device-auth";
 import { handle, readJson } from "@/server/http";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { requireAllowance } from "@/server/question-gate";
 
 /**
  * "Save this to Chemistry chapter 2" said or typed in Screen Coach without a question, or after an
@@ -14,6 +15,8 @@ import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     destinations: RATE_RULES.destinations,
     destinationsDaily: RATE_RULES.destinationsDaily,

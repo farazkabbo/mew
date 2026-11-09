@@ -5,6 +5,7 @@ import { deviceToken, requireDevice } from "@/server/device-auth";
 import { handle, readJson } from "@/server/http";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { answerScreenQuiz, screenQuizDeps } from "@/server/screen-quiz";
+import { requireAllowance } from "@/server/question-gate";
 
 /**
  * An answer to a "quiz me on this" question (S6), typed, said or picked on screen (device token).
@@ -12,6 +13,8 @@ import { answerScreenQuiz, screenQuizDeps } from "@/server/screen-quiz";
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     quizGrade: RATE_RULES.quizGrade,
     quizGradeDaily: RATE_RULES.quizGradeDaily,

@@ -152,7 +152,7 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
     } catch (error) {
       if (error instanceof HttpError) {
         return NextResponse.json(
-          { error: error.message },
+          { error: error.message, ...(error.code && { code: error.code }) },
           { status: error.status, headers: { "Cache-Control": "no-store", ...error.headers } },
         );
       }

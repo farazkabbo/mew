@@ -190,7 +190,12 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
 
     let started = Instant::now();
     let mut lines = LineSplitter::default();
+    // The start of the body, for a refusal's own words (a limit's message).
+    let mut head = Vec::new();
     let result = http::post(&url, &headers, body.as_slice(), |chunk| {
+        if head.len() < 4096 {
+            head.extend_from_slice(&chunk[..chunk.len().min(4096 - head.len())]);
+        }
         for line in lines.push(chunk) {
             deliver(app, parse_event(&line), &mut for_ink);
         }
@@ -205,6 +210,11 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         "[screen] asked: status {status} in {} ms",
         started.elapsed().as_millis()
     );
+    if status != 200 {
+        if let Some(message) = super::protocol::limit_message(&head) {
+            return Err(message);
+        }
+    }
     match status {
         200 => Ok(()),
         401 => {

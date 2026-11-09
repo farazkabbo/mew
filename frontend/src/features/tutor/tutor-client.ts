@@ -1,11 +1,17 @@
 import { type TutorRequest, TutorStreamEvent } from "@mew/shared";
 
 export class TutorRequestError extends Error {
-  constructor(readonly status: number) {
+  constructor(
+    readonly status: number,
+    /** The server's own words for a limit (out of questions, at capacity…), to say as is. */
+    readonly spoken?: string,
+  ) {
     super(`Tutor request failed (${status})`);
     this.name = "TutorRequestError";
   }
 }
+
+const LIMIT_CODES = new Set(["RATE_LIMITED", "QUOTA_EXCEEDED", "AT_CAPACITY", "EMAIL_UNVERIFIED"]);
 
 /** Streams a tutor turn from `/api/tutor`, yielding validated events as they arrive. */
 export async function* streamTutor(
@@ -19,7 +25,17 @@ export async function* streamTutor(
     cache: "no-store",
     signal,
   });
-  if (!response.ok || !response.body) throw new TutorRequestError(response.status);
+  if (!response.ok || !response.body) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: unknown;
+      code?: unknown;
+    } | null;
+    const limited =
+      typeof body?.code === "string" && LIMIT_CODES.has(body.code) && typeof body.error === "string"
+        ? body.error.slice(0, 300)
+        : undefined;
+    throw new TutorRequestError(response.status, limited);
+  }
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";

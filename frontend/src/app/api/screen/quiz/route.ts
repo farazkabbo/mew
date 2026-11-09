@@ -7,6 +7,7 @@ import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { makeScreenQuiz, screenQuizDeps } from "@/server/screen-quiz";
+import { requireAllowance } from "@/server/question-gate";
 
 /** The JSON body: a base64 JPEG (~1 MB at most) plus the window's title. */
 const MAX_BODY_BYTES = 1_500_000;
@@ -19,6 +20,8 @@ const MAX_BODY_BYTES = 1_500_000;
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     screenQuiz: RATE_RULES.screenQuiz,
     screenQuizDaily: RATE_RULES.screenQuizDaily,

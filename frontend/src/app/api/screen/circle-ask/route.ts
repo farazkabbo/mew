@@ -1,7 +1,7 @@
 import { asksForAnswer, CircleAskRequest, questionText, type Subject } from "@mew/shared";
 
 import { verifiedCheckQuestion } from "@/server/check-question";
-import { runCircleAsk } from "@/server/circle-ask";
+import { CIRCLE_FALLBACK, runCircleAsk } from "@/server/circle-ask";
 import { studentNotes } from "@/server/student-notes";
 import { placeLabel, runCircleSolution } from "@/server/circle-solution";
 import { circleDestination } from "@/server/destinations";
@@ -11,6 +11,8 @@ import { geminiEnv } from "@/server/env";
 import { fileMoment, filingEvent } from "@/server/filing";
 import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
+import { LIMITS } from "@/server/limits";
+import { askerOf, questionStream, startQuestion } from "@/server/question-gate";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { screenCourseContext } from "@/server/screen-course";
 
@@ -41,6 +43,11 @@ export const POST = handle(async (request: Request) => {
   assertJpeg(body.focus.image.jpeg);
   assertJpeg(body.context.jpeg);
   geminiEnv(); // 503 before streaming when the model isn't configured
+  // One of the learner's questions; follow-ups in the same circle session are part of it.
+  const asked = await startQuestion(askerOf(request, device.userId), {
+    key: `q:circle:${body.sessionId}`,
+    cap: LIMITS.followUps,
+  });
   const placed = await circleDestination(body, device.userId, deviceToken(request));
   const question = questionText(placed.request.question);
   const direct = question !== null && asksForAnswer(question);
@@ -97,17 +104,13 @@ export const POST = handle(async (request: Request) => {
         },
       );
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      if (placed.event) controller.enqueue(encoder.encode(`${JSON.stringify(placed.event)}\n`));
-      for await (const event of events) {
-        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
-      }
-      controller.close();
+  return questionStream(
+    asked,
+    async function* () {
+      if (placed.event) yield placed.event;
+      yield* events;
     },
-  });
-  return new Response(stream, {
-    headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
-  });
+    // A step reached the learner (the "couldn't work that out" caption isn't an answer).
+    (event) => event.type === "step" && event.step.say !== CIRCLE_FALLBACK,
+  );
 });

@@ -42,7 +42,11 @@ describe("reusing answers", () => {
     await collect(stream(request("why?")));
     expect(model).toHaveBeenCalledTimes(3);
 
-    now = 11 * 60_000; // kept for ten minutes
+    // Past ten minutes here, the shared copy (Redis, 7 days) still answers.
+    now = 11 * 60_000;
+    await collect(stream(request("explain")));
+    expect(model).toHaveBeenCalledTimes(3);
+    forgetAnswers();
     await collect(stream(request("explain")));
     expect(model).toHaveBeenCalledTimes(4);
   });

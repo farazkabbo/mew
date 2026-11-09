@@ -14,6 +14,7 @@ import { COLORS } from "../notebook/tree/node-style";
 import { ago } from "../notebook/tree/NodeHome";
 import { DeskCover, NewNotebookCover } from "./DeskCover";
 import { DeskMenu } from "./DeskMenu";
+import { QuestionsLeft } from "../quota/QuestionsLeft";
 import { MomentCard } from "./MomentCard";
 import { TonightCard, type TonightRow } from "./TonightCard";
 
@@ -164,6 +165,7 @@ export function Desk(props: DeskProps) {
           {greeting(now, props.name)}
         </h1>
         <div className="flex-1" />
+        <QuestionsLeft />
         <button
           type="button"
           onClick={props.onJump}

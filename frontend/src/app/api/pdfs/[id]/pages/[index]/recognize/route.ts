@@ -7,6 +7,7 @@ import { recognizePdfPage } from "@/server/pdf-ocr";
 import { PDF_MESSAGES, pageIndex, pdfId } from "@/server/pdfs";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { userApiBytes } from "@/server/user-api";
+import { requireAllowance } from "@/server/question-gate";
 
 type Context = { params: Promise<{ id: string; index: string }> };
 
@@ -17,6 +18,8 @@ type Context = { params: Promise<{ id: string; index: string }> };
 export const POST = handle(async (request: Request, context: Context) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(userId);
   enforceRateLimit(userId, {
     pdfRecognize: RATE_RULES.pdfRecognize,
     pdfRecognizeDaily: RATE_RULES.pdfRecognizeDaily,

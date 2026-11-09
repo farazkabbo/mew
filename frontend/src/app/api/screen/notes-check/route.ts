@@ -7,6 +7,7 @@ import { handle, readJson } from "@/server/http";
 import { notesCheckFailure } from "@/server/notes-check/errors";
 import { runNotesCheck } from "@/server/notes-check/run";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { requireAllowance } from "@/server/question-gate";
 
 /** At most 8,000 characters of screen text, as JSON with block ids and a source link. */
 const MAX_BODY_BYTES = 40_000;
@@ -19,6 +20,8 @@ const MAX_BODY_BYTES = 40_000;
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     notesCheck: RATE_RULES.notesCheck,
     notesCheckDaily: RATE_RULES.notesCheckDaily,

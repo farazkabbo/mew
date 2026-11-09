@@ -11,9 +11,12 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Request, status
+from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic.alias_generators import to_camel
 
 from ..config import Settings
 from ..deps import Caller, CurrentCaller, SettingsDep
@@ -223,6 +226,27 @@ def _owner_language(device: VerifiedDevice, request: Request, settings: Settings
     except (PermissionError, StoreError, ValueError):
         logger.warning("Couldn't read a device owner's language (%s)", device.device_id)
         return "en"
+
+
+class UserCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
+    user_id: Annotated[
+        str, StringConstraints(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_]+$")
+    ]
+
+
+@router.post("/revoke-user", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_user_devices(body: UserCheck, request: Request, settings: SettingsDep) -> None:
+    """Clerk deleted this account (its webhook, checked by the Next server): every computer it
+    signed in on is signed out at once."""
+    _call(lambda: _local_devices(request).revoke_all(body.user_id))
+    if settings.supabase_url and settings.supabase_secret_key is not None:
+        service = SupabaseOwnerDevices(
+            settings.supabase_url,
+            api_key=settings.supabase_secret_key.get_secret_value(),
+            user_token=None,
+        )
+        _call(lambda: service.revoke_all(body.user_id))
 
 
 @router.post("/revoke-self", status_code=status.HTTP_204_NO_CONTENT)

@@ -532,13 +532,19 @@ fn stream_answer<R: Runtime>(app: &AppHandle<R>, request: Request) {
     let Request {
         body, session_id, ..
     } = request;
+    // A refusal's body is one JSON line with the server's own words (a limit's message).
+    let mut refusal = None;
     let result = post(app, "api/screen/circle-ask", body.as_slice(), |line| {
         if let Some(event) = parse_circle_event(line) {
             on_event(app, &session_id, event);
+        } else if refusal.is_none() {
+            refusal = super::protocol::limit_message(line.as_bytes());
         }
     });
     drop(body);
+    let limited = refusal.filter(|_| !matches!(result, Ok(200)));
     let failure = match result {
+        _ if limited.is_some() => limited.as_deref(),
         Ok(200) => None,
         Ok(429) => Some("You've asked a lot recently. Try again in a little while."),
         Ok(401) => {

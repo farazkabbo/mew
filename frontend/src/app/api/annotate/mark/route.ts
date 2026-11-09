@@ -5,6 +5,7 @@ import { geminiEnv } from "@/server/env";
 import { assertSameOrigin, handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { liveMarkNote } from "@/server/live-mark";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { requireAllowance } from "@/server/question-gate";
 
 const MAX_BODY_BYTES = 4_000;
 
@@ -15,6 +16,8 @@ const MAX_BODY_BYTES = 4_000;
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(userId);
   enforceRateLimit(userId, {
     liveMark: RATE_RULES.liveMark,
     liveMarkDaily: RATE_RULES.liveMarkDaily,

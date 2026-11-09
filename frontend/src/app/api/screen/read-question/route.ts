@@ -8,6 +8,7 @@ import { ModelBusyError } from "@/server/gemini";
 import { handle, HttpError, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { requireAllowance } from "@/server/question-gate";
 
 /** A small base64 JPEG: the area the student selected. */
 const MAX_BODY_BYTES = 420_000;
@@ -19,6 +20,8 @@ const MAX_BODY_BYTES = 420_000;
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     readQuestion: RATE_RULES.readQuestion,
     readQuestionDaily: RATE_RULES.readQuestionDaily,
