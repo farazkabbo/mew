@@ -234,6 +234,18 @@ pub(crate) fn show<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<WebviewWindo
     Some(window)
 }
 
+/// Opens Neb at a line of the student's own notebook (docs/PLAN.md, "teach from your notes"):
+/// asked to do the work, neb shows where they wrote about it instead. The page (an id) and the
+/// line's box were checked when the event was parsed; they reach the page as JSON.
+pub(crate) fn open_note<R: tauri::Runtime>(app: &AppHandle<R>, spot: &screen::protocol::NoteSpot) {
+    let detail = serde_json::json!({ "pageId": spot.page_id, "bbox": spot.bbox });
+    if let Some(window) = show(app) {
+        let _ = window.eval(format!(
+            "window.dispatchEvent(new CustomEvent('mew:open-note', {{ detail: {detail} }}))"
+        ));
+    }
+}
+
 /// Shows the window and asks Mew to listen, as if the mascot was tapped (the hold gesture while
 /// Screen Coach is off, or "Ask Neb" in the tray).
 pub(crate) fn summon<R: tauri::Runtime>(app: &AppHandle<R>) {

@@ -10,7 +10,64 @@ export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 /** Multimodal input: text plus (optionally) base64 images. */
 export type InputPart =
   | { type: "text"; text: string }
-  | { type: "image"; base64: string; mimeType: "image/png" | "image/jpeg" };
+  | {
+      type: "image";
+      base64: string;
+      mimeType: "image/png" | "image/jpeg";
+      /**
+       * How finely the model samples it. Gemini 3 bills an image by this, not by its size: low 280
+       * tokens, medium 560, high 1120 (the default when unset).
+       */
+      resolution?: ImageResolution;
+    };
+
+export type ImageResolution = "low" | "medium" | "high";
+
+/** Tokens per image at each resolution (Gemini 3; docs/PLAN.md). */
+export const IMAGE_TOKENS: Record<ImageResolution, number> = { low: 280, medium: 560, high: 1120 };
+
+/** One call's token counts, as the API reports them. Never any content. */
+export type TokenUsage = {
+  /** What the call was for (the prompt's name), for the per-turn table. */
+  purpose: string;
+  model: string;
+  input: number;
+  cached: number;
+  output: number;
+  thought: number;
+};
+
+type UsageListener = (usage: TokenUsage) => void;
+const usageListeners = new Set<UsageListener>();
+
+/** Hears every call's token counts (measurement and budget tests). Returns the unsubscribe. */
+export function onUsage(listener: UsageListener): () => void {
+  usageListeners.add(listener);
+  return () => usageListeners.delete(listener);
+}
+
+type ReportedUsage =
+  | {
+      total_input_tokens?: number | undefined;
+      total_cached_tokens?: number | undefined;
+      total_output_tokens?: number | undefined;
+      total_thought_tokens?: number | undefined;
+    }
+  | undefined;
+
+function reportUsage(request: GenerationRequest, usage: ReportedUsage): void {
+  if (!usage) return;
+  const counted: TokenUsage = {
+    purpose: request.purpose ?? "unnamed",
+    model: request.model,
+    input: usage.total_input_tokens ?? 0,
+    cached: usage.total_cached_tokens ?? 0,
+    output: usage.total_output_tokens ?? 0,
+    thought: usage.total_thought_tokens ?? 0,
+  };
+  console.info(`[usage] ${JSON.stringify(counted)}`);
+  for (const listener of usageListeners) listener(counted);
+}
 
 type GenerationRequest = {
   model: string;
@@ -20,6 +77,8 @@ type GenerationRequest = {
   maxOutputTokens: number;
   timeoutMs: number;
   signal?: AbortSignal;
+  /** What the call is for, in the usage log (e.g. "circle-ask"). */
+  purpose?: string;
 };
 
 export type StructuredRequest<T> = GenerationRequest & { schema: z.ZodType<T> };
@@ -108,7 +167,12 @@ function params(request: StructuredRequest<unknown>) {
         : request.input.map((part) =>
             part.type === "text"
               ? part
-              : { type: "image" as const, data: part.base64, mime_type: part.mimeType },
+              : {
+                  type: "image" as const,
+                  data: part.base64,
+                  mime_type: part.mimeType,
+                  ...(part.resolution && { resolution: part.resolution }),
+                },
           ),
     store: false,
     response_format: {
@@ -148,6 +212,7 @@ export const generateStructured: GenerateStructured = async <T>(request: Structu
         noteFailure(request.model, error);
         throw error;
       });
+    reportUsage(request, interaction.usage);
     const parsed = request.schema.safeParse(parseJson(interaction.output_text));
     if (parsed.success) return parsed.data;
     problem = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
@@ -165,6 +230,8 @@ export const streamStructuredText: StreamStructuredText = async function* (reque
     );
     for await (const event of stream) {
       if (event.event_type === "step.delta" && event.delta.type === "text") yield event.delta.text;
+      if (event.event_type === "interaction.completed")
+        reportUsage(request, event.interaction.usage);
       if (event.event_type === "error") {
         throw new Error(`Model stream error: ${event.error?.code ?? "unknown"}`);
       }

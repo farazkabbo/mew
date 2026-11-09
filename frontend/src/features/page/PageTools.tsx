@@ -2,6 +2,7 @@
 
 import {
   Ellipsis,
+  FileDown,
   FolderInput,
   ImageDown,
   type LucideIcon,
@@ -18,13 +19,14 @@ import { useNotebookUi } from "../notebook/store";
 /**
  * The page's quiet tools, beside the replay bar (U2): the page's place in its chapter, and one
  * "⋯" (board 2 shows none) for zoom, the detected lines, neb's ink on or off, export the current
- * line, moving the page to another chapter, and the marks menu.
+ * line, save the page as PDF, moving the page to another chapter, and the marks menu.
  */
 export function PageTools({
   onZoom,
   onResetView,
   onExportLine,
   onMovePage,
+  onSavePdf,
   marks,
   pageNav,
 }: {
@@ -33,6 +35,8 @@ export function PageTools({
   onExportLine(): void;
   /** "Move this page to…": the destination picker, then the page goes there (with Undo). */
   onMovePage(): void;
+  /** "Save this page as PDF": its saved moments, with their ink and explanations. */
+  onSavePdf(): void;
   /** The marks menu (Off, hide until done, this page's marks layer). */
   marks: ReactNode;
   /** Previous and next page. */
@@ -94,6 +98,14 @@ export function PageTools({
             onClick={toggleTutorInk}
           />
           <Quiet icon={ImageDown} label="Export current line as PNG" onClick={onExportLine} />
+          <Quiet
+            icon={FileDown}
+            label="Save this page as PDF"
+            onClick={() => {
+              setOpen(false);
+              onSavePdf();
+            }}
+          />
           <Quiet
             icon={FolderInput}
             label="Move this page to…"

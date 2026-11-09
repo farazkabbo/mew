@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { geometryTexts, moleculeTexts } from "./figures";
+import { FromNotes, NotebookEvent } from "./student-notes";
 import { DrawGeometry, DrawMolecule, DrawShapes } from "./tutor";
 
 /**
@@ -164,6 +165,10 @@ export const ScreenTutorResponse = z.object({
 });
 export type ScreenTutorResponse = z.infer<typeof ScreenTutorResponse>;
 
+/** What the model writes: the reply, plus which of the student's lines it taught from. */
+export const ScreenTutorModelResponse = ScreenTutorResponse.extend({ fromNotes: FromNotes });
+export type ScreenTutorModelResponse = z.infer<typeof ScreenTutorModelResponse>;
+
 /** Actions that draw something, with the box they're about (focus_region and clear don't). */
 const DRAWN_BOX = (action: TutorScreenAction): ScreenBox | null => {
   switch (action.type) {
@@ -251,6 +256,8 @@ export const ScreenStreamEvent = z.discriminatedUnion("type", [
     latencyMs: z.number(),
   }),
   z.object({ type: z.literal("error"), message: z.string() }),
+  /** The answer taught from the student's own notes: where (before `response`). */
+  NotebookEvent,
 ]);
 export type ScreenStreamEvent = z.infer<typeof ScreenStreamEvent>;
 

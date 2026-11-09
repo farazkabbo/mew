@@ -117,6 +117,67 @@ fn fill_rect(image: &mut Pixels, x: i64, y: i64, w: i64, h: i64, rgb: [u8; 3]) {
     }
 }
 
+/// How bright what's outside a circled area stays in the model's copy (docs/PLAN.md, Part 1):
+/// dimmed, not blacked out, so the model still has the context.
+pub const OUTSIDE_BRIGHTNESS: f32 = 0.35;
+
+/// Dims every pixel outside all of `areas` (closed polygons in the image's pixels) to
+/// `brightness`. Each area is grown a little from its centre first, so words touching the loop
+/// stay bright. Nothing happens without an area of at least three points.
+pub fn dim_outside(image: &mut Pixels, areas: &[Vec<(f32, f32)>], brightness: f32) {
+    let areas: Vec<Vec<(f32, f32)>> = areas
+        .iter()
+        .filter(|a| a.len() >= 3)
+        .map(|a| grown(a, 1.08))
+        .collect();
+    if areas.is_empty() {
+        return;
+    }
+    let channels = image.channels as usize;
+    let stride = image.stride();
+    let width = image.width as usize;
+    let data = image.data.as_mut_slice();
+    for y in 0..image.height as usize {
+        // Where each area's edges cross this row's centre (even-odd: inside between pairs).
+        let cy = y as f32 + 0.5;
+        let mut spans: Vec<(f32, f32)> = Vec::new();
+        for area in &areas {
+            let mut xs: Vec<f32> = area
+                .iter()
+                .zip(area.iter().cycle().skip(1))
+                .filter(|((_, y0), (_, y1))| (*y0 <= cy) != (*y1 <= cy))
+                .map(|((x0, y0), (x1, y1))| x0 + (cy - y0) / (y1 - y0) * (x1 - x0))
+                .collect();
+            xs.sort_by(f32::total_cmp);
+            spans.extend(xs.as_chunks::<2>().0.iter().map(|[a, b]| (*a, *b)));
+        }
+        let Some(row) = data.get_mut(y * stride..y * stride + width * channels) else {
+            continue;
+        };
+        for (x, pixel) in row.chunks_exact_mut(channels).enumerate() {
+            let cx = x as f32 + 0.5;
+            if spans.iter().any(|(a, b)| cx >= *a && cx <= *b) {
+                continue;
+            }
+            for value in pixel.iter_mut().take(3) {
+                *value = (f32::from(*value) * brightness).round() as u8;
+            }
+        }
+    }
+}
+
+/// `points` moved away from their centre by `factor`.
+fn grown(points: &[(f32, f32)], factor: f32) -> Vec<(f32, f32)> {
+    let n = points.len() as f32;
+    let (cx, cy) = points
+        .iter()
+        .fold((0.0, 0.0), |(sx, sy), (x, y)| (sx + x / n, sy + y / n));
+    points
+        .iter()
+        .map(|(x, y)| (cx + (x - cx) * factor, cy + (y - cy) * factor))
+        .collect()
+}
+
 /// Sets one BGRA pixel (outside the image: nothing).
 fn put(image: &mut Pixels, x: i64, y: i64, [r, g, b]: [u8; 3]) {
     if x < 0 || y < 0 || x >= i64::from(image.width) || y >= i64::from(image.height) {
@@ -158,6 +219,29 @@ mod tests {
         assert_eq!(rgb_at(&image, 20, 11), STUDENT_INK);
         assert_eq!(rgb_at(&image, 20, 16), [255, 255, 255]);
         assert_eq!(rgb_at(&image, 2, 10), [255, 255, 255]);
+    }
+
+    #[test]
+    fn dims_what_is_outside_the_circle_and_keeps_what_is_inside() {
+        let mut image = white(100, 60);
+        let square = vec![(30.0, 20.0), (70.0, 20.0), (70.0, 40.0), (30.0, 40.0)];
+        dim_outside(&mut image, &[square], OUTSIDE_BRIGHTNESS);
+        assert_eq!(rgb_at(&image, 50, 30), [255, 255, 255]);
+        assert_eq!(rgb_at(&image, 5, 5), [89, 89, 89]);
+        assert_eq!(rgb_at(&image, 95, 30), [89, 89, 89]);
+        // Just outside the loop stays bright: words touching it are kept.
+        assert_eq!(rgb_at(&image, 71, 30), [255, 255, 255]);
+    }
+
+    #[test]
+    fn leaves_the_image_alone_without_a_closed_area() {
+        let mut image = white(20, 20);
+        dim_outside(
+            &mut image,
+            &[vec![(1.0, 1.0), (9.0, 9.0)]],
+            OUTSIDE_BRIGHTNESS,
+        );
+        assert_eq!(rgb_at(&image, 15, 15), [255, 255, 255]);
     }
 
     #[test]

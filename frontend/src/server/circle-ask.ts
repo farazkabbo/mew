@@ -3,8 +3,10 @@ import "server-only";
 import {
   checkedStep,
   CIRCLE_ASK_PROMPT,
+  questionText,
   inLanguage,
   CIRCLE_LIMITS,
+  circleImagePlan,
   type CircleAskRequest,
   CircleAskModelResponse,
   circleAnswerReasons,
@@ -31,6 +33,8 @@ import {
   type StreamStructuredText,
   streamStructuredText,
 } from "./gemini";
+import { reusingAnswers } from "./answer-cache";
+import { excerpts, notebookEvent, type StudentNote } from "./student-notes";
 import { completedArrayItems } from "./partial-json";
 import { unavailableMessage } from "./tutor";
 
@@ -59,7 +63,7 @@ export type CircleAskDeps = {
 };
 
 const defaultDeps: CircleAskDeps = {
-  stream: streamStructuredText,
+  stream: reusingAnswers(streamStructuredText),
   generate: generateStructured,
   now: () => performance.now(),
   newTurnId: () => crypto.randomUUID(),
@@ -75,6 +79,7 @@ export async function* runCircleAsk(
   request: CircleAskRequest & {
     courseContext?: readonly CourseExcerpt[];
     language?: NebLanguage;
+    studentNotes?: readonly StudentNote[];
   },
   signal?: AbortSignal,
   deps: CircleAskDeps = defaultDeps,
@@ -87,13 +92,37 @@ export async function* runCircleAsk(
     widthPx: request.focus.widthPx,
     heightPx: request.focus.heightPx,
   };
+  const plan = circleImagePlan(questionText(request.question) ?? "", request.marks, request.kind);
   const generation = {
     model: screenModel(),
+    purpose: "circle-ask",
     system: inLanguage(CIRCLE_ASK_PROMPT.system, request.language),
     input: [
-      { type: "text" as const, text: renderCircleInput(request, request.courseContext) },
-      { type: "image" as const, base64: request.focus.image.jpeg, mimeType: "image/jpeg" as const },
-      { type: "image" as const, base64: request.context.jpeg, mimeType: "image/jpeg" as const },
+      {
+        type: "text" as const,
+        text: renderCircleInput(
+          request,
+          request.courseContext,
+          plan.context !== null,
+          excerpts(request.studentNotes ?? []),
+        ),
+      },
+      {
+        type: "image" as const,
+        base64: request.focus.image.jpeg,
+        mimeType: "image/jpeg" as const,
+        resolution: plan.focus,
+      },
+      ...(plan.context
+        ? [
+            {
+              type: "image" as const,
+              base64: request.context.jpeg,
+              mimeType: "image/jpeg" as const,
+              resolution: plan.context,
+            },
+          ]
+        : []),
     ],
     schema: CircleAskModelResponse,
     thinkingLevel: "low" as const,
@@ -136,6 +165,13 @@ export async function* runCircleAsk(
       yield fallbackStep(elapsed());
     }
     if (answer && onAnswer) yield* await onAnswer(answer).catch(() => []);
+    // Taught from the student's own notes: where, so the desktop can open them there.
+    const notes = notebookEvent(
+      request.studentNotes ?? [],
+      answer?.fromNotes,
+      questionText(request.question) ?? "",
+    );
+    if (notes) yield notes;
     yield done(answer, deps.newTurnId(), elapsed());
   } catch (error) {
     if (signal?.aborted) return;

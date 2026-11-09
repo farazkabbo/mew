@@ -96,6 +96,7 @@ export async function startCoaching(
 ): Promise<CoachReply> {
   const plan = await deps.generate({
     model: screenModel(),
+    purpose: "coach-plan",
     system: COACH_PLANNER_PROMPT.system,
     input: [
       { type: "text", text: renderPlannerInput(request) },
@@ -221,6 +222,7 @@ async function verify(
 ): Promise<StepVerdict> {
   const verdict = await generate({
     model: verifierModel(),
+    purpose: "coach-check",
     system: COACH_VERIFIER_PROMPT.system,
     input: [
       {

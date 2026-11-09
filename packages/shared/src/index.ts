@@ -4,6 +4,8 @@ export * from "./check";
 export * from "./chemistry";
 export * from "./circle";
 export * from "./language";
+export * from "./routing";
+export * from "./student-notes";
 export * from "./clips";
 export * from "./coach";
 export * from "./coach-machine";

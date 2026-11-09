@@ -342,6 +342,41 @@ pub enum StreamEvent {
     Error {
         message: String,
     },
+    /// The answer taught from the student's own notes (docs/PLAN.md): where they are, and
+    /// whether to open them (the student asked neb to do the work).
+    Notebook(NoteSpot),
+}
+
+/// A line in the student's notebook, as the server found it (`notebook` events).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteSpot {
+    pub notebook_id: String,
+    pub page_id: String,
+    pub line_index: u32,
+    /// The line on its page, in page units: [x, y, width, height].
+    pub bbox: [f32; 4],
+    pub notebook_title: String,
+    pub page: u32,
+    pub open: bool,
+}
+
+impl Eq for NoteSpot {}
+
+impl NoteSpot {
+    /// Ids that are ids, a box that's a box on a page, a title that's short text.
+    pub fn is_valid(&self) -> bool {
+        is_uuid(&self.notebook_id)
+            && is_uuid(&self.page_id)
+            && self
+                .bbox
+                .iter()
+                .all(|v| v.is_finite() && v.abs() <= 1_000_000.0)
+            && self.bbox[2] >= 0.0
+            && self.bbox[3] >= 0.0
+            && self.notebook_title.chars().count() <= 200
+            && !self.notebook_title.chars().any(char::is_control)
+    }
 }
 
 /// Parses and checks one line of the stream. None for anything malformed or out of bounds.
@@ -351,6 +386,7 @@ pub fn parse_event(line: &str) -> Option<StreamEvent> {
         StreamEvent::Speech { text } => within(text, SPEECH_CHARS),
         StreamEvent::Response { response, turn_id } => reply_is_valid(response) && is_uuid(turn_id),
         StreamEvent::Error { message } => within(message, 300),
+        StreamEvent::Notebook(spot) => spot.is_valid(),
     };
     ok.then_some(event)
 }
@@ -932,5 +968,27 @@ mod tests {
         assert!(is_device_token(&format!("mewdt_{}", "A".repeat(43))));
         assert!(!is_device_token(&format!("mewdt_{}", "A".repeat(42))));
         assert!(!is_device_token(&format!("other_{}", "A".repeat(43))));
+    }
+
+    #[test]
+    fn reads_where_the_students_own_notes_are_and_refuses_bad_ones() {
+        let line = |page: &str, bbox: &str| {
+            format!(
+                r#"{{"type":"notebook","notebookId":"22222222-2222-4222-8222-222222222222","pageId":"{page}","lineIndex":4,"bbox":{bbox},"notebookTitle":"Algebra","page":3,"open":true}}"#
+            )
+        };
+        let good = parse_event(&line(
+            "33333333-3333-4333-8333-333333333333",
+            "[40,300,500,60]",
+        ));
+        assert!(
+            matches!(good, Some(StreamEvent::Notebook(spot)) if spot.open && spot.line_index == 4)
+        );
+        assert!(parse_event(&line("../../settings", "[40,300,500,60]")).is_none());
+        assert!(parse_event(&line(
+            "33333333-3333-4333-8333-333333333333",
+            "[40,300,-5,60]"
+        ))
+        .is_none());
     }
 }

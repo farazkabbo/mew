@@ -32,6 +32,8 @@ type Props = {
   onMoveTo(id: string): void;
   /** K4: download its PDF pages for offline use. */
   onKeepOffline(id: string): void;
+  /** "Save as PDF": the saved moments on this notebook's or chapter's pages. */
+  onSavePdf(id: string): void;
   onDelete(id: string): void;
   onOpenTrash(): void;
 };
@@ -136,6 +138,7 @@ export function TreeNav(props: Props) {
       { label: "New page", shortcut: keys.shown("new_page"), run: () => props.onAddPage(id) },
       { label: "Move to…", run: () => props.onMoveTo(id) },
       { label: "Make available offline", run: () => props.onKeepOffline(id) },
+      { label: "Save as PDF", run: () => props.onSavePdf(id) },
       { label: "Move up", shortcut: keys.shown("move_up"), run: () => props.onReorder(id, -1) },
       { label: "Move down", shortcut: keys.shown("move_down"), run: () => props.onReorder(id, 1) },
       { label: "Delete", run: () => props.onDelete(id), danger: true },

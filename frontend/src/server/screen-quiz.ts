@@ -114,6 +114,7 @@ export async function makeScreenQuiz(
   try {
     made = await deps.generate({
       model: screenModel(),
+      purpose: "screen-quiz",
       system: SCREEN_QUIZ_PROMPT.system,
       input: [
         { type: "text" as const, text: renderScreenQuizInput(request) },

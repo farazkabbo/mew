@@ -89,7 +89,7 @@ describe("screen schemas", () => {
     expect(silent).toContain("asked you to look at their screen");
     expect(text).not.toContain("videoPlaying");
     const playing = renderScreenInput(ScreenAskRequest.parse({ ...ASK, videoPlaying: true }));
-    expect(playing).toContain('"videoPlaying": true');
+    expect(playing).toContain('"videoPlaying":true');
   });
 
   it("adds the student's course passages only when there are some (S5)", () => {

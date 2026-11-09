@@ -220,6 +220,7 @@ fn build_request<R: Runtime>(
         let focus = focus_rect(&marks_view, meta.bounds, scale)?;
 
         let mut focus_pixels = crop_screen(&detail.pixels, meta.bounds, focus)?;
+        dim_around_circles(&mut focus_pixels, &marks_view, focus);
         draw_marks(&mut focus_pixels, &marks_view, focus, scale);
         let focus_small = downscale_bgra_to_bgr(&focus_pixels, IMAGE_LONG_SIDE);
         drop(focus_pixels);
@@ -423,6 +424,27 @@ fn crop_screen(pixels: &Pixels, bounds: ScreenRect, area: ScreenRect) -> Option<
     (right > left + 8 && bottom > top + 8).then(|| crop(pixels, left, top, right, bottom))
 }
 
+/// Dims what's outside the circled areas in the model's copy (docs/PLAN.md, Part 1), so it reads
+/// what was circled first and the rest as context. Underlines, arrows and taps enclose nothing.
+fn dim_around_circles(image: &mut Pixels, marks: &[MarkView], focus: ScreenRect) {
+    let sx = image.width as f32 / focus.width().max(1) as f32;
+    let sy = image.height as f32 / focus.height().max(1) as f32;
+    let areas: Vec<Vec<(f32, f32)>> = marks
+        .iter()
+        .filter(|m| matches!(m.kind, marks::MarkKind::Circle))
+        .map(|m| {
+            m.points
+                .iter()
+                .map(|&(x, y)| ((x - focus.left as f32) * sx, (y - focus.top as f32) * sy))
+                .collect()
+        })
+        .collect();
+    // Every mark must be a circle: an underline beside a circle would be dimmed away.
+    if areas.len() == marks.len() {
+        super::raster::dim_outside(image, &areas, super::raster::OUTSIDE_BRIGHTNESS);
+    }
+}
+
 /// The student's marks, drawn onto the focus image the model sees (numbered: §3.4).
 fn draw_marks(image: &mut Pixels, marks: &[MarkView], focus: ScreenRect, scale: f32) {
     let sx = image.width as f32 / focus.width().max(1) as f32;
@@ -551,6 +573,13 @@ fn stream_answer<R: Runtime>(app: &AppHandle<R>, request: Request) {
 }
 
 fn on_event<R: Runtime>(app: &AppHandle<R>, session_id: &str, event: CircleEvent) {
+    if let CircleEvent::Notebook(spot) = &event {
+        // "Do it for me": their own notebook opens where they wrote about it (docs/PLAN.md).
+        if spot.open {
+            crate::open_note(app, spot);
+        }
+        return;
+    }
     let now = Instant::now();
     let cues = with_session(app, |s| {
         if s.id != session_id {
@@ -614,7 +643,9 @@ fn on_event<R: Runtime>(app: &AppHandle<R>, session_id: &str, event: CircleEvent
                 work
             }
             CircleEvent::Error { message } => vec![Work::Message(message)],
-            CircleEvent::Step { .. } | CircleEvent::Destination { .. } => Vec::new(),
+            CircleEvent::Step { .. }
+            | CircleEvent::Destination { .. }
+            | CircleEvent::Notebook(_) => Vec::new(),
         }
     })
     .unwrap_or_default();
@@ -1911,6 +1942,51 @@ mod tests {
             ],
             targets: Vec::new(),
             region,
+        }
+    }
+
+    #[test]
+    fn crops_the_marked_area_to_within_two_pixels_at_every_scale_and_on_a_left_monitor() {
+        let left_monitor = ScreenRect {
+            left: -2560,
+            top: -200,
+            right: 0,
+            bottom: 1240,
+        };
+        for monitor in [MONITOR, left_monitor] {
+            for scale in [1.0_f32, 1.25, 1.5, 1.75, 2.0] {
+                // A capture in physical pixels; the mark 300 × 120 CSS px from the monitor's corner.
+                let (w, h) = (monitor.width() as u32, monitor.height() as u32);
+                let pixels = Pixels {
+                    width: w,
+                    height: h,
+                    channels: 4,
+                    data: crate::screen::secret::SecretBytes::from_vec(vec![
+                        255;
+                        (w * h * 4) as usize
+                    ]),
+                };
+                let at = |css: f32| (css * scale).round() as i32;
+                let region = ScreenRect {
+                    left: monitor.left + at(300.0),
+                    top: monitor.top + at(120.0),
+                    right: monitor.left + at(700.0),
+                    bottom: monitor.top + at(320.0),
+                };
+                let focus = focus_rect(&[mark(region)], monitor, scale).unwrap();
+                let crop = crop_screen(&pixels, monitor, focus).unwrap();
+                assert!((crop.width as i32 - focus.width()).abs() <= 2, "{scale}");
+                assert!((crop.height as i32 - focus.height()).abs() <= 2, "{scale}");
+                // The focus keeps the whole mark, wherever the monitor is.
+                assert!(
+                    focus.left <= region.left && focus.right >= region.right,
+                    "{scale}"
+                );
+                assert!(
+                    focus.top <= region.top && focus.bottom >= region.bottom,
+                    "{scale}"
+                );
+            }
         }
     }
 

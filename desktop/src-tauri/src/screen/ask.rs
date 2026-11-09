@@ -251,7 +251,8 @@ fn deliver<R: Runtime>(
             }
         }
         Some(StreamEvent::Error { message }) => coach::notify(app, &message),
-        None => {}
+        Some(StreamEvent::Notebook(spot)) if spot.open => crate::open_note(app, &spot),
+        Some(StreamEvent::Notebook(_)) | None => {}
     }
 }
 

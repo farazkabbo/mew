@@ -2,6 +2,7 @@ import { asksForAnswer, CircleAskRequest, questionText, type Subject } from "@me
 
 import { verifiedCheckQuestion } from "@/server/check-question";
 import { runCircleAsk } from "@/server/circle-ask";
+import { studentNotes } from "@/server/student-notes";
 import { placeLabel, runCircleSolution } from "@/server/circle-solution";
 import { circleDestination } from "@/server/destinations";
 import { deviceToken, requireDevice } from "@/server/device-auth";
@@ -73,6 +74,11 @@ export const POST = handle(async (request: Request) => {
         {
           ...placed.request,
           language: device.language,
+          // The student's own lines about what they marked: the answer teaches from them.
+          studentNotes: await studentNotes(
+            token,
+            [question ?? "", ...placed.request.marks.map((m) => m.text)].join(" "),
+          ),
           // The student's course passages about what they marked (S5), named when it's the same idea.
           courseContext: await screenCourseContext(
             token,

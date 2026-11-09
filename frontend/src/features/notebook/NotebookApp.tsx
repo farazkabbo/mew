@@ -50,6 +50,8 @@ import { SolutionRecords } from "../solution/record";
 import { SolutionLayer } from "../solution/SolutionLayer";
 import { NotebookPointer } from "../tutor/NotebookPointer";
 import { EntryNotes } from "./EntryNotes";
+import { type NoteSpot, NoteSpotlight, OPEN_NOTE_EVENT, readNoteSpot } from "./NoteSpotlight";
+import { savePdf, type SavePdfScope } from "./save-pdf";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
@@ -163,6 +165,24 @@ export function NotebookApp({
     setNotice({ text: "Couldn't save your last change. Check available storage.", tone: "error" });
   }, []);
   const notify = useCallback((next: Notice) => setNotice(next), []);
+  /** "Save as PDF" (docs/PLAN.md, Part 3): built here from the saved moments, then downloaded. */
+  const savePdfOf = useCallback(
+    (scope: SavePdfScope, title: string) => {
+      void savePdf(repo, scope, title)
+        .then((saved) =>
+          setNotice(
+            saved
+              ? { text: "Saved the PDF to your downloads.", tone: "info" }
+              : { text: "There are no saved moments here to put in a PDF yet.", tone: "info" },
+          ),
+        )
+        .catch((error: unknown) => {
+          console.error("[notebook] PDF", error);
+          setNotice({ text: "The PDF couldn't be made. Try again.", tone: "error" });
+        });
+    },
+    [repo],
+  );
   const treeNotice = useCallback((text: string) => setNotice({ text, tone: "info" }), []);
 
   const { nodes, tree } = useNotebookTree(repo, treeNotice, report);
@@ -215,6 +235,18 @@ export function NotebookApp({
   /** The tab a home opens on when asked for one (U26: a course link opens Study). */
   const [homeTab, setHomeTab] = useState<{ nodeId: string; tab: HomeTab } | null>(null);
 
+  /** "Do it for me" on screen: the line in their own notes neb points them to (docs/PLAN.md). */
+  // From the address when the desktop app came here for it (`/notebook?page=…&spot=x,y,w,h`).
+  const [noteSpot, setNoteSpot] = useState<NoteSpot | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return readNoteSpot({
+      pageId: params.get("page"),
+      bbox: params.get("spot")?.split(",").map(Number),
+    });
+  });
+  const clearNoteSpot = useCallback(() => setNoteSpot(null), []);
+
   const openPage = useCallback((page: Page) => {
     wantedPage.current = page.id;
     setNotebookId(page.notebookId);
@@ -226,6 +258,21 @@ export function NotebookApp({
     );
     setPageId(page.id);
   }, []);
+
+  // The desktop app asks to open a line of the student's notes while the notebook is open.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const spot = readNoteSpot((event as CustomEvent<unknown>).detail);
+      if (!spot) return;
+      void repo.getPage(spot.pageId).then((page) => {
+        if (!page) return;
+        openPage(page);
+        setNoteSpot(spot);
+      });
+    };
+    window.addEventListener(OPEN_NOTE_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
+  }, [repo, openPage]);
 
   // Open the most recent notebook (creating one on first use) and ask the browser not to evict it.
   useEffect(() => {
@@ -1082,6 +1129,9 @@ export function NotebookApp({
               onReorder={treeActions.reorder}
               onMoveTo={treeActions.setMovingId}
               onKeepOffline={treeActions.keepOffline}
+              onSavePdf={(id) =>
+                savePdfOf({ kind: "chapter", nodeId: id }, tree.get(id)?.title ?? "Neb")
+              }
               onDelete={treeActions.requestDelete}
               onOpenTrash={() => treeActions.setTrashOpen(true)}
             />
@@ -1237,7 +1287,17 @@ export function NotebookApp({
                 {/* Mounted with the page's canvas (keyed by page), so the notes subscribe to the camera
             of the canvas that's actually shown and scroll with the page, never over it. */}
                 {engine && view === "page" && engine.pageId === pageId && (
-                  <EntryNotes key={engine.pageId} canvas={canvas} images={engine.images} />
+                  <EntryNotes
+                    key={engine.pageId}
+                    canvas={canvas}
+                    images={engine.images}
+                    onSavePdf={(image) =>
+                      savePdfOf(
+                        { kind: "moment", pageId: image.pageId, imageId: image.id },
+                        `${node?.title ?? "Neb"} moment`,
+                      )
+                    }
+                  />
                 )}
 
                 {engine && view === "page" && (
@@ -1245,6 +1305,9 @@ export function NotebookApp({
                 )}
 
                 {engine && view === "page" && <NotebookPointer canvas={canvas} ink={mew.ink} />}
+                {engine && view === "page" && noteSpot?.pageId === engine.pageId && (
+                  <NoteSpotlight canvas={canvas} spot={noteSpot} onDone={clearNoteSpot} />
+                )}
 
                 {engine && view === "page" && (
                   <MarkLayer
@@ -1390,6 +1453,9 @@ export function NotebookApp({
                   onZoom={actions.zoom}
                   onResetView={actions.resetView}
                   onExportLine={() => void exportLine().catch(report)}
+                  onSavePdf={() =>
+                    pageId && savePdfOf({ kind: "page", pageId }, `${node?.title ?? "Neb"} page`)
+                  }
                   onMovePage={() => pageId && treeActions.startMovingPage(pageId)}
                   marks={<MarksMenu notebookId={rootId} pageId={pageId} />}
                   pageNav={

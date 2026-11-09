@@ -4,6 +4,7 @@ import {
   checkScreenReply,
   type CourseExcerpt,
   type NebLanguage,
+  needsScreen,
   renderScreenInput,
   SAFE_FALLBACK,
   SCREEN_LIMITS,
@@ -11,7 +12,7 @@ import {
   SCREEN_TUTOR_PROMPT,
   type ScreenAskRequest,
   type ScreenStreamEvent,
-  ScreenTutorResponse,
+  ScreenTutorModelResponse,
   unsafeReasons,
   type WalkthroughContext,
   withFocusRegion,
@@ -26,7 +27,9 @@ import {
   type StreamStructuredText,
   streamStructuredText,
 } from "./gemini";
+import { reusingAnswers } from "./answer-cache";
 import { completedStringField } from "./partial-json";
+import { excerpts, notebookEvent, type StudentNote } from "./student-notes";
 import { clipSpeech, unavailableMessage } from "./tutor";
 
 const SCREEN_TUTOR_TIMEOUT_MS = 15_000;
@@ -48,7 +51,7 @@ export type ScreenQuestion = ScreenAskRequest & {
 };
 
 const defaultDeps: ScreenTutorDeps = {
-  stream: streamStructuredText,
+  stream: reusingAnswers(streamStructuredText),
   generate: generateStructured,
   now: () => performance.now(),
   newTurnId: () => crypto.randomUUID(),
@@ -64,23 +67,35 @@ const defaultDeps: ScreenTutorDeps = {
  * The screenshot is only forwarded to the model (`store: false`), never kept.
  */
 export async function* runScreenTutor(
-  request: ScreenQuestion & { language?: NebLanguage },
+  request: ScreenQuestion & { language?: NebLanguage; studentNotes?: readonly StudentNote[] },
   signal?: AbortSignal,
   deps: ScreenTutorDeps = defaultDeps,
 ): AsyncGenerator<ScreenStreamEvent> {
   const started = deps.now();
   const elapsed = () => Math.round(deps.now() - started);
+  // A question that doesn't need the screen goes without it (a walkthrough always looks).
+  const withScreen =
+    request.walkthrough !== undefined || needsScreen(request.transcript, request.language);
   const generation = {
     model: screenModel(),
+    purpose: "screen-ask",
     system: inLanguage(SCREEN_TUTOR_PROMPT.system, request.language),
     input: [
       {
         type: "text" as const,
-        text: renderScreenInput(request, request.walkthrough, request.courseContext),
+        text: renderScreenInput(
+          request,
+          request.walkthrough,
+          request.courseContext,
+          withScreen,
+          excerpts(request.studentNotes ?? []),
+        ),
       },
-      { type: "image" as const, base64: request.image.jpeg, mimeType: "image/jpeg" as const },
+      ...(withScreen
+        ? [{ type: "image" as const, base64: request.image.jpeg, mimeType: "image/jpeg" as const }]
+        : []),
     ],
-    schema: ScreenTutorResponse,
+    schema: ScreenTutorModelResponse,
     thinkingLevel: "low" as const,
     maxOutputTokens: 1024,
     timeoutMs: SCREEN_TUTOR_TIMEOUT_MS,
@@ -101,10 +116,14 @@ export async function* runScreenTutor(
       yield { type: "speech", text: spoken, latencyMs: elapsed() };
     }
 
-    const generated =
-      ScreenTutorResponse.safeParse(parseJson(text)).data ?? (await deps.generate(generation));
+    // Which of the student's own lines it taught from goes in its own event, not the reply.
+    const { fromNotes, ...generated } =
+      ScreenTutorModelResponse.safeParse(parseJson(text)).data ?? (await deps.generate(generation));
     // One focus region, first (it anchors the ink and is the default clip, S3 §2.1).
-    const checked = checkScreenReply(withFocusRegion(generated));
+    // Without the screen there's nowhere to draw: anything it drew anyway would be a guess.
+    const checked = checkScreenReply(
+      withFocusRegion(withScreen ? generated : { ...generated, actions: [] }),
+    );
     if (checked.blocked.length > 0 || speechBlocked) {
       // Counts only: never what was said.
       console.info(
@@ -116,6 +135,11 @@ export async function* runScreenTutor(
       spoken = response.speech;
       yield { type: "speech", text: spoken, latencyMs: elapsed() };
     }
+    // Taught from the student's own notes: where, so the desktop can open them there.
+    const notes = speechBlocked
+      ? null
+      : notebookEvent(request.studentNotes ?? [], fromNotes, request.transcript);
+    if (notes) yield notes;
     // What was already said aloud stays the reply, even if a retry phrased it differently.
     yield {
       type: "response",
