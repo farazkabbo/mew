@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 
 import { elevenLabsEnv, ttsEnv } from "./env";
+import { fakeModel, fakeSpeech } from "./fake-model";
 import { HttpError } from "./http-error";
 
 const API = "https://api.elevenlabs.io";
@@ -54,6 +55,8 @@ export async function streamSpeech(
   voiceId?: string,
   language: NebLanguage = "en",
 ): Promise<ReadableStream<Uint8Array>> {
+  // Preview and staging only (fake-model.ts): silence, no call.
+  if (fakeModel()) return fakeSpeech(TTS_SAMPLE_RATE);
   const { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_TTS_MODEL } = ttsEnv();
   const voice = voiceId ?? ELEVENLABS_VOICE_ID;
   if (!/^[A-Za-z0-9]{8,64}$/.test(voice)) throw new HttpError(400, "Unknown voice");

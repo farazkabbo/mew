@@ -8,7 +8,7 @@ import { z } from "zod";
 import { ApiError, apiFetch } from "./api-client";
 import { onUsage } from "./gemini";
 import { HttpError } from "./http-error";
-import { learnerFacts, requireVerified } from "./learner-identity";
+import { learnerFacts, maskEmail, requireVerified } from "./learner-identity";
 import { estimateUsd, LIMITS, quotaEnforced, TTS_USD_PER_1K_CHARS } from "./limits";
 import { addTo, getJson, limitOrThrow, readNumber, setJson } from "./redis";
 
@@ -102,10 +102,32 @@ const Allowance = z.object({
 export type AllowanceView = z.infer<typeof Allowance>;
 const Changed = z.object({ changed: z.boolean() });
 
-const outOfQuestions = () =>
+/**
+ * Out of free questions: the learner is flagged to be emailed when more open up (exported for a
+ * broadcast, scripts/export-notify-emails.mjs), and told where that email will go.
+ */
+async function outOfQuestions(userId: string): Promise<HttpError> {
+  const n = LIMITS.freeQuestions();
+  void apiFetch("/v1/quota/notify", z.unknown(), {
+    method: "POST",
+    body: { userId, limit: n },
+  }).catch(() => undefined);
+  const masked = maskEmail((await learnerFacts(userId).catch(() => null))?.email ?? null);
+  return new HttpError(
+    429,
+    masked
+      ? `You've used your ${n} free questions. We'll email you at ${masked} when more open up.`
+      : `You've used your ${n} free questions. We'll email you when more open up.`,
+    {},
+    "QUOTA_EXCEEDED",
+  );
+}
+
+/** A follow-up past its cap: start a new question (no flag: they may have questions left). */
+const followUpsUsed = () =>
   new HttpError(
     429,
-    `You've used your ${LIMITS.freeQuestions()} free questions. We'll email you when more open up.`,
+    "That's as far as one question goes. Ask a new one to keep going.",
     {},
     "QUOTA_EXCEEDED",
   );
@@ -136,7 +158,7 @@ async function reserve(asker: Asker, unlimited: boolean) {
       },
     });
   } catch (error) {
-    if (error instanceof ApiError && error.status === 429) throw outOfQuestions();
+    if (error instanceof ApiError && error.status === 429) throw await outOfQuestions(asker.userId);
     if (error instanceof ApiError && error.status === null) {
       throw new HttpError(503, "The service is unavailable right now");
     }
@@ -188,7 +210,7 @@ export async function startQuestion(asker: Asker, followUp?: FollowUp): Promise<
   if (followUp) {
     const group = await getJson<Group>(followUp.key);
     if (group && group.userId === asker.userId) {
-      if (group.calls >= followUp.cap) throw outOfQuestions();
+      if (group.calls >= followUp.cap) throw followUpsUsed();
       await setJson(
         followUp.key,
         { ...group, calls: group.calls + 1 },
@@ -257,7 +279,7 @@ export async function requireAllowance(userId: string): Promise<void> {
     allowed = found ? found.unlimited || found.remaining > 0 : true;
     await setJson(key, allowed, LIMITS.allowanceCacheS);
   }
-  if (!allowed) throw outOfQuestions();
+  if (!allowed) throw await outOfQuestions(userId);
 }
 
 /** Headers that tell the client how many questions are left after this one. */

@@ -106,6 +106,13 @@ def ensure(body: EnsureRequest, request: Request, settings: SettingsDep) -> None
     _call(lambda: store.ensure(body.user_id, body.limit))
 
 
+@router.post("/notify", status_code=status.HTTP_204_NO_CONTENT)
+def notify(body: EnsureRequest, request: Request, settings: SettingsDep) -> None:
+    """The learner ran out: flag them to be emailed when more questions open up."""
+    store = _store(request, settings, body.user_id)
+    _call(lambda: store.ask_to_notify(body.user_id, body.limit))
+
+
 @router.post("/{question_id}/refund")
 def refund(question_id: UUID, request: Request, settings: SettingsDep, user: str) -> Done:
     store = _store(request, settings, user)

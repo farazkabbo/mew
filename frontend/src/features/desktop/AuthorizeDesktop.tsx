@@ -6,17 +6,43 @@ import { useState } from "react";
 
 import { authPrimaryButton, authQuietButton, AuthScreen } from "./AuthScreen";
 
-type Step = "confirm" | "sending" | "sent" | "failed";
-
-/** The way back to the desktop app; it checks the code against the sign-in it started. */
-const signInLink = (code: string) => `neb://auth/callback?code=${encodeURIComponent(code)}`;
+type Step = "confirm" | "sending" | "sent" | "failed" | "cancelled";
 
 /**
- * In the browser, signed in: confirms which account the desktop app should use, then sends it a
- * one-time code. Always a click: a page mustn't be able to sign anyone's app in just by opening
- * this address.
+ * The way back to the desktop app; it checks the state is its own and the code against the
+ * sign-in it started. (When the link is blocked, the app's polling picks the sign-in up.)
  */
-export function AuthorizeDesktop({ challenge }: { challenge: string | null }) {
+const signInLink = (code: string, state: string | null) =>
+  `neb://auth/callback?code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
+
+const DEVICES = { windows: "a Windows PC" } as const;
+
+/** "just now", "3 minutes ago"… from the app's start time (seconds), as the page sees it. */
+function startedWhen(startedAt: number | null): string | null {
+  if (startedAt === null) return null;
+  const minutes = Math.floor((Date.now() / 1000 - startedAt) / 60);
+  if (minutes < 1) return "just now";
+  if (minutes < 15) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  return null;
+}
+
+/**
+ * In the browser, signed in: confirms which account and which computer, then sends the app a
+ * one-time code. Always a click: a page mustn't be able to sign anyone's app in just by opening
+ * this address (with polling, an attacker could otherwise start a sign-in and have a victim's
+ * open tab finish it). "This wasn't me" cancels the sign-in for good.
+ */
+export function AuthorizeDesktop({
+  challenge,
+  state,
+  device,
+  startedAt,
+}: {
+  challenge: string | null;
+  state: string | null;
+  device: keyof typeof DEVICES | null;
+  startedAt: number | null;
+}) {
   const { signOut } = useClerk();
   const { user } = useUser();
   const [step, setStep] = useState<Step>("confirm");
@@ -41,7 +67,7 @@ export function AuthorizeDesktop({ challenge }: { challenge: string | null }) {
       });
       if (!response.ok) throw new Error("link code refused");
       const { code } = DeviceLinkCode.parse(await response.json());
-      const next = signInLink(code);
+      const next = signInLink(code, state);
       setLink(next);
       setStep("sent");
       window.location.assign(next);
@@ -49,6 +75,25 @@ export function AuthorizeDesktop({ challenge }: { challenge: string | null }) {
       setStep("failed");
     }
   };
+
+  const notMe = async () => {
+    // Nothing is connected: no code was made, and this sign-in can't be finished from now on.
+    await fetch("/api/devices/link/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ challenge }),
+      cache: "no-store",
+    }).catch(() => undefined);
+    setStep("cancelled");
+  };
+
+  if (step === "cancelled") {
+    return (
+      <AuthScreen title="Cancelled">
+        <p className="text-muted">Nothing was connected to your account. You can close this tab.</p>
+      </AuthScreen>
+    );
+  }
 
   if (step === "sent") {
     return (
@@ -63,8 +108,11 @@ export function AuthorizeDesktop({ challenge }: { challenge: string | null }) {
     );
   }
   const email = user?.primaryEmailAddress?.emailAddress;
+  const when = startedWhen(startedAt);
   return (
-    <AuthScreen title="Sign in to Neb Desktop">
+    <AuthScreen
+      title={`Connect neb on ${device ? DEVICES[device] : "this computer"}${when ? `, started ${when}` : ""}?`}
+    >
       <p className="text-muted">
         {email ? (
           <>
@@ -81,6 +129,9 @@ export function AuthorizeDesktop({ challenge }: { challenge: string | null }) {
         className={authPrimaryButton}
       >
         {step === "sending" ? "Opening Neb Desktop…" : "Continue"}
+      </button>
+      <button type="button" onClick={() => void notMe()} className={authQuietButton}>
+        This wasn&apos;t me
       </button>
       {step === "failed" && (
         <p role="alert" className="text-sm text-muted">

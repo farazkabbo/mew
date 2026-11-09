@@ -4,6 +4,7 @@ import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
 import { geminiEnv } from "./env";
+import { fakeAnswer, fakeModel } from "./fake-model";
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 
@@ -200,6 +201,14 @@ function options(request: GenerationRequest) {
  * retried once, then reported as a StructuredOutputError so callers can degrade gracefully.
  */
 export const generateStructured: GenerateStructured = async <T>(request: StructuredRequest<T>) => {
+  if (fakeModel()) {
+    // Preview and staging only (fake-model.ts): a fixed answer, its usage counted like a real one.
+    const text = fakeAnswer(request.purpose ?? "", request.input);
+    reportUsage(request, { total_input_tokens: 1000, total_output_tokens: 100 });
+    const parsed = request.schema.safeParse(parseJson(text));
+    if (parsed.success) return parsed.data;
+    throw new StructuredOutputError("The fake model's answer doesn't fit this schema");
+  }
   let problem = "no attempt";
   for (let attempt = 0; attempt < 2; attempt++) {
     assertNotBusy(request.model);
@@ -222,6 +231,12 @@ export const generateStructured: GenerateStructured = async <T>(request: Structu
 
 /** Streams the raw JSON text of a structured generation as it is produced (not validated). */
 export const streamStructuredText: StreamStructuredText = async function* (request) {
+  if (fakeModel()) {
+    const text = fakeAnswer(request.purpose ?? "", request.input);
+    for (let i = 0; i < text.length; i += 40) yield text.slice(i, i + 40);
+    reportUsage(request, { total_input_tokens: 1000, total_output_tokens: 100 });
+    return;
+  }
   assertNotBusy(request.model);
   try {
     const stream = await gemini().interactions.create(

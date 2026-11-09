@@ -14,7 +14,7 @@ from functools import partial
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from pydantic.alias_generators import to_camel
 
@@ -26,6 +26,7 @@ from ..devices.models import (
     IssuedToken,
     LinkCode,
     LinkCodeRequest,
+    PollRequest,
     TokenCheck,
     VerifiedDevice,
 )
@@ -42,6 +43,7 @@ from ..devices.tokens import (
     TOKEN_PATTERN,
     LinkCodes,
     LinkGrant,
+    SignInCancelledError,
     hash_token,
     new_device_token,
 )
@@ -114,8 +116,17 @@ def _call[T](fn: Callable[[], T]) -> T:
 def create_link_code(body: LinkCodeRequest, request: Request, caller: CurrentCaller) -> LinkCode:
     """A one-time code the signed-in page hands to the desktop app (valid for a minute)."""
     grant = LinkGrant(user_id=caller.user_id, local=caller.is_local)
-    code = _link_codes(request).issue(grant, body.challenge)
+    codes = _link_codes(request)
+    if codes.is_cancelled(body.challenge):
+        raise HTTPException(status.HTTP_410_GONE, "That sign-in was cancelled")
+    code = codes.issue(grant, body.challenge)
     return LinkCode(code=code, expires_in_s=int(LINK_CODE_TTL_S))
+
+
+@router.post("/link-codes/cancel", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_link(body: LinkCodeRequest, caller: CurrentCaller, request: Request) -> None:
+    """ "This wasn't me" on the browser page: that desktop sign-in can't finish, by link or poll."""
+    _link_codes(request).cancel(body.challenge)
 
 
 @router.get("")
@@ -150,9 +161,32 @@ def exchange_link_code(
     grant = _link_codes(request).redeem(body.code, body.verifier)
     if grant is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired link code")
+    return _issue_token(grant, body.device_name, request, settings)
+
+
+@router.post("/poll", responses={202: {"description": "Not finished in the browser yet"}})
+def poll_sign_in(
+    body: PollRequest, request: Request, response: Response, settings: SettingsDep
+) -> IssuedToken | None:
+    """The desktop app's fallback when the neb:// link didn't reach it: the code the browser
+    issued for this verifier's challenge, redeemed at once (202 until there is one, 410 if the
+    learner said "This wasn't me")."""
+    try:
+        grant = _link_codes(request).redeem_waiting(body.verifier)
+    except SignInCancelledError:
+        raise HTTPException(status.HTTP_410_GONE, "That sign-in was cancelled") from None
+    if grant is None:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return None
+    return _issue_token(grant, body.device_name, request, settings)
+
+
+def _issue_token(
+    grant: LinkGrant, device_name: str, request: Request, settings: Settings
+) -> IssuedToken:
     registry: DeviceRegistry = _local_devices(request) if grant.local else _registry(settings)
     token = new_device_token()
-    device_id = _call(lambda: registry.add(grant.user_id, hash_token(token), body.device_name))
+    device_id = _call(lambda: registry.add(grant.user_id, hash_token(token), device_name))
     logger.info("Linked a device (%s)", device_id)
     return IssuedToken(token=token, device_id=device_id)
 

@@ -42,6 +42,10 @@ class QuotaStore(Protocol):
         """Creates the learner's row (0 used) if it isn't there yet."""
         ...
 
+    def ask_to_notify(self, user: str, limit: int) -> None:
+        """Flags the learner to be emailed when more questions open up."""
+        ...
+
 
 @dataclass(slots=True)
 class _Count:
@@ -56,6 +60,8 @@ class MemoryQuotaStore:
         self._users: dict[str, tuple[_Count, int, bool]] = {}
         self._devices: dict[str, _Count] = {}
         self._log: dict[UUID, tuple[str, str | None, str]] = {}
+        #: Learners to email when more open up.
+        self.notify: set[str] = set()
         self._lock = threading.Lock()
 
     @staticmethod
@@ -111,6 +117,11 @@ class MemoryQuotaStore:
     def ensure(self, user: str, limit: int) -> None:
         with self._lock:
             self._users.setdefault(user, (_Count(), limit, False))
+
+    def ask_to_notify(self, user: str, limit: int) -> None:
+        with self._lock:
+            self._users.setdefault(user, (_Count(), limit, False))
+            self.notify.add(user)
 
     def allowance(self, user: str, limit: int) -> Allowance:
         with self._lock:
@@ -169,6 +180,9 @@ class SupabaseQuotaStore(SupabaseRest):
             json={"user_id": user, "limit_total": limit},
             headers={"Prefer": "resolution=ignore-duplicates,return=minimal"},
         )
+
+    def ask_to_notify(self, user: str, limit: int) -> None:
+        self._request("POST", "/rest/v1/rpc/ask_to_notify", json={"p_user": user, "p_limit": limit})
 
     def allowance(self, user: str, limit: int) -> Allowance:
         rows = self._get(

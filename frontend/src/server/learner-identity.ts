@@ -33,6 +33,13 @@ export async function learnerFacts(userId: string): Promise<LearnerFacts> {
   return facts;
 }
 
+/** "a•••@gmail.com": enough to recognise, not enough to read out (shown at 0 questions). */
+export function maskEmail(email: string | null): string | null {
+  const at = email?.lastIndexOf("@") ?? -1;
+  if (!email || at < 1) return null;
+  return `${email[0]}•••${email.slice(at)}`;
+}
+
 /** 403 EMAIL_UNVERIFIED unless the learner's primary email is verified. */
 export function requireVerified(facts: LearnerFacts): void {
   if (!facts.verified) {

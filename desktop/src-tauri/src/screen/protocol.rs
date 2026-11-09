@@ -652,7 +652,8 @@ fn is_url_safe(b: u8) -> bool {
 /// The code in a browser sign-in's link back to the app: exactly
 /// `neb://auth/callback?code=<code>`. Anyone can launch the app with any link, so anything else
 /// is ignored.
-pub fn parse_sign_in_link(link: &tauri::Url) -> Option<String> {
+/// A sign-in link's code and the state the app sent with its sign-in (both required).
+pub fn parse_sign_in_link(link: &tauri::Url) -> Option<(String, String)> {
     if link.scheme() != "neb"
         || link.host_str() != Some("auth")
         || link.path() != "/callback"
@@ -664,8 +665,30 @@ pub fn parse_sign_in_link(link: &tauri::Url) -> Option<String> {
         return None;
     }
     let mut pairs = link.query_pairs();
-    let (name, code) = pairs.next()?;
-    (name == "code" && pairs.next().is_none() && is_link_code(&code)).then(|| code.into_owned())
+    let (first, code) = pairs.next()?;
+    let (second, state) = pairs.next()?;
+    let ok = first == "code"
+        && second == "state"
+        && pairs.next().is_none()
+        && is_link_code(&code)
+        && is_sign_in_state(&state);
+    ok.then(|| (code.into_owned(), state.into_owned()))
+}
+
+/// The app's random sign-in state: base64url, 22 to 64 characters.
+pub fn is_sign_in_state(text: &str) -> bool {
+    (22..=64).contains(&text.len())
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+/// The desktop app polling for a sign-in finished in the browser (docs/DESKTOP_API.md).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PollRequest<'a> {
+    pub verifier: &'a str,
+    pub device_name: &'a str,
 }
 
 #[derive(Serialize)]
@@ -697,12 +720,17 @@ mod tests {
     #[test]
     fn accepts_only_the_exact_sign_in_link() {
         let code = "c".repeat(32);
+        let state = "s".repeat(22);
         let parse = |link: String| parse_sign_in_link(&tauri::Url::parse(&link).unwrap());
         assert_eq!(
-            parse(format!("neb://auth/callback?code={code}")),
-            Some(code.clone())
+            parse(format!("neb://auth/callback?code={code}&state={state}")),
+            Some((code.clone(), state.clone()))
         );
         for link in [
+            // Without its state, or with a malformed one, a link is refused.
+            format!("neb://auth/callback?code={code}"),
+            format!("neb://auth/callback?code={code}&state=short"),
+            format!("neb://auth/callback?code={code}&state={state}&next=x"),
             format!("https://auth/callback?code={code}"),
             format!("neb://evil/callback?code={code}"),
             format!("neb://auth/other?code={code}"),

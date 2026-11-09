@@ -31,6 +31,8 @@ CHALLENGE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{43}$")  # base64url SHA-256, no 
 CODE_PATTERN = re.compile(r"^[A-Za-z0-9_-]{32}$")
 
 LINK_CODE_TTL_S = 60.0
+#: How long "This wasn't me" keeps a sign-in from finishing (the desktop app waits 10 minutes).
+CANCELLED_TTL_S = 15 * 60.0
 MAX_PENDING_CODES_PER_USER = 5
 
 
@@ -51,6 +53,10 @@ def challenge_for(verifier: str) -> str:
 
 def verifier_matches(verifier: str, challenge: str) -> bool:
     return hmac.compare_digest(challenge_for(verifier), challenge)
+
+
+class SignInCancelledError(Exception):
+    """The learner said this desktop sign-in wasn't theirs."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +83,15 @@ class LinkCodes:
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self._clock = clock
         self._pending: dict[str, _Pending] = {}
+        # Challenges a learner said weren't theirs ("This wasn't me"), until when.
+        self._cancelled: dict[str, float] = {}
         self._lock = threading.Lock()
+
+    def is_cancelled(self, challenge: str) -> bool:
+        """The learner said this sign-in wasn't theirs ("This wasn't me")."""
+        with self._lock:
+            self._forget_expired(self._clock())
+            return challenge in self._cancelled
 
     def issue(self, grant: LinkGrant, challenge: str) -> str:
         now = self._clock()
@@ -98,6 +112,31 @@ class LinkCodes:
             return None
         return pending.grant if verifier_matches(verifier, pending.challenge) else None
 
+    def redeem_waiting(self, verifier: str) -> LinkGrant | None:
+        """For the desktop app's polling (when the neb:// link didn't reach it): the code issued
+        for this verifier's challenge, redeemed at once, or None while there's none yet. Raises
+        SignInCancelledError if the learner said the sign-in wasn't theirs."""
+        challenge = challenge_for(verifier)
+        now = self._clock()
+        with self._lock:
+            self._forget_expired(now)
+            if challenge in self._cancelled:
+                raise SignInCancelledError
+            code = next((c for c, p in self._pending.items() if p.challenge == challenge), None)
+            pending = self._pending.pop(code, None) if code else None
+        return pending.grant if pending else None
+
+    def cancel(self, challenge: str) -> None:
+        """ "This wasn't me": no code for this challenge is redeemed, now or later."""
+        now = self._clock()
+        with self._lock:
+            self._forget_expired(now)
+            self._cancelled[challenge] = now + CANCELLED_TTL_S
+            for code in [c for c, p in self._pending.items() if p.challenge == challenge]:
+                del self._pending[code]
+
     def _forget_expired(self, now: float) -> None:
+        for challenge in [c for c, until in self._cancelled.items() if now >= until]:
+            del self._cancelled[challenge]
         for code in [c for c, p in self._pending.items() if now >= p.expires_at]:
             del self._pending[code]

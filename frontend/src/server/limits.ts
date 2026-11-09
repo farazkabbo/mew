@@ -41,10 +41,13 @@ export const LIMITS = {
   notebookFollowUpMs: 5 * MINUTE,
   /** Sliding windows (Redis; in memory when Redis is down). */
   rate: {
-    askUserMinute: { limit: 3, windowMs: MINUTE },
-    askUserHour: { limit: 15, windowMs: HOUR },
-    askIpMinute: { limit: 10, windowMs: MINUTE },
+    // Overridable for the journey test only (playwright.journey.config.ts); production uses these.
+    askUserMinute: { limit: int("ASK_PER_MINUTE", 3), windowMs: MINUTE },
+    askUserHour: { limit: int("ASK_PER_HOUR", 15), windowMs: HOUR },
+    askIpMinute: { limit: int("ASK_IP_PER_MINUTE", 10), windowMs: MINUTE },
     sessionIp: { limit: 10, windowMs: 10 * MINUTE },
+    /** The desktop app polls every 2 s for up to 3 minutes while a sign-in waits. */
+    pollIp: { limit: 120, windowMs: 10 * MINUTE },
     waitlistIp: { limit: 5, windowMs: HOUR },
   },
   /** Everyone together, per UTC day: GLOBAL_DAILY_QUESTION_CAP and GLOBAL_DAILY_USD_CAP. */

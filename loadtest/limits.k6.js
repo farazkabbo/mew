@@ -5,7 +5,9 @@
 //
 //   k6 run -e BASE_URL=https://staging.app.myneb.si -e DEVICE_TOKENS=mewdt_a,mewdt_b loadtest/limits.k6.js
 //
-// DEVICE_TOKENS: device tokens of test accounts whose 8 questions are already used.
+// DEVICE_TOKENS: device tokens of test accounts whose 8 questions are already used. On a preview
+// running the fake model (NEB_FAKE_MODEL=1, never production), fresh accounts work too: their
+// first 8 asks are answered by the fake model, at no cost.
 import http from "k6/http";
 import { check } from "k6";
 import { Counter } from "k6/metrics";

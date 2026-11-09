@@ -270,3 +270,52 @@ def test_owners_revoke_only_their_own_active_devices() -> None:
     assert params["id"] == f"eq.{device_id}"
     assert params["revoked_at"] == "is.null"
     assert set(json.loads(seen[0].content)) == {"revoked_at"}
+
+
+# ─── Polling and "This wasn't me" ────────────────────────────────────────────────────────────
+
+
+def poll(client: TestClient, verifier: str = RFC_VERIFIER) -> httpx.Response:
+    response: httpx.Response = client.post(
+        "/v1/devices/poll",
+        json={"verifier": verifier, "deviceName": "DESKTOP-1"},
+        headers=internal_headers(),
+    )
+    return response
+
+
+def test_polling_waits_then_picks_up_the_browsers_code_once(client: TestClient) -> None:
+    assert poll(client).status_code == 202
+    client.post("/v1/devices/link-codes", json={"challenge": RFC_CHALLENGE}, headers=LOCAL)
+    first = poll(client)
+    assert first.status_code == 200
+    assert verify(client, first.json()["token"]).status_code == 200
+    # Redeemed: neither another poll nor the link can use it again.
+    assert poll(client).status_code == 202
+
+
+def test_polling_needs_the_verifier(client: TestClient) -> None:
+    client.post("/v1/devices/link-codes", json={"challenge": RFC_CHALLENGE}, headers=LOCAL)
+    other = "x" * 43
+    assert poll(client, other).status_code == 202
+    assert poll(client).status_code == 200
+
+
+def test_this_wasnt_me_stops_the_sign_in_for_good(client: TestClient) -> None:
+    client.post("/v1/devices/link-codes", json={"challenge": RFC_CHALLENGE}, headers=LOCAL)
+    cancelled = client.post(
+        "/v1/devices/link-codes/cancel", json={"challenge": RFC_CHALLENGE}, headers=LOCAL
+    )
+    assert cancelled.status_code == 204
+    assert poll(client).status_code == 410
+    again = client.post("/v1/devices/link-codes", json={"challenge": RFC_CHALLENGE}, headers=LOCAL)
+    assert again.status_code == 410
+
+
+def test_a_cancel_needs_a_signed_in_user(client: TestClient) -> None:
+    response = client.post(
+        "/v1/devices/link-codes/cancel",
+        json={"challenge": RFC_CHALLENGE},
+        headers=internal_headers(),
+    )
+    assert response.status_code == 401

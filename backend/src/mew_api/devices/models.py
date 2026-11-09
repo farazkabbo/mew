@@ -36,6 +36,13 @@ class ExchangeRequest(_Camel):
     device_name: DeviceName
 
 
+class PollRequest(_Camel):
+    """The desktop app checking whether its sign-in finished in the browser (polling)."""
+
+    verifier: Verifier
+    device_name: DeviceName
+
+
 class IssuedToken(_Camel):
     """Returned once, to the desktop app that redeemed the code."""
 

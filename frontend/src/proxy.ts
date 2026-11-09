@@ -19,6 +19,7 @@ const isPublicRoute = createRouteMatcher([
 const isDeviceRoute = createRouteMatcher([
   "/api/devices/exchange",
   "/api/devices/sign-in",
+  "/api/devices/poll",
   "/api/devices/revoke-self",
   "/api/screen/(.*)",
   // Clerk's own webhooks: signed with Svix, checked inside the route.

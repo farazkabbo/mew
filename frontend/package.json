@@ -20,7 +20,8 @@
     "eval:notes": "tsx --conditions=react-server evals/notes-check.eval.ts",
     "eval:solution": "tsx --conditions=react-server evals/solution.eval.ts",
     "eval:handwriting": "tsx --conditions=react-server evals/handwriting.eval.ts",
-    "eval:tokens": "tsx --conditions=react-server evals/tokens.eval.ts"
+    "eval:tokens": "tsx --conditions=react-server evals/tokens.eval.ts",
+    "journey": "playwright test --config playwright.journey.config.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.16",

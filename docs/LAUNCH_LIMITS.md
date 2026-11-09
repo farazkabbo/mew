@@ -21,31 +21,52 @@ is [DESKTOP_API.md](DESKTOP_API.md), copied into `neb_web`.
 | App                                       | "N of 8 questions left" on the desk; one notice at 2; the 0 message.                                                                                                                                                                                                                                                    |
 | neb_web                                   | `LAUNCH_MODE`, Get neb, `/download`, waitlist `converted`, Upstash waitlist limit (`neb_web/docs/LAUNCH.md`).                                                                                                                                                                                                           |
 
-**Not built:** the polling fallback and the typed 6-character code for sign-in (the "Copy the
-link" fallback exists); moving work to background jobs (the app sends no email, and PDF export
-already runs on the device); a model mock for load tests (`loadtest/limits.k6.js` loads only the
-gate's free paths: allowance reads and used-up accounts).
+**Second round (2026-11-09, the owner's decisions on the gap report):**
+
+- Download first: "Get neb" → public `/download` (OS detected; Mac/Linux "Windows-only for now"),
+  "Email me the link" (`neb_web /api/download-link`: waitlist upsert `download`/`download_mac`,
+  always sends, 5/hour per address and 3/day per email, timeout + one retry), "Already have an
+  account? Sign in". Sign-up happens in the app: `/desktop/authorize` shows sign-up first.
+- Sign-in: `state` checked on the link; polling every 2 s for 3 minutes (`/api/devices/poll`,
+  PKCE-verified); "Connect neb on a Windows PC, started just now?" with **This wasn't me**
+  (cancels for good). The click stays. No 6-character code; "Copy the link" stays.
+- At 0: `notify_when_more` (migration `20261113000000_quota_notify.sql`), "We'll email you at
+  a•••@gmail.com…", and `scripts/export-notify-emails.mjs` (a CSV for a Resend broadcast).
+- Fake model (`frontend/src/server/fake-model.ts`): `NEB_FAKE_MODEL=1` on a non-production deploy;
+  `next.config.ts` refuses a production build with it.
+- Journey test `pnpm --filter @mew/frontend journey` (steps 1–12; locally with live keys blanked,
+  or on a preview with `JOURNEY_BASE_URL`, `JOURNEY_DEVICE_TOKEN`, `JOURNEY_SITE_URL`). Real
+  Postgres race: `scripts/staging-quota-race.mjs` (refuses production).
+
+**Still not done:** background jobs (no queue yet, as decided), the 6-character code. Steps 11
+(cap and kill switch) and the device limit across accounts are unit-tested, not in the journey.
 
 ## Tests
 
-PGlite (`question-quota.test.ts`): 8 of 20, device limit, refund once, finish, unlimited, RLS.
-pytest (`test_quota.py`): 20 threads → 8. Vitest: the gate (`question-gate.test.ts`: codes,
-`Retry-After`, cap and kill switch charge nobody, follow-ups and their cap, unverified, refund,
-Redis down), the webhook (`route.test.ts`: signatures, replays), the answer cache. Rust: limit
-messages, device id.
+PGlite: 8 of 20, device limit, refund, finish, unlimited, notify, RLS. pytest: 20 threads → 8,
+polling, "This wasn't me". Vitest: the gate (codes, Retry-After, cap and kill switch, follow-ups,
+unverified, refund, Redis down), webhook signatures, the fake model. Rust: link + state parsing,
+limit messages, device id. Journey: passes locally (2026-11-09); not yet on a preview.
 
-## By hand, on Windows (before launch)
+## On a real Windows machine (before merging)
 
-1. Fresh install → Sign in → browser (already signed in) → one click → app shows the account.
-2. Ask: the desk says 7 of 8. A circle follow-up and walkthrough steps don't change it.
-3. Turn Wi-Fi off mid-answer: the count comes back.
-4. Use all 8: the 0 message; the notebook, Replay and PDF still work.
-5. Reinstall, and a second account on the same computer: still 0 left.
-6. Settings → Signed-in devices → Sign out: the next ask is signed out.
+1. Install from myneb.si/download (no account). Open neb → Sign in → the browser shows sign-up.
+2. Sign up with Google → "Connect neb on a Windows PC, started just now?" → Continue → the app
+   says hello within seconds, and the tab says you can close it.
+3. Again, with neb:// blocked (Edge: "Always block"): polling connects within ~2 s of Continue.
+4. Start a sign-in, then click **This wasn't me**: the app says it was cancelled; nothing connects.
+5. Ask once: the desk says 7 of 8. A circle follow-up and walkthrough steps don't change it.
+6. Wi-Fi off mid-answer: "neb had a hiccup"-style failure, and still 7.
+7. Use all 8: the notice at 2, then "We'll email you at a•••@… when more open up."; the notebook,
+   Replay and PDF still work.
+8. Reinstall, and sign in with a second account: still 0 left on this computer.
+9. Settings → Signed-in devices → Sign out: the next ask asks you to connect again.
 
 ## Pre-launch checklist
 
-- [ ] Apply the migration to the hosted Supabase project (after a look; `20261112000000`).
+- [ ] Apply both migrations to the hosted project (after a look: `20261112000000`, `20261113000000`).
+- [ ] The journey on a preview (fake model), the k6 run there, and the staging race: all pass.
+- [ ] `NEB_FAKE_MODEL` unset in production (the build refuses it anyway).
 - [ ] Vercel project for `frontend` at app.myneb.si; every variable in `.env.example`, including
       `UPSTASH_*`, `CLERK_WEBHOOK_SECRET`, the caps, `NEB_UNLIMITED_EMAILS`.
 - [ ] Clerk production instance: keys set, bot protection on, app.myneb.si and myneb.si/download

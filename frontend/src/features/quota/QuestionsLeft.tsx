@@ -17,6 +17,7 @@ const Quota = z.union([
     limit: z.number().int(),
     remaining: z.number().int(),
     unlimited: z.boolean(),
+    maskedEmail: z.string().max(260).nullable().optional(),
   }),
 ]);
 type Quota = z.infer<typeof Quota>;
@@ -65,7 +66,9 @@ export function QuestionsLeft() {
       <span aria-live="polite">
         {left > 0
           ? `${left} of ${quota.limit} questions left`
-          : `You've used your ${quota.limit} free questions. We'll email you when more open up.`}
+          : `You've used your ${quota.limit} free questions. We'll email you${
+              quota.maskedEmail ? ` at ${quota.maskedEmail}` : ""
+            } when more open up.`}
       </span>
       {nearlyOut && (
         <span role="status" className="rounded-full bg-neb-wash px-3 py-1 text-neb-ink">

@@ -29,6 +29,10 @@ export const DeviceExchangeRequest = z.object({
 });
 export type DeviceExchangeRequest = z.infer<typeof DeviceExchangeRequest>;
 
+/** The desktop app's polling (its fallback when the neb:// link didn't reach it). */
+export const DevicePollRequest = DeviceExchangeRequest.omit({ code: true });
+export type DevicePollRequest = z.infer<typeof DevicePollRequest>;
+
 export const IssuedDeviceToken = z.object({
   token: z.string().regex(DEVICE_TOKEN_PATTERN),
   deviceId: z.uuid(),

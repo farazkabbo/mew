@@ -124,3 +124,22 @@ describe("the free allowance", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("emailing when more open up", () => {
+  it("flags a learner who ran out, and only the API service can", async () => {
+    await asService(() => db.query("select public.ask_to_notify($1, 8)", ["user_ran_out"]));
+    await asService(() => db.query("select public.ask_to_notify($1, 8)", [AYESHA]));
+    const { rows } = await db.query<{ user_id: string }>(
+      "select user_id from public.question_quota where notify_when_more order by user_id",
+    );
+    expect(rows.map((r) => r.user_id)).toEqual([AYESHA, "user_ran_out"]);
+    // Ayesha's count is untouched.
+    expect(await used(AYESHA)).toBe(8);
+    await expect(
+      db.as(AYESHA, () => db.query("select public.ask_to_notify($1, 8)", [AYESHA])),
+    ).rejects.toThrow();
+    await expect(
+      db.as(AYESHA, () => db.query("update public.question_quota set notify_when_more = false")),
+    ).rejects.toThrow();
+  });
+});

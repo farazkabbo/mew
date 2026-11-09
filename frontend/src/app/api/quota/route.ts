@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { handle, requireUserId } from "@/server/http";
 import { quotaEnforced } from "@/server/limits";
+import { learnerFacts, maskEmail } from "@/server/learner-identity";
 import { allowanceOf } from "@/server/question-gate";
 
 /**
@@ -14,9 +15,12 @@ export const GET = handle(async () => {
   if (!quotaEnforced()) {
     return NextResponse.json({ enforced: false }, { headers: { "Cache-Control": "no-store" } });
   }
-  const allowance = await allowanceOf(userId);
+  const [allowance, facts] = await Promise.all([
+    allowanceOf(userId),
+    learnerFacts(userId).catch(() => null),
+  ]);
   return NextResponse.json(
-    { enforced: true, ...allowance },
+    { enforced: true, ...allowance, maskedEmail: maskEmail(facts?.email ?? null) },
     { headers: { "Cache-Control": "no-store" } },
   );
 });

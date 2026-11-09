@@ -72,3 +72,12 @@ def test_a_deleted_account_is_signed_out_everywhere(client: TestClient) -> None:
         client.post("/v1/devices/revoke-user", json={"userId": "x;"}, headers=HEADERS).status_code
         == 422
     )
+
+
+def test_a_learner_who_ran_out_is_flagged_for_an_email(client: TestClient) -> None:
+    response = client.post(
+        "/v1/quota/notify", json={"userId": "local", "limit": 8}, headers=HEADERS
+    )
+    assert response.status_code == 204
+    store = client.app.state.local_quota  # type: ignore[attr-defined]
+    assert "local" in store.notify
