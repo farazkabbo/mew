@@ -8,4 +8,4 @@ major_version = 17
 # when running Supabase locally; on the hosted project, set this in Authentication → Third-party.
 [auth.third_party.clerk]
 enabled = true
-domain = "your-instance.clerk.accounts.dev"
+domain = "still-mosquito-3338.clerk.accounts.dev"

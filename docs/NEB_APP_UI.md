@@ -1069,7 +1069,8 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       to a PDF group's header.
     - **Strays removed:** the clip's source pill ("… · Check against my notes") showed on the home
       too; it's on pages only now. The violet blob was the desktop app's Circle & Ask pointer,
-      still the old Mew head: its ears are gone, so it's the neb dot.
+      still the old Mew head: its ears are gone, so it's the neb dot. **Reversed 2026-11-09 by
+      the owner:** the desktop pointer is the Mew cat again, ears and all (`shell/pointer.html`).
     - **Previews:** `/dev/ui` sections home-header, home-pages, home-study and home-moments, in
       light and night screenshots; keyboard tests for the divider tabs, the plan editor and the
       filter chips (`e2e/ui.spec.ts`).
