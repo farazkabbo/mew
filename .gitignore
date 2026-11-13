@@ -72,3 +72,5 @@ ml/output/
 
 # Eval replies cached by `pnpm eval:notes` (model outputs; never committed)
 frontend/evals/.cache/
+
+.vercel
