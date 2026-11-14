@@ -377,6 +377,7 @@ export function NodeHome({
                       <AddTile
                         icon={FilePlus}
                         label="New page"
+                        tour="new-page"
                         keys={keys.shown("new_page")}
                         ariaKeys={keys.aria("new_page")}
                         onClick={actions.onAddPage}
@@ -386,6 +387,7 @@ export function NodeHome({
                       <AddTile
                         icon={FileUp}
                         label="Import PDF"
+                        tour="import-pdf"
                         keys={keys.shown("import_pdf")}
                         ariaKeys={keys.aria("import_pdf")}
                         onClick={actions.onImportPdf}

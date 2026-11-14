@@ -181,6 +181,7 @@ export function Desk(props: DeskProps) {
         <button
           type="button"
           onClick={props.onNewNotebook}
+          data-tour="new-notebook"
           className="flex h-11 shrink-0 items-center gap-2.5 rounded-full bg-ink px-3.5 text-sm font-medium whitespace-nowrap text-paper transition-opacity duration-[120ms] hover:opacity-90"
           title={`New notebook (${props.keys.newNotebook}) · or say “new notebook called chemistry”`}
           data-keytip={props.keys.newNotebook}
