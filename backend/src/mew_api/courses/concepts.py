@@ -16,6 +16,62 @@ logger = logging.getLogger(__name__)
 OUTLINE_CHARS = 24_000
 MAX_CONCEPTS = 20
 
+#: Headings that label a kind of passage, not a topic: never a concept on their own.
+_GENERIC_HEADINGS = frozenset(
+    {
+        "abstract",
+        "acknowledgements",
+        "acknowledgments",
+        "answer",
+        "answers",
+        "appendix",
+        "bibliography",
+        "chapter",
+        "contents",
+        "copyright",
+        "corollary",
+        "definition",
+        "definitions",
+        "example",
+        "examples",
+        "exercise",
+        "exercises",
+        "figure",
+        "glossary",
+        "index",
+        "introduction",
+        "lemma",
+        "note",
+        "notes",
+        "objectives",
+        "outline",
+        "overview",
+        "practice",
+        "preface",
+        "problem",
+        "problems",
+        "proof",
+        "question",
+        "questions",
+        "references",
+        "remark",
+        "remarks",
+        "review",
+        "solution",
+        "solutions",
+        "summary",
+        "table",
+        "theorem",
+    }
+)
+
+
+def is_generic_heading(heading: str) -> bool:
+    """ "Definition", "Example 3", "Exercises 2.1", "Table of Contents": a label, not a topic."""
+    words = re.sub(r"[^a-z ]", " ", heading.casefold()).split()
+    topic = [w for w in words if w not in _GENERIC_HEADINGS and w not in {"of", "the", "and", "a"}]
+    return not topic
+
 
 class ExtractedConcept(BaseModel):
     title: Annotated[
@@ -100,9 +156,13 @@ def clean(graph: ConceptGraph, pages: set[int]) -> ConceptGraph:
 def heuristic_concepts(chunks: list[TextChunk]) -> ConceptGraph:
     """Without a model: one concept per section heading, in order, each building on the last."""
     sections: dict[str, list[TextChunk]] = {}
+    current: str | None = None
     for chunk in chunks:
-        if chunk.heading:
-            sections.setdefault(chunk.heading, []).append(chunk)
+        # A passage under "Definition" or "Example 2" belongs to the topic before it.
+        if chunk.heading and not is_generic_heading(chunk.heading):
+            current = chunk.heading
+        if current:
+            sections.setdefault(current, []).append(chunk)
     if not sections:
         # No headings: split the material into parts by page.
         size = max(1, len(chunks) // 5)

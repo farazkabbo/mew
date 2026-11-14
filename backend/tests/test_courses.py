@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from mew_api.checker.sandbox import CheckerPool
 from mew_api.config import Settings
-from mew_api.courses.chunking import TextChunk, chunk_pages, looks_like_heading
+from mew_api.courses.chunking import TextChunk, chunk_pages, looks_like_heading, running_lines
 from mew_api.courses.concepts import ConceptGraph, ExtractedConcept, clean, heuristic_concepts
 from mew_api.courses.embeddings import (
     MAX_RATE_LIMIT_WAIT_S,
@@ -107,6 +107,42 @@ def test_heuristic_concepts_follow_the_headings() -> None:
     assert [c.title for c in graph.concepts] == ["Forces", "Newton's laws"]
     assert graph.concepts[1].pages == [2, 3]
     assert graph.concepts[1].prerequisites == [0]
+
+
+def test_running_headers_and_footers_are_not_headings() -> None:
+    # The publisher's name and the book's title sit on every page of a textbook.
+    body = "The mean is the sum of the values divided by how many there are, a measure of centre."
+    topics = ["The Mean", "The Median", "The Mode", "Outliers", "Weighted Means", "Skew"]
+    pages = [
+        (n, "\n".join(["Elementary Statistics", f"2.{n} {topic}", body, "Pearson", f"Page {n}"]))
+        for n, topic in enumerate(topics, start=1)
+    ]
+    assert running_lines(pages) == {"elementary statistics", "pearson", "page #"}
+    chunks = chunk_pages(pages)
+    assert [c.heading for c in chunks] == [f"2.{n} {t}" for n, t in enumerate(topics, start=1)]
+    assert all("Pearson" not in c.text and "Page" not in c.text for c in chunks)
+    # A short document has no "every page": nothing is dropped.
+    assert running_lines(pages[:2]) == set()
+
+
+def test_label_headings_never_become_concepts() -> None:
+    chunks = [
+        TextChunk(1, "2.3 Measures of Central Tendency", "The mean, the median and the mode."),
+        TextChunk(1, "Definition", "The mean is the sum of the entries divided by their number."),
+        TextChunk(2, "Example 3", "Find the mean of 4, 8 and 9."),
+        TextChunk(3, "2.4 Measures of Variation", "The range, variance and standard deviation."),
+        TextChunk(3, "Exercises 2.4", "Find the range of each data set."),
+    ]
+    graph = heuristic_concepts(chunks)
+    assert [c.title for c in graph.concepts] == [
+        "Measures of Central Tendency",
+        "Measures of Variation",
+    ]
+    # What's under a label belongs to the topic before it.
+    assert graph.concepts[0].pages == [1, 2]
+    # Only labels: the material is split by page instead of naming a concept "Definition".
+    only_labels = [TextChunk(n, "Definition", "Some text about the subject.") for n in (1, 2)]
+    assert all(c.title.startswith("Part ") for c in heuristic_concepts(only_labels).concepts)
 
 
 def test_model_graphs_are_cleaned() -> None:
@@ -235,6 +271,41 @@ def test_structured_calls_never_store_and_retry_invalid_output_once() -> None:
     bad, _ = fake_llm(["nope", "still nope"])
     with pytest.raises(LlmError):
         bad.structured(model="m", system="s", text="t", schema=Answer)
+
+
+class FailingInteractions:
+    """The first model named in `down` times out; any other answers."""
+
+    def __init__(self, down: set[str]) -> None:
+        self.down = down
+        self.models: list[str] = []
+
+    def create(self, **kwargs: Any) -> Any:
+        self.models.append(kwargs["model"])
+        if kwargs["model"] in self.down:
+            raise TimeoutError("timed out")
+        return type("Interaction", (), {"output_text": '{"value": 7}'})()
+
+
+def test_a_model_that_fails_outright_is_retried_on_the_fallback_model() -> None:
+    interactions = FailingInteractions({"slow"})
+    client = type("Client", (), {"interactions": interactions})()
+    llm = GeminiLlm(client, fallback_model="fast")
+    assert llm.structured(model="slow", system="s", text="t", schema=Answer).value == 7
+    assert interactions.models == ["slow", "fast"]
+
+    # No fallback (or the same model): the failure is the caller's to handle, as before.
+    for fallback in (None, "slow"):
+        alone = GeminiLlm(client, fallback_model=fallback)
+        with pytest.raises(LlmError, match="TimeoutError"):
+            alone.structured(model="slow", system="s", text="t", schema=Answer)
+
+    # Both down: one error, after one try each.
+    both = FailingInteractions({"slow", "fast"})
+    down = GeminiLlm(type("Client", (), {"interactions": both})(), fallback_model="fast")
+    with pytest.raises(LlmError):
+        down.structured(model="slow", system="s", text="t", schema=Answer)
+    assert both.models == ["slow", "fast"]
 
 
 def test_schemas_are_pruned_to_what_gemini_accepts() -> None:

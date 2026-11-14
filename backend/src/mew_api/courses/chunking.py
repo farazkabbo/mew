@@ -9,6 +9,12 @@ MIN_CHARS = 40
 
 _NUMBERED = re.compile(r"^(?:chapter\s+\d+|\d+(?:\.\d+){0,3}\.?)\s+\S", re.IGNORECASE)
 
+#: A short line on this share of the pages (and at least this many) is a running header or
+#: footer: the book's title, the publisher, "Chapter 3", a copyright line.
+_RUNNING_SHARE = 0.3
+_RUNNING_MIN_PAGES = 3
+_RUNNING_MAX_CHARS = 80
+
 
 @dataclass(frozen=True)
 class TextChunk:
@@ -38,10 +44,11 @@ def chunk_pages(pages: list[tuple[int, str]]) -> list[TextChunk]:
     """Chunks of about TARGET_CHARS, each tagged with the nearest heading above it. Works line by
     line (PDF text rarely has blank lines between paragraphs); never crosses a page."""
     builder = _ChunkBuilder()
+    running = running_lines(pages)
     for number, text in pages:
         for line in text.splitlines():
             stripped = line.strip()
-            if not stripped:
+            if not stripped or _running_key(stripped) in running:
                 continue
             if looks_like_heading(stripped):
                 builder.heading(number, stripped)
@@ -49,6 +56,29 @@ def chunk_pages(pages: list[tuple[int, str]]) -> list[TextChunk]:
                 builder.add(number, stripped)
         builder.flush()
     return builder.chunks
+
+
+def _running_key(line: str) -> str:
+    """A line with its page number taken out: "Pearson 12" and "Pearson 13" are the same line."""
+    return re.sub(r"\d+", "#", line.strip().casefold())
+
+
+def running_lines(pages: list[tuple[int, str]]) -> set[str]:
+    """The short lines repeated across pages (headers, footers, the publisher's name): they say
+    nothing about the subject, and read as headings if left in."""
+    if len(pages) < _RUNNING_MIN_PAGES:
+        return set()
+    seen: dict[str, int] = {}
+    for _, text in pages:
+        keys = {
+            _running_key(line)
+            for line in text.splitlines()
+            if 0 < len(line.strip()) <= _RUNNING_MAX_CHARS
+        }
+        for key in keys:
+            seen[key] = seen.get(key, 0) + 1
+    needed = max(_RUNNING_MIN_PAGES, round(len(pages) * _RUNNING_SHARE))
+    return {key for key, count in seen.items() if count >= needed}
 
 
 class _ChunkBuilder:
