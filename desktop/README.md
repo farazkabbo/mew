@@ -70,34 +70,19 @@ How the app updates (`src-tauri/src/updates.rs`, the official Tauri updater plug
 
 Only `pnpm bundle:release` builds update themselves; `pnpm bundle` and debug builds don't.
 
-**Once, before the first release:**
+**Set up** (done 2026-11-14): the private key is `~/.tauri/neb-updater.key` on the developer's
+PC, with its password in `~/.tauri/neb-updater.password`. Keep both in a password manager and out of
+the repo: **if the key is lost, installed apps can't accept another update, and if it leaks, anyone
+can sign one.** `src-tauri/tauri.release.conf.json` holds the public key and the address
+`https://app.myneb.si/desktop/latest.json`, a web app route that redirects to the newest GitHub
+Release (or to `DESKTOP_UPDATE_MANIFEST_URL`). If the repo ever goes private, its release files need
+a login: move them to another public host and set that variable. The release build refuses to run
+without the private key.
 
-```sh
-pnpm tauri signer generate -w ~/.tauri/neb-updater.key
-```
-
-Keep the private key and its password in a password manager and out of the repo: **if the key is
-lost, installed apps can't accept another update, and if it leaks, anyone can sign one.** Then
-choose a public https folder for releases (not GitHub Releases while the repo is private; its files
-need a login). Put both in `src-tauri/tauri.release.conf.json` and commit it: `pubkey` is the
-contents of `neb-updater.key.pub` (public, safe to commit), `endpoints` is
-`["https://<host>/desktop/latest.json"]`. The release build refuses to run with an empty key.
-
-**Each release:**
-
-1. Raise the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json`.
-2. Build, with the private key and the production site in the environment:
-
-   ```sh
-   TAURI_SIGNING_PRIVATE_KEY="<contents of neb-updater.key>" \
-   TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<its password>" \
-   MEW_APP_URL="https://<the site>" \
-   pnpm bundle:release
-   pnpm update-manifest --base-url "https://<host>/desktop" --notes "What changed"
-   ```
-
-3. Upload `Neb_<version>_x64-setup.exe` to the folder first, then `latest.json`, which goes live
-   the moment it's replaced. The website's download button points at the same `.exe`.
+**Each release:** see [docs/DESKTOP_RELEASE.md](../docs/DESKTOP_RELEASE.md#publishing-a-release).
+Raise the version, build with `MEW_APP_URL`, `TAURI_SIGNING_PRIVATE_KEY` and its password set, run
+`pnpm update-manifest --base-url "https://github.com/farazkabbo/mew/releases/download/desktop-v<version>"`,
+then publish a GitHub Release tagged `desktop-v<version>` with the `.exe` and `latest.json`.
 
 The `.exe` should also be Authenticode-signed before it goes on the website, or Windows SmartScreen
 warns about an unknown publisher. That certificate is separate from the update key.

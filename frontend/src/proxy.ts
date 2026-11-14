@@ -14,6 +14,8 @@ const isPublicRoute = createRouteMatcher([
   // The desktop app's Sign in: the page itself sends someone signed out to sign-up (not sign-in,
   // which is what protecting it here would do) and shows nothing without a session.
   "/desktop/authorize",
+  // Installed desktop apps checking for a new version: a redirect to the release files.
+  "/desktop/latest.json",
 ]);
 /**
  * Called by the desktop app, which has no browser session: these authenticate with a device

@@ -87,56 +87,62 @@ That's why the key and host need to be in place before the first public release.
 
 ## Setup before the first release
 
-Do these once. **Do them before giving the app to anyone:** a copy built without the key and address
-can't update itself, so those users would have to reinstall by hand.
+Done on 2026-11-14:
 
-1. **Create the signing key.** In `desktop/`, run:
+1. **The signing key** is at `~/.tauri/neb-updater.key` on the developer's PC, with its password in
+   `~/.tauri/neb-updater.password`. Keep both in a password manager, and never commit them. If you
+   lose them, installed apps can't accept another update. If they leak, someone else could sign an
+   update.
+2. **The address** every installed copy checks is `https://app.myneb.si/desktop/latest.json`. It's a
+   route in the web app (`frontend/src/app/(site)/desktop/latest.json/route.ts`) that redirects to
+   the newest **GitHub Release** of `farazkabbo/mew`. To host the files somewhere else later, set
+   `DESKTOP_UPDATE_MANIFEST_URL` on Vercel. Installed copies keep working, because their built-in
+   address doesn't change.
+3. **`desktop/src-tauri/tauri.release.conf.json`** holds the public key and that address.
 
-   ```sh
-   pnpm tauri signer generate -w ~/.tauri/neb-updater.key
-   ```
+The website (myneb.si) isn't involved, so releases don't put a download on it. On launch day, copy
+the same `.exe` to where `/download` points.
 
-   Keep the private key and its password in a password manager, and never commit them. If you lose
-   them, installed apps can't accept another update. If they leak, someone else could sign an update.
-
-2. **Host the files on the waitlist site**, `https://www.myneb.si/` (a separate repo, on Vercel). Put
-   the `.exe` and `latest.json` in its public `desktop/` folder. Keep that address working for good,
-   because every installed copy has it built in.
-
-3. **Fill in `desktop/src-tauri/tauri.release.conf.json`** and commit it:
-   - `pubkey`: the contents of `neb-updater.key.pub`. This key is public, so committing it is safe.
-   - `endpoints`: `["https://www.myneb.si/desktop/latest.json"]`
-
-4. **Optional but recommended: buy a code-signing certificate** to reduce the SmartScreen warning.
-   It's separate from the update key.
+Still optional but recommended: **a code-signing certificate**, to reduce the SmartScreen warning.
+It's separate from the update key.
 
 ## Publishing a release
 
 1. Raise the version in `desktop/src-tauri/tauri.conf.json`, `desktop/src-tauri/Cargo.toml` and
-   `desktop/package.json`.
+   `desktop/package.json`. Installed apps only take a **greater** version.
 
-2. Build it, in Git Bash from `desktop/`:
+2. Build it, in Git Bash from the repo root:
 
    ```sh
-   TAURI_SIGNING_PRIVATE_KEY="<contents of neb-updater.key>" \
-   TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<its password>" \
-   MEW_APP_URL="https://<the deployed web app>" \
-   pnpm bundle:release
+   export MEW_APP_URL="https://app.myneb.si"
+   export TAURI_SIGNING_PRIVATE_KEY="$HOME/.tauri/neb-updater.key"
+   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat ~/.tauri/neb-updater.password)"
+   pnpm --filter @mew/desktop bundle:release
 
-   pnpm update-manifest --base-url "https://www.myneb.si/desktop" --notes "What changed"
+   V=0.2.0   # the new version
+   pnpm --filter @mew/desktop update-manifest      --base-url "https://github.com/farazkabbo/mew/releases/download/desktop-v$V"      --notes "What changed"
    ```
 
-   Don't forget `MEW_APP_URL`, and don't set it to the waitlist site. Without it, the app opens `localhost:3000` and users see "localhost
+   Don't forget `MEW_APP_URL`. Without it, the app opens `localhost:3000` and users see "localhost
    refused to connect".
 
-3. Copy the `.exe` and `latest.json` into the waitlist repo and deploy it. Installed apps can see the
-   new version as soon as that deploy is live.
+3. On GitHub, **Releases → Draft a new release**:
+   - Tag: `desktop-v0.2.0` (the same as in `--base-url`), target `main`.
+   - Attach `Neb_0.2.0_x64-setup.exe` **and** `latest.json` from
+     `desktop/src-tauri/target/release/bundle/nsis/`. Don't attach the `.sig`.
+   - Leave **Set as the latest release** ticked, then **Publish**.
 
-4. Point the website's download button at the new `.exe`.
+   Installed apps see the new version at their next check. To pull a bad release, delete it (or
+   untick "latest") and the previous release becomes the newest again. Copies that already
+   updated stay on it until a newer version is published.
+
+4. Hand testers the `.exe` from the release page, or wait for launch day for the website.
 
 ## Before relying on this
 
 These haven't been tested yet:
 
-- Updating from one installed version to the next, which needs the real key and host.
+- Updating from one installed version to the next. The first release (0.1.0) needs the
+  `/desktop/latest.json` route deployed to app.myneb.si; then publish 0.1.1 and watch an installed
+  0.1.0 update.
 - "Show Neb in screen shares and recordings" in a real OBS or Teams capture.
