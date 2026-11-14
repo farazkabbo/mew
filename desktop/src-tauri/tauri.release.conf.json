@@ -4,8 +4,10 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "",
-      "endpoints": []
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ2MzU2MThGNDE3NUQ4MjcKUldRbjJIVkJqMkUxUmh6bllJbmloUTNYMFgxMmV0K2xDMXZoenpBTnRiMklyNys4dmJCa0NSS3oK",
+      "endpoints": [
+        "https://app.myneb.si/desktop/latest.json"
+      ]
     }
   }
 }

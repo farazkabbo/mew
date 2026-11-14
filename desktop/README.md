@@ -59,48 +59,8 @@ PowerShell's name.
 The window shows the web app, so **web changes reach everyone when the site deploys**. A desktop
 release is only needed when something in `desktop/` changes.
 
-How the app updates (`src-tauri/src/updates.rs`, the official Tauri updater plugin):
-
-1. 30 seconds after start, then every 6 hours, or from the tray or the settings page, it fetches
-   the `latest.json` named in `src-tauri/tauri.release.conf.json` (https only).
-2. If that version is newer, it downloads the installer in the background and checks its signature
-   against the public key built into the app. A bad signature is discarded.
-3. The student sees one notification, and the tray and settings page offer "Restart to update". It
-   never restarts by itself. The installer then runs with a progress bar and reopens Neb.
-
-Only `pnpm bundle:release` builds update themselves; `pnpm bundle` and debug builds don't.
-
-**Once, before the first release:**
-
-```sh
-pnpm tauri signer generate -w ~/.tauri/neb-updater.key
-```
-
-Keep the private key and its password in a password manager and out of the repo: **if the key is
-lost, installed apps can't accept another update, and if it leaks, anyone can sign one.** Then
-choose a public https folder for releases (not GitHub Releases while the repo is private; its files
-need a login). Put both in `src-tauri/tauri.release.conf.json` and commit it: `pubkey` is the
-contents of `neb-updater.key.pub` (public, safe to commit), `endpoints` is
-`["https://<host>/desktop/latest.json"]`. The release build refuses to run with an empty key.
-
-**Each release:**
-
-1. Raise the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `package.json`.
-2. Build, with the private key and the production site in the environment:
-
-   ```sh
-   TAURI_SIGNING_PRIVATE_KEY="<contents of neb-updater.key>" \
-   TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<its password>" \
-   MEW_APP_URL="https://<the site>" \
-   pnpm bundle:release
-   pnpm update-manifest --base-url "https://<host>/desktop" --notes "What changed"
-   ```
-
-3. Upload `Neb_<version>_x64-setup.exe` to the folder first, then `latest.json`, which goes live
-   the moment it's replaced. The website's download button points at the same `.exe`.
-
-The `.exe` should also be Authenticode-signed before it goes on the website, or Windows SmartScreen
-warns about an unknown publisher. That certificate is separate from the update key.
+Building the installer, the update key and its password, publishing an update and how the update
+flow works are all in **[docs/DESKTOP_RELEASE.md](../docs/DESKTOP_RELEASE.md)**.
 
 ## Security
 
