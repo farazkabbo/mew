@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   type ImageBlock,
   type Page,
@@ -54,6 +55,7 @@ import { type NoteSpot, NoteSpotlight, OPEN_NOTE_EVENT, readNoteSpot } from "./N
 import { savePdf, type SavePdfScope } from "./save-pdf";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
+import { tourSeen } from "../tour/seen";
 import { QuizCard } from "../quiz/QuizCard";
 import { makeCourseMaterial, recognizePdfPage } from "../pdfs/api";
 import { carryOutImport } from "../pdfs/import";
@@ -142,6 +144,7 @@ export function NotebookApp({
   /** The open node: a notebook, chapter or section (its pages are `pages`). */
   const [notebookId, setNotebookId] = useState<string | null>(null);
   const [view, setView] = useState<View>(start === "desk" ? "desk" : "page");
+  const router = useRouter();
   /** The page to open once the node's pages are read (a jump, a new page). */
   const wantedPage = useRef<string | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
@@ -1563,7 +1566,11 @@ export function NotebookApp({
       />
       {app.showIntro && (
         <Onboarding
-          onDone={app.closeIntro}
+          onDone={() => {
+            app.closeIntro();
+            // U31: someone new, arriving on their desk, goes on to the tour (once per device).
+            if (view === "desk" && !tourSeen(userId)) router.push("/tour");
+          }}
           onStartListening={mew.startListening}
           onHand={setHand}
         />

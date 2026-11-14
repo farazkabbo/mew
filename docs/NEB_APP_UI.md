@@ -1091,3 +1091,19 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     screenshots, so it stays true as screens change; a test checks the PDF → quiz buttons are
     named in order. The introduction's handwriting step also gained **Start over** (the tester
     had no way to redo a box).
+31. **U31. The interactive tour (2026-11-14, `feat/interactive-tour`).** Reading the guide wasn't
+    enough for a new student: `/tour` (`features/tour/`) has them try each thing once, on a
+    practice version of the real screen.
+    - **Steps:** welcome; the desk (three parts to open); writing a line and seeing neb's mark,
+      at each of Quiet / Hint / Coach; holding Ctrl + Alt; circling a slide and picking a
+      question; saving the answer and replaying the moment; the taskbar's tray icon, its menu
+      (the real labels) and turning Screen Coach on, then the tool bar (Windows app only);
+      the four buttons from a PDF to a quiz; a summary.
+    - **Nothing real happens:** no model call, no capture, no question used. In the Windows app
+      the hold step uses an on-screen button, since the real keys belong to Screen Coach there.
+    - **When it shows:** by itself once, when the introduction closes on the desk (a flag in
+      this device's storage, `features/tour/seen.ts`; no account setting). After that from the
+      desk's avatar menu ("Take the tour") and the top of the guide.
+    - **Skippable** at every step and as a whole; Next waits for the step's task otherwise.
+    - **Motion:** `tour-in`, `tour-draw`, `tour-drop`, `tour-pulse` in `globals.css`; reduced
+      motion shows the end state. Tested in `e2e/tour.spec.ts` (browser, Windows app, first run).

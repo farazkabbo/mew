@@ -15,7 +15,15 @@ export function Guide() {
     <CourseShell
       back={{ href: "/desk", label: "Your desk" }}
       title="How to use neb"
-      subtitle="What you can do, and where to click for each. Two minutes to read."
+      subtitle={
+        <>
+          What you can do, and where to click for each. Two minutes to read. Prefer to try it?{" "}
+          <Link href="/tour" className="font-medium text-ink underline underline-offset-2">
+            Take the interactive tour
+          </Link>
+          .
+        </>
+      }
     >
       <nav aria-label="On this page" className="mb-10 flex flex-wrap gap-2 text-sm">
         {TOPICS.map((topic) => (
