@@ -35,10 +35,10 @@ use super::island::{shape_path, Shape, Tool};
 use super::marks::{self, MarkKind, Pt, WordBox, MAX_MARKS};
 use super::overlay::{self, require_surface, Surface};
 use super::pipeline::Captured;
-use super::pointer::{pointer_spot, shows, tick_ms, Hide, PointerLook};
+use super::pointer::{pointer_at, pointer_spot, shows, tick_ms, Hide, PenSeen, PointerLook};
 use super::watch::Change;
 use super::win::winevent::{self, Watch};
-use super::win::{input, target};
+use super::win::{input, pen_input, target};
 
 /// Draw overlay page events (desktop/overlay-src/draw-overlay.ts).
 const DRAW_SHOW: &str = "mew:draw-show";
@@ -129,6 +129,8 @@ pub(super) struct Session {
     pub paused_for_words: bool,
     /// The card's last view (besides the picker), to go back to.
     pub last_view: Option<serde_json::Value>,
+    /// A save that didn't get through: Save sends it again.
+    pub unsent: Option<circle_answer::Unsent>,
 }
 
 impl Session {
@@ -139,6 +141,8 @@ impl Session {
 
 #[derive(Default)]
 pub struct CircleState {
+    /// Where the pen last was on the draw overlay, and the mouse position then (`pointer_at`).
+    pen: Option<PenSeen>,
     /// The microphone is listening (voice on): the pointer says so.
     listening: bool,
     /// The island's tool (draw mode is on for any but None) and the select shape.
@@ -215,14 +219,17 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
     let pointer = overlay::ensure(app, Surface::Pointer);
     let _ = overlay::ensure(app, Surface::Draw);
     // Made now, so their pages have loaded by the time they're first shown (a card made at the
-    // first mark missed what it was sent, and showed empty).
+    // first mark missed what it was sent, and showed empty; so did the first Notes Check panel).
     let _ = overlay::ensure(app, Surface::Card);
     let _ = overlay::ensure(app, Surface::Island);
+    let _ = overlay::ensure(app, Surface::Notes);
     let mut last_cursor = None;
     let mut moved_at = Instant::now() - MOVING_FOR;
     let mut hide = Hide::default();
     let mut hide_checked = Instant::now() - HIDE_CHECK_EVERY;
     let mut shown = false;
+    pen_input::start();
+    pen_input::set_active(true);
 
     while coach::is_usable(app) {
         let now = Instant::now();
@@ -247,11 +254,14 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
         let settings = coach::circle_settings(app);
         let cursor = input::cursor();
         let dragging = track_drag(app, cursor);
-        if cursor != last_cursor {
+        // Heard directly, or from the draw overlay if the tablet's reports couldn't be read.
+        let pen = pen_input::latest().or_else(|| state(app).and_then(|s| s.pen));
+        let follow = pointer_at(cursor, pen);
+        if follow != last_cursor {
             moved_at = now;
-            last_cursor = cursor;
+            last_cursor = follow;
         }
-        if let (Some(window), Some((x, y))) = (&pointer, cursor) {
+        if let (Some(window), Some((x, y))) = (&pointer, follow) {
             let visible = shows(settings.pointer, drawing, hide);
             if visible {
                 if let Some((monitor, dpi)) = target::monitor_at(x, y) {
@@ -287,7 +297,8 @@ fn run_tracker<R: Runtime>(app: &AppHandle<R>) {
         });
     }
 
-    // Off or paused: nothing shows, nothing is held.
+    // Off or paused: nothing shows, nothing is held, and the pen isn't followed.
+    pen_input::set_active(false);
     if let Some(window) = &pointer {
         overlay::hide_quietly(window);
     }
@@ -395,11 +406,17 @@ fn track_drag<R: Runtime>(app: &AppHandle<R>, cursor: Option<(i32, i32)>) -> boo
             overlay::dispatch(app, Surface::Draw, DRAW_NOTE_END, &json!({}));
         }
         DragLook::Finished(points) => {
+            let points_len = points.len();
             let marked = shape_path(shape, &points)
                 .and_then(|points| with_session(app, |s| on_monitor(s.monitor, points)));
             if let Some(points) = marked {
                 add_mark(app, points, shape != Shape::Free);
             } else {
+                eprintln!(
+                    "[screen] mark dropped: {} points, session {}",
+                    points_len,
+                    in_session(app)
+                );
                 // A shape too small to be one: what was drawn of it goes.
                 show_marks(app);
             }
@@ -430,7 +447,7 @@ fn what_hides(privacy: &super::config::Privacy) -> Hide {
     Hide {
         off: false,
         fullscreen: target::foreground_is_fullscreen(),
-        in_call: super::win::system::call_or_recording_in_progress(),
+        in_call: privacy.pause_during_calls && super::win::system::call_or_recording_in_progress(),
         blocked_app,
     }
 }
@@ -532,8 +549,28 @@ fn send_tool<R: Runtime>(app: &AppHandle<R>) {
         app,
         Surface::Draw,
         DRAW_TOOL,
-        &json!({ "tool": tool, "shape": shape }),
+        &json!({ "tool": tool, "shape": shape, "island": island_on_board(app) }),
     );
+}
+
+/// Where the island is on the draw overlay (CSS pixels: left, top, right, bottom), so a pen press
+/// there is a press on its buttons, not a stroke.
+fn island_on_board<R: Runtime>(app: &AppHandle<R>) -> Option<[f32; 4]> {
+    let island = state(app)?.island?;
+    let (monitor, scale) = board(app)?;
+    let x = |at: i32| (at - monitor.left) as f32 / scale;
+    let y = |at: i32| (at - monitor.top) as f32 / scale;
+    Some([
+        x(island.left),
+        y(island.top),
+        x(island.right),
+        y(island.bottom),
+    ])
+}
+
+/// The island moved or changed height: the draw overlay's page is told.
+pub(super) fn island_changed<R: Runtime>(app: &AppHandle<R>) {
+    send_tool(app);
 }
 
 /// The draw overlay's monitor and scale (physical pixels per CSS pixel), once it's placed.
@@ -792,6 +829,7 @@ fn begin_session_if_needed<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindo
             save_only_pending: false,
             paused_for_words: false,
             last_view: None,
+            unsent: None,
         });
     }
     place_board(app, window, monitor, dpi);
@@ -850,10 +888,53 @@ pub fn screen_draw_mark<R: Runtime>(
         s.drag.active() || s.dragged_at.is_some_and(|at| at.elapsed() < SAME_STROKE)
     });
     if mouse_drew {
+        eprintln!("[screen] pen mark ignored: the mouse drew the same stroke");
         return Ok(());
     }
     let points = to_screen_points(app, &stroke.points).ok_or("Not allowed.")?;
     add_mark(app, points, stroke.dashed);
+    Ok(())
+}
+
+/// A pen moved over the draw overlay. A Windows Ink pen often doesn't move the mouse position, so
+/// this is how the pointer keeps up with it. Only ever a position on the overlay's monitor.
+#[tauri::command(async)]
+pub fn screen_draw_pen<R: Runtime>(window: WebviewWindow<R>, at: [f32; 2]) -> Result<(), String> {
+    require_surface(&window, Surface::Draw)?;
+    let app = window.app_handle();
+    let (Some((monitor, scale)), true) = (board(app), at.iter().all(|v| v.is_finite())) else {
+        return Ok(());
+    };
+    let x = (at[0] * scale) as i32 + monitor.left;
+    let y = (at[1] * scale) as i32 + monitor.top;
+    if monitor.contains(x, y) {
+        if let Some(mut state) = state(app) {
+            state.pen = Some(PenSeen {
+                at: (x, y),
+                cursor: input::cursor(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// A pen pressed the island through the draw overlay (mouse presses are read in `track_drag`).
+/// Only a press that really is on the island counts.
+#[tauri::command(async)]
+pub fn screen_draw_island_press<R: Runtime>(
+    window: WebviewWindow<R>,
+    at: [f32; 2],
+) -> Result<(), String> {
+    require_surface(&window, Surface::Draw)?;
+    let app = window.app_handle();
+    let (Some((monitor, scale)), true) = (board(app), at.iter().all(|v| v.is_finite())) else {
+        return Ok(());
+    };
+    let x = (at[0] * scale) as i32 + monitor.left;
+    let y = (at[1] * scale) as i32 + monitor.top;
+    if state(app).is_some_and(|s| s.island.is_some_and(|r| r.contains(x, y))) {
+        super::screen_island::press(app, x, y);
+    }
     Ok(())
 }
 
@@ -930,6 +1011,16 @@ fn add_mark<R: Runtime>(app: &AppHandle<R>, points: Vec<Pt>, dashed: bool) {
         }
     });
     show_marks(app);
+    eprintln!(
+        "[screen] mark: {}",
+        match &outcome {
+            Some(MarkOutcome::Capture) => "capturing",
+            Some(MarkOutcome::Added) => "added",
+            Some(MarkOutcome::Full) => "full",
+            Some(MarkOutcome::Refused) => "refused",
+            None => "no session",
+        }
+    );
     match outcome {
         Some(MarkOutcome::Capture) => coach::capture_for_circle(app),
         Some(MarkOutcome::Full) => circle_answer::show_card_message(
@@ -996,6 +1087,7 @@ pub fn on_captured<R: Runtime>(app: &AppHandle<R>, captured: Captured) {
 
 /// The capture for the marks was refused or failed (the reason was shown).
 pub fn capture_failed<R: Runtime>(app: &AppHandle<R>) {
+    eprintln!("[screen] the capture for the marks failed: the session ends");
     with_session(app, |s| s.capturing = false);
     end_session(app);
 }
@@ -1038,6 +1130,12 @@ fn content_changed<R: Runtime>(app: &AppHandle<R>, change: Change) {
     }
 }
 
+/// The draw overlay's view with no session. The pen and eraser need no session, and the page only
+/// takes a pen stroke while `drawing` is true, so it says whether a tool is on, not just "no marks".
+fn no_marks_view(drawing: bool) -> serde_json::Value {
+    json!({ "marks": [], "grey": false, "drawing": drawing, "mode": "draw" })
+}
+
 /// Sends the marks to the draw overlay to show (the one being drawn is the page's own).
 pub(super) fn show_marks<R: Runtime>(app: &AppHandle<R>) {
     let view = state(app).and_then(|state| {
@@ -1061,8 +1159,8 @@ pub(super) fn show_marks<R: Runtime>(app: &AppHandle<R>) {
             .collect();
         Some(json!({ "marks": marks, "grey": grey, "drawing": drawing, "mode": "draw" }))
     });
-    let view = view
-        .unwrap_or_else(|| json!({ "marks": [], "grey": false, "drawing": false, "mode": "draw" }));
+    let drawing = state(app).is_some_and(|s| s.drawing);
+    let view = view.unwrap_or_else(|| no_marks_view(drawing));
     overlay::dispatch(app, Surface::Draw, DRAW_SHOW, &view);
 }
 
@@ -1084,7 +1182,7 @@ pub fn end_session<R: Runtime>(app: &AppHandle<R>) {
         app,
         Surface::Draw,
         DRAW_SHOW,
-        &json!({ "marks": [], "grey": false, "drawing": false, "mode": "draw" }),
+        &no_marks_view(state(app).is_some_and(|s| s.drawing)),
     );
     overlay::dispatch(app, Surface::Ink, "mew:ink-clear", &json!({}));
     overlay::hide_quietly_named(app, Surface::Ink);
@@ -1427,4 +1525,16 @@ pub fn screen_draw_select<R: Runtime>(
     .ok_or("Drag a box around the question.")?;
     ask_about_area(app, area);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_pen_and_eraser_can_draw_without_a_session() {
+        assert_eq!(no_marks_view(true)["drawing"], true);
+        assert_eq!(no_marks_view(false)["drawing"], false);
+        assert_eq!(no_marks_view(true)["marks"], json!([]));
+    }
 }

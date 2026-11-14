@@ -18,7 +18,7 @@ export function DesktopSignIn() {
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn) {
-      window.location.replace("/notebook");
+      window.location.replace("/desk");
       return;
     }
     // Signed out, or the session expired: this computer's Screen Coach sign-in ends with it.
@@ -26,7 +26,14 @@ export function DesktopSignIn() {
   }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
-    const failed = () => setStep({ kind: "ready", error: TRY_AGAIN });
+    const failed = (event: Event) => {
+      const reason = (event as CustomEvent<{ reason?: unknown } | null>).detail?.reason;
+      setStep({
+        kind: "ready",
+        // "This wasn't me" in the browser: say so, rather than "try again".
+        error: reason === "cancelled" ? "That sign-in was cancelled in your browser." : TRY_AGAIN,
+      });
+    };
     window.addEventListener(SIGN_IN_FAILED_EVENT, failed);
     return () => window.removeEventListener(SIGN_IN_FAILED_EVENT, failed);
   }, []);

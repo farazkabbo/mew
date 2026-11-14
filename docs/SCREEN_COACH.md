@@ -665,3 +665,13 @@ don't ask them again. Where a decision changes the brief above, the decision win
       are the answer ("skip", "next", "stop" too), or it's typed or picked on the card. The web
       server grades it with the key (which never reaches the device) and doesn't reschedule the
       card: the review asks it again later, cold. Rate limits: 4 quizzes a minute, 40 a day.
+14. **Neb's language** (decided 2026-11-01; the owner asked for French, Bengali and Mandarin):
+    one language setting in Settings > Voice, saved to the account, not separate ElevenLabs Agents:
+    Neb's answers come from Gemini and its checks, and an Agent would replace that with its own
+    model and bill by the minute. The setting drives Scribe's `language_code`, a language
+    instruction added to the prompts (`inLanguage`; English prompts are unchanged), and the speech
+    model (Flash has no Bengali, so Bengali uses `eleven_v4_turbo`). The desktop app gets it from
+    device verification. Ink stays in English because the handwriting font has only basic Latin
+    letters. The safety rules cover all four languages; a native speaker should review them. Still
+    in English: fixed lines (coach praise, `SAFE_FALLBACK`), spoken commands in `intent.rs`, and
+    full worked solutions.

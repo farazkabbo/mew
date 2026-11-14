@@ -105,7 +105,7 @@ function render(next: CardLayout): void {
   );
   if (next.mode === "place") input.focus();
   startCountdown(next.countdown);
-  fit();
+  refit();
 }
 
 // Click, speak, click again: the words are asked like typed ones (a follow-up, with the marks).
@@ -180,6 +180,17 @@ function fit(): void {
   fitted = wanted;
   void invoke("screen_circle_card", { action: "fit", text: String(wanted) }).catch(() => undefined);
 }
+/**
+ * Fits whatever size was asked for last: each new view puts the window back at its usual size, so
+ * the same text still needs its height asked for again.
+ */
+function refit(): void {
+  fitted = 0;
+  fit();
+}
+// Another script's font arrives after the text is drawn, and wraps it differently inside the same
+// box: no resize to notice, so the caption stayed cut off until something else changed the card.
+document.fonts.addEventListener("loadingdone", refit);
 if (card) {
   const watch = new ResizeObserver(fit);
   watch.observe(card);

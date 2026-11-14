@@ -7,6 +7,7 @@ import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { makeScreenQuiz, screenQuizDeps } from "@/server/screen-quiz";
+import { requireAllowance } from "@/server/question-gate";
 
 /** The JSON body: a base64 JPEG (~1 MB at most) plus the window's title. */
 const MAX_BODY_BYTES = 1_500_000;
@@ -19,6 +20,8 @@ const MAX_BODY_BYTES = 1_500_000;
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     screenQuiz: RATE_RULES.screenQuiz,
     screenQuizDaily: RATE_RULES.screenQuizDaily,
@@ -27,6 +30,10 @@ export const POST = handle(async (request: Request) => {
   const body = await readJson(request, ScreenQuizRequest, MAX_BODY_BYTES);
   assertJpeg(body.image.jpeg);
   geminiEnv();
-  const reply = await makeScreenQuiz(body, screenQuizDeps(deviceToken(request)), request.signal);
+  const reply = await makeScreenQuiz(
+    body,
+    screenQuizDeps(deviceToken(request), device.language),
+    request.signal,
+  );
   return NextResponse.json(reply, { headers: { "Cache-Control": "no-store" } });
 });

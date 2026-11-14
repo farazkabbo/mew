@@ -44,8 +44,10 @@ const HELD_FADE_STEPS: u32 = 6;
 const GLOW_AT_100: i32 = 40;
 const GLOW_ALPHA: u8 = 84;
 const GLOW_BANDS: u32 = 4;
-/// How long `Frame::hold` waits for the edges to be on screen before giving up.
-const SHOW_TIMEOUT: Duration = Duration::from_millis(300);
+/// How long `Frame::hold` waits for the edges to be on screen before giving up. 300 ms was
+/// often too short on a busy PC (a screen recorder running, a debug build): the capture was refused
+/// and the student's marks vanished.
+const SHOW_TIMEOUT: Duration = Duration::from_millis(2000);
 
 static REGISTER: Once = Once::new();
 

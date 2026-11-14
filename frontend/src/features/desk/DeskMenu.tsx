@@ -3,18 +3,17 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { AccountControls } from "@/components/AccountControls";
+import { SignOutMenuItem } from "@/components/AccountControls";
 
 const LINKS = [
-  { href: "/courses", label: "Courses" },
-  { href: "/review", label: "Review" },
   { href: "/teach", label: "Teach neb" },
   { href: "/settings", label: "Settings" },
 ] as const;
 
 /**
- * The avatar on the desk (docs/NEB_APP_UI.md §5.1, decision U14): the student's initial, opening
- * Courses, Review, Teach neb, Settings and the account.
+ * The avatar on the desk (docs/NEB_APP_UI.md §5.1, decisions U14 and U26): the student's
+ * initial, opening Teach neb, Settings and the account. Courses live in their notebooks, and
+ * Review has its own button in the header.
  */
 export function DeskMenu({ name }: { name: string | null }) {
   const [open, setOpen] = useState(false);
@@ -58,9 +57,8 @@ export function DeskMenu({ name }: { name: string | null }) {
               {link.label}
             </Link>
           ))}
-          <div className="mt-1 flex items-center justify-between border-t border-line px-3 pt-2 pb-1">
-            <span className="text-xs text-muted">Account</span>
-            <AccountControls />
+          <div className="mt-1 flex flex-col border-t border-line pt-1">
+            <SignOutMenuItem />
           </div>
         </div>
       )}

@@ -223,11 +223,16 @@ export class TreeRepository {
     });
   }
 
-  /** Links a notebook to a course (K4: "Use as course material" made one for it). */
-  async setCourse(id: string, courseId: string): Promise<void> {
+  /**
+   * Links a notebook to a course (K4: "Use as course material" made one for it; U26: an existing
+   * course picked on its home), or unlinks it (null: the course was deleted).
+   */
+  async setCourse(id: string, courseId: string | null): Promise<void> {
     await this.write(async () => {
       const node = (await this.tree()).get(id);
-      if (node && node.courseId !== courseId) await this.save(node, { courseId });
+      if (node && (node.courseId ?? null) !== courseId) {
+        await this.save(node, { courseId: courseId ?? undefined });
+      }
     });
   }
 

@@ -15,6 +15,7 @@ import {
   SHAPE_LABEL,
   TIP_DELAY_MS,
   type Tool,
+  pressedByPen,
 } from "./island-view";
 import { invoke, on } from "./tauri";
 
@@ -99,8 +100,14 @@ const actions = new Map<Element, () => void>();
 function onPress(button: HTMLButtonElement | null, run: () => void): void {
   if (!button) return;
   actions.set(button, run);
-  button.addEventListener("click", () => {
-    act(button, run);
+  // A pen's tip touching down is its press. With Windows Ink it isn't a mouse press, so Rust doesn't
+  // see it, and this never-activated window may never get the click that would follow.
+  button.addEventListener("pointerdown", (event) => {
+    if (pressedByPen(event)) act(button, run);
+  });
+  button.addEventListener("click", (event) => {
+    // The press already acted, however long the tip stayed down.
+    if (!pressedByPen(event)) act(button, run);
   });
 }
 

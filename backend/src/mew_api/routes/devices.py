@@ -11,9 +11,12 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic.alias_generators import to_camel
 
 from ..config import Settings
 from ..deps import Caller, CurrentCaller, SettingsDep
@@ -23,6 +26,7 @@ from ..devices.models import (
     IssuedToken,
     LinkCode,
     LinkCodeRequest,
+    PollRequest,
     TokenCheck,
     VerifiedDevice,
 )
@@ -39,9 +43,11 @@ from ..devices.tokens import (
     TOKEN_PATTERN,
     LinkCodes,
     LinkGrant,
+    SignInCancelledError,
     hash_token,
     new_device_token,
 )
+from ..profiles.store import ProfileStore, SupabaseProfileStore
 from ..supabase_rest import StoreError
 
 logger = logging.getLogger(__name__)
@@ -110,8 +116,17 @@ def _call[T](fn: Callable[[], T]) -> T:
 def create_link_code(body: LinkCodeRequest, request: Request, caller: CurrentCaller) -> LinkCode:
     """A one-time code the signed-in page hands to the desktop app (valid for a minute)."""
     grant = LinkGrant(user_id=caller.user_id, local=caller.is_local)
-    code = _link_codes(request).issue(grant, body.challenge)
+    codes = _link_codes(request)
+    if codes.is_cancelled(body.challenge):
+        raise HTTPException(status.HTTP_410_GONE, "That sign-in was cancelled")
+    code = codes.issue(grant, body.challenge)
     return LinkCode(code=code, expires_in_s=int(LINK_CODE_TTL_S))
+
+
+@router.post("/link-codes/cancel", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_link(body: LinkCodeRequest, caller: CurrentCaller, request: Request) -> None:
+    """ "This wasn't me" on the browser page: that desktop sign-in can't finish, by link or poll."""
+    _link_codes(request).cancel(body.challenge)
 
 
 @router.get("")
@@ -146,9 +161,32 @@ def exchange_link_code(
     grant = _link_codes(request).redeem(body.code, body.verifier)
     if grant is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired link code")
+    return _issue_token(grant, body.device_name, request, settings)
+
+
+@router.post("/poll", responses={202: {"description": "Not finished in the browser yet"}})
+def poll_sign_in(
+    body: PollRequest, request: Request, response: Response, settings: SettingsDep
+) -> IssuedToken | None:
+    """The desktop app's fallback when the neb:// link didn't reach it: the code the browser
+    issued for this verifier's challenge, redeemed at once (202 until there is one, 410 if the
+    learner said "This wasn't me")."""
+    try:
+        grant = _link_codes(request).redeem_waiting(body.verifier)
+    except SignInCancelledError:
+        raise HTTPException(status.HTTP_410_GONE, "That sign-in was cancelled") from None
+    if grant is None:
+        response.status_code = status.HTTP_202_ACCEPTED
+        return None
+    return _issue_token(grant, body.device_name, request, settings)
+
+
+def _issue_token(
+    grant: LinkGrant, device_name: str, request: Request, settings: Settings
+) -> IssuedToken:
     registry: DeviceRegistry = _local_devices(request) if grant.local else _registry(settings)
     token = new_device_token()
-    device_id = _call(lambda: registry.add(grant.user_id, hash_token(token), body.device_name))
+    device_id = _call(lambda: registry.add(grant.user_id, hash_token(token), device_name))
     logger.info("Linked a device (%s)", device_id)
     return IssuedToken(token=token, device_id=device_id)
 
@@ -199,7 +237,50 @@ def verify_device_token(
     device = find_device(body.token, request, settings)
     if device is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Unauthorized")
+    device.language = _owner_language(device, request, settings)
     return device
+
+
+def _owner_language(device: VerifiedDevice, request: Request, settings: Settings) -> str:
+    """The language the device's owner chose. English if it can't be read: a screen answer in the
+    wrong language is better than none."""
+    store: ProfileStore
+    if device.local:
+        store = request.app.state.local_profiles
+    elif settings.supabase_url and settings.supabase_secret_key is not None:
+        store = SupabaseProfileStore(
+            settings.supabase_url,
+            api_key=settings.supabase_secret_key.get_secret_value(),
+            user_token=None,
+        )
+    else:
+        return "en"
+    try:
+        return store.get_settings(device.user_id).language
+    except (PermissionError, StoreError, ValueError):
+        logger.warning("Couldn't read a device owner's language (%s)", device.device_id)
+        return "en"
+
+
+class UserCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
+    user_id: Annotated[
+        str, StringConstraints(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9_]+$")
+    ]
+
+
+@router.post("/revoke-user", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_user_devices(body: UserCheck, request: Request, settings: SettingsDep) -> None:
+    """Clerk deleted this account (its webhook, checked by the Next server): every computer it
+    signed in on is signed out at once."""
+    _call(lambda: _local_devices(request).revoke_all(body.user_id))
+    if settings.supabase_url and settings.supabase_secret_key is not None:
+        service = SupabaseOwnerDevices(
+            settings.supabase_url,
+            api_key=settings.supabase_secret_key.get_secret_value(),
+            user_token=None,
+        )
+        _call(lambda: service.revoke_all(body.user_id))
 
 
 @router.post("/revoke-self", status_code=status.HTTP_204_NO_CONTENT)

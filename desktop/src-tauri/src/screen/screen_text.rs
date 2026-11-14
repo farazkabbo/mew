@@ -147,6 +147,44 @@ impl ScreenText {
             .collect()
     }
 
+    /// Where the words a label names are, near `near` (docs/PLAN.md, Part 2; the scoring follows
+    /// Plip's `snap.py`, MIT): runs of up to four words on one line, scored by the share of the
+    /// label's terms they contain, at least 0.55, within `radius` pixels; the best score wins,
+    /// then the nearest. None when nothing on screen matches, so the model's point stands.
+    pub fn spot_for_label(&self, label: &str, near: (i32, i32), radius: f32) -> Option<ScreenRect> {
+        let wanted = terms(label);
+        if wanted.is_empty() {
+            return None;
+        }
+        let mut best: Option<(f32, f32, ScreenRect)> = None;
+        for start in 0..self.words.len() {
+            for len in 1..=wanted.len().clamp(1, 4) {
+                let Some(run) = self.words.get(start..start + len) else {
+                    break;
+                };
+                if run.iter().any(|w| w.line != run[0].line) {
+                    break;
+                }
+                let found: Vec<String> = run.iter().flat_map(|w| terms(&w.text)).collect();
+                let score = wanted.iter().filter(|t| found.contains(t)).count() as f32
+                    / wanted.len() as f32;
+                let Some(rect) = union(run.iter().map(|w| w.rect)) else {
+                    continue;
+                };
+                let (cx, cy) = ((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+                let distance = ((cx - near.0) as f32).hypot((cy - near.1) as f32);
+                if score < 0.55 || distance > radius {
+                    continue;
+                }
+                let better = best.is_none_or(|(s, d, _)| score > s || (score == s && distance < d));
+                if better {
+                    best = Some((score, distance, rect));
+                }
+            }
+        }
+        best.map(|(_, _, rect)| rect)
+    }
+
     /// The text of the words at `indexes` (from `word_boxes`), a line per OCR line, leaving out
     /// lines that still look sensitive (as `text_in` does).
     pub fn text_of(&self, indexes: &[usize], rules: &RedactionRules) -> String {
@@ -355,6 +393,14 @@ pub fn union(rects: impl IntoIterator<Item = ScreenRect>) -> Option<ScreenRect> 
     })
 }
 
+/// A label's or a word's terms: lower case, letters and digits, two characters or more.
+fn terms(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|t| t.chars().count() >= 2)
+        .map(str::to_lowercase)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,6 +437,31 @@ mod tests {
 
     fn text(lines: &[&str], covered: &[PixelRect]) -> ScreenText {
         ScreenText::from_ocr(&ocr(lines), 2.0, (2000, 1000), BOUNDS, covered)
+    }
+
+    #[test]
+    fn finds_the_words_a_label_names_near_the_models_guess() {
+        // Words are 80×20 screen px, 100 px apart; lines 40 px apart, from (-1000, 100).
+        let screen = text(&["File Insert PivotTable Chart", "Insert Table"], &[]);
+        let pivot = screen
+            .spot_for_label("PivotTable", (-760, 110), 120.0)
+            .unwrap();
+        assert_eq!((pivot.left, pivot.top), (-800, 100));
+        // The same word twice: the one nearer the model's guess.
+        let insert = screen.spot_for_label("Insert", (-960, 150), 120.0).unwrap();
+        assert_eq!((insert.left, insert.top), (-1000, 140));
+        // Two words named, on one line: both, as one spot.
+        let table = screen
+            .spot_for_label("insert table", (-920, 150), 120.0)
+            .unwrap();
+        assert_eq!((table.left, table.top, table.right), (-1000, 140, -820));
+        // Too far, or not on screen: the model's point stands.
+        assert!(screen
+            .spot_for_label("PivotTable", (500, 900), 120.0)
+            .is_none());
+        assert!(screen
+            .spot_for_label("Formulas", (-760, 110), 120.0)
+            .is_none());
     }
 
     #[test]

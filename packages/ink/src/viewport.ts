@@ -30,6 +30,14 @@ export function zoomAt(camera: Camera, anchor: Vec, factor: number): Camera {
   return { zoom, x: px - anchor[0] / zoom, y: py - anchor[1] / zoom };
 }
 
+/**
+ * A page has a top but no bottom: the view never goes above the page's top edge (y = 0), and
+ * scrolls down as far as the student likes.
+ */
+export function keepBelowTop(camera: Camera): Camera {
+  return camera.y < 0 ? { ...camera, y: 0 } : camera;
+}
+
 /** The page region visible in a viewport of the given CSS size. */
 export function visibleRegion(camera: Camera, width: number, height: number): BBox {
   return [camera.x, camera.y, width / camera.zoom, height / camera.zoom];

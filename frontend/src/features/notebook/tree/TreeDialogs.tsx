@@ -93,7 +93,7 @@ export function TreeDialogs({
         refuse={() => null}
         onPick={(destination) => {
           if (actions.movingPageId && destination) {
-            actions.movePage(actions.movingPageId, destination);
+            actions.movePage(actions.movingPageId, destination, actions.movingPageFollows);
           }
         }}
         onClose={() => actions.setMovingPageId(null)}

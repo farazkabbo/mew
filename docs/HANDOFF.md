@@ -406,7 +406,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     `mew:card-mic`).
   - **Ink snapping:** `packages/ink/src/tutor/screen/snap.ts` moves circles, underlines,
     highlights and arrows aimed at text onto the OCR word boxes (`ScreenInkInput.words`; the
-    overlay passes its word obstacles). Prompt `circle-ask.v6` asks the model to start from the
+    overlay passes its word obstacles). Prompt `circle-ask.v7` asks the model to start from the
     given boxes.
   - **Notebook:** `EntryNotes` mounts with the page's canvas (keyed by page), so the note under a
     screen entry scrolls with the page instead of floating over it.
@@ -462,6 +462,37 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     editor on 2026-10-28; the security advisor reports nothing).
   - **To verify by hand:** the calibration with a real pen; fixing a reading, then the same
     character read right on a later line; Reset and turning learning off (the count goes to 0).
+- **Updates, voice picker, showing Neb in shares** (2026-11-01, branch
+  `feat/desktop-updater-voice-capture-settings`; the owner's request):
+  - **Updates:** `desktop/src-tauri/src/updates.rs` with `tauri-plugin-updater` (signed `latest.json`
+    and installer, background download, restart only when the student says). Only
+    `pnpm bundle:release` builds update, from `tauri.release.conf.json`. Release steps: desktop/README.md.
+    **Host:** the waitlist site (`https://www.myneb.si/`, another repo, on Vercel) serves
+    `/desktop/latest.json` and the installer, so each release also deploys that repo. It isn't the
+    app: `MEW_APP_URL` must be the deployed web app.
+    **Not done yet:** the owner generates the signing key and fills in `tauri.release.conf.json`.
+  - **Voice:** Settings → Voice shows the allowlisted voices as pills, each with its own sample.
+    Only one shows until `ELEVENLABS_VOICES` lists more.
+  - **Show Neb in screen shares and recordings** (`privacy.showInCaptures`, local page only, off by
+    default; decision 1): sets the overlays to `WDA_NONE`. `pipeline::capture` puts them back to
+    `WDA_EXCLUDEFROMCAPTURE` for each of Neb's own pictures. The capture frame stays excluded always.
+    With the setting on, the hidden card paints a white box where it waits (Windows still says it's
+    hidden; why is unknown), so the card, quiz and notes windows are parked off-screen while hidden
+    (`overlay::park`, native coordinates: a builder's `position` is DPI-scaled and overflows).
+  - **Pen on the island** (Windows Ink pens aren't mouse presses): the tip's `pointerdown` presses a
+    button; through the draw overlay via `screen_draw_island_press`; `no_marks_view` keeps `drawing`
+    true for the pen and eraser with no session; `overlay::keep_top` cuts the island's window to
+    what shows, so a pen reaches what's under its clear part. A tool on still takes all pen input.
+  - **The pointer follows a pen** (`win/pen_input.rs`): a hovering Windows Ink pen freezes
+    `GetCursorPos`, so Raw Input (digitizer pens only, while the pointer runs, position only, memory
+    only) feeds `pointer_at`; the digitizer's range is taken to cover the cursor's monitor. It
+    registers plain digitizers too: an XP-Pen driver passes its pen on through a virtual one
+    (`00FF:BACC`, usage 0x01), and short reports are smaller than a `RAWINPUT`. Verified on XP-Pen. Consent
+    version not bumped: the settings page's wording changed, not what's sent. A maximised window no
+    longer counts as full screen (an auto-hiding taskbar made it look like one and hid the pointer).
+    The desktop app now opens on `/desk`, also after sign-in.
+  - **To verify by hand:** with the setting on, the island and ink in an OBS or Teams capture but not
+    in what Neb's saved clip shows; a real update from one installed version to the next.
 - **The `skills` and `screen_quiz` migrations are not applied to the hosted project yet** (they
   need the owner's go).
 - **The U series (UI overhaul)** — [NEB_APP_UI.md](NEB_APP_UI.md), decisions U1–U23:
@@ -506,6 +537,21 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
 - If the notebook shows "Cannot access 'Subject' before initialization", the dev server is holding
   a stale copy of `packages/shared/src/tutor.ts`: stop `pnpm dev`, delete `frontend/.next`, start
   it again.
+- **U25 built** (2026-11-04, `feat/ui-u10-review`): the Review page restyled to boards 7 and 8
+  (the desk's header, the Up next card and skills, courses as file folders). NEB_APP_UI.md decision
+  U25; it overrides U14 for Review only.
+- **U26, first half, built** (2026-11-04, `feat/ui-u26-study`): a notebook is the whole class.
+  No Courses page (`/courses` → the desk, `/courses/<id>` → its notebook's Study tab); a
+  notebook's home has Pages, Study (the course: build progress, scope review, plan, exam date,
+  Quiz me started on the page) and Moments; "Add course material" until it has one, with "Use a
+  course you have…" for courses made before. NEB_APP_UI.md decision U26.
+- **U26, second half, built** (2026-11-04, `feat/ui-u26-review`): Review's folders are notebooks
+  (checks-only notebooks get their own Quick check), Review is a button with a due count in the
+  desk's header, and Tonight lists concepts to review.
+- **U27 and U28 built** (2026-11-04): a notebook opens on its home and loose pages go into
+  chapters (`feat/notebook-home-and-page-moves`); the notebook home restyled to
+  design/u/notebook-home, with a `--sunk` token (`feat/ui-u11-notebook-home`). NEB_APP_UI.md
+  decisions U27 and U28.
 - **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in

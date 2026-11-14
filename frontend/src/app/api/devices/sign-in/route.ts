@@ -1,21 +1,13 @@
-import { clerkClient } from "@clerk/nextjs/server";
-import {
-  DesktopSignIn,
-  DeviceExchangeRequest,
-  IssuedDeviceToken,
-  VerifiedDevice,
-} from "@mew/shared";
-import { NextResponse } from "next/server";
-import { z } from "zod";
+import { DeviceExchangeRequest, IssuedDeviceToken } from "@mew/shared";
 
 import { isClerkConfigured } from "@/lib/auth-mode";
 import { ApiError, apiFetch } from "@/server/api-client";
 import { clientAddress } from "@/server/device-auth";
 import { handle, HttpError, readJson } from "@/server/http";
+import { signInResponse } from "@/server/desktop-sign-in";
+import { LIMITS } from "@/server/limits";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
-
-/** Clerk's default is 30 days. The desktop window uses this one within seconds. */
-const TICKET_LIFETIME_S = 60;
+import { limitOrThrow } from "@/server/redis";
 
 /**
  * The browser sign-in's last step, called by the desktop app (SCREEN_COACH decision 8a; no browser
@@ -25,6 +17,8 @@ const TICKET_LIFETIME_S = 60;
  */
 export const POST = handle(async (request: Request) => {
   enforceRateLimit(clientAddress(request), { deviceExchange: RATE_RULES.deviceExchange });
+  // The code exchange: 10 per 10 minutes per address, shared by every instance (LAUNCH_LIMITS).
+  await limitOrThrow("session:ip", clientAddress(request), LIMITS.rate.sessionIp);
   if (!isClerkConfigured) throw new HttpError(503, "Desktop sign-in isn't configured");
   const body = await readJson(request, DeviceExchangeRequest, 600);
   let token: string;
@@ -38,26 +32,5 @@ export const POST = handle(async (request: Request) => {
     if (error.status === 400) throw new HttpError(400, "That link has expired. Try again.");
     throw new HttpError(503, "The service is unavailable right now");
   }
-  try {
-    // The user the code was issued to, never anything the caller says.
-    const { userId } = await apiFetch("/v1/devices/verify", VerifiedDevice, {
-      method: "POST",
-      body: { token },
-    });
-    const client = await clerkClient();
-    const { token: ticket } = await client.signInTokens.createSignInToken({
-      userId,
-      expiresInSeconds: TICKET_LIFETIME_S,
-    });
-    return NextResponse.json(DesktopSignIn.parse({ token, ticket }), {
-      headers: { "Cache-Control": "no-store" },
-    });
-  } catch {
-    // The app won't receive the token, so it mustn't stay active.
-    await apiFetch("/v1/devices/revoke-self", z.undefined(), {
-      method: "POST",
-      body: { token },
-    }).catch(() => undefined);
-    throw new HttpError(503, "The service is unavailable right now");
-  }
+  return signInResponse(token);
 });

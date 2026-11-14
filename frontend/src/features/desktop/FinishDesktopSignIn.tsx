@@ -25,7 +25,7 @@ export function FinishDesktopSignIn() {
       try {
         // Sign-in only starts from the signed-out login screen, so this is a reload.
         if (clerk.session) {
-          window.location.replace("/notebook");
+          window.location.replace("/desk");
           return;
         }
         const ticket = await takeDesktopSignInTicket();
@@ -34,7 +34,7 @@ export function FinishDesktopSignIn() {
         if (error || signIn.status !== "complete") throw new Error("ticket refused");
         await signIn.finalize({
           navigate: ({ decorateUrl }) => {
-            window.location.replace(decorateUrl("/notebook"));
+            window.location.replace(decorateUrl("/desk"));
           },
         });
       } catch {

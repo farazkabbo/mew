@@ -55,6 +55,7 @@ pub mod config;
 pub mod destination;
 pub mod drag;
 pub mod frame;
+pub mod glance;
 pub mod hold;
 pub mod image;
 pub mod ink;

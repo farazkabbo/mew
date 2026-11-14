@@ -224,6 +224,12 @@ pub fn foreground_is_fullscreen() -> bool {
     if !is_app_window(hwnd) {
         return false;
     }
+    // A maximised window fills the monitor too when the taskbar auto-hides, and it's an ordinary
+    // window, not a game or a video.
+    // SAFETY: plain value argument; Windows validates the handle.
+    if unsafe { windows::Win32::UI::WindowsAndMessaging::IsZoomed(hwnd) }.as_bool() {
+        return false;
+    }
     let Some(bounds) = window_bounds(hwnd) else {
         return false;
     };

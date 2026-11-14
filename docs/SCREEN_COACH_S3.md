@@ -19,15 +19,14 @@ below were settled; where it differs from this brief, the decision wins.
    - writes a short hint or the first step in the **free space next to the question** (margin),
      never on top of the text
    - says one or two short sentences out loudCompany
-Company name*
-neb
-Describe what your company does in 50 characters or less.*
-Screen tutor that saves every lesson to replay
-Company URL, if any
-https://www.myneb.si/
-If you have a demo, attach it below.
-Anything that shows us how the product works. Please limit to 3 minutes / 100 MB.
-
+     Company name*
+     neb
+     Describe what your company does in 50 characters or less.*
+     Screen tutor that saves every lesson to replay
+     Company URL, if any
+     https://www.myneb.si/
+     If you have a demo, attach it below.
+     Anything that shows us how the product works. Please limit to 3 minutes / 100 MB.
 
 Drop here or browse
 Please provide a link to the product, if any.
@@ -52,7 +51,7 @@ During my day, our operational founder handles operations, talks to users, and g
 This setup lets us sell premium subscriptions in the West, run ad-supported models in Asia, and keep our operational costs dirt cheap,all while moving twice as fast as a local team.
 Progress
 How far along are you?
-Working beta, not launched yet. 17 students used it, and all 17 came back on a second day. They circled things on their screen, heard explanations in Bengali and French, and replayed the saved moments in their notebooks. Together they saved 5  moments and replayed 2.
+Working beta, not launched yet. 17 students used it, and all 17 came back on a second day. They circled things on their screen, heard explanations in Bengali and French, and replayed the saved moments in their notebooks. Together they saved 5 moments and replayed 2.
 Everything in our product description works today: circle and ask by voice, the explanation with drawing, saving to the right notebook chapter, search, replay, the follow-up questions days later and handwriting checking. The main complaint is speed. One tester said it "sometimes lags a bit"; an answer takes about 7 seconds today, and we're working to get it under 4 seconds.
 200 people joined the waitlist from teaser videos that reached 30,000 views on Instagram and Facebook oganically within 5 days.
 We're three students paying for every model call ourselves, which is why the beta stayed at 15 people. Each question costs us about $6. We'll launch on 11/8/2026 as a free app capped at 15 questions per person per day, letting the waitlistes people tryout so the bill stays within what we can pay, and use their feedback to decide what to charge for.
@@ -93,7 +92,6 @@ https://www.myneb.si/
 If you have a demo, attach it below.
 Anything that shows us how the product works. Please limit to 3 minutes / 100 MB.
 
-
 Drop here or browse
 Please provide a link to the product, if any.
 https://www.myneb.si
@@ -117,7 +115,7 @@ During my day, our operational founder handles operations, talks to users, and g
 This setup lets us sell premium subscriptions in the West, run ad-supported models in Asia, and keep our operational costs dirt cheap,all while moving twice as fast as a local team.
 Progress
 How far along are you?
-Working beta, not launched yet. 17 students used it, and all 17 came back on a second day. They circled things on their screen, heard explanations in Bengali and French, and replayed the saved moments in their notebooks. Together they saved 5  moments and replayed 2.
+Working beta, not launched yet. 17 students used it, and all 17 came back on a second day. They circled things on their screen, heard explanations in Bengali and French, and replayed the saved moments in their notebooks. Together they saved 5 moments and replayed 2.
 Everything in our product description works today: circle and ask by voice, the explanation with drawing, saving to the right notebook chapter, search, replay, the follow-up questions days later and handwriting checking. The main complaint is speed. One tester said it "sometimes lags a bit"; an answer takes about 7 seconds today, and we're working to get it under 4 seconds.
 200 people joined the waitlist from teaser videos that reached 30,000 views on Instagram and Facebook oganically within 5 days.
 We're three students paying for every model call ourselves, which is why the beta stayed at 15 people. Each question costs us about $6. We'll launch on 11/8/2026 as a free app capped at 15 questions per person per day, letting the waitlistes people tryout so the bill stays within what we can pay, and use their feedback to decide what to charge for.
@@ -149,7 +147,6 @@ Our domain expertise is that we are the user. One of us is also an animator, whi
 How do we know they need it? Because nobody wants to rewatch a 40-minute video tutorial just to find a 30-second answer. When we told 20 students they could search their notebook for a single word like "color wheels" and jump straight to the exact second they were confused, they immediately tried to download it. We are solving a pain point that makes people want to slam their laptops shut.
 Who are your competitors? What do you understand about your business that they don’t?
 
-
 What we understand: a student learning in a second language has three problems at once. They need to understand the idea in their own language, keep the English words their exam uses, and find the explanation again a week later. Each competitor solves one. A translator helps you understand but drops the English terms. A screen assistant explains, and then the answer is gone. A notes app keeps things, but only what you write down yourself. neb does all three in one action: it explains in your language, keeps the labels in English and saves the moment to your notebook automatically.
 A small study bar at the top of your screen shows your session, your saved moments and your music, so you never have to leave what you’re learning.
 
@@ -171,7 +168,7 @@ This may be in the United States, in your home country or in another country.
 Yes
 No
 If you have not formed the company yet, describe the planned equity ownership breakdown among the founders, employees and any other proposed stockholders. If there are multiple founders, be sure to give the proposed equity ownership of each founder and founder title (e.g. CEO). (This question is as much for you as us.)
-Rubaiya, Rahbir and  we have been working on projects for we spent more weekends than we can count at hackathons together, pulling all-nighters and shipping things that barely worked at 6am.That’s how we learned who does what: Me and Rahbir usually sketching the product and the story,and making it actually run, and Rubaiya is the one talking to people and keeping the three of us on track. Starting neb together felt obvious, and we split the company equally, a third each.
+Rubaiya, Rahbir and we have been working on projects for we spent more weekends than we can count at hackathons together, pulling all-nighters and shipping things that barely worked at 6am.That’s how we learned who does what: Me and Rahbir usually sketching the product and the story,and making it actually run, and Rubaiya is the one talking to people and keeping the three of us on track. Starting neb together felt obvious, and we split the company equally, a third each.
 Have you taken any investment yet?
 Yes
 No
@@ -203,7 +200,7 @@ This may be in the United States, in your home country or in another country.
 Yes
 No
 If you have not formed the company yet, describe the planned equity ownership breakdown among the founders, employees and any other proposed stockholders. If there are multiple founders, be sure to give the proposed equity ownership of each founder and founder title (e.g. CEO). (This question is as much for you as us.)
-Rubaiya, Rahbir and  we have been working on projects for we spent more weekends than we can count at hackathons together, pulling all-nighters and shipping things that barely worked at 6am.That’s how we learned who does what: Me and Rahbir usually sketching the product and the story,and making it actually run, and Rubaiya is the one talking to people and keeping the three of us on track. Starting neb together felt obvious, and we split the company equally, a third each.
+Rubaiya, Rahbir and we have been working on projects for we spent more weekends than we can count at hackathons together, pulling all-nighters and shipping things that barely worked at 6am.That’s how we learned who does what: Me and Rahbir usually sketching the product and the story,and making it actually run, and Rubaiya is the one talking to people and keeping the three of us on track. Starting neb together felt obvious, and we split the company equally, a third each.
 Have you taken any investment yet?
 Yes
 No
@@ -216,13 +213,10 @@ What convinced you to apply to Y Combinator? Did someone encourage you to apply?
 How did you hear about Y Combinator?
 
 Batch Preference
-What batch do you want to apply for?
-4. The student says **"save this"** (or presses **Ctrl + Alt + C**, or clicks **Save to
-   notebook**).
-5. A small preview appears: the question crop **with the tutor's annotations on it**. The
-   student can adjust the crop and press **Save** (Enter) or **Cancel** (Esc).
-6. A new notebook page opens with the question image and the tutor's annotations as **real,
-   editable ink strokes** on top. The student keeps working on it by hand.
+What batch do you want to apply for? 4. The student says **"save this"** (or presses **Ctrl + Alt + C**, or clicks **Save to
+notebook**). 5. A small preview appears: the question crop **with the tutor's annotations on it**. The
+student can adjust the crop and press **Save** (Enter) or **Cancel** (Esc). 6. A new notebook page opens with the question image and the tutor's annotations as **real,
+editable ink strokes** on top. The student keeps working on it by hand.
 
 ### B. YouTube video
 

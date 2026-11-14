@@ -1,6 +1,6 @@
 import { CoachStepRequest } from "@mew/shared";
 
-import { coachFailure, coachReply } from "@/server/coach/http";
+import { coachQuestion, walkthroughKey } from "@/server/coach/http";
 import { defaultCoachDeps, stepCoaching } from "@/server/coach/run";
 import { deviceWalkthroughs } from "@/server/coach/store";
 import { deviceToken, requireDevice } from "@/server/device-auth";
@@ -8,6 +8,8 @@ import { geminiEnv } from "@/server/env";
 import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { askerOf, startQuestion } from "@/server/question-gate";
+import { LIMITS } from "@/server/limits";
 
 /** The JSON body: a base64 JPEG (~1 MB at most) for a check, or just the event. */
 const MAX_BODY_BYTES = 1_500_000;
@@ -31,9 +33,12 @@ export const POST = handle(async (request: Request) => {
   }
 
   const store = deviceWalkthroughs(deviceToken(request));
-  try {
-    return coachReply(await stepCoaching(body, defaultCoachDeps(store), request.signal));
-  } catch (error) {
-    throw coachFailure(error);
-  }
+  // A step of a walkthrough already counted as a question is free (docs/LAUNCH_LIMITS.md).
+  const question = await startQuestion(askerOf(request, device.userId), {
+    key: walkthroughKey(body.walkthroughId),
+    cap: LIMITS.walkthroughSteps,
+  });
+  return coachQuestion(question, device.userId, () =>
+    stepCoaching(body, defaultCoachDeps(store, device.language), request.signal),
+  );
 });

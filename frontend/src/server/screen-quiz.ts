@@ -2,6 +2,8 @@ import "server-only";
 
 import {
   type CheckQuestion,
+  inLanguage,
+  type NebLanguage,
   renderScreenQuizInput,
   SCREEN_QUIZ_LIMITS,
   SCREEN_QUIZ_PROMPT,
@@ -92,9 +94,10 @@ export function deviceQuizStore(token: string): QuizStore {
   };
 }
 
-export function screenQuizDeps(token: string): ScreenQuizDeps {
+export function screenQuizDeps(token: string, language?: NebLanguage): ScreenQuizDeps {
   return {
-    generate: generateStructured,
+    generate: (request) =>
+      generateStructured({ ...request, system: inLanguage(request.system, language) }),
     checkMath: checkMathRemote,
     grade: gradeAnswer,
     store: deviceQuizStore(token),
@@ -111,6 +114,7 @@ export async function makeScreenQuiz(
   try {
     made = await deps.generate({
       model: screenModel(),
+      purpose: "screen-quiz",
       system: SCREEN_QUIZ_PROMPT.system,
       input: [
         { type: "text" as const, text: renderScreenQuizInput(request) },

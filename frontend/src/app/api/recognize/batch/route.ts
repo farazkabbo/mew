@@ -7,6 +7,7 @@ import { assertSameOrigin, handle, HttpError, readJson, requireUserId } from "@/
 import { assertPng } from "@/server/png";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { recognizeHandwritingBatch } from "@/server/recognition";
+import { requireAllowance } from "@/server/question-gate";
 
 const MAX_BODY_BYTES = RECOGNIZE_BATCH_MAX * TUTOR_LIMITS.lineImageBase64Chars + 10_000;
 
@@ -17,6 +18,8 @@ const MAX_BODY_BYTES = RECOGNIZE_BATCH_MAX * TUTOR_LIMITS.lineImageBase64Chars +
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(userId);
   enforceRateLimit(userId, { recognizeBatch: RATE_RULES.recognizeBatch });
   const { images } = await readJson(request, RecognizeBatchRequest, MAX_BODY_BYTES);
   images.forEach((image) => assertPng(image));

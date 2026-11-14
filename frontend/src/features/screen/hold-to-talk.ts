@@ -1,7 +1,8 @@
 import { SttSession } from "@mew/shared";
 
 import { type MicrophoneHandle, startMicrophone } from "../voice/microphone";
-import { ScribeClient } from "../voice/scribe-client";
+import { useSettings } from "../settings/store";
+import { ScribeClient, scribeLanguage } from "../voice/scribe-client";
 
 /** How long to wait for the transcript after the key comes up before using what was heard. */
 const COMMIT_TIMEOUT_MS = 2500;
@@ -47,6 +48,7 @@ export class HoldToTalk {
   }
 
   private async open(): Promise<void> {
+    this.heard = "";
     const session = await fetchSession();
     this.scribe = new ScribeClient(
       session,
@@ -56,13 +58,17 @@ export class HoldToTalk {
           if (text.trim()) this.heard = text;
         },
         onCommitted: (text) => {
-          this.heard = text;
-          this.onCommitted?.(text);
+          // An empty commit never wipes words already heard.
+          if (text.trim()) this.heard = text;
+          this.onCommitted?.(this.heard);
         },
         onError: () => this.release(),
         onClose: () => undefined,
       },
-      { commitStrategy: "manual" },
+      {
+        commitStrategy: "manual",
+        ...scribeLanguage(useSettings.getState().settings.language),
+      },
     );
     this.mic = await startMicrophone((pcm) => this.scribe?.sendAudio(pcm));
   }

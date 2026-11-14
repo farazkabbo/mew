@@ -1,9 +1,16 @@
 import "server-only";
 
-import { SCRIBE_REALTIME_URL, type SttSession, TTS_SAMPLE_RATE } from "@mew/shared";
+import {
+  NEB_LANGUAGES,
+  type NebLanguage,
+  SCRIBE_REALTIME_URL,
+  type SttSession,
+  TTS_SAMPLE_RATE,
+} from "@mew/shared";
 import { z } from "zod";
 
 import { elevenLabsEnv, ttsEnv } from "./env";
+import { fakeModel, fakeSpeech } from "./fake-model";
 import { HttpError } from "./http-error";
 
 const API = "https://api.elevenlabs.io";
@@ -46,7 +53,10 @@ export async function streamSpeech(
   signal: AbortSignal,
   /** An allowed voice (see voices.ts); defaults to ELEVENLABS_VOICE_ID. */
   voiceId?: string,
+  language: NebLanguage = "en",
 ): Promise<ReadableStream<Uint8Array>> {
+  // Preview and staging only (fake-model.ts): silence, no call.
+  if (fakeModel()) return fakeSpeech(TTS_SAMPLE_RATE);
   const { ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID, ELEVENLABS_TTS_MODEL } = ttsEnv();
   const voice = voiceId ?? ELEVENLABS_VOICE_ID;
   if (!/^[A-Za-z0-9]{8,64}$/.test(voice)) throw new HttpError(400, "Unknown voice");
@@ -58,7 +68,11 @@ export async function streamSpeech(
     response = await fetch(url, {
       method: "POST",
       headers: { "xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ text, model_id: ELEVENLABS_TTS_MODEL }),
+      body: JSON.stringify({
+        text,
+        model_id: NEB_LANGUAGES[language].ttsModel ?? ELEVENLABS_TTS_MODEL,
+        ...(language !== "en" && { language_code: language }),
+      }),
       cache: "no-store",
       redirect: "error",
       signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),

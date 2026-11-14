@@ -14,6 +14,8 @@ import {
   type CoachStepRequest,
   CoachVerdict,
   coachPlanReasons,
+  inLanguage,
+  type NebLanguage,
   coachVerdictReasons,
   declined,
   pickSkill,
@@ -94,6 +96,7 @@ export async function startCoaching(
 ): Promise<CoachReply> {
   const plan = await deps.generate({
     model: screenModel(),
+    purpose: "coach-plan",
     system: COACH_PLANNER_PROMPT.system,
     input: [
       { type: "text", text: renderPlannerInput(request) },
@@ -219,6 +222,7 @@ async function verify(
 ): Promise<StepVerdict> {
   const verdict = await generate({
     model: verifierModel(),
+    purpose: "coach-check",
     system: COACH_VERIFIER_PROMPT.system,
     input: [
       {
@@ -323,8 +327,9 @@ function clip(text: string, max: number): string {
   return cut.slice(0, Math.max(cut.lastIndexOf(" "), 1));
 }
 
-export const defaultCoachDeps = (store: WalkthroughStore): CoachDeps => ({
-  generate: generateStructured,
+export const defaultCoachDeps = (store: WalkthroughStore, language?: NebLanguage): CoachDeps => ({
+  generate: (request) =>
+    generateStructured({ ...request, system: inLanguage(request.system, language) }),
   store,
   now: () => new Date(),
 });

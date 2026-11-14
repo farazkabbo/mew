@@ -192,3 +192,19 @@ export function erase(notes: readonly Pt[][], at: Pt, radius: number): Pt[][] {
   const near = ([x, y]: Pt) => Math.hypot(x - at[0], y - at[1]) <= radius;
   return notes.filter((note) => !note.some(near));
 }
+
+/** Whether (`x`, `y`) is inside `box`: `[left, top, right, bottom]` from Rust, or nothing. */
+export function insideBox(box: unknown, x: number, y: number): boolean {
+  if (!Array.isArray(box) || box.length !== 4) return false;
+  const [left, top, right, bottom] = box as unknown[];
+  return (
+    typeof left === "number" &&
+    typeof top === "number" &&
+    typeof right === "number" &&
+    typeof bottom === "number" &&
+    x >= left &&
+    x < right &&
+    y >= top &&
+    y < bottom
+  );
+}

@@ -6,6 +6,7 @@ import { assertSameOrigin, handle, HttpError, readJson, requireUserId } from "@/
 import { assertPng } from "@/server/png";
 import { gradeAnswer } from "@/server/quiz";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { requireAllowance } from "@/server/question-gate";
 
 const MAX_BODY_BYTES = 1_700_000;
 
@@ -13,6 +14,8 @@ const MAX_BODY_BYTES = 1_700_000;
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(userId);
   enforceRateLimit(userId, {
     quizGrade: RATE_RULES.quizGrade,
     quizGradeDaily: RATE_RULES.quizGradeDaily,

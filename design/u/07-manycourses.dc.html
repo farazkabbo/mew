@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>neb · Review, many courses</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&amp;family=Inter:wght@400;500;600&amp;family=Pixelify+Sans:wght@500&amp;display=swap">
+<style>
+body{margin:0}
+.t-light{--desk:#ECE6D8;--paper:#FBF8F0;--paper-hi:#FFFEFB;--ink:#1E1D1A;--muted:#5F5A50;--line:#D3CAB7;--rule:#D6E2E6;--margin-red:#E9B9B2;--neb:#6B4EE6;--neb-ink:#3F2BA0;--neb-wash:#F1EDFF;--note:#F1E5AE;--on-ink:#FBF8F0;--sh-2:0 10px 24px -14px #1E1D1A66;--sh-3:0 24px 50px -30px #1E1D1A99}
+.t-night{--desk:#1B1F23;--paper:#22272C;--paper-hi:#2A3036;--ink:#ECE6D8;--muted:#A9A294;--line:#3A4047;--rule:#2F3A40;--margin-red:#6A3E3A;--neb:#9C86FF;--neb-ink:#C9BCFF;--neb-wash:#2C2550;--note:#5A5230;--on-ink:#1B1F23;--sh-2:0 10px 24px -14px #00000099;--sh-3:0 24px 50px -30px #000000CC}
+a{color:var(--ink)}a:hover{color:var(--muted)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.row-link{text-decoration:none}
+.row-link:hover{background:var(--paper-hi)}
+.front,.back{pointer-events:none}.front>*,.back>*{pointer-events:auto}
+.ftab{transition:transform 160ms ease-out}
+.back .ftab:hover{transform:translateY(-4px)}
+.pull-out{transform-origin:50% 100%;animation:pullOut 640ms both}
+@keyframes pullOut{
+0%{transform:translateY(0) rotate(0deg);z-index:0;animation-timing-function:cubic-bezier(.3,0,.25,1)}
+47%{transform:translateY(-140px) rotate(-1deg);z-index:0;animation-timing-function:steps(1,end)}
+50%{transform:translateY(-140px) rotate(-1deg);z-index:20;animation-timing-function:cubic-bezier(.3,.6,.2,1)}
+100%{transform:none;z-index:20}}
+@media (prefers-reduced-motion: reduce){.pull-out{animation:none}.ftab{transition:none}}
+</style>
+</helmet>
+<div class="{{themeClass}}" style="min-height: 100vh; background: var(--desk); color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+
+<header style="min-height: 76px; box-sizing: border-box; padding: 14px 40px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; gap: 20px">
+<a href="#" style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px 0 8px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--ink)">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+Desk
+</a>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 30px; height: 30px; border-radius: 999px; background: var(--neb); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+</span>
+<span style="font-size: 20px; font-weight: 600; letter-spacing: 0.02em">neb</span>
+</div>
+<div style="flex: 1 1 40px"></div>
+<button type="button" style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 8px 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); font: 400 14px Inter, sans-serif; cursor: pointer">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+Jump to any page or moment
+<span style="display: inline-flex; gap: 4px; margin-left: 12px">
+<kbd style="font: 600 12px Inter, sans-serif; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 5px; padding: 1px 6px">Ctrl</kbd>
+<kbd style="font: 600 12px Inter, sans-serif; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 5px; padding: 1px 6px">K</kbd>
+</span>
+</button>
+<button type="button" aria-label="Account menu" style="width: 44px; height: 44px; border-radius: 999px; border: none; background: #7DA4AF; color: #FFFEFB; font: 400 22px 'Instrument Serif', serif; cursor: pointer">N</button>
+</header>
+
+<main style="max-width: 1160px; margin: 0 auto; padding: 48px 40px 80px; box-sizing: border-box">
+
+<div style="margin-bottom: 40px">
+<h1 style="margin: 0; font: 400 72px/1 'Instrument Serif', serif; letter-spacing: -0.01em">Review</h1>
+<p style="margin: 12px 0 0; font-size: 16px; color: var(--muted); max-width: 520px">What's due for another look. Things come back sooner when you miss them, later when they stay.</p>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 40px; align-items: flex-start">
+
+<section aria-labelledby="upnext" style="flex: 1 1 340px; max-width: 420px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+<h2 id="upnext" style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted)">Up next</h2>
+
+<div style="position: relative; background: var(--paper-hi); border-radius: 4px; box-shadow: var(--sh-3); padding: 0 0 28px; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 31px, var(--rule) 31px, var(--rule) 32px); background-position: 0 66px">
+<div style="height: 66px; box-sizing: border-box; padding: 22px 28px 0; border-bottom: 2px solid var(--margin-red); background: var(--paper-hi)">
+<span style="font: 500 14px 'Pixelify Sans', monospace; color: var(--neb-ink)">from what you saved</span>
+</div>
+<div style="padding: 20px 28px 0; display: flex; flex-direction: column; gap: 18px">
+<div>
+<div style="font: 400 40px/1.05 'Instrument Serif', serif">4 quick checks</div>
+<div style="margin-top: 6px; font-size: 14px; color: var(--muted)">about 8 min · from 3 courses</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
+<button type="button" style="height: 48px; padding: 0 28px; border-radius: 999px; border: none; background: var(--neb); color: #FFFFFF; font: 600 16px Inter, sans-serif; cursor: pointer">Start</button>
+<button type="button" style="height: 48px; padding: 0 20px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: 500 15px Inter, sans-serif; cursor: pointer">Not now</button>
+</div>
+</div>
+</div>
+
+<div style="padding: 20px 22px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px">
+<div style="display: flex; align-items: center; gap: 10px; font-weight: 600">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>
+Skills to re-check
+</div>
+<p style="margin: 8px 0 0; font-size: 14px; color: var(--muted)">None due. Finish a walkthrough in the desktop app and its re-check shows up here.</p>
+</div>
+</section>
+
+<section aria-labelledby="courses" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; margin-bottom: 8px">
+<h2 id="courses" style="margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted)">By course</h2>
+<span style="font-size: 13px; color: var(--muted)">5 courses · most due first</span>
+</div>
+
+<div role="tablist" aria-label="Courses" style="position: relative; isolation: isolate">
+<sc-for list="{{courses}}" as="c" hint-placeholder-count="5">
+<div class="{{c.cls}}" style="{{c.folderStyle}}">
+<button type="button" role="tab" class="ftab" aria-selected="{{c.open}}" onClick="{{c.pick}}" style="{{c.tabStyle}}">
+<span style="flex: none; width: 8px; height: 8px; border-radius: 999px; background: {{c.color}}; box-shadow: 0 0 0 1.5px rgba(30,29,26,.35)" aria-hidden="true"></span>
+<span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left">{{c.short}}</span>
+<sc-if value="{{c.hasQuiz}}" hint-placeholder-val="{{ true }}">
+<span style="flex: none; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: var(--ink); color: var(--on-ink); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center" aria-label="{{c.dueLabel}}">{{c.quiz}}</span>
+</sc-if>
+</button>
+<div role="tabpanel" aria-hidden="{{c.hidden}}" style="{{c.bodyStyle}}">
+<sc-if value="{{c.showContent}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; margin-bottom: 22px">
+<div style="flex: 1 1 260px; min-width: 0">
+<h3 style="margin: 0; font: 400 34px/1.05 'Instrument Serif', serif">{{c.name}}</h3>
+<div style="display: flex; height: 8px; gap: 2px; margin-top: 14px; max-width: 320px">
+<span style="{{c.revisitBar}}"></span>
+<span style="{{c.newBar}}"></span>
+<span style="{{c.checkedBar}}"></span>
+</div>
+<div style="margin-top: 8px; font-size: 13px; color: var(--ink); opacity: .78">{{c.summary}}</div>
+</div>
+<sc-if value="{{c.hasQuiz}}" hint-placeholder-val="{{ true }}">
+<button type="button" style="height: 44px; padding: 0 16px 0 22px; border-radius: 999px; border: none; background: var(--ink); color: var(--on-ink); font: 600 15px Inter, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; flex: none">
+Quiz me
+<span style="min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: var(--on-ink); color: var(--ink); font-size: 12px; display: inline-flex; align-items: center; justify-content: center">{{c.quiz}}</span>
+</button>
+</sc-if>
+</div>
+
+<div style="background: var(--paper-hi); border-radius: 6px; box-shadow: var(--sh-2); overflow: hidden">
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{c.concepts}}" as="k" hint-placeholder-count="3">
+<li style="border-bottom: 1px solid var(--rule)">
+<a href="#" class="row-link" style="display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 10px 22px; color: var(--ink)">
+<sc-if value="{{k.isRevisit}}" hint-placeholder-val="{{ true }}">
+<span style="width: 30px; height: 30px; flex: none; border-radius: 999px; background: var(--ink); color: var(--on-ink); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+</span>
+</sc-if>
+<sc-if value="{{k.isNew}}" hint-placeholder-val="{{ false }}">
+<span style="width: 30px; height: 30px; flex: none; border-radius: 999px; border: 1.5px dashed var(--muted); box-sizing: border-box" aria-hidden="true"></span>
+</sc-if>
+<sc-if value="{{k.isChecked}}" hint-placeholder-val="{{ false }}">
+<span style="width: 30px; height: 30px; flex: none; border-radius: 999px; background: var(--neb-wash); display: inline-flex; align-items: center; justify-content: center" aria-hidden="true">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--neb)" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"></path></svg>
+</span>
+</sc-if>
+<span style="flex: 1; min-width: 0">
+<span style="display: block; font-size: 16px; font-weight: 600">{{k.name}}</span>
+<span style="display: block; font-size: 13px; color: var(--muted)">{{k.detail}}</span>
+</span>
+<span style="{{k.chipStyle}}">{{k.chip}}</span>
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</a>
+</li>
+</sc-for>
+</ul>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+</div>
+
+<p style="margin: 8px 0 0; font-size: 13px; color: var(--muted)">A concept counts as checked once you get it right on your own. Hints and shown answers bring it back sooner.</p>
+</section>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = { active: 'eecs4101', prev: null, flip: 0 };
+}
+componentWillUnmount() { clearTimeout(this._t); }
+pick(id) {
+var self = this;
+if (id === this.state.active) return;
+clearTimeout(this._t);
+this.setState({ prev: this.state.active, active: id, flip: this.state.flip + 1 });
+this._t = setTimeout(function () { self.setState({ prev: null }); }, 640);
+}
+renderVals() {
+var self = this;
+var data = [
+{ id: 'eecs4101', short: 'EECS 4101', name: 'EECS 4101 · Advanced Data Structures', color: '#C98B6B', concepts: [
+{ name: 'Amortized analysis', status: 'revisit', detail: 'Due since 2 days ago' },
+{ name: 'Red-black tree deletion', status: 'revisit', detail: 'Due since yesterday' },
+{ name: 'Splay trees', status: 'new', detail: 'Not practised yet' },
+{ name: 'Binomial heaps', status: 'checked', detail: 'Comes back in 5 days' }
+] },
+{ id: 'math1581', short: 'Business Math', name: 'Business Mathematics', color: '#9DB8D9', concepts: [
+{ name: 'Simple Discount', status: 'revisit', detail: 'Due since yesterday' },
+{ name: 'Simple Interest', status: 'new', detail: 'Not practised yet' }
+] },
+{ id: 'nats1610', short: 'NATS 1610', name: 'NATS 1610 · The Living Body', color: '#8FA98B', concepts: [
+{ name: 'Membrane transport', status: 'revisit', detail: 'Due today' },
+{ name: 'Homeostasis', status: 'checked', detail: 'Comes back in 3 days' },
+{ name: 'Negative feedback loops', status: 'checked', detail: 'Comes back in 1 week' }
+] },
+{ id: 'stats', short: 'Statistics', name: 'Intro Statistics', color: '#D4B45A', concepts: [
+{ name: 'Sampling distributions', status: 'new', detail: 'Not practised yet' },
+{ name: 'Confidence intervals', status: 'new', detail: 'Not practised yet' }
+] },
+{ id: 'hist', short: 'History', name: 'Modern History', color: '#C99AA4', concepts: [
+{ name: 'The Treaty of Versailles', status: 'checked', detail: 'Comes back in 4 days' },
+{ name: 'The interwar economy', status: 'checked', detail: 'Comes back in 9 days' }
+] }
+];
+function bar(n, kind) {
+if (!n) return 'display: none';
+var base = 'flex: ' + n + '; border-radius: 999px; box-sizing: border-box; ';
+if (kind === 'revisit') return base + 'background: var(--ink)';
+if (kind === 'new') return base + 'border: 1.5px dashed var(--muted)';
+return base + 'background: var(--neb)';
+}
+var courses = data.map(function (c, i) {
+var r = 0, n = 0, k = 0;
+c.concepts.forEach(function (x) { if (x.status === 'revisit') r++; else if (x.status === 'new') n++; else k++; });
+var parts = [];
+if (r) parts.push(r + ' to revisit');
+if (n) parts.push(n + ' new');
+if (!r && !n) parts.push('all ' + k + ' checked · nothing due');
+else if (k) parts.push(k + ' checked');
+var open = self.state.active === c.id;
+var tint = 'color-mix(in srgb, ' + c.color + ' 42%, var(--paper))';
+var N = data.length;
+var slotLeft = 'calc((100% - 16px) * ' + i + ' / ' + N + ')';
+var slotWidth = 'calc((100% - 16px) / ' + N + ' - 4px)';
+var isPrev = !open && self.state.prev === c.id;
+var pulling = open && self.state.prev !== null;
+return {
+name: c.name, short: c.short, color: c.color, open: open,
+hidden: !open, showContent: open || isPrev,
+dueLabel: (r + n) + ' to practise',
+pick: function () { self.pick(c.id); },
+cls: (open ? 'front' : 'back') + (pulling ? ' pull-out' : ''),
+folderStyle: open
+? 'position: relative; z-index: 20; padding-top: 50px'
+: 'position: absolute; left: 0; right: 0; top: 0; bottom: 0; z-index: ' + (isPrev ? 10 : 1 + i) + '; padding-top: 50px; box-sizing: border-box; display: flex; flex-direction: column',
+tabStyle: 'position: absolute; top: 0; left: ' + slotLeft + '; width: ' + slotWidth + '; height: 51px; display: flex; align-items: center; gap: 8px; box-sizing: border-box; padding: 0 12px 1px 14px; border: none; border-radius: 10px 10px 0 0; background: ' + tint + '; color: var(--ink); font: ' + (open ? 600 : 500) + ' 14px Inter, sans-serif; cursor: pointer' + (open ? '' : '; box-shadow: inset 0 -10px 12px -10px rgba(30,29,26,.28)'),
+bodyStyle: 'background: ' + tint + '; border-radius: ' + (i === 0 ? '0 14px 14px 14px' : '14px') + '; box-shadow: var(--sh-3); padding: 28px 28px 32px; box-sizing: border-box; ' + (open ? 'min-height: 380px' : 'flex: 1'),
+summary: parts.join(' · '),
+quiz: r + n, hasQuiz: r + n > 0,
+revisitBar: bar(r, 'revisit'), newBar: bar(n, 'new'), checkedBar: bar(k, 'checked'),
+concepts: c.concepts.slice().sort(function (a, b) { var w = { revisit: 0, 'new': 1, checked: 2 }; return w[a.status] - w[b.status]; }).map(function (x) {
+var chip = x.status === 'revisit' ? 'Revisit' : x.status === 'new' ? 'New' : 'Checked';
+var chipStyle = x.status === 'revisit'
+? 'font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--note); color: var(--ink); flex: none'
+: x.status === 'new'
+? 'font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); flex: none'
+: 'font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--neb-wash); color: var(--neb-ink); flex: none';
+return { name: x.name, detail: x.detail, chip: chip, chipStyle: chipStyle, isRevisit: x.status === 'revisit', isNew: x.status === 'new', isChecked: x.status === 'checked' };
+})
+};
+});
+return { themeClass: this.props.night ? 't-night' : 't-light', courses: courses };
+}
+}
+</script>
+</body>
+</html>

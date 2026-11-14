@@ -36,6 +36,13 @@ class ExchangeRequest(_Camel):
     device_name: DeviceName
 
 
+class PollRequest(_Camel):
+    """The desktop app checking whether its sign-in finished in the browser (polling)."""
+
+    verifier: Verifier
+    device_name: DeviceName
+
+
 class IssuedToken(_Camel):
     """Returned once, to the desktop app that redeemed the code."""
 
@@ -51,6 +58,8 @@ class VerifiedDevice(_Camel):
     user_id: str
     device_id: UUID
     scopes: list[str]
+    # The language its owner chose, so a screen answer comes back in it.
+    language: str = "en"
     # Found in the development-only local store (local mode): never sent to the web app.
     local: bool = Field(default=False, exclude=True)
 

@@ -8,6 +8,7 @@ import { handle, HttpError, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { reanchorScreen } from "@/server/screen-reanchor";
+import { requireAllowance } from "@/server/question-gate";
 
 /** The JSON body: a base64 JPEG (~1 MB at most), the earlier ink and a little text. */
 const MAX_BODY_BYTES = 1_520_000;
@@ -19,6 +20,8 @@ const MAX_BODY_BYTES = 1_520_000;
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     screen: RATE_RULES.screen,
     screenDaily: RATE_RULES.screenDaily,

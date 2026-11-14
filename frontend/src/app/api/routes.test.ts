@@ -203,6 +203,35 @@ describe("POST /api/tts", () => {
     });
   });
 
+  it("speaks Bengali with the model that can, and uses a language's own voice", async () => {
+    vi.stubEnv("ELEVENLABS_API_KEY", "xi-secret-key");
+    vi.stubEnv("ELEVENLABS_VOICE_ID", "Voice1234abcd");
+    vi.stubEnv("ELEVENLABS_VOICE_FR", "French1234abcd");
+    const upstream = vi.fn(async () => new Response(new Uint8Array([1, 0])));
+    vi.stubGlobal("fetch", upstream);
+    const { POST } = await import("./tts/route");
+
+    await POST(post("/api/tts", { text: "নমস্কার", language: "bn" }));
+    const [bnUrl, bn] = upstream.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(String(bnUrl)).toContain("/Voice1234abcd/");
+    expect(JSON.parse(String(bn.body))).toEqual({
+      text: "নমস্কার",
+      model_id: "eleven_v4_turbo",
+      language_code: "bn",
+    });
+
+    await POST(post("/api/tts", { text: "Bonjour", language: "fr" }));
+    const [frUrl, fr] = upstream.mock.calls[1] as unknown as [URL, RequestInit];
+    expect(String(frUrl)).toContain("/French1234abcd/");
+    expect(JSON.parse(String(fr.body))).toMatchObject({
+      model_id: "eleven_flash_v2_5",
+      language_code: "fr",
+    });
+
+    const refused = await POST(post("/api/tts", { text: "Hi", language: "xx" }));
+    expect(refused.status).toBe(400);
+  });
+
   it("budgets by characters per minute", async () => {
     vi.stubGlobal(
       "fetch",

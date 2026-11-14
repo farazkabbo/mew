@@ -287,7 +287,8 @@ fn poll_keys() {
     let change = STATE.with(|cell| {
         let mut state = cell.borrow_mut();
         let state = state.as_mut()?;
-        let mouse = std::mem::take(&mut state.mouse_since_poll);
+        // A pen moves the last-input time too, without the mouse hook seeing it.
+        let mouse = std::mem::take(&mut state.mouse_since_poll) | super::pen_input::moved_since();
         state
             .keys
             .poll(Instant::now(), info.dwTime, mouse, modifier_down)

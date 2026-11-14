@@ -19,7 +19,9 @@
     "eval:quiz": "tsx --conditions=react-server evals/quiz.eval.ts",
     "eval:notes": "tsx --conditions=react-server evals/notes-check.eval.ts",
     "eval:solution": "tsx --conditions=react-server evals/solution.eval.ts",
-    "eval:handwriting": "tsx --conditions=react-server evals/handwriting.eval.ts"
+    "eval:handwriting": "tsx --conditions=react-server evals/handwriting.eval.ts",
+    "eval:tokens": "tsx --conditions=react-server evals/tokens.eval.ts",
+    "journey": "playwright test --config playwright.journey.config.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "7.9.16",
@@ -28,9 +30,12 @@
     "@mew/ink": "workspace:*",
     "@mew/shared": "workspace:*",
     "@supabase/supabase-js": "^2",
+    "@upstash/ratelimit": "2.2.0",
+    "@upstash/redis": "1.40.0",
     "dexie": "^4.4.6",
     "lucide-react": "^1.50.0",
     "next": "16.4.2",
+    "pdf-lib": "1.17.1",
     "perfect-freehand": "^1.2.3",
     "pyodide": "314.0.7",
     "react": "19.3.0",

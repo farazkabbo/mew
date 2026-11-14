@@ -20,6 +20,13 @@
       "desktop": {
         "schemes": ["neb"]
       }
+    },
+    "updater": {
+      "pubkey": "",
+      "endpoints": [],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   },
   "bundle": {

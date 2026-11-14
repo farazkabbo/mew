@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "./fixtures";
 
+import { createCourse } from "./helpers/course";
 import { CHAPTER, makePdf } from "./helpers/pdf";
 
 /**
@@ -17,23 +18,16 @@ test.beforeEach(({ page }) => {
   });
 });
 
-async function uploadChapter(page: Page) {
-  await page.goto("/courses");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "chapter-3.pdf",
-    mimeType: "application/pdf",
-    buffer: makePdf(CHAPTER),
-  });
-  await expect(page.getByLabel("Course title")).toHaveValue("chapter-3");
-  await page.getByLabel("Course title").fill("Forces and motion");
-  await page.getByRole("button", { name: "Build course" }).click();
-  await expect(page).toHaveURL(/\/courses\/[0-9a-f-]{36}$/);
+/** A chapter PDF as course material: its notebook opens on the Study tab (decision U26). */
+async function uploadChapter(page: Page): Promise<string> {
+  const id = await createCourse(page, makePdf(CHAPTER), "Forces and motion");
   await expect(page.getByText("Needs review")).toBeVisible({ timeout: 30_000 });
+  return id;
 }
 
 test("a chapter PDF becomes an ordered plan, reviewed by the student", async ({ page }) => {
   test.setTimeout(90_000);
-  await uploadChapter(page);
+  const courseId = await uploadChapter(page);
 
   // The proposed concepts, in order, each with its pages and what it builds on.
   const rows = page.getByTestId("review-concept");
@@ -56,8 +50,13 @@ test("a chapter PDF becomes an ordered plan, reviewed by the student", async ({ 
   await expect(plan.nth(0)).toContainText("Forces and Newton's laws");
   await expect(plan.nth(0)).toContainText("pp. 1–2");
   // The merged concept's prerequisite edge followed it.
-  await expect(plan.nth(1)).toContainText("Needs: Forces and Newton's laws");
-  await expect(page.getByText(/exam in \d+ days/)).toBeVisible();
+  // What it needs is "after 1", with the name on hover (U28).
+  await expect(plan.nth(1).getByTestId("concept-after")).toHaveText("after 1");
+  await expect(plan.nth(1).getByTestId("concept-after")).toHaveAttribute(
+    "title",
+    "Needs: Forces and Newton's laws",
+  );
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/exam in \d+ days/);
 
   // A lesson, grounded in its pages (no model key: the summary and the source passage).
   await plan.nth(1).getByRole("link", { name: "Friction" }).click();
@@ -65,17 +64,19 @@ test("a chapter PDF becomes an ordered plan, reviewed by the student", async ({ 
   await expect(page.getByText("From p. 3", { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/opposes sliding/).first()).toBeVisible();
 
-  // The course is listed.
-  await page.goto("/courses");
-  await expect(page.getByRole("link", { name: /Forces and motion/ })).toContainText("ready");
+  // The course lives in its notebook: a course link opens its Study tab, ready.
+  await page.goto(`/courses/${courseId}`);
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/2 concepts/);
+  await expect(page.getByRole("heading", { name: "Forces and motion", level: 1 })).toBeVisible();
 });
 
 test("the tutor gets the right pages of the course for a question", async ({ page }) => {
   test.setTimeout(90_000);
-  await uploadChapter(page);
+  const id = await uploadChapter(page);
   await page.getByRole("button", { name: /Start studying/ }).click();
-  await page.getByRole("link", { name: "Open the course notebook" }).click();
-  await expect(page).toHaveURL(/\/notebook\?course=/);
+  await expect(page.getByTestId("plan-concept").first()).toBeVisible();
+  // The Study tab is in the notebook already: open its page to talk to the tutor.
+  await page.goto(`/notebook?course=${id}&title=Forces%20and%20motion`);
   await expect(page.getByRole("treeitem", { name: "Forces and motion" })).toHaveAttribute(
     "aria-current",
     "page",
@@ -112,7 +113,7 @@ test("the tutor gets the right pages of the course for a question", async ({ pag
 
   // The dev server compiles a route on its first call, which can outlast the tutor's 2.5 s wait
   // for course pages: call it once first (a production build has nothing to compile).
-  const courseId = new URL(page.url()).searchParams.get("course");
+  const courseId = id;
   await page.evaluate(
     (id) =>
       fetch(`/api/courses/${id}/retrieve`, {

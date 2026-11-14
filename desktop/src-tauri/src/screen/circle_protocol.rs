@@ -217,6 +217,8 @@ pub enum CircleEvent {
         #[serde(default)]
         filing: Option<serde_json::Value>,
     },
+    /// The answer taught from the student's own notes (docs/PLAN.md).
+    Notebook(super::protocol::NoteSpot),
 }
 
 /// Parses and checks one line of the stream; None for anything malformed or out of bounds.
@@ -250,6 +252,7 @@ pub fn parse_circle_event(line: &str) -> Option<CircleEvent> {
                 && concept_hints.iter().all(|c| within(c, CONCEPT_CHARS))
         }
         CircleEvent::Abort { speech } => within(speech, SPEECH_CHARS),
+        CircleEvent::Notebook(spot) => spot.is_valid(),
         CircleEvent::Error { message } => within(message, 300),
         CircleEvent::Destination {
             phrase,

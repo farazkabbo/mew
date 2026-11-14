@@ -26,7 +26,7 @@ use super::overlay::{self, Surface};
 use super::page;
 use super::pipeline::Captured;
 use super::protocol::{Box2, FocusKind, ScreenAction};
-use super::screen_text::TextAnchor;
+use super::screen_text::{ScreenText, TextAnchor};
 use super::win::winevent::{self, Watch};
 use super::{clip, reanchor, watch::Change};
 
@@ -132,13 +132,14 @@ pub fn turn_state<R: Runtime>(app: &AppHandle<R>) -> TurnState {
 pub fn show<R: Runtime>(app: &AppHandle<R>, ink_to_show: ShowInk) {
     let ShowInk {
         seed,
-        actions,
+        mut actions,
         meta,
         detail,
         video_time_sec,
         clip_when_drawn,
         coaching,
     } = ink_to_show;
+    snap_labelled_arrows(&mut actions, &meta, &detail.text);
     let draws = actions
         .iter()
         .any(|a| !matches!(a, ScreenAction::FocusRegion { .. } | ScreenAction::Clear));
@@ -414,6 +415,39 @@ fn say<R: Runtime>(app: &AppHandle<R>, text: &str) {
 }
 
 /// The turn as normalised boxes → its screen rectangle.
+/// Moves each labelled arrow onto the words its label names, when they're near where the model
+/// pointed (docs/PLAN.md, Part 2): the model's guess is rough, the words' boxes are exact.
+fn snap_labelled_arrows(actions: &mut [ScreenAction], meta: &FrameMeta, text: &ScreenText) {
+    let bounds = meta.bounds;
+    let radius = 120.0 * meta.dpi.max(96) as f32 / 96.0;
+    for action in actions.iter_mut() {
+        let ScreenAction::PointAt {
+            point,
+            label: Some(label),
+        } = action
+        else {
+            continue;
+        };
+        let at = to_screen(
+            Box2 {
+                left: point.x,
+                top: point.y,
+                right: point.x,
+                bottom: point.y,
+            },
+            bounds,
+        );
+        let Some(spot) = text.spot_for_label(label, (at.left, at.top), radius) else {
+            continue;
+        };
+        let norm = |v: i32, start: i32, size: i32| {
+            (i64::from(v - start) * 1000 / i64::from(size.max(1))).clamp(0, 1000) as u16
+        };
+        point.x = norm((spot.left + spot.right) / 2, bounds.left, bounds.width());
+        point.y = norm((spot.top + spot.bottom) / 2, bounds.top, bounds.height());
+    }
+}
+
 fn to_screen(region: Box2, bounds: ScreenRect) -> ScreenRect {
     let x = |v: u16| bounds.left + (i64::from(v) * i64::from(bounds.width()) / 1000) as i32;
     let y = |v: u16| bounds.top + (i64::from(v) * i64::from(bounds.height()) / 1000) as i32;

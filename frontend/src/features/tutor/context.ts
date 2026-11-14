@@ -10,6 +10,7 @@ import {
   type RecognizedLine,
   TUTOR_LIMITS,
   RetrieveResponse,
+  type NebLanguage,
   type TutorRequest,
 } from "@mew/shared";
 
@@ -24,6 +25,8 @@ const DEEP_REQUEST =
   /\b(explain|in detail|step by step|walk me through|go through|why exactly|deeply)\b/i;
 
 type ContextInput = {
+  /** The language to answer in (omitted: English). */
+  language?: NebLanguage | undefined;
   intent: TutorRequest["intent"];
   utterance: string;
   transcript: readonly string[];

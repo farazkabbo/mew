@@ -3,6 +3,7 @@ import {
   type BoardAction,
   type ImageBlock,
   type LineCheck,
+  type NebLanguage,
   type QuizContext,
   reconcileMarks,
   TTS_SAMPLE_RATE,
@@ -13,13 +14,14 @@ import type { RecognizedLine } from "@mew/shared";
 import type { WorkChecker } from "../check/checker";
 import type { Circled } from "../notebook/circle";
 import { useVoice } from "../voice/store";
+import { QUESTIONS_CHANGED_EVENT } from "../quota/QuestionsLeft";
 import { buildTutorRequest } from "./context";
 import { isLikelyEcho, newWords } from "./echo";
 import type { PcmStreamPlayer } from "./pcm-player";
 import type { TutorInk } from "./ink";
 import type { RecognitionService } from "./recognition";
 import { type Turn, useTutor } from "./store";
-import { streamTutor } from "./tutor-client";
+import { streamTutor, TutorRequestError } from "./tutor-client";
 
 /** Echoes can trail the end of playback by a moment (room, buffering). */
 const ECHO_TAIL_MS = 3000;
@@ -41,6 +43,8 @@ export type TutorDeps = {
   quiz?: () => QuizContext | null;
   /** The student's chosen voice (null: the server's default). */
   voiceId?: () => string | null;
+  /** The language neb speaks (omitted: English). */
+  language?: () => NebLanguage;
   /** The page on screen, if any. */
   doc(): PageDocument | null;
   /** Images on that page (clips saved from the screen). */
@@ -100,6 +104,7 @@ export class TutorController {
       }
       if (checks.length > 0) useTutor.getState().update(id, { checks });
       const request = await buildTutorRequest({
+        language: this.deps.language?.(),
         intent,
         utterance,
         transcript: useVoice.getState().segments.map((s) => s.text),
@@ -135,10 +140,16 @@ export class TutorController {
         }
       }
       await speaking;
-    } catch {
+    } catch (error) {
       outcome = "failed";
-      if (!turn.abort.signal.aborted) this.fallBack(id, checks, turn, triggeredAt, drew);
+      if (!turn.abort.signal.aborted) {
+        // A limit says what it is in the server's own words (docs/LAUNCH_LIMITS.md).
+        const spoken = error instanceof TutorRequestError ? error.spoken : undefined;
+        this.fallBack(id, checks, turn, triggeredAt, drew, spoken);
+      }
     } finally {
+      // The count of questions left may have changed.
+      if (typeof window !== "undefined") window.dispatchEvent(new Event(QUESTIONS_CHANGED_EVENT));
       if (turn.abort.signal.aborted) outcome = "interrupted";
       if (this.active === turn) this.active = null;
       if (turn.speech) this.lastSpoken = { text: turn.speech, endedAt: this.now() };
@@ -252,7 +263,11 @@ export class TutorController {
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: turn.speech, voiceId: this.deps.voiceId?.() ?? null }),
+        body: JSON.stringify({
+          text: turn.speech,
+          voiceId: this.deps.voiceId?.() ?? null,
+          language: this.deps.language?.(),
+        }),
         cache: "no-store",
         signal: turn.abort.signal,
       });

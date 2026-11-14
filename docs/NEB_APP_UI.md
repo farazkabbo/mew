@@ -974,3 +974,111 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **neb's pointer** shows only while neb writes, as a violet nib; the old Mew cat is gone.
     - **Next's development badge** is off (`devIndicators: false`); it was the black circle in
       every page's corner.
+25. **U25. Review gets a new layout (2026-11-04, `feat/ui-u10-review`; boards 7 and 8).** This
+    overrides U14 for Review only; Courses, Teach and Settings still keep their layouts.
+    - **Header:** the desk's: ‹ Desk, neb's mark, the jump search and the avatar menu. The jump
+      palette needs the notebook tree, so the search (and the jump key on Review) opens
+      `/desk?jump=1`, which opens the palette on the desk.
+    - **Left column, "Up next":** the index card for moment and screen-quiz checks (Start is the
+      neb button; it opens the existing Quick check), then Skills to re-check (`SkillsCard`, shown
+      empty as board 8's "None due" card). Board 8's "Not now" and the source thumbnail aren't
+      built: Not now has no behaviour behind it, and the check's moment stays hidden until the
+      student tries.
+    - **Right column, the folders:** one folder per course with started concepts or reviews due,
+      tinted with the cover colour of the course's notebook on this device (a stable cover colour
+      from the course id when there's none). Tabs sit in fixed slots, ordered by most to revisit,
+      then most new; a course with an exam close still comes first. A picked tab pulls its folder
+      up and drops it in front (`folder-pull-out`, 640 ms); reduced motion swaps. Past 7 courses a
+      "More" tab lists the rest, and one picked from it takes the last slot. Arrows, Home and End
+      move between tabs.
+    - **Rows:** every concept the student has started, from `conceptStatus`: revisit (ink disc ↺),
+      explored as new (dashed ring), checked (violet-washed disc ✓), in that order. Practised with a
+      hint isn't checked, so it shows between new and checked as "With a hint" (washed disc, muted
+      ✓). Never-opened concepts aren't listed.
+    - **Quiz me** per course is the existing quiz (`quizHref`); its count is the course's concepts
+      in the review queue, as before.
+    - **Unchanged:** behaviour, data and FSRS (no API change: the page reads the course list, each
+      course's detail and progress, and the review queue). No score line.
+    - **Previews:** `/dev/ui`'s Review and Review · many courses sections, screenshotted in light
+      and night by `e2e/ui.spec.ts`, which also tests the tabs and More.
+26. **U26. A notebook is the whole class; Review stays the one place for what's due
+    (2026-11-04, the owner's request; `feat/ui-u26-study`, then `feat/ui-u26-review`).** Courses
+    and notebooks were two things to find; students think of one, "my DSA class". This overrides
+    U14 for Courses, and U25 where it names courses.
+    - **No Courses page.** `/courses` goes to the desk; `/courses/<id>` opens the course's
+      notebook on its Study tab (making the notebook, as `/notebook?course=` always did, for a
+      course that has none). Lessons keep their pages.
+    - **A notebook's home has at most three tabs:** Pages (always; "Contents" before), Study (on
+      the notebook itself, once it has course material: what the course page showed, its build
+      progress, the scope review, the study plan, the exam date and Quiz me) and Moments (once
+      something was saved, and always in Unsorted). Chapters have no Study tab: the course is the
+      notebook's, and chapter cards keep their progress.
+    - **Until a notebook has material,** one card on its Pages tab says what adding it unlocks.
+      "Add course material" is the PDF import, whose "Use as course material" (on by default)
+      makes and links the course (K4). A course made before this, on the old page, can be picked
+      from the same card ("Use a course you have…"); a deleted course unlinks.
+    - **"Review topics"** opens the Study tab instead of the course page.
+    - **Review** keeps its look (U25); built in `feat/ui-u26-review`:
+      - **Its folders are notebooks:** a course's folder takes its notebook's name and cover
+        colour; a notebook with checks due from saved moments and no course gets a folder with
+        "N quick checks from what you saved here" and Start (its own Quick check); a course no
+        notebook links keeps its own folder. Tabs order by revisit, then new, then checks due; a
+        tab's count is its quiz plus its checks.
+      - **It's reached from the desk's header:** a Review button, with what's due (checks plus
+        course concepts in the review queue) and no count when nothing is. The avatar menu keeps
+        Teach neb, Settings and the account.
+      - **The Tonight card** gains "N concepts to review" (Review) after the quick checks, still at
+        most three rows.
+    - **Unchanged:** the data. Courses, concepts, attempts and FSRS stay as they are; a notebook
+      still links to a course by `courseId`.
+27. **U27. A notebook opens on its home; loose pages go into chapters (2026-11-04,
+    `feat/notebook-home-and-page-moves`; the owner's request).**
+    - **Opening:** a notebook picked in the sidebar or on a desk cover opens its home (the
+      breadcrumb, its tabs, chapter cards and loose pages), not its latest page. Resume, the
+      chapter tabs, a chapter picked in the sidebar and `/notebook` still open pages as before.
+    - **Loose pages into chapters:** on a home, each loose page has a move button (the destination
+      picker) and can be dragged onto a chapter card; the page's "⋯" has "Move this page to…".
+      Every move says where it went and offers Undo. From a home the view stays put (its lists
+      and the cards' page counts read again); from a page, the page opens where it went.
+28. **U28. The notebook home matches its boards (2026-11-04, `feat/ui-u11-notebook-home`;
+    design/u/notebook-home, extending U14).** Look and layout only; data, stores, routes and
+    models are unchanged, and where a board and the code disagree on behaviour, the code wins.
+    - **Header:** one breadcrumb (the top bar's; the home's own is gone), the cover mark (the
+      notebook's colour, a binding, a paper label with its icon), the name, the meta line and a
+      pill Subject select. The level control stays the top bar's. One neb notice sits above the
+      tabs: the PDF being read or its topics found (Review topics, ink), else checks due (Quick
+      check, the neb button).
+    - **Tabs are dividers** joined to the paper sheet, with counts (pages, concepts, moments);
+      a tab shows only when it applies (U26). Arrows, Home and End move between them. A new
+      `--sunk` token (#E2DACA / #2E3439) is the inactive tabs' and icon tiles' tone.
+    - **Pages:** chapter cards with the cover colour along the top, a checks-due badge, progress
+      and meta, and a dashed drop state; loose pages as ruled sheets with a move button, their
+      slot dashed while dragged; dashed add tiles with their keys; at most 14 loose pages, then
+      "+N · Show all"; the course-material card (U26).
+    - **Study:** the summary as big serif numbers (its plain sentence is the group's accessible
+      name) with a status bar; concepts as rows with a status disc, "after N" (the full name on
+      hover), pages in a quiet column and the chip, eight at a time; the exam plan as a card
+      beside them (the date, today on a note, the eve dashed, the exam day in ink). The plan
+      editor, building, failed and empty states are restyled; a moved row keeps the keyboard.
+      The empty state's "Read it again" isn't built (nothing re-reads a course); it offers
+      "Delete and try another file", as failed does.
+    - **Moments:** search, filter chips with counts (a radio group: arrows, Home, End), group by
+      source (default, the source line once per group) or day, and cards with the picture,
+      "check due", the question, Replay, Open source and Check against my notes (it opens the
+      moment and runs Notes Check there). Six per group, then "Show N more". "Open in neb" moved
+      to a PDF group's header.
+    - **Strays removed:** the clip's source pill ("… · Check against my notes") showed on the home
+      too; it's on pages only now. The violet blob was the desktop app's Circle & Ask pointer,
+      still the old Mew head: its ears are gone, so it's the neb dot. **Reversed 2026-11-09 by
+      the owner:** the desktop pointer is the Mew cat again, ears and all (`shell/pointer.html`).
+    - **Previews:** `/dev/ui` sections home-header, home-pages, home-study and home-moments, in
+      light and night screenshots; keyboard tests for the divider tabs, the plan editor and the
+      filter chips (`e2e/ui.spec.ts`).
+29. **U29. The address says where you are (2026-11-04, `fix/notebook-reload-and-back`).** F5
+    and Back used to open the latest notebook's page, or replay a one-off link (a course, its
+    Study tab, a quiz). The notebook app now replaces the address as the view changes: `/desk`,
+    `/notebook?node=<id>` for a home, `/notebook?page=<id>` for a page. On load it opens that page
+    or home while it's still there (else the latest notebook, as before). One-off parameters
+    (`course`, `title`, `tab`, `quiz`, `moment`, `jump`) are read at start, before the address is
+    replaced, so they never fire twice. Replaced, not pushed: moving around the notebook doesn't
+    fill the browser's history.

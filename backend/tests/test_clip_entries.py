@@ -73,6 +73,16 @@ def test_an_entry_is_saved_and_read_back_with_its_explanation(client: TestClient
     assert entry["conceptHints"] == ["Acceleration"]
 
 
+def test_an_entry_sent_again_is_the_same_entry(client: TestClient) -> None:  # noqa: F811
+    token = link_device(client)
+    first = save(client, token, entry_body()).json()["clipId"]
+    again = save(client, token, entry_body())
+    assert again.status_code == 201
+    assert again.json()["clipId"] == first
+    other = save(client, token, entry_body(sessionId=str(uuid.uuid4()))).json()["clipId"]
+    assert other != first
+
+
 def test_an_ordinary_clip_has_no_entry(client: TestClient) -> None:  # noqa: F811
     token = link_device(client)
     clip_id = save(client, token).json()["clipId"]
@@ -272,3 +282,33 @@ def test_an_entrys_extras_keep_their_nulls_when_read_back(client: TestClient) ->
     ).json()
     assert view["entry"]["moment"]["checkQuestion"] == question
     assert "notebookPageId" not in view  # an empty top-level field is still left out
+
+
+def test_entries_without_a_notebook_page_are_listed_for_the_next_notebook(
+    client: TestClient,  # noqa: F811
+) -> None:
+    token = link_device(client)
+    headers = {**internal_headers(), "X-Mew-Local-User": "local"}
+    assert client.get("/v1/clips/unplaced", headers=headers).json() == {"clipIds": []}
+
+    older = save(client, token, entry_body()).json()["clipId"]
+    newer = save(client, token, entry_body(sessionId=str(uuid.uuid4()))).json()["clipId"]
+    save(client, token)  # a plain clip opens its page when it's saved: never listed
+
+    listed = client.get("/v1/clips/unplaced", headers=headers).json()
+    assert listed == {"clipIds": [newer, older]}
+
+    # Once a notebook has a page for one, it's no longer offered.
+    page = str(uuid.uuid4())
+    placed = client.patch(f"/v1/clips/{older}", json={"notebookPageId": page}, headers=headers)
+    assert placed.status_code == 200
+    assert client.get("/v1/clips/unplaced", headers=headers).json() == {"clipIds": [newer]}
+
+
+def test_unplaced_entries_stay_with_their_owner() -> None:
+    store = MemoryClipStore()
+    entry = ClipCreate.model_validate(entry_body())
+    clip_id = uuid.uuid4()
+    store.create("a", clip_id, entry, b"jpeg")
+    assert store.unplaced_entries("a") == [clip_id]
+    assert store.unplaced_entries("b") == []

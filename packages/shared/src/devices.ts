@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { NebLanguage } from "./language";
+
 /**
  * Desktop sign-in for Screen Coach (docs/SCREEN_COACH.md decision 8). Mirrors
  * backend/src/mew_api/devices/models.py.
@@ -27,6 +29,10 @@ export const DeviceExchangeRequest = z.object({
 });
 export type DeviceExchangeRequest = z.infer<typeof DeviceExchangeRequest>;
 
+/** The desktop app's polling (its fallback when the neb:// link didn't reach it). */
+export const DevicePollRequest = DeviceExchangeRequest.omit({ code: true });
+export type DevicePollRequest = z.infer<typeof DevicePollRequest>;
+
 export const IssuedDeviceToken = z.object({
   token: z.string().regex(DEVICE_TOKEN_PATTERN),
   deviceId: z.uuid(),
@@ -47,6 +53,8 @@ export const VerifiedDevice = z.object({
   userId: z.string().min(1),
   deviceId: z.uuid(),
   scopes: z.array(z.string()),
+  /** The language its owner chose, so a screen answer comes back in it. */
+  language: NebLanguage.default("en"),
 });
 export type VerifiedDevice = z.infer<typeof VerifiedDevice>;
 

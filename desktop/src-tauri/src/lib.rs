@@ -15,6 +15,8 @@
 mod origin;
 mod reminders;
 pub mod screen;
+#[cfg(windows)]
+mod updates;
 
 use tauri::{
     ipc::CapabilityBuilder,
@@ -48,6 +50,8 @@ pub fn run() {
     let builder = builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_notification::init())
+        // Its commands are granted to no page: `updates.rs` drives it from Rust.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Reminders::default())
         .invoke_handler(handlers());
     #[cfg(windows)]
@@ -67,6 +71,8 @@ pub fn run() {
             // The hold gesture summons Neb (or, with Screen Coach on, circles and talks): K2.
             #[cfg(windows)]
             screen::keys::start(app.handle());
+            #[cfg(windows)]
+            updates::start(app.handle());
             #[cfg(windows)]
             sign_in_links(app.handle())?;
             let _ = window.set_focus();
@@ -101,8 +107,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::annotate::{screen_ink_drawn, screen_ink_pill};
     use screen::ask::screen_coach_ask;
     use screen::circle::{
-        screen_circle_card, screen_draw_erase, screen_draw_mark, screen_draw_note,
-        screen_draw_select,
+        screen_circle_card, screen_draw_erase, screen_draw_island_press, screen_draw_mark,
+        screen_draw_note, screen_draw_pen, screen_draw_select,
     };
     use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
@@ -116,6 +122,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::screen_island::screen_island;
     use screen::screen_quiz::screen_quiz_card;
     use screen::sign_in::{desktop_sign_in_start, desktop_sign_in_ticket, desktop_sign_out};
+    use updates::{desktop_update_check, desktop_update_install, desktop_update_status};
     tauri::generate_handler![
         desktop_sign_in_start,
         desktop_sign_in_ticket,
@@ -145,11 +152,16 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_coach_spoken,
         screen_draw_mark,
         screen_draw_erase,
+        screen_draw_island_press,
+        screen_draw_pen,
         screen_draw_select,
         screen_draw_note,
         screen_circle_card,
         screen_quiz_card,
-        screen_island
+        screen_island,
+        desktop_update_status,
+        desktop_update_check,
+        desktop_update_install
     ]
 }
 
@@ -185,7 +197,7 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
 
 fn main_window(app: &AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
     let allowed = app_url.clone();
-    let start = app_url.join("notebook").unwrap_or(app_url);
+    let start = app_url.join("desk").unwrap_or(app_url);
     let window = WebviewWindowBuilder::new(app, MAIN, WebviewUrl::External(start))
         .title("Neb")
         .inner_size(1280.0, 840.0)
@@ -220,6 +232,18 @@ pub(crate) fn show<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<WebviewWindo
     let _ = window.unminimize();
     let _ = window.set_focus();
     Some(window)
+}
+
+/// Opens Neb at a line of the student's own notebook (docs/PLAN.md, "teach from your notes"):
+/// asked to do the work, neb shows where they wrote about it instead. The page (an id) and the
+/// line's box were checked when the event was parsed; they reach the page as JSON.
+pub(crate) fn open_note<R: tauri::Runtime>(app: &AppHandle<R>, spot: &screen::protocol::NoteSpot) {
+    let detail = serde_json::json!({ "pageId": spot.page_id, "bbox": spot.bbox });
+    if let Some(window) = show(app) {
+        let _ = window.eval(format!(
+            "window.dispatchEvent(new CustomEvent('mew:open-note', {{ detail: {detail} }}))"
+        ));
+    }
 }
 
 /// Shows the window and asks Mew to listen, as if the mascot was tapped (the hold gesture while
@@ -271,6 +295,14 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    // Says "Restart to update to …" once a new version is ready (`updates.rs`).
+    let update = MenuItem::with_id(
+        app,
+        "update",
+        "Check for updates",
+        cfg!(windows),
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let separator2 = PredefinedMenuItem::separator(app)?;
@@ -286,6 +318,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             &stop_walkthrough,
             &settings,
             &separator2,
+            &update,
             &quit,
         ],
     )?;
@@ -308,6 +341,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             "screen-coach-stop" => screen::coach_mode::stop_from_tray(app),
             #[cfg(windows)]
             "screen-settings" => screen::coach::open_settings(app),
+            #[cfg(windows)]
+            "update" => updates::from_tray(app),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -332,6 +367,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         pause_hour,
         stop_walkthrough,
     });
+    #[cfg(windows)]
+    app.manage(updates::TrayItem(update));
     Ok(())
 }
 

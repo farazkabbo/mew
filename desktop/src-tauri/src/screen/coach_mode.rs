@@ -51,6 +51,9 @@ pub struct CoachState {
     generation: u64,
     /// The monitor the pill is on, and its DPI (events without a capture keep it there).
     monitor: Option<(ScreenRect, u32)>,
+    /// A thumbnail of the screen as the current step was shown (`glance`), and whether "Done"
+    /// was already answered here once on that unchanged screen.
+    step_glance: Option<(Vec<u8>, bool)>,
 }
 
 /// What a coach-mode capture is for.
@@ -177,12 +180,42 @@ fn check<R: Runtime>(app: &AppHandle<R>, id: &str, event: StepEvent, captured: C
     let id = id.to_owned();
     in_background(app, move || {
         let Captured { jpeg, meta, detail } = captured;
+        if event == StepEvent::Done && unchanged_since_step(&handle, &detail) {
+            // Nothing happened on screen yet: say so here, without a model call or a hint.
+            // A second "Done" on the same screen goes to the server (some steps change nothing).
+            if let Some(mut s) = state(&handle) {
+                s.busy = false;
+            }
+            say(&handle, NOTHING_CHANGED);
+            refresh_pill(&handle, None);
+            coach::settle(&handle);
+            return;
+        }
         let body = check_body(&id, event, &meta, jpeg.as_slice());
         drop(jpeg);
         let reply = send(&handle, "api/screen/coach/step", body.as_slice());
         drop(body);
         finish(&handle, generation, reply, Some((meta, detail)));
     });
+}
+
+/// Said when "Done" comes on the same screen the step was shown on (docs/PLAN.md, Part 3).
+const NOTHING_CHANGED: &str =
+    "I don't see anything change yet. Have a go at the step, then press Done.";
+
+/// True the first time "Done" comes on a screen that looks as it did when the step was shown.
+fn unchanged_since_step<R: Runtime>(app: &AppHandle<R>, detail: &FrameDetail) -> bool {
+    let now = super::glance::fingerprint(&detail.pixels);
+    let Some(mut s) = state(app) else {
+        return false;
+    };
+    match &mut s.step_glance {
+        Some((before, answered)) if !*answered && !super::glance::changed(before, &now) => {
+            *answered = true;
+            true
+        }
+        _ => false,
+    }
 }
 
 /// An event that needs no screen (Yes, Pause, Stop).
@@ -293,6 +326,11 @@ fn send<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Coach
         "[screen] coach {path}: status {status} in {} ms",
         started.elapsed().as_millis()
     );
+    if status != 200 {
+        if let Some(message) = super::protocol::limit_message(&reply) {
+            return Err(message);
+        }
+    }
     match status {
         200 if !too_large => {}
         401 => {
@@ -364,8 +402,12 @@ fn apply<R: Runtime>(
             return;
         };
         s.session = session.clone();
-        if let Some((meta, _)) = &scene {
+        if let Some((meta, detail)) = &scene {
             s.monitor = Some((meta.monitor, meta.dpi));
+            // The screen this reply was given on is where the (next) step starts.
+            s.step_glance = Some((super::glance::fingerprint(&detail.pixels), false));
+        } else if session.is_none() {
+            s.step_glance = None;
         }
         s.monitor
     };

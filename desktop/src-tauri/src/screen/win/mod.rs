@@ -11,6 +11,7 @@ pub mod indicator;
 pub mod input;
 pub mod media_session;
 pub mod ocr;
+pub mod pen_input;
 pub mod system;
 pub mod target;
 #[cfg(test)]

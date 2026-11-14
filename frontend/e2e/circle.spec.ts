@@ -92,6 +92,37 @@ async function stored(page: Page) {
   );
 }
 
+test("an entry saved while no notebook could take it is added when one opens", async ({ page }) => {
+  await page.goto("about:blank");
+  const picture = await jpeg(page);
+  const clip = entryClip(
+    [TURN],
+    [stroke(20, "#8a7bf0"), stroke(220, "#8a7bf0")],
+    [
+      [0, 0],
+      [0, 1],
+    ],
+  );
+  let noted = false;
+  await page.route("**/api/clips/unplaced", (route) =>
+    route.fulfill({ json: { clipIds: noted ? [] : [CLIP_ID] } }),
+  );
+  await page.route(`**/api/clips/${CLIP_ID}`, (route) => {
+    if (route.request().method() !== "PATCH") return route.fulfill({ json: clip });
+    noted = true;
+    return route.fulfill({ json: {} });
+  });
+  await page.route(`**/api/clips/${CLIP_ID}/image`, (route) =>
+    route.fulfill({ contentType: "image/jpeg", body: picture }),
+  );
+
+  await page.goto("/notebook");
+
+  await expect.poll(() => noted).toBe(true);
+  const added = await stored(page);
+  expect(added.pages.filter((p) => p.fromScreen)).toHaveLength(1);
+});
+
 test("an explanation saved from the screen lands on today's From screen page, with Replay", async ({
   page,
 }) => {
@@ -160,4 +191,63 @@ test("an explanation saved from the screen lands on today's From screen page, wi
   const after = await stored(page);
   expect(after.pages.filter((p) => p.fromScreen)).toHaveLength(1);
   expect(after.authors.filter((a) => a === "tutor")).toHaveLength(3);
+});
+
+test("a saved moment comes out as a PDF, and 'do it for me' opens the student's own line", async ({
+  page,
+}) => {
+  await page.goto("about:blank");
+  const picture = await jpeg(page);
+  const clip = entryClip(
+    [TURN],
+    [stroke(20, "#8a7bf0"), stroke(220, "#8a7bf0")],
+    [
+      [0, 0],
+      [0, 1],
+    ],
+  );
+  await page.route(`**/api/clips/${CLIP_ID}`, (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({ json: {} })
+      : route.fulfill({ json: clip }),
+  );
+  await page.route(`**/api/clips/${CLIP_ID}/image`, (route) =>
+    route.fulfill({ contentType: "image/jpeg", body: picture }),
+  );
+  await page.goto(`/notebook?entry=${CLIP_ID}`);
+  const note = page.getByTestId("entry-note");
+  await expect(note).toContainText("Explain this");
+
+  // The moment as a PDF: one page, a real PDF, made on this device.
+  const download = page.waitForEvent("download");
+  await note.getByRole("button", { name: "Save as PDF" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/\.pdf$/);
+  const bytes = await (await import("node:fs/promises")).readFile(await file.path());
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+  const { PDFDocument } = await import("pdf-lib");
+  expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
+  await expect(page.getByText("Saved the PDF to your downloads.")).toBeVisible();
+
+  // "Do it for me" on screen: the desktop app asks for this page's line; it's marked.
+  const pageId = await page.evaluate(
+    (name) =>
+      new Promise<string>((resolve, reject) => {
+        const open = indexedDB.open(name);
+        open.onerror = () => reject(new Error("can't open the notebook"));
+        open.onsuccess = () => {
+          const request = open.result.transaction("pages").objectStore("pages").getAll();
+          request.onsuccess = () =>
+            resolve((request.result as { id: string; fromScreen?: number }[])[0]?.id ?? "");
+        };
+      }),
+    DB_NAME,
+  );
+  await page.evaluate((id) => {
+    window.dispatchEvent(
+      new CustomEvent("mew:open-note", { detail: { pageId: id, bbox: [40, 120, 300, 40] } }),
+    );
+  }, pageId);
+  await expect(page.getByTestId("note-spotlight")).toBeVisible();
+  await expect(page.getByText("You wrote this")).toBeVisible();
 });

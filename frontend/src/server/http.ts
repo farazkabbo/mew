@@ -66,7 +66,14 @@ export async function readJson<T>(
     throw new HttpError(400, "Malformed JSON");
   }
   const parsed = schema.safeParse(body);
-  if (!parsed.success) throw new HttpError(400, "Invalid request body");
+  if (!parsed.success) {
+    // Which fields, never their values: enough to see why a request was refused.
+    const fields = parsed.error.issues
+      .slice(0, 5)
+      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.code}`);
+    console.warn(`[api] ${new URL(request.url).pathname} refused:`, fields.join("; "));
+    throw new HttpError(400, "Invalid request body");
+  }
   return parsed.data;
 }
 
@@ -145,7 +152,7 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<Response
     } catch (error) {
       if (error instanceof HttpError) {
         return NextResponse.json(
-          { error: error.message },
+          { error: error.message, ...(error.code && { code: error.code }) },
           { status: error.status, headers: { "Cache-Control": "no-store", ...error.headers } },
         );
       }

@@ -7,6 +7,8 @@
   "scripts": {
     "app": "tauri dev",
     "bundle": "tauri build",
+    "bundle:release": "tauri build --bundles nsis --config src-tauri/tauri.release.conf.json",
+    "update-manifest": "node scripts/update-manifest.mjs",
     "icons": "tauri icon icon.svg",
     "build:shell": "node scripts/build-shell.mjs",
     "lint": "eslint --max-warnings 0 overlay-src",

@@ -16,6 +16,7 @@ import { ReadAsChip } from "../annotate/ReadAsChip";
 import { MarksMenu } from "../annotate/MarksMenu";
 import { useMarkPrefs } from "../annotate/prefs";
 import { AnnotationRecords } from "../annotate/records";
+import { coursesApi } from "../courses/api";
 import { AnnotationSync } from "../annotate/sync";
 import { DebugPanel } from "../mew/DebugPanel";
 import { MewDock } from "../mew/MewDock";
@@ -49,6 +50,8 @@ import { SolutionRecords } from "../solution/record";
 import { SolutionLayer } from "../solution/SolutionLayer";
 import { NotebookPointer } from "../tutor/NotebookPointer";
 import { EntryNotes } from "./EntryNotes";
+import { type NoteSpot, NoteSpotlight, OPEN_NOTE_EVENT, readNoteSpot } from "./NoteSpotlight";
+import { savePdf, type SavePdfScope } from "./save-pdf";
 import { useNoteIndexing } from "../notes/useNoteIndexing";
 import { Onboarding } from "../onboarding/Onboarding";
 import { QuizCard } from "../quiz/QuizCard";
@@ -79,7 +82,7 @@ import { useClipImport } from "./useClipImport";
 import { pullTree } from "./tree-api";
 import { useShortcuts } from "./useShortcuts";
 import { DestinationPicker } from "./tree/DestinationPicker";
-import { NodeHome } from "./tree/NodeHome";
+import { type HomeTab, NodeHome } from "./tree/NodeHome";
 import type { PaletteCommand } from "./tree/JumpPalette";
 import { TreeDialogs } from "./tree/TreeDialogs";
 import { TreeNav } from "./tree/TreeNav";
@@ -152,6 +155,8 @@ export function NotebookApp({
   const canvas = useRef<CanvasHandle>(null);
   /** "Quiz me" from a course screen: /notebook?course=…&quiz=1 starts a quiz once open. */
   const quizRequested = useRef(false);
+  /** U26: a quiz asked for from the Study tab (the page may already be open). */
+  const [quizAsked, setQuizAsked] = useState(0);
   const debugOpen = useMew((s) => s.debugOpen);
   const quizActive = useQuiz((s) => s.active);
 
@@ -160,6 +165,24 @@ export function NotebookApp({
     setNotice({ text: "Couldn't save your last change. Check available storage.", tone: "error" });
   }, []);
   const notify = useCallback((next: Notice) => setNotice(next), []);
+  /** "Save as PDF" (docs/PLAN.md, Part 3): built here from the saved moments, then downloaded. */
+  const savePdfOf = useCallback(
+    (scope: SavePdfScope, title: string) => {
+      void savePdf(repo, scope, title)
+        .then((saved) =>
+          setNotice(
+            saved
+              ? { text: "Saved the PDF to your downloads.", tone: "info" }
+              : { text: "There are no saved moments here to put in a PDF yet.", tone: "info" },
+          ),
+        )
+        .catch((error: unknown) => {
+          console.error("[notebook] PDF", error);
+          setNotice({ text: "The PDF couldn't be made. Try again.", tone: "error" });
+        });
+    },
+    [repo],
+  );
   const treeNotice = useCallback((text: string) => setNotice({ text, tone: "info" }), []);
 
   const { nodes, tree } = useNotebookTree(repo, treeNotice, report);
@@ -194,6 +217,35 @@ export function NotebookApp({
     setNotebookId(id);
     setView("home");
   }, []);
+  /**
+   * A notebook picked in the sidebar or on the desk opens its home (its tabs, chapters and loose
+   * pages); a chapter or section opens as before (its home when it has sections, else its page).
+   */
+  const openPlace = useCallback(
+    (id: string) => {
+      if (tree.get(id)?.parentId !== null) {
+        openNode(id);
+        return;
+      }
+      void repo.touchNotebook(id).catch(report);
+      openHome(id);
+    },
+    [tree, repo, report, openNode, openHome],
+  );
+  /** The tab a home opens on when asked for one (U26: a course link opens Study). */
+  const [homeTab, setHomeTab] = useState<{ nodeId: string; tab: HomeTab } | null>(null);
+
+  /** "Do it for me" on screen: the line in their own notes neb points them to (docs/PLAN.md). */
+  // From the address when the desktop app came here for it (`/notebook?page=…&spot=x,y,w,h`).
+  const [noteSpot, setNoteSpot] = useState<NoteSpot | null>(() => {
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return readNoteSpot({
+      pageId: params.get("page"),
+      bbox: params.get("spot")?.split(",").map(Number),
+    });
+  });
+  const clearNoteSpot = useCallback(() => setNoteSpot(null), []);
 
   const openPage = useCallback((page: Page) => {
     wantedPage.current = page.id;
@@ -207,6 +259,21 @@ export function NotebookApp({
     setPageId(page.id);
   }, []);
 
+  // The desktop app asks to open a line of the student's notes while the notebook is open.
+  useEffect(() => {
+    const onOpen = (event: Event) => {
+      const spot = readNoteSpot((event as CustomEvent<unknown>).detail);
+      if (!spot) return;
+      void repo.getPage(spot.pageId).then((page) => {
+        if (!page) return;
+        openPage(page);
+        setNoteSpot(spot);
+      });
+    };
+    window.addEventListener(OPEN_NOTE_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_NOTE_EVENT, onOpen);
+  }, [repo, openPage]);
+
   // Open the most recent notebook (creating one on first use) and ask the browser not to evict it.
   useEffect(() => {
     let cancelled = false;
@@ -216,7 +283,12 @@ export function NotebookApp({
       const params = new URLSearchParams(window.location.search);
       const course = params.get("course");
       quizRequested.current = params.get("quiz") === "1";
+      // U26: `&tab=study` opens the course notebook's home on its Study tab.
+      const study = params.get("tab") === "study";
       const title = (params.get("title") ?? "").trim().slice(0, 200) || "Course notes";
+      // U29: F5 or Back: the page or home the address names (written below as it changes).
+      const pageParam = params.get("page");
+      const nodeParam = params.get("node");
       // A device with no notebooks yet (a new browser, a second computer) takes the account's
       // first, so it never makes a "My first notebook" of its own beside them.
       if (navigator.onLine && (await repo.listNotebooks()).length === 0) {
@@ -224,16 +296,35 @@ export function NotebookApp({
         if (server) await repo.tree.applyServerTree(server);
       }
       if (start === "desk" && !(course && UUID.test(course))) return;
+      if (!(course && UUID.test(course))) {
+        const tree = await repo.tree.tree();
+        if (pageParam && UUID.test(pageParam)) {
+          const page = await repo.getPage(pageParam);
+          if (cancelled) return;
+          if (page && tree.isLive(page.notebookId)) {
+            openPage(page);
+            return;
+          }
+        }
+        if (nodeParam && UUID.test(nodeParam) && tree.isLive(nodeParam)) {
+          if (!cancelled) openHome(nodeParam);
+          return;
+        }
+      }
       const latest =
         course && UUID.test(course)
           ? await repo.notebookForCourse(course, title)
           : await repo.openLatestNotebook();
-      if (!cancelled) openNode(latest.id);
+      if (cancelled) return;
+      if (study) {
+        setHomeTab({ nodeId: latest.id, tab: "study" });
+        openHome(latest.id);
+      } else openNode(latest.id);
     })().catch(report);
     return () => {
       cancelled = true;
     };
-  }, [repo, report, openNode, start]);
+  }, [repo, report, openNode, openHome, openPage, start]);
 
   // The open node's pages; a page view always has one (a node from another device may have
   // none here yet).
@@ -406,11 +497,35 @@ export function NotebookApp({
     return () => window.removeEventListener("focus", again);
   }, [loadChecks, momentsVersion, view]);
   const dueCounts = useMemo(() => dueByNode(checks ?? [], tree, now), [checks, tree, now]);
+  /** Moments with a check due (U28: their cards say so). */
+  const dueClipIds = useMemo(
+    () =>
+      new Set(
+        (checks ?? [])
+          .filter((c) => Date.parse(c.dueAt) <= now)
+          .flatMap((c) => [c.clipId, ...c.mergedClipIds])
+          .filter((id): id is string => id !== null),
+      ),
+    [checks, now],
+  );
   /** Every check due now, anywhere (the desk's Tonight card). */
   const dueTotal = useMemo(
     () => (checks ?? []).filter((c) => Date.parse(c.dueAt) <= now).length,
     [checks, now],
   );
+  // U26: course concepts due (the review queue), for the desk's Review button and Tonight card.
+  const [conceptsDue, setConceptsDue] = useState(0);
+  useEffect(() => {
+    if (view !== "desk") return;
+    let live = true;
+    void coursesApi
+      .dueReviews()
+      .then((queue) => live && setConceptsDue(queue.items.length))
+      .catch(() => undefined); // offline or signed out: the checks still count
+    return () => {
+      live = false;
+    };
+  }, [view]);
   const exam = useMomentChecks((s) => s.exam);
   const stayedRows = useMomentChecks((s) => s.stayed);
   const stayed = useMemo(() => stayedByNotebook(stayedRows ?? [], tree), [stayedRows, tree]);
@@ -669,7 +784,7 @@ export function NotebookApp({
     if (!courseId || !engine || !quizRequested.current) return;
     quizRequested.current = false;
     void quiz.start(courseId);
-  }, [courseId, engine, quiz]);
+  }, [courseId, engine, quiz, quizAsked]);
 
   // A quiz belongs to its course's notebook: switching notebooks ends it.
   useEffect(() => {
@@ -677,7 +792,18 @@ export function NotebookApp({
     if (running.active && running.courseId !== courseId) void quiz.stop();
   }, [courseId, quiz]);
 
-  const treeActions = useTreeActions({ repo, tree, notify, report, openNode, openPage });
+  const treeActions = useTreeActions({
+    repo,
+    tree,
+    notify,
+    report,
+    openNode,
+    openPage,
+    // A loose page moved from a home: that home's pages are read again (its cards count theirs).
+    onPagesMoved: () => {
+      if (notebookId) void repo.listPages(notebookId).then(setPages, report);
+    },
+  });
   // K4: importing a PDF (Ctrl+O, "Import PDF", or a PDF dropped on the sidebar or a page).
   const [importing, setImporting] = useState<{ nodeId: string | null; file: File | null } | null>(
     null,
@@ -686,8 +812,11 @@ export function NotebookApp({
     const result = await carryOutImport(info, choice, { repo, tree, makeCourseMaterial });
     setImporting(null);
     const first = result.firstPageId ? await repo.getPage(result.firstPageId) : null;
-    if (first) openPage(first);
-    else openNode(choice.nodeId);
+    if (first) {
+      openPage(first);
+      // Into the notebook already open, nothing reads its pages again: every new one is listed here.
+      setPages(await repo.listPages(first.notebookId));
+    } else openNode(choice.nodeId);
     const pages =
       (choice.plan.loose ? choice.plan.loose.lastPage - choice.plan.loose.firstPage + 1 : 0) +
       choice.plan.chapters.reduce((n, c) => n + c.lastPage - c.firstPage + 1, 0);
@@ -870,6 +999,30 @@ export function NotebookApp({
     keys.platform,
     keys.own,
   );
+  // /desk?jump=1: the jump search on pages outside the notebook (Review's header) opens it here.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("jump") !== "1") return;
+    url.searchParams.delete("jump");
+    window.history.replaceState(window.history.state, "", url);
+    treeActions.setPaletteOpen(true);
+  }, [treeActions]);
+  // U29: the address says where the student is: the desk, a node's home, or a page. F5 and Back
+  // come back to it, never to the latest notebook or to a one-off link's course, tab or quiz
+  // again (those were read when the app started, in the effects above). Replaced, not pushed: the
+  // notebook's own moves don't fill the browser's history.
+  useEffect(() => {
+    const target =
+      view === "desk"
+        ? "/desk"
+        : view === "home" && notebookId
+          ? `/notebook?node=${notebookId}`
+          : view === "page" && pageId
+            ? `/notebook?page=${pageId}`
+            : null;
+    if (!target || window.location.pathname + window.location.search === target) return;
+    window.history.replaceState(window.history.state, "", target);
+  }, [view, notebookId, pageId]);
 
   const paletteCommands: PaletteCommand[] = [
     {
@@ -966,7 +1119,7 @@ export function NotebookApp({
               trashCount={tree.trash().length}
               counts={unsortedCount}
               newNotebookShortcut={keys.shown("new_notebook")}
-              onOpen={openNode}
+              onOpen={openPlace}
               onCreateNotebook={treeActions.startCreating}
               onAddChild={treeActions.addChild}
               onAddPage={treeActions.addPage}
@@ -976,6 +1129,9 @@ export function NotebookApp({
               onReorder={treeActions.reorder}
               onMoveTo={treeActions.setMovingId}
               onKeepOffline={treeActions.keepOffline}
+              onSavePdf={(id) =>
+                savePdfOf({ kind: "chapter", nodeId: id }, tree.get(id)?.title ?? "Neb")
+              }
               onDelete={treeActions.requestDelete}
               onOpenTrash={() => treeActions.setTrashOpen(true)}
             />
@@ -1047,11 +1203,13 @@ export function NotebookApp({
                       moments={moments}
                       dueCounts={dueCounts}
                       dueTotal={dueTotal}
+                      conceptsDue={conceptsDue}
                       stayed={stayed}
                       exam={exam ? { title: exam.title, days: exam.daysLeft } : null}
                       loadCounts={loadCounts}
                       keys={{ jump: keys.shown("jump"), newNotebook: keys.shown("new_notebook") }}
                       onOpen={openNode}
+                      onOpenNotebook={openPlace}
                       onOpenMoment={(moment) => openMoment(moment, true)}
                       onQuickCheck={() => openQuickCheck()}
                       onJump={() => treeActions.setPaletteOpen(true)}
@@ -1063,7 +1221,20 @@ export function NotebookApp({
                   )
                 ) : view === "home" && node ? (
                   <NodeHome
+                    key={node.id}
                     node={node}
+                    {...(homeTab?.nodeId === node.id && { initialTab: homeTab.tab })}
+                    onQuiz={() => {
+                      // The quiz runs on a page: open the notebook's, and it starts there.
+                      quizRequested.current = true;
+                      setQuizAsked((n) => n + 1);
+                      setView("page");
+                    }}
+                    onLinkCourse={(courseId) =>
+                      void repo.tree
+                        .setCourse(tree.path(node.id)[0]?.id ?? node.id, courseId)
+                        .catch(report)
+                    }
                     tree={tree}
                     pages={pages.filter((p) => p.notebookId === node.id)}
                     now={now}
@@ -1075,10 +1246,19 @@ export function NotebookApp({
                     }}
                     onAddChild={() => treeActions.addChild(node.id)}
                     onAddPage={() => treeActions.addPage(node.id)}
+                    onMovePage={(id) => treeActions.startMovingPage(id, false)}
+                    onMovePageTo={(id, nodeId) => treeActions.movePage(id, nodeId, false)}
                     onImportPdf={() => setImporting({ nodeId: node.id, file: null })}
                     moments={moments.filter((m) => subtreeIds(tree, node.id).has(m.nodeId))}
                     dueCounts={dueCounts}
                     onOpenMoment={(moment) => openMoment(moment)}
+                    onReplayMoment={(moment) => openMoment(moment, true)}
+                    onCheckMoment={(moment) => {
+                      // Its page, then Notes Check on it (what "Check against my notes" does there).
+                      openMoment(moment);
+                      checkAgainstNotes(moment.image);
+                    }}
+                    dueClipIds={dueClipIds}
                     inNeb={inNeb}
                     onOpenInNeb={openInNeb}
                     onQuickCheck={() => openQuickCheck({ nodeIds: [...subtreeIds(tree, node.id)] })}
@@ -1107,7 +1287,17 @@ export function NotebookApp({
                 {/* Mounted with the page's canvas (keyed by page), so the notes subscribe to the camera
             of the canvas that's actually shown and scroll with the page, never over it. */}
                 {engine && view === "page" && engine.pageId === pageId && (
-                  <EntryNotes key={engine.pageId} canvas={canvas} images={engine.images} />
+                  <EntryNotes
+                    key={engine.pageId}
+                    canvas={canvas}
+                    images={engine.images}
+                    onSavePdf={(image) =>
+                      savePdfOf(
+                        { kind: "moment", pageId: image.pageId, imageId: image.id },
+                        `${node?.title ?? "Neb"} moment`,
+                      )
+                    }
+                  />
                 )}
 
                 {engine && view === "page" && (
@@ -1115,6 +1305,9 @@ export function NotebookApp({
                 )}
 
                 {engine && view === "page" && <NotebookPointer canvas={canvas} ink={mew.ink} />}
+                {engine && view === "page" && noteSpot?.pageId === engine.pageId && (
+                  <NoteSpotlight canvas={canvas} spot={noteSpot} onDone={clearNoteSpot} />
+                )}
 
                 {engine && view === "page" && (
                   <MarkLayer
@@ -1153,7 +1346,7 @@ export function NotebookApp({
                   <HoldCircle key={holding} canvas={canvas} onLoop={mew.hold.circle} />
                 )}
 
-                {clipImage && !quizActive && (
+                {view === "page" && clipImage && !quizActive && (
                   <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-4">
                     <ClipSource
                       image={clipImage}
@@ -1260,6 +1453,10 @@ export function NotebookApp({
                   onZoom={actions.zoom}
                   onResetView={actions.resetView}
                   onExportLine={() => void exportLine().catch(report)}
+                  onSavePdf={() =>
+                    pageId && savePdfOf({ kind: "page", pageId }, `${node?.title ?? "Neb"} page`)
+                  }
+                  onMovePage={() => pageId && treeActions.startMovingPage(pageId)}
                   marks={<MarksMenu notebookId={rootId} pageId={pageId} />}
                   pageNav={
                     pageId && (

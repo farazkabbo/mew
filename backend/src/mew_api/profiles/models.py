@@ -6,6 +6,8 @@ from typing import Annotated, Any, Literal, get_args
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 VoiceId = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9]{8,64}$")]
+#: The language neb listens and speaks in (mirrors NEB_LANGUAGES in language.ts).
+NebLanguage = Literal["en", "fr", "bn", "zh"]
 
 #: The notebook's rebindable shortcuts (K2; mirrors SHORTCUT_ACTIONS in shortcuts.ts).
 ShortcutAction = Literal[
@@ -47,6 +49,7 @@ class UserSettings(BaseModel):
     auto_check: bool = True
     listen_on_open: bool = False
     voice_id: VoiceId | None = None
+    language: NebLanguage = "en"
     #: Lets the app keep Mew's decisions to improve it (M10). Off unless the student opts in.
     mew_logging_opt_in: bool = False
     #: Notes Check keeps a searchable copy of the notes' text (S3.5). On unless turned off.
@@ -90,6 +93,7 @@ class SettingsPatch(BaseModel):
     auto_check: bool | None = None
     listen_on_open: bool | None = None
     voice_id: VoiceId | None = None
+    language: NebLanguage | None = None
     mew_logging_opt_in: bool | None = None
     notes_index: bool | None = None
     onboarded: bool | None = None

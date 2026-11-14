@@ -91,6 +91,21 @@ pub fn pointer_spot(
     }
 }
 
+/// Where a pen was last seen, and where the mouse was at that moment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PenSeen {
+    pub at: (i32, i32),
+    pub cursor: Option<(i32, i32)>,
+}
+
+/// What the pointer follows: the pen, until the mouse moves away from where it was then.
+pub fn pointer_at(cursor: Option<(i32, i32)>, pen: Option<PenSeen>) -> Option<(i32, i32)> {
+    match pen {
+        Some(pen) if pen.cursor == cursor => Some(pen.at),
+        _ => cursor,
+    }
+}
+
 /// Why the pointer stays hidden whatever the setting (brief §2.1).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Hide {
@@ -131,6 +146,18 @@ pub fn tick_ms(moved_recently: bool, drawing: bool) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn follows_the_pen_until_the_mouse_moves() {
+        let pen = PenSeen {
+            at: (500, 300),
+            cursor: Some((10, 10)),
+        };
+        assert_eq!(pointer_at(Some((10, 10)), None), Some((10, 10)));
+        assert_eq!(pointer_at(Some((10, 10)), Some(pen)), Some((500, 300)));
+        assert_eq!(pointer_at(Some((11, 10)), Some(pen)), Some((11, 10)));
+        assert_eq!(pointer_at(None, None), None);
+    }
 
     const MONITOR: ScreenRect = ScreenRect {
         left: -1920,

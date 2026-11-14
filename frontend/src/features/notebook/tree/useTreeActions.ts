@@ -21,6 +21,8 @@ type Options = {
   report(error: unknown): void;
   openNode(id: string): void;
   openPage(page: Page): void;
+  /** Pages moved without following them (from a home): its lists read again. */
+  onPagesMoved(): void;
 };
 
 const MOVE_REFUSED = {
@@ -34,13 +36,27 @@ const MOVE_REFUSED = {
  * handlers for the sidebar, the home view, the dialogs and the shortcuts, plus those dialogs'
  * state. Renames, moves and deletes say what happened and offer Undo.
  */
-export function useTreeActions({ repo, tree, notify, report, openNode, openPage }: Options) {
+export function useTreeActions({
+  repo,
+  tree,
+  notify,
+  report,
+  openNode,
+  openPage,
+  onPagesMoved,
+}: Options) {
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<Pick<Notebook, "title" | "icon" | "color"> | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
   /** A page being moved to another node (K3: the picker, when it wasn't clear where). */
   const [movingPageId, setMovingPageId] = useState<string | null>(null);
+  /** Whether the page opens where it went (moving the open page) or the view stays (a home). */
+  const [movingPageFollows, setMovingPageFollows] = useState(true);
+  const startMovingPage = useCallback((pageId: string, follow = true) => {
+    setMovingPageFollows(follow);
+    setMovingPageId(pageId);
+  }, []);
   const [deleting, setDeleting] = useState<{ id: string; title: string; body: string } | null>(
     null,
   );
@@ -144,12 +160,16 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
     });
   };
 
-  /** Moves a page to another node, says where, and offers Undo (K3). */
-  const movePage = (pageId: string, nodeId: string) =>
+  /**
+   * Moves a page to another node, says where, and offers Undo (K3). `follow` opens it there (the
+   * page being moved is the one open); from a home the view stays and its lists read again.
+   */
+  const movePage = (pageId: string, nodeId: string, follow = true) =>
     run(repo.movePage(pageId, nodeId), (result) => {
       setMovingPageId(null);
       if (!result) return;
-      openPage(result.page);
+      if (follow) openPage(result.page);
+      else onPagesMoved();
       const where = tree
         .path(nodeId)
         .map((n) => n.title)
@@ -161,7 +181,9 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
           label: "Undo",
           run: () =>
             run(repo.movePage(pageId, result.from.notebookId, result.from.index), (back) => {
-              if (back) openPage(back.page);
+              if (!back) return;
+              if (follow) openPage(back.page);
+              else onPagesMoved();
             }),
         },
       });
@@ -220,6 +242,8 @@ export function useTreeActions({ repo, tree, notify, report, openNode, openPage 
     setMovingId,
     movingPageId,
     setMovingPageId,
+    movingPageFollows,
+    startMovingPage,
     deleting,
     setDeleting,
     trashOpen,

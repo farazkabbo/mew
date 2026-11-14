@@ -81,6 +81,11 @@ export function notebookHref(course: { id: string; title: string }): string {
   return `/notebook?${params.toString()}`;
 }
 
+/** The course notebook's home on its Study tab (decision U26: a course lives in its notebook). */
+export function studyHref(course: { id: string; title: string }): string {
+  return `${notebookHref(course)}&tab=study`;
+}
+
 /** The course notebook with a quiz started on arrival ("Quiz me"). */
 export function quizHref(course: { id: string; title: string }): string {
   return `${notebookHref(course)}&quiz=1`;

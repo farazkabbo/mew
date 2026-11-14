@@ -1,12 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { CoursesApp } from "@/features/courses/CoursesApp";
-import { isClerkConfigured } from "@/lib/auth-mode";
-
-export const metadata: Metadata = { title: "Courses · Neb" };
-
-export default async function CoursesPage() {
-  if (isClerkConfigured) await auth.protect();
-  return <CoursesApp />;
+/** Courses live in their notebooks now (docs/NEB_APP_UI.md decision U26): the desk lists them. */
+export default function CoursesPage() {
+  redirect("/desk");
 }

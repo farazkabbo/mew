@@ -8,7 +8,10 @@ import { handle, readJson } from "@/server/http";
 import { assertJpeg } from "@/server/jpeg";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 import { screenCourseContext } from "@/server/screen-course";
+import { LIMITS } from "@/server/limits";
+import { askerOf, questionStream, startQuestion } from "@/server/question-gate";
 import { runScreenTutor } from "@/server/screen-tutor";
+import { studentNotes } from "@/server/student-notes";
 
 /** The JSON body: a base64 JPEG (~1 MB at most) plus a short question. */
 const MAX_BODY_BYTES = 1_500_000;
@@ -33,28 +36,38 @@ export const POST = handle(async (request: Request) => {
   const body = await readJson(request, ScreenAskRequest, MAX_BODY_BYTES);
   assertJpeg(body.image.jpeg);
   geminiEnv(); // fail fast with 503 (before streaming) when the model isn't configured
+  // One of the learner's questions, or part of the walkthrough it's asked in (LAUNCH_LIMITS.md).
+  const question = await startQuestion(
+    askerOf(request, device.userId),
+    body.walkthroughId
+      ? { key: `q:walk:${body.walkthroughId}`, cap: LIMITS.walkthroughSteps }
+      : undefined,
+  );
   // Asked in the middle of a walkthrough: the tutor answers about its current step.
   const token = deviceToken(request);
-  const [walkthrough, courseContext] = await Promise.all([
+  const [walkthrough, courseContext, notes] = await Promise.all([
     body.walkthroughId
       ? walkthroughContext(deviceWalkthroughs(token), body.walkthroughId)
       : undefined,
     screenCourseContext(token, body.transcript),
+    // The student's own lines about it: the answer teaches from them (docs/PLAN.md).
+    studentNotes(token, body.transcript),
   ]);
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      for await (const event of runScreenTutor(
-        { ...body, ...(walkthrough && { walkthrough }), courseContext },
+  return questionStream(
+    question,
+    () =>
+      runScreenTutor(
+        {
+          ...body,
+          ...(walkthrough && { walkthrough }),
+          courseContext,
+          language: device.language,
+          studentNotes: notes,
+        },
         request.signal,
-      )) {
-        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
-      }
-      controller.close();
-    },
-  });
-  return new Response(stream, {
-    headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
-  });
+      ),
+    // Spoken words reached the learner (a safe fallback line is still an answer).
+    (event) => event.type === "speech",
+  );
 });

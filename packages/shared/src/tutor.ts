@@ -3,6 +3,7 @@ import { z } from "zod";
 import { CHECK_LIMITS, LineCheck } from "./check";
 import { COURSE_LIMITS, CourseExcerpt } from "./course";
 import { GeometrySpec, MoleculeFigure } from "./figures";
+import { NebLanguage } from "./language";
 import { MEW_LIMITS, MewLabel } from "./mew";
 import { QuizContext } from "./quiz";
 import { Subject } from "./subject";
@@ -149,6 +150,8 @@ export const ClippedText = z.object({
 export type ClippedText = z.infer<typeof ClippedText>;
 
 export const TutorRequest = z.object({
+  /** The language to answer in; omitted: English. */
+  language: NebLanguage.optional(),
   /**
    * Why the tutor is responding (the gate's label; never "ignore", and never the notebook's own
    * commands: saving and organising are done in the notebook, K3).
@@ -258,6 +261,8 @@ export const TtsRequest = z.object({
     .string()
     .regex(/^[A-Za-z0-9]{8,64}$/)
     .nullish(),
+  /** The language of `text`; omitted: English. */
+  language: NebLanguage.optional(),
 });
 export type TtsRequest = z.infer<typeof TtsRequest>;
 

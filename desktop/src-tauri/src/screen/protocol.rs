@@ -342,6 +342,41 @@ pub enum StreamEvent {
     Error {
         message: String,
     },
+    /// The answer taught from the student's own notes (docs/PLAN.md): where they are, and
+    /// whether to open them (the student asked neb to do the work).
+    Notebook(NoteSpot),
+}
+
+/// A line in the student's notebook, as the server found it (`notebook` events).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteSpot {
+    pub notebook_id: String,
+    pub page_id: String,
+    pub line_index: u32,
+    /// The line on its page, in page units: [x, y, width, height].
+    pub bbox: [f32; 4],
+    pub notebook_title: String,
+    pub page: u32,
+    pub open: bool,
+}
+
+impl Eq for NoteSpot {}
+
+impl NoteSpot {
+    /// Ids that are ids, a box that's a box on a page, a title that's short text.
+    pub fn is_valid(&self) -> bool {
+        is_uuid(&self.notebook_id)
+            && is_uuid(&self.page_id)
+            && self
+                .bbox
+                .iter()
+                .all(|v| v.is_finite() && v.abs() <= 1_000_000.0)
+            && self.bbox[2] >= 0.0
+            && self.bbox[3] >= 0.0
+            && self.notebook_title.chars().count() <= 200
+            && !self.notebook_title.chars().any(char::is_control)
+    }
 }
 
 /// Parses and checks one line of the stream. None for anything malformed or out of bounds.
@@ -351,6 +386,7 @@ pub fn parse_event(line: &str) -> Option<StreamEvent> {
         StreamEvent::Speech { text } => within(text, SPEECH_CHARS),
         StreamEvent::Response { response, turn_id } => reply_is_valid(response) && is_uuid(turn_id),
         StreamEvent::Error { message } => within(message, 300),
+        StreamEvent::Notebook(spot) => spot.is_valid(),
     };
     ok.then_some(event)
 }
@@ -450,7 +486,23 @@ pub(super) fn within(text: &str, max: usize) -> bool {
     !text.trim().is_empty() && text.chars().count() <= max && !text.chars().any(char::is_control)
 }
 
-pub(super) fn is_uuid(text: &str) -> bool {
+/// The server's own words for a limit (docs/DESKTOP_API.md): `{"error": …, "code": …}` with one
+/// of the known codes. None for anything else, so the caller says its usual message.
+pub fn limit_message(body: &[u8]) -> Option<String> {
+    #[derive(Deserialize)]
+    struct Limited {
+        error: String,
+        code: String,
+    }
+    let limited: Limited = serde_json::from_slice(body).ok()?;
+    let known = matches!(
+        limited.code.as_str(),
+        "RATE_LIMITED" | "QUOTA_EXCEEDED" | "AT_CAPACITY" | "EMAIL_UNVERIFIED"
+    );
+    (known && within(&limited.error, 300)).then_some(limited.error)
+}
+
+pub(crate) fn is_uuid(text: &str) -> bool {
     text.len() == 36
         && text.char_indices().all(|(i, c)| {
             if matches!(i, 8 | 13 | 18 | 23) {
@@ -487,6 +539,13 @@ impl LineSplitter {
             }
         }
         lines
+    }
+
+    /// The reply ended: what's left is its last line. A JSON reply is one line with no newline.
+    pub fn finish(&mut self) -> Option<String> {
+        let line = std::str::from_utf8(&self.pending).ok().map(str::to_owned);
+        self.pending.clear();
+        line.filter(|line| !line.trim().is_empty())
     }
 }
 
@@ -593,7 +652,8 @@ fn is_url_safe(b: u8) -> bool {
 /// The code in a browser sign-in's link back to the app: exactly
 /// `neb://auth/callback?code=<code>`. Anyone can launch the app with any link, so anything else
 /// is ignored.
-pub fn parse_sign_in_link(link: &tauri::Url) -> Option<String> {
+/// A sign-in link's code and the state the app sent with its sign-in (both required).
+pub fn parse_sign_in_link(link: &tauri::Url) -> Option<(String, String)> {
     if link.scheme() != "neb"
         || link.host_str() != Some("auth")
         || link.path() != "/callback"
@@ -605,8 +665,30 @@ pub fn parse_sign_in_link(link: &tauri::Url) -> Option<String> {
         return None;
     }
     let mut pairs = link.query_pairs();
-    let (name, code) = pairs.next()?;
-    (name == "code" && pairs.next().is_none() && is_link_code(&code)).then(|| code.into_owned())
+    let (first, code) = pairs.next()?;
+    let (second, state) = pairs.next()?;
+    let ok = first == "code"
+        && second == "state"
+        && pairs.next().is_none()
+        && is_link_code(&code)
+        && is_sign_in_state(&state);
+    ok.then(|| (code.into_owned(), state.into_owned()))
+}
+
+/// The app's random sign-in state: base64url, 22 to 64 characters.
+pub fn is_sign_in_state(text: &str) -> bool {
+    (22..=64).contains(&text.len())
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+}
+
+/// The desktop app polling for a sign-in finished in the browser (docs/DESKTOP_API.md).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PollRequest<'a> {
+    pub verifier: &'a str,
+    pub device_name: &'a str,
 }
 
 #[derive(Serialize)]
@@ -638,12 +720,17 @@ mod tests {
     #[test]
     fn accepts_only_the_exact_sign_in_link() {
         let code = "c".repeat(32);
+        let state = "s".repeat(22);
         let parse = |link: String| parse_sign_in_link(&tauri::Url::parse(&link).unwrap());
         assert_eq!(
-            parse(format!("neb://auth/callback?code={code}")),
-            Some(code.clone())
+            parse(format!("neb://auth/callback?code={code}&state={state}")),
+            Some((code.clone(), state.clone()))
         );
         for link in [
+            // Without its state, or with a malformed one, a link is refused.
+            format!("neb://auth/callback?code={code}"),
+            format!("neb://auth/callback?code={code}&state=short"),
+            format!("neb://auth/callback?code={code}&state={state}&next=x"),
             format!("https://auth/callback?code={code}"),
             format!("neb://evil/callback?code={code}"),
             format!("neb://auth/other?code={code}"),
@@ -908,6 +995,16 @@ mod tests {
     }
 
     #[test]
+    fn a_reply_with_no_newline_is_still_its_last_line() {
+        let mut splitter = LineSplitter::default();
+        assert!(splitter.push(b"{\"places\":[]}").is_empty());
+        assert_eq!(splitter.finish().as_deref(), Some("{\"places\":[]}"));
+        assert_eq!(splitter.finish(), None);
+        splitter.push(b"{\"a\":1}\n");
+        assert_eq!(splitter.finish(), None);
+    }
+
+    #[test]
     fn recognises_codes_and_tokens() {
         assert!(is_link_code(&"c".repeat(32)));
         assert!(!is_link_code(&"c".repeat(31)));
@@ -915,5 +1012,48 @@ mod tests {
         assert!(is_device_token(&format!("mewdt_{}", "A".repeat(43))));
         assert!(!is_device_token(&format!("mewdt_{}", "A".repeat(42))));
         assert!(!is_device_token(&format!("other_{}", "A".repeat(43))));
+    }
+
+    #[test]
+    fn reads_where_the_students_own_notes_are_and_refuses_bad_ones() {
+        let line = |page: &str, bbox: &str| {
+            format!(
+                r#"{{"type":"notebook","notebookId":"22222222-2222-4222-8222-222222222222","pageId":"{page}","lineIndex":4,"bbox":{bbox},"notebookTitle":"Algebra","page":3,"open":true}}"#
+            )
+        };
+        let good = parse_event(&line(
+            "33333333-3333-4333-8333-333333333333",
+            "[40,300,500,60]",
+        ));
+        assert!(
+            matches!(good, Some(StreamEvent::Notebook(spot)) if spot.open && spot.line_index == 4)
+        );
+        assert!(parse_event(&line("../../settings", "[40,300,500,60]")).is_none());
+        assert!(parse_event(&line(
+            "33333333-3333-4333-8333-333333333333",
+            "[40,300,-5,60]"
+        ))
+        .is_none());
+    }
+
+    #[test]
+    fn says_the_servers_own_words_for_a_limit_and_nothing_else() {
+        let limited = br#"{"error":"You've used your 8 free questions. We'll email you when more open up.","code":"QUOTA_EXCEEDED"}"#;
+        assert_eq!(
+            limit_message(limited).as_deref(),
+            Some("You've used your 8 free questions. We'll email you when more open up.")
+        );
+        assert!(limit_message(br#"{"error":"Internal error"}"#).is_none());
+        assert!(limit_message(br#"{"error":"x","code":"SOMETHING_ELSE"}"#).is_none());
+        assert!(limit_message(b"not json").is_none());
+        let long = format!(r#"{{"error":"{}","code":"AT_CAPACITY"}}"#, "x".repeat(400));
+        assert!(limit_message(long.as_bytes()).is_none());
+    }
+
+    #[test]
+    fn a_device_id_is_a_version_4_uuid() {
+        let id = crate::screen::win::credential::uuid_v4([0xab; 16]);
+        assert!(is_uuid(&id));
+        assert_eq!(&id[14..15], "4");
     }
 }

@@ -11,6 +11,9 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   // Where the desktop window turns its ticket into a session, so it has none yet.
   "/desktop/finish",
+  // The desktop app's Sign in: the page itself sends someone signed out to sign-up (not sign-in,
+  // which is what protecting it here would do) and shows nothing without a session.
+  "/desktop/authorize",
 ]);
 /**
  * Called by the desktop app, which has no browser session: these authenticate with a device
@@ -19,8 +22,11 @@ const isPublicRoute = createRouteMatcher([
 const isDeviceRoute = createRouteMatcher([
   "/api/devices/exchange",
   "/api/devices/sign-in",
+  "/api/devices/poll",
   "/api/devices/revoke-self",
   "/api/screen/(.*)",
+  // Clerk's own webhooks: signed with Svix, checked inside the route.
+  "/api/webhooks/clerk",
 ]);
 const production = process.env.NODE_ENV === "production";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

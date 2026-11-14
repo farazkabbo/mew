@@ -38,3 +38,13 @@ describe("proxy matcher", () => {
     expect(matcher.test(route)).toBe(false);
   });
 });
+
+describe("public routes", () => {
+  const publicList = /createRouteMatcher\(\[([\s\S]*?)\]\)/.exec(source)?.[1] ?? "";
+
+  // Signed out, the desktop app's Sign in must reach the page, which sends the visitor to
+  // sign-up; protecting it in the proxy would send them to sign-in instead.
+  it("lets /desktop/authorize through to the page", () => {
+    expect(publicList).toContain('"/desktop/authorize"');
+  });
+});

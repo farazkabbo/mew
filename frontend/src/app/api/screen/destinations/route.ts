@@ -4,6 +4,7 @@ import { deviceTree, placesOf } from "@/server/destinations";
 import { deviceToken, requireDevice } from "@/server/device-auth";
 import { handle } from "@/server/http";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { requireAllowance } from "@/server/question-gate";
 
 /**
  * Screen Coach's destination picker (K3 §4.4, "Change" and Ctrl+D): every notebook, chapter and
@@ -13,6 +14,8 @@ import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
  */
 export const POST = handle(async (request: Request) => {
   const device = await requireDevice(request);
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(device.userId);
   enforceRateLimit(device.userId, {
     destinations: RATE_RULES.destinations,
     destinationsDaily: RATE_RULES.destinationsDaily,

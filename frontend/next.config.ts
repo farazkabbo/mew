@@ -10,6 +10,15 @@ const repoRoot = path.resolve(import.meta.dirname, "..");
 const rootEnvFile = path.join(repoRoot, ".env.local");
 if (existsSync(rootEnvFile)) process.loadEnvFile(rootEnvFile);
 
+// The fake model (src/server/fake-model.ts) is for preview and staging: a production build with
+// it switched on is refused outright (it would answer every learner with canned text).
+if (
+  process.env.NEB_FAKE_MODEL === "1" &&
+  (process.env.VERCEL_ENV === "production" || process.env.NEB_DEPLOY_ENV === "production")
+) {
+  throw new Error("NEB_FAKE_MODEL=1 is set on a production deploy. Remove it.");
+}
+
 // The Content-Security-Policy itself is set per request (with a nonce) in src/proxy.ts.
 const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },

@@ -18,6 +18,8 @@ type Props = {
   canvas: RefObject<CanvasHandle | null>;
   /** The page's images: those that are Circle & Ask entries get their note. */
   images: readonly ImageBlock[];
+  /** "Save as PDF" for one moment (docs/PLAN.md, Part 3). */
+  onSavePdf?: (image: ImageBlock) => void;
 };
 
 /**
@@ -27,7 +29,7 @@ type Props = {
  * opened from elsewhere (Moments, Ctrl+K, a Quick check) is scrolled to, and replayed if asked. A layer above the page that follows the camera (like Notes Check's marks), so
  * the note stays under its picture; only the notes take the pointer.
  */
-export function EntryNotes({ canvas, images }: Props) {
+export function EntryNotes({ canvas, images, onSavePdf }: Props) {
   const layer = useRef<HTMLDivElement | null>(null);
   const camera = useRef<Camera | null>(null);
   const [replaying, setReplaying] = useState<{ imageId: string; step: ReplayStep | null } | null>(
@@ -152,6 +154,15 @@ export function EntryNotes({ canvas, images }: Props) {
                 >
                   {replaying?.imageId === image.id ? "Stop replay" : "Replay"}
                 </button>
+                {onSavePdf && (
+                  <button
+                    type="button"
+                    className="mt-2 ml-4 font-medium underline underline-offset-2"
+                    onClick={() => onSavePdf(image)}
+                  >
+                    Save as PDF
+                  </button>
+                )}
               </section>
             </Fragment>
           );

@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { OPEN_NOTE_EVENT, readNoteSpot } from "../notebook/NoteSpotlight";
 import { ScreenCoachBridge } from "../screen/ScreenCoachBridge";
 import { useSettings } from "../settings/store";
 import {
@@ -46,6 +47,17 @@ export function DesktopBridge() {
     const toNotebook = () => router.push("/notebook?summon=1");
     window.addEventListener(SUMMON_EVENT, toNotebook);
     return () => window.removeEventListener(SUMMON_EVENT, toNotebook);
+  }, [pathname, router]);
+
+  // "Do it for me" on screen: their own notes open at the line (the notebook takes it from here).
+  useEffect(() => {
+    if (!isDesktop() || pathname === "/notebook") return;
+    const toNote = (event: Event) => {
+      const spot = readNoteSpot((event as CustomEvent<unknown>).detail);
+      if (spot) router.push(`/notebook?page=${spot.pageId}&spot=${spot.bbox.join(",")}`);
+    };
+    window.addEventListener(OPEN_NOTE_EVENT, toNote);
+    return () => window.removeEventListener(OPEN_NOTE_EVENT, toNote);
   }, [pathname, router]);
 
   return <ScreenCoachBridge />;

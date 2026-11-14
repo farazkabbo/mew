@@ -53,11 +53,13 @@ fn show<R: Runtime>(app: &AppHandle<R>) {
     // window never resizes (resizing it showed a pale band). Clicks on the clear part reach the
     // app below.
     let window_rect = island_spot(monitor, scale, ISLAND_WINDOW_HEIGHT);
+    let island = island_spot(monitor, scale, ISLAND_SIZE.1);
     if let Some(mut state) = circle::state(app) {
-        state.island = Some(island_spot(monitor, scale, ISLAND_SIZE.1));
+        state.island = Some(island);
     }
     overlay::dispatch(app, Surface::Island, ISLAND_RESET, &serde_json::json!({}));
     shape(&window, window_rect);
+    keep_island_only(&window, island, scale);
     circle::start_tracker(app);
     refresh(app);
     screen_music::start(app);
@@ -283,4 +285,18 @@ fn fit<R: Runtime>(app: &AppHandle<R>, height: f64) {
     if let Some(mut state) = circle::state(app) {
         state.island = Some(next);
     }
+    if let Some(window) = app.get_webview_window(Surface::Island.label()) {
+        keep_island_only(&window, next, scale);
+    }
+    circle::island_changed(app);
+}
+
+/// The room under the island for a button's name (CSS pixels).
+const TIP_ROOM: f64 = 40.0;
+
+/// Cuts the window down to the island and the names under its buttons, so a pen reaches whatever
+/// is under the rest of it.
+fn keep_island_only<R: Runtime>(window: &WebviewWindow<R>, island: ScreenRect, scale: f64) {
+    let room = (TIP_ROOM * scale).round() as i32;
+    overlay::keep_top(window, island.width(), island.height() + room);
 }

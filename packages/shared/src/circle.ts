@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { DestinationResolution } from "./destinations";
 import { CheckQuestion, FilingNote } from "./moments";
+import { FromNotes, NotebookEvent } from "./student-notes";
 import { Subject } from "./tutor";
 import {
   AppName,
@@ -165,6 +166,8 @@ export const CircleAskModelResponse = z.object({
   /** K8: what it's about, and one question to check the idea later (filed and quizzed). */
   subject: Subject,
   checkQuestion: CheckQuestion.nullable(),
+  /** The student's own line it taught from (its `ref` in "studentNotes"), if any. */
+  fromNotes: FromNotes,
 });
 export type CircleAskModelResponse = z.infer<typeof CircleAskModelResponse>;
 export type CircleModelStep = z.infer<typeof CircleModelStep>;
@@ -211,6 +214,8 @@ export const CircleStreamEvent = z.discriminatedUnion("type", [
   /** A step broke the safety check: stop, take back what was drawn, and say this instead. */
   z.object({ type: z.literal("abort"), speech: z.string().min(1).max(SCREEN_LIMITS.speechChars) }),
   z.object({ type: z.literal("error"), message: z.string().max(300) }),
+  /** The answer taught from the student's own notes: where (before `done`). */
+  NotebookEvent,
 ]);
 export type CircleStreamEvent = z.infer<typeof CircleStreamEvent>;
 

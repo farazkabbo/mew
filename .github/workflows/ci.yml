@@ -32,6 +32,8 @@ jobs:
       - run: pnpm --filter '!@mew/backend' -r typecheck
       - run: pnpm --filter '!@mew/backend' -r test
       - run: pnpm --filter @mew/frontend build
+      # No key in anything that ships: the desktop app and the browser bundle (LAUNCH_LIMITS.md).
+      - run: pnpm scan:secrets
       - run: pnpm audit --prod --audit-level high
 
   e2e:

@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "./fixtures";
 
+import { createCourse } from "./helpers/course";
 import { CHAPTER, makePdf } from "./helpers/pdf";
 
 /**
@@ -65,20 +66,14 @@ function dateIn(days: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** A course in its notebook's Study tab (decision U26); returns its link, which opens there. */
 async function startCourse(page: Page, examDate?: string) {
-  await page.goto("/courses");
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "chapter-3.pdf",
-    mimeType: "application/pdf",
-    buffer: makePdf(CHAPTER),
-  });
-  await page.getByLabel("Course title").fill("Forces and motion");
-  await page.getByRole("button", { name: "Build course" }).click();
+  const id = await createCourse(page, makePdf(CHAPTER), "Forces and motion");
   await expect(page.getByText("Needs review")).toBeVisible({ timeout: 30_000 });
   if (examDate) await page.getByLabel("Exam date (optional)").fill(examDate);
   await page.getByRole("button", { name: /Start studying/ }).click();
   await expect(page.getByTestId("plan-concept")).toHaveCount(3);
-  return page.url();
+  return `/courses/${id}`;
 }
 
 const planRow = (page: Page, title: string) =>
@@ -129,7 +124,7 @@ test("practice moves a concept from not started to checked, with a plan and revi
     "Not started",
     "Not started",
   ]);
-  await expect(page.getByTestId("plan-summary")).toContainText("0 checked · exam in 4 days");
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/0 checked · exam in 4 days/);
   const days = page.getByTestId("plan-day");
   await expect(days.first()).toContainText("Today");
   await expect(days.first()).toContainText("Work on: Forces");
@@ -156,7 +151,7 @@ test("practice moves a concept from not started to checked, with a plan and revi
   await page.getByRole("link", { name: "Forces and motion" }).click();
   await expect(planRow(page, "Friction").getByTestId("concept-status")).toHaveText("Checked");
   await expect(planRow(page, "Friction")).toContainText("review in 3 days");
-  await expect(page.getByTestId("plan-summary")).toContainText("1 checked");
+  await expect(page.getByTestId("plan-summary")).toHaveAccessibleName(/1 checked/);
   await expect(days.first()).not.toContainText("Friction");
 
   // Opening a lesson puts its concept in the review queue; Friction isn't due yet.
@@ -167,15 +162,33 @@ test("practice moves a concept from not started to checked, with a plan and revi
   await expect(page.getByTestId("concept-status")).toHaveCount(0);
   // (Other tests' courses share this API's store: look at this course only.)
   const courseId = new URL(page.url()).pathname.split("/")[2] ?? "";
-  await page.goto("/review");
-  const section = page
-    .getByTestId("review-course")
-    .filter({ has: page.locator(`a[href="/courses/${courseId}"]`) });
+  // Review is on the desk's header now (decision U26), with what's due.
+  await page.goto("/desk");
+  const review = page.getByTestId("desk-review");
+  await expect(review).toHaveAccessibleName(/Review, \d+ due/);
+  await review.click();
+  await expect(page).toHaveURL(/\/review$/);
+  // Each notebook is a folder (decisions U25, U26); this course's is its notebook's. The tab is
+  // in the folders, or under More past seven.
+  const tab = page.locator(`[role="tab"][data-course-id="${courseId}"]`);
+  await expect(page.getByTestId("review-folders")).toBeVisible();
+  if ((await tab.count()) === 0) {
+    await page.getByRole("button", { name: /More/ }).click();
+    await page.locator(`button[data-course-id="${courseId}"]`).click();
+  }
+  await tab.click();
+  const section = page.locator(`#${await tab.getAttribute("aria-controls")}`);
+  await expect(section.locator(`a[href="/courses/${courseId}"]`)).toBeVisible();
+  // The folder lists every concept started: new first, then the checked one (Friction).
   const items = section.getByTestId("review-item");
-  await expect(items).toHaveCount(1);
+  await expect(items).toHaveCount(2);
   await expect(items.first()).toContainText("Forces");
-  await expect(items.first()).toContainText("new · not practised yet");
-  await expect(section.getByRole("link", { name: "Quiz me (1)" })).toBeVisible();
+  await expect(items.first()).toContainText("Not practised yet");
+  await expect(items.first()).toContainText("New");
+  await expect(items.last()).toContainText("Friction");
+  await expect(items.last()).toContainText("Checked");
+  // Quiz me asks about what's due: Forces only.
+  await expect(section.getByRole("link", { name: /Quiz me/ })).toContainText("1");
 });
 
 test("Quiz me asks in the notebook, grades the written answer and records the evidence", async ({
@@ -199,8 +212,9 @@ test("Quiz me asks in the notebook, grades the written answer and records the ev
     });
   });
   const courseUrl = await startCourse(page);
-  await page.getByRole("link", { name: "Quiz me" }).click();
-  await expect(page).toHaveURL(/\/notebook\?course=.*&quiz=1/);
+  // The Study tab is in the notebook (decision U26): Quiz me starts on the notebook's page.
+  await page.getByRole("button", { name: "Quiz me" }).click();
+  await expect(page.getByTestId("notebook-canvas")).toBeVisible();
 
   const card = page.getByTestId("quiz-card");
   await expect(card).toContainText("Quiz · Forces and motion");
@@ -254,8 +268,10 @@ test("without a grader, the student compares with the model answer themselves", 
   page,
 }) => {
   test.setTimeout(90_000);
-  await startCourse(page);
-  await page.getByRole("link", { name: "Open the course notebook" }).click();
+  const courseUrl = await startCourse(page);
+  // The course's notebook, on its page (the Study tab is its home).
+  const courseId = courseUrl.split("/").pop() ?? "";
+  await page.goto(`/notebook?course=${courseId}&title=Forces%20and%20motion`);
 
   // "Quiz me" from Ctrl+K's commands, in the course's own notebook.
   await expect(page.getByTestId("pencil-case")).toBeVisible();

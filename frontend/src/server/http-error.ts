@@ -9,6 +9,11 @@ export class HttpError extends Error {
     readonly status: number,
     message: string,
     readonly headers: Record<string, string> = {},
+    /**
+     * A machine-readable reason the client turns into its own words (docs/DESKTOP_API.md):
+     * RATE_LIMITED, QUOTA_EXCEEDED, AT_CAPACITY, EMAIL_UNVERIFIED.
+     */
+    readonly code?: string,
   ) {
     super(message);
     this.name = "HttpError";

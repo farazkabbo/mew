@@ -170,3 +170,8 @@ export function notchPath(w: number, h: number, ear: number, radius: number): st
     `A${n(e)} ${n(e)} 0 0 0 0 0Z`,
   ].join("");
 }
+
+/** Whether a pointer or click event came from a pen's tip (a click is a pointer event in WebView2). */
+export function pressedByPen(event: Event): boolean {
+  return "pointerType" in event && event.pointerType === "pen";
+}

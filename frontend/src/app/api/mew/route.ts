@@ -5,6 +5,7 @@ import { assertSameOrigin, handle, readJson, requireUserId } from "@/server/http
 import { classifyMew } from "@/server/mew-gate";
 import { afterResponse, logMewDecision } from "@/server/mew-log";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
+import { requireAllowance } from "@/server/question-gate";
 
 const MAX_BODY_BYTES = 8 * 1024;
 
@@ -12,6 +13,8 @@ const MAX_BODY_BYTES = 8 * 1024;
 export const POST = handle(async (request: Request) => {
   assertSameOrigin(request);
   const userId = await requireUserId();
+  // Model calls stop when the learner's free questions are used up (docs/LAUNCH_LIMITS.md).
+  await requireAllowance(userId);
   enforceRateLimit(userId, { mew: RATE_RULES.mew, mewDaily: RATE_RULES.mewDaily });
   const input = await readJson(request, MewInput, MAX_BODY_BYTES);
 

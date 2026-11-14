@@ -117,8 +117,8 @@ test("S6: a quiz-me-on-this card comes back in the Quick check, from its screen"
   });
 
   await page.goto("/review");
-  await expect(page.getByTestId("review-moments")).toContainText("1 check due");
-  await page.getByRole("button", { name: "Quick check" }).click();
+  await expect(page.getByTestId("review-moments")).toContainText("1 quick check");
+  await page.getByTestId("review-moments").getByRole("button", { name: "Start" }).click();
   await expect(page.getByTestId("quick-check-question")).toContainText("horizontal acceleration");
   // Nothing was saved, so there's no moment to show: only where it came from, after answering.
   await expect(page.getByTestId("quick-check-source")).toHaveCount(0);

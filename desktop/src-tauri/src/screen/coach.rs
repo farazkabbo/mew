@@ -263,6 +263,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     let loaded = config::load(&config_path);
     let config_reset = matches!(loaded, Loaded::Reset(_));
     let config = loaded.into_config();
+    let show_in_captures = config.privacy.show_in_captures;
     let shortcuts_notice = config.shortcuts_notice && config.is_on();
     let state = State {
         config,
@@ -295,6 +296,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
         state.status = coach.resting_status(&state);
     }
     app.manage(coach);
+    super::overlay::set_shown_in_captures(app, show_in_captures);
     super::screen_music::setup(app, &config_dir);
     settings_capability(app)?;
     overlay_capabilities(app)?;
@@ -324,7 +326,10 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-set-circle")
             .permission("allow-screen-coach-open-mic-settings")
             .permission("allow-screen-coach-link-start")
-            .permission("allow-screen-coach-disconnect"),
+            .permission("allow-screen-coach-disconnect")
+            .permission("allow-desktop-update-status")
+            .permission("allow-desktop-update-check")
+            .permission("allow-desktop-update-install"),
     )
 }
 
@@ -366,6 +371,8 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .window(Surface::Draw.label())
             .permission("allow-screen-draw-mark")
             .permission("allow-screen-draw-erase")
+            .permission("allow-screen-draw-island-press")
+            .permission("allow-screen-draw-pen")
             .permission("allow-screen-draw-select")
             .permission("allow-screen-draw-note"),
     )?;
@@ -718,10 +725,12 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
         }
         if !state.connected {
             drop(state);
+            eprintln!("[screen] no capture: not connected to an account");
             notify(app, "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.");
             return false;
         }
         if coach.capturing.swap(true, Ordering::SeqCst) {
+            eprintln!("[screen] no capture: another one is still running");
             return false;
         }
         state.status = Status::Looking;
@@ -741,6 +750,10 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
 
     let handle = app.clone();
     let queued = on_worker(app, move |tools| {
+        let overlays = handle.clone();
+        tools.hide_overlays = Some(Box::new(move || {
+            super::overlay::hide_for_own_capture(&overlays)
+        }));
         let result = pipeline::run(tools, &request);
         finish_capture(&handle, origin, result);
     });
@@ -875,7 +888,10 @@ fn finish_capture<R: Runtime>(
                 kept = true;
             }
         }
-        Err(error) => notify(app, &error.message()),
+        Err(error) => {
+            eprintln!("[screen] capture refused: {}", error.message());
+            notify(app, &error.message());
+        }
     }
     // Only now: an ask waiting for this capture reads the flag first, then the slot.
     coach.capturing.store(false, Ordering::SeqCst);
@@ -942,6 +958,8 @@ fn log_capture(meta: &FrameMeta, bytes: usize) {
 }
 
 pub fn notify<R: Runtime>(app: &AppHandle<R>, message: &str) {
+    // Our own wording, never the student's: a notification can be hidden (Focus, recording).
+    eprintln!("[screen] notified: {message}");
     let _ = app
         .notification()
         .builder()
@@ -992,9 +1010,15 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         let state = coach.lock();
         (state.status, state.config.is_on(), state.config.paused)
     };
-    if let Some(tray) = app.tray_by_id(crate::TRAY_ID) {
+    // On the main thread: the tray icon is reference-counted for one thread, and this is called
+    // from others (two at once corrupted its count and aborted the app).
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(tray) = handle.tray_by_id(crate::TRAY_ID) else {
+            return;
+        };
         let _ = tray.set_tooltip(Some(status.tooltip()));
-        if let Some(icon) = app.default_window_icon() {
+        if let Some(icon) = handle.default_window_icon() {
             let image = match status.badge() {
                 Some(colour) => Image::new_owned(
                     with_badge(icon.rgba(), icon.width(), icon.height(), colour),
@@ -1005,7 +1029,7 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
             };
             let _ = tray.set_icon(Some(image));
         }
-    }
+    });
     if let Some(items) = app.try_state::<TrayItems<R>>() {
         let _ = items.look.set_enabled(on && !paused);
         let _ = items.pause.set_enabled(on);
@@ -1148,7 +1172,9 @@ pub fn screen_coach_set_privacy<R: Runtime>(
     let app = window.app_handle();
     let coach = coach_of(app)?;
     let privacy = privacy.normalized()?;
+    let show_in_captures = privacy.show_in_captures;
     coach.update(|config| config.privacy = privacy)?;
+    super::overlay::set_shown_in_captures(app, show_in_captures);
     refresh(app);
     Ok(coach.view())
 }

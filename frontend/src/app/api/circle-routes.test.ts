@@ -154,6 +154,7 @@ beforeEach(() => {
   vi.stubEnv("INTERNAL_API_SECRET", "s".repeat(40));
   vi.stubEnv("GEMINI_API_KEY", "test-key");
   vi.doMock("@/server/circle-ask", () => ({
+    CIRCLE_FALLBACK: "I couldn't work that out just now. Try asking again in a moment.",
     runCircleAsk: async function* (
       asked: { question: unknown },
       _signal: unknown,
@@ -213,7 +214,11 @@ describe("POST /api/screen/circle-ask", () => {
     const { POST } = await import("./screen/circle-ask/route");
     const statuses: number[] = [];
     for (let i = 0; i < 11; i++) {
-      const response = await POST(request("/api/screen/circle-ask", ASK));
+      // A new session each time: one session's follow-ups stop at their own cap (LAUNCH_LIMITS).
+      const session = `11111111-1111-4111-8111-${String(i).padStart(12, "0")}`;
+      const response = await POST(
+        request("/api/screen/circle-ask", { ...ASK, sessionId: session }),
+      );
       await response.text();
       statuses.push(response.status);
     }

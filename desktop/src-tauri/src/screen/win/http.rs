@@ -66,7 +66,16 @@ pub fn post(
     body: &[u8],
     on_chunk: impl FnMut(&[u8]),
 ) -> Result<u16, HttpError> {
-    request(w!("POST"), url, headers, body, on_chunk)
+    // Every request to Neb says which computer it's from (a random id, kept in Credential
+    // Manager; the server stores only its hash): the free allowance is per computer too.
+    let mut all = headers.to_vec();
+    if let Some(id) = super::credential::device_id() {
+        all.push(format!("X-Neb-Device: {id}"));
+    }
+    let result = request(w!("POST"), url, &all, body, on_chunk);
+    all.iter_mut()
+        .for_each(|h| crate::screen::account::wipe_string(h));
+    result
 }
 
 /// GETs `url` with no headers (nothing of the student's goes with it) and streams the response

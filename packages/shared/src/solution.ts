@@ -256,6 +256,19 @@ export function asksForAnswer(question: string): boolean {
   return ANSWER_REQUESTS.some((pattern) => pattern.test(text));
 }
 
+/**
+ * Asking neb to do the work: "solve it", "do this for me", "just give me the answer". Then the
+ * student's own notes open where they wrote about it (docs/PLAN.md, "teach from your notes").
+ */
+export function asksToDoIt(question: string): boolean {
+  return (
+    asksForAnswer(question) ||
+    /\b(do|solve|finish|complete|write|fill in|answer) (it|this|that|these|the rest)\b|\bfor me\b/i.test(
+      question,
+    )
+  );
+}
+
 /** What's kept with an entry (K7): the verified solution without its figures or concept ids. */
 export function toSavedSolution(solution: VerifiedSolution): SavedSolution {
   return {

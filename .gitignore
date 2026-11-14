@@ -7,6 +7,7 @@ node_modules/
 desktop/shell/gen/
 .next/
 .next-e2e/
+.next-journey/
 .next-build/
 out/
 dist/
@@ -71,3 +72,5 @@ ml/output/
 
 # Eval replies cached by `pnpm eval:notes` (model outputs; never committed)
 frontend/evals/.cache/
+
+.vercel
