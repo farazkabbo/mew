@@ -18,7 +18,7 @@ import { useMomentChecks } from "../moments/store";
 import { NotebookDb } from "../notebook/db";
 import { NotebookRepository } from "../notebook/repository";
 import { COLORS, PICKABLE_COLORS } from "../notebook/tree/node-style";
-import { coursesApi, CourseApiError } from "./api";
+import { coursesApi, CourseApiError, studyHref } from "./api";
 import { ReviewFolders } from "./ReviewFolders";
 import { ReviewHeader } from "./ReviewHeader";
 import { fallbackColor, folderRows, notebookFolders, orderFolders } from "./review-folders";
@@ -44,6 +44,8 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
   const exam = useMomentChecks((s) => s.exam);
   const [items, setItems] = useState<ReviewItem[] | null>(null);
   const [loaded, setLoaded] = useState<Loaded[] | null>(null);
+  /** Every course, started or not: an empty Review says why it's empty. */
+  const [courses, setCourses] = useState<Course[] | null>(null);
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [now] = useState(() => new Date());
@@ -61,16 +63,17 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
     coursesApi.dueReviews().then((queue) => !cancelled && setItems(queue.items), failed);
     coursesApi
       .list()
-      .then((courses) =>
-        Promise.all(
+      .then((courses) => {
+        if (!cancelled) setCourses(courses);
+        return Promise.all(
           courses.map((course) =>
             Promise.all([coursesApi.get(course.id), coursesApi.progress(course.id)]).then(
               ([detail, progress]) => ({ course, detail, progress: progress.concepts }),
               () => null, // one course failing still shows the others
             ),
           ),
-        ),
-      )
+        );
+      })
       .then((all) => !cancelled && setLoaded(all.filter((x): x is Loaded => x !== null)), failed);
     // The folders are this device's notebooks: their names, colours and what's saved in them.
     const db = new NotebookDb(userId);
@@ -166,15 +169,7 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
               </p>
             )}
             {!folders && !error && <p className="text-muted">Loading…</p>}
-            {folders?.length === 0 && (
-              <p className="rounded-xl border border-line bg-paper p-6">
-                Nothing is due right now. Add course material to a notebook on{" "}
-                <Link href="/desk" className="underline hover:text-ink">
-                  your desk
-                </Link>{" "}
-                and open a lesson to start something new.
-              </p>
-            )}
+            {folders?.length === 0 && <NothingDue courses={courses ?? []} />}
             {folders && folders.length > 0 && (
               <>
                 <ReviewFolders
@@ -191,5 +186,48 @@ export function ReviewApp({ userId, name }: { userId: string; name: string | nul
         </div>
       </main>
     </div>
+  );
+}
+
+/**
+ * Review with nothing in it says why, and what fills it: course material that's still being
+ * read, material that's ready but not studied yet, or none at all.
+ */
+export function NothingDue({ courses }: { courses: readonly Course[] }) {
+  const ready = courses.find((course) => course.status === "ready");
+  const coming = courses.find((course) => course.status !== "ready" && course.status !== "failed");
+  const course = ready ?? coming;
+  return (
+    <p className="rounded-xl border border-line bg-paper p-6" data-testid="review-empty">
+      {ready ? (
+        <>
+          Nothing is due yet. You&apos;ve added <b className="font-semibold">{ready.title}</b>, but
+          haven&apos;t studied it. Take a lesson or a quiz, and what you learn comes back here just
+          before you&apos;d forget it.
+        </>
+      ) : coming ? (
+        <>
+          Nothing is due yet. neb is still preparing <b className="font-semibold">{coming.title}</b>
+          , which takes a minute or two. Once it&apos;s ready, take a lesson or a quiz, and what you
+          learn comes back here.
+        </>
+      ) : (
+        <>
+          Nothing is due yet. Add course material to a notebook on{" "}
+          <Link href="/desk" className="underline hover:text-ink">
+            your desk
+          </Link>{" "}
+          and take a lesson: what you learn comes back here just before you&apos;d forget it.
+        </>
+      )}
+      {course && (
+        <>
+          {" "}
+          <Link href={studyHref(course)} className="font-medium underline hover:text-ink">
+            Open {course.title}
+          </Link>
+        </>
+      )}
+    </p>
   );
 }

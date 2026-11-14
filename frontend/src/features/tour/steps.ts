@@ -3,16 +3,22 @@ import type { TourSignal } from "./signals";
 /** Where in the app a step happens. */
 export type TourPlace = "desk" | "home" | "page" | "review";
 
+/** Something on screen (a CSS selector): the Study tab's plan, a quiz's feedback. */
+export type TourSight = { present: string };
+
 /** What finishes a step. */
 export type TourDone =
-  /** Reading it: the student presses the step's button. */
-  | { by: "next"; label?: string }
+  /**
+   * The student presses the step's button, at their own pace. With `after`, the button waits
+   * until they've done the thing (written, asked, turned Screen Coach on, had an answer marked).
+   */
+  | { by: "next"; label?: string; after?: TourSignal | "coach-on" | TourSight }
   /** Getting somewhere, by doing the real thing (creating a notebook opens it). */
   | { by: "place"; places: readonly TourPlace[] }
-  /** Doing something the app reports (`signals.ts`). */
+  /** Something that's plainly finished when the app reports it (a PDF imported). */
   | { by: "signal"; signal: TourSignal }
-  /** Screen Coach being on (asked of the Windows app). */
-  | { by: "coach-on" };
+  /** Something appearing on screen because of what the student did, or what neb finished. */
+  | { by: "present"; selector: string };
 
 export type TourStep = {
   id: string;
@@ -28,8 +34,14 @@ export type TourStep = {
   note?: string;
   /** Only in the Windows app (the browser has no Screen Coach). */
   desktopOnly?: boolean;
+  /** Where "Skip this step" goes when the steps after it can't be done without this one. */
+  skipTo?: string;
 };
 
+const STUDY = '[data-testid="course-study"]';
+const TOPICS = '[data-testid="review-concept"]';
+const PLAN = '[data-testid="plan-summary"]';
+const QUIZ = '[data-testid="quiz-card"]';
 const TABS = '[role="tablist"][aria-label="Notebook"]';
 const USES_A_QUESTION = "A real question uses one of your free ones. To keep it, skip this step.";
 
@@ -60,10 +72,10 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "write",
     title: "Write a line",
-    body: "Write some working with the mouse, a pen or your finger: 3x + 7 = 19, then 3x = 26 below it. When you pause, I read the line. A tick if it's right, a circle where something slipped.",
+    body: "Write some working with the mouse, a pen or your finger: 3x + 7 = 19, then 3x = 26 below it. Each time you pause, I read the line: a tick if it's right, a circle where something slipped. Take your time, and carry on when you've seen a mark.",
     place: "page",
     target: '[data-testid="sheet"]',
-    done: { by: "signal", signal: "wrote" },
+    done: { by: "next", after: "wrote" },
   },
   {
     id: "marks",
@@ -76,9 +88,9 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "ask",
     title: "Hold Ctrl + Alt to ask",
-    body: "Hold both keys, ask your question out loud, and let go. While you hold, you can also circle the line you mean. I answer once you let go.",
+    body: "Hold both keys. While they're down, circle the line you mean and ask your question out loud. Then let go, and I answer: out loud, and in writing beside your work. Carry on when I've finished.",
     place: "page",
-    done: { by: "signal", signal: "asked" },
+    done: { by: "next", after: "asked" },
     note: USES_A_QUESTION,
   },
   {
@@ -100,19 +112,66 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "pdf",
     title: "Add your course material",
-    body: "Add your slides, a syllabus or a chapter as a PDF. I read it and build lessons and quizzes from the subject.",
+    body: "Add your slides, a syllabus or a chapter as a PDF, and leave \"Use as course material\" ticked. I read it and build lessons and quizzes from the subject. I'll carry on as soon as it's in.",
     place: "home",
     target: '[data-testid="add-material"], [data-tour="import-pdf"]',
     done: { by: "signal", signal: "pdf" },
     note: "No PDF to hand? Skip this step and add one later.",
+    skipTo: "to-desk",
   },
   {
-    id: "study",
-    title: "Study from it",
-    body: "Once I've read a PDF, a Study tab appears here with a plan, lessons and quizzes. Reading takes a minute or two, and you can keep working meanwhile.",
+    id: "back-home",
+    title: "Your PDF is in",
+    body: "Its pages are in the notebook now, for you to write on. Press the notebook's name up here to go back to its home.",
+    place: "page",
+    target: '[data-testid="breadcrumb"] button',
+    done: { by: "place", places: ["home"] },
+    skipTo: "to-desk",
+  },
+  {
+    id: "study-tab",
+    title: "Open Study",
+    body: "The notebook has a Study tab now. Press it.",
     place: "home",
-    target: TABS,
-    done: { by: "next" },
+    target: "#home-tab-study",
+    done: { by: "present", selector: STUDY },
+    skipTo: "to-desk",
+  },
+  {
+    id: "reading",
+    title: "I'm reading your PDF",
+    body: "This takes a minute or two. I'll carry on by myself when the topics are ready.",
+    place: "home",
+    done: { by: "present", selector: `${TOPICS}, ${PLAN}` },
+    note: "If it says the course couldn't be built, skip this step and try another PDF later.",
+    skipTo: "to-desk",
+  },
+  {
+    id: "topics",
+    title: "Check the topics",
+    body: "These are the topics I found. Untick any you don't need, then press Start studying.",
+    place: "home",
+    target: '[data-tour="start-studying"]',
+    done: { by: "present", selector: PLAN },
+    skipTo: "to-desk",
+  },
+  {
+    id: "quiz",
+    title: "Take a quiz",
+    body: "This is your study plan: each topic, with a lesson. Press Quiz me to try a question now.",
+    place: "home",
+    target: '[data-tour="quiz-me"]',
+    done: { by: "present", selector: QUIZ },
+    skipTo: "to-desk",
+  },
+  {
+    id: "answer",
+    title: "Answer on the page",
+    body: "Write your answer on the page, or say it, then press Check my answer. I mark it and tell you why. Try another if you like, then press End quiz and carry on.",
+    place: "page",
+    // Nothing ringed: the card stays in the corner, clear of where the answer is written.
+    done: { by: "next", after: { present: '[data-testid="quiz-feedback"]' } },
+    skipTo: "to-desk",
   },
   {
     id: "to-desk",
@@ -132,7 +191,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "review",
     title: "What's due today",
-    body: "Each notebook gets a folder here. Inside are the topics I'll quiz you on and the things you saved, brought back just before you'd forget them. It stays empty until you've studied something.",
+    body: "Each notebook gets a folder here, with the topics you've started and the things you saved. What you just practised is in it, and comes back for another look just before you'd forget it. A notebook you haven't studied from has no folder yet.",
     place: "review",
     target: '[data-testid="review-folders"]',
     done: { by: "next" },
@@ -141,21 +200,22 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "coach",
     title: "Turn on Screen Coach",
     body: "Screen Coach lets me help over any app on your PC: a slide, a PDF, a video. Its settings say exactly what I can see. Turn it on there, then come back here.",
-    done: { by: "coach-on" },
+    done: { by: "next", after: "coach-on" },
     desktopOnly: true,
   },
   {
     id: "island",
     title: "Find the island",
-    body: "Tap Ctrl + Alt twice, quickly. A black bar appears at the top of your screen, with a pen, a selection tool, a microphone and your music. Tap twice again to hide it.",
+    body: "Tap Ctrl + Alt twice, quickly. A black bar appears at the top of your screen: that's the island, with a pen, a selection tool, a microphone and your music. Tap twice again to hide it.",
     done: { by: "next", label: "I see it" },
+    note: "Nothing there? Click on another window first, then tap twice again.",
     desktopOnly: true,
   },
   {
     id: "circle",
     title: "Circle anything and ask",
-    body: "Hold Ctrl + Alt and drag a circle round something on your screen, this box if you like. Ask out loud and let go. I explain it step by step, right beside it.",
-    done: { by: "signal", signal: "screen-asked" },
+    body: "Open something to study in another window: slides, a PDF, a video. On the island, pick the selection tool and draw round the part you mean. Press the island's microphone, ask out loud, and press it again. I explain it step by step, right beside it. Come back here afterwards.",
+    done: { by: "next", after: "screen-asked" },
     note: USES_A_QUESTION,
     desktopOnly: true,
   },

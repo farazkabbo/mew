@@ -2,8 +2,9 @@
 //! runs, polling left Ctrl and left Alt (`win::input`; no keyboard hook, decision 11) and feeding
 //! `hold.rs`. While both keys are down it also asks whether any other key is (the AltGr guard),
 //! only "yes or no". What a gesture does is `coach::on_hold`'s business: Circle & Ask and talking
-//! when Screen Coach is on, summoning Neb's window when it isn't. A gesture that starts while
-//! Neb's own window is in front belongs to the notebook page, which has its own hold (decision 5).
+//! when Screen Coach is on, summoning Neb's window when it isn't. A hold that starts while Neb's
+//! own window is in front belongs to the notebook page, which has its own hold (decision 5); a
+//! double tap is always the island's.
 
 use std::time::{Duration, Instant};
 
@@ -39,10 +40,13 @@ fn run<R: Runtime>(app: &AppHandle<R>) {
         let other = held && input::other_key_down(!were_down);
         were_down = held;
         if let Some(event) = gesture.step(Keys { held, other }, Instant::now()) {
-            if matches!(event, HoldEvent::Started | HoldEvent::DoubleTap) {
+            if event == HoldEvent::Started {
                 page_has_it = neb_in_front(app);
             }
-            if !page_has_it {
+            // A double tap is the island's wherever it happens: the page has no use for one, and
+            // the island must be reachable while Neb's own window is in front (the tour asks
+            // for it there).
+            if !page_has_it || event == HoldEvent::DoubleTap {
                 coach::on_hold(app, event);
             }
             if event != HoldEvent::Started {

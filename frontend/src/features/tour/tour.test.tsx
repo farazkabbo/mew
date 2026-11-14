@@ -27,7 +27,12 @@ describe("the guided tour's steps (decision U32)", () => {
       "to-home",
       "home",
       "pdf",
-      "study",
+      "back-home",
+      "study-tab",
+      "reading",
+      "topics",
+      "quiz",
+      "answer",
       "to-desk",
       "review-open",
       "review",
@@ -45,7 +50,27 @@ describe("the guided tour's steps (decision U32)", () => {
 
   it("warns before every step that spends a question, and lets a PDF be skipped", () => {
     const noted = TOUR_STEPS.filter((s) => s.note).map((s) => s.id);
-    expect(noted).toEqual(["ask", "pdf", "circle"]);
+    expect(noted).toEqual(["ask", "pdf", "reading", "island", "circle"]);
+  });
+
+  it("lets the student pace the steps where something has to be watched or heard", () => {
+    const paced = TOUR_STEPS.filter((s) => s.done.by === "next" && s.done.after).map((s) => s.id);
+    expect(paced).toEqual(["write", "ask", "answer", "coach", "circle"]);
+    // Only a finished import moves on by itself.
+    expect(TOUR_STEPS.filter((s) => s.done.by === "signal").map((s) => s.id)).toEqual(["pdf"]);
+  });
+
+  it("goes from the PDF to a quiz before Review, and past them all without a PDF", () => {
+    const ids = stepsFor(false).map((s) => s.id);
+    expect(ids.indexOf("pdf")).toBeLessThan(ids.indexOf("quiz"));
+    expect(ids.indexOf("answer")).toBeLessThan(ids.indexOf("review-open"));
+    const needPdf = ["pdf", "back-home", "study-tab", "reading", "topics", "quiz", "answer"];
+    for (const id of needPdf) {
+      expect(TOUR_STEPS.find((s) => s.id === id)?.skipTo, id).toBe("to-desk");
+    }
+    useTour.setState({ stepId: "pdf" });
+    useTour.getState().skip("pdf", "to-desk");
+    expect(useTour.getState().stepId).toBe("to-desk");
   });
 
   it("points at a real control wherever the student has to press one", () => {

@@ -832,6 +832,9 @@ export function NotebookApp({
           : `Imported ${pages} pages.`,
       tone: result.courseFailed ? "error" : "info",
     });
+    // The tour carries on from where the import leaves the student: told once the page it
+    // opened is on screen and in the address (U29), not before.
+    window.setTimeout(() => tourSignal("pdf"), 400);
   };
   useEffect(() => {
     const isPdf = (event: DragEvent) =>
@@ -1504,10 +1507,7 @@ export function NotebookApp({
           nodeId={importing.nodeId}
           file={importing.file}
           onImport={importPdf}
-          onClose={() => {
-            setImporting(null);
-            tourSignal("pdf");
-          }}
+          onClose={() => setImporting(null)}
         />
       )}
       <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
