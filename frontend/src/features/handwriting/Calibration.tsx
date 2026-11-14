@@ -30,6 +30,14 @@ export function Calibration({
   const written = useRef(new Map<string, Point[][]>());
   const [filled, setFilled] = useState(0);
   const [state, setState] = useState<"writing" | "saving" | "failed">("writing");
+  /** Bumped by "Start over": every box empties. */
+  const [clearKey, setClearKey] = useState(0);
+  const startOver = () => {
+    written.current.clear();
+    setFilled(0);
+    setState("writing");
+    setClearKey((key) => key + 1);
+  };
 
   const save = async () => {
     setState("saving");
@@ -50,7 +58,8 @@ export function Calibration({
     <div className="flex flex-col gap-4" data-testid="calibration">
       <p className="text-sm text-muted">
         Write each one in its box, the way you normally write. It takes about a minute, and you can
-        skip any box.
+        skip any box. Not happy with it? Start over clears the boxes, and you can redo this any time
+        in Settings.
       </p>
       {GROUPS.map((group) => (
         <fieldset key={group.title} className="flex flex-col gap-2">
@@ -69,6 +78,7 @@ export function Calibration({
                     label={`Write ${prompt.text}`}
                     width={wide ? 420 : 44}
                     height={wide ? 64 : 52}
+                    clearKey={clearKey}
                     onChange={(strokes) => {
                       written.current.set(prompt.text, strokes);
                       setFilled(written.current.size);
@@ -92,6 +102,14 @@ export function Calibration({
           ) : (
             "Teach neb"
           )}
+        </button>
+        <button
+          type="button"
+          disabled={filled === 0 || state === "saving"}
+          onClick={startOver}
+          className="rounded-full border border-line px-4 py-1.5 text-sm font-medium disabled:opacity-50"
+        >
+          Start over
         </button>
         <button
           type="button"

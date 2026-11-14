@@ -41,6 +41,10 @@ services:
       # Gemini (course ingestion, OCR, lessons). Model IDs default to the code's values.
       - key: GEMINI_API_KEY
         sync: false
+      # The model for course topics and lessons: the one the web app uses. (The code default,
+      # gemini-3.8-flash, timed out in production; the fast model is also the fallback in code.)
+      - key: GEMINI_TUTOR_MODEL
+        value: gemini-3.5-flash-lite
       # Extra hostnames to accept; the service's onrender.com host is trusted automatically.
       - key: ALLOWED_HOSTS
         value: localhost

@@ -1082,3 +1082,28 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     (`course`, `title`, `tab`, `quiz`, `moment`, `jump`) are read at start, before the address is
     replaced, so they never fire twice. Replaced, not pushed: moving around the notebook doesn't
     fill the browser's history.
+30. **U30. "How to use neb" (2026-11-14, `fix/quiz-topics-and-guide`).** The first outside tester
+    couldn't find how to turn a PDF into a quiz, and took Coach mode for it. `/guide`
+    (`features/guide/Guide.tsx`) lists what a student comes to do as numbered steps that name the
+    exact buttons: finding your way, PDF → quiz, writing and asking, asking about the screen,
+    what to say, Review, the free questions, redoing something. It's reached from the desk's
+    avatar menu (first item) and from the last step of the introduction. Plain text, no
+    screenshots, so it stays true as screens change; a test checks the PDF → quiz buttons are
+    named in order. The introduction's handwriting step also gained **Start over** (the tester
+    had no way to redo a box).
+31. **U31. The interactive tour (2026-11-14, `feat/interactive-tour`).** Reading the guide wasn't
+    enough for a new student: `/tour` (`features/tour/`) has them try each thing once, on a
+    practice version of the real screen.
+    - **Steps:** welcome; the desk (three parts to open); writing a line and seeing neb's mark,
+      at each of Quiet / Hint / Coach; holding Ctrl + Alt; circling a slide and picking a
+      question; saving the answer and replaying the moment; the taskbar's tray icon, its menu
+      (the real labels) and turning Screen Coach on, then the tool bar (Windows app only);
+      the four buttons from a PDF to a quiz; a summary.
+    - **Nothing real happens:** no model call, no capture, no question used. In the Windows app
+      the hold step uses an on-screen button, since the real keys belong to Screen Coach there.
+    - **When it shows:** by itself once, when the introduction closes on the desk (a flag in
+      this device's storage, `features/tour/seen.ts`; no account setting). After that from the
+      desk's avatar menu ("Take the tour") and the top of the guide.
+    - **Skippable** at every step and as a whole; Next waits for the step's task otherwise.
+    - **Motion:** `tour-in`, `tour-draw`, `tour-drop`, `tour-pulse` in `globals.css`; reduced
+      motion shows the end state. Tested in `e2e/tour.spec.ts` (browser, Windows app, first run).

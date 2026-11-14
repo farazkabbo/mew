@@ -24,6 +24,10 @@ const SUPABASE_BOOTSTRAP = `
 
   grant usage on schema public to anon, authenticated, service_role;
   alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+  -- Supabase grants new functions to the API roles by name too, so "revoke … from public" alone
+  -- leaves them callable with the anon key; a server-only function must revoke from anon and
+  -- authenticated as well.
+  alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
 
   -- Supabase installs extensions into their own schema.
   create schema extensions;

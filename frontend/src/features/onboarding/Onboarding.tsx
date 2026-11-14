@@ -1,6 +1,7 @@
 "use client";
 
 import type { MarkLevel } from "@mew/shared";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { buttonClass } from "@/components/ui/Button";
@@ -164,10 +165,20 @@ export function Onboarding({
         {step === "try" && <TryIt />}
 
         {step === "listen" && (
-          <p className="leading-relaxed text-muted">
-            neb listens and stays quiet until you need it. Ask a question, say “is this right?”, or
-            tap the dot. It answers out loud and writes on your page.
-          </p>
+          <div className="flex flex-col gap-3 leading-relaxed text-muted">
+            <p>
+              neb listens and stays quiet until you need it. Ask a question, say “is this right?”,
+              or tap the dot. It answers out loud and writes on your page.
+            </p>
+            <p data-testid="onboarding-guide">
+              Next comes a three-minute tour where you try each thing yourself. It&apos;s also under
+              your initial at the top right of your desk, with{" "}
+              <Link href="/guide" className="font-medium text-ink underline underline-offset-2">
+                How to use neb
+              </Link>
+              .
+            </p>
+          </div>
         )}
 
         <footer className="flex flex-wrap items-center justify-between gap-3">

@@ -100,7 +100,8 @@ def _embedder(request: Request, settings: Settings, model: str | None = None) ->
 
 def _llm(request: Request, settings: Settings) -> GeminiLlm | None:
     client = _gemini(request, settings)
-    return GeminiLlm(client) if client else None
+    # The fast model stands in when the course model times out or errors.
+    return GeminiLlm(client, fallback_model=settings.gemini_gate_model) if client else None
 
 
 def _call[T](fn: Callable[[], T]) -> T:
