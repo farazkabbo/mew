@@ -1082,3 +1082,12 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     (`course`, `title`, `tab`, `quiz`, `moment`, `jump`) are read at start, before the address is
     replaced, so they never fire twice. Replaced, not pushed: moving around the notebook doesn't
     fill the browser's history.
+30. **U30. "How to use neb" (2026-11-14, `fix/quiz-topics-and-guide`).** The first outside tester
+    couldn't find how to turn a PDF into a quiz, and took Coach mode for it. `/guide`
+    (`features/guide/Guide.tsx`) lists what a student comes to do as numbered steps that name the
+    exact buttons: finding your way, PDF → quiz, writing and asking, asking about the screen,
+    what to say, Review, the free questions, redoing something. It's reached from the desk's
+    avatar menu (first item) and from the last step of the introduction. Plain text, no
+    screenshots, so it stays true as screens change; a test checks the PDF → quiz buttons are
+    named in order. The introduction's handwriting step also gained **Start over** (the tester
+    had no way to redo a box).

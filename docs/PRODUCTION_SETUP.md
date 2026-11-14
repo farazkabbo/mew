@@ -153,7 +153,9 @@ for example `https://clerk.myneb.si`.
    | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | production publishable key                                                                                                     |
    | `SUPABASE_SECRET_KEY`                  | production secret key                                                                                                          |
    | `GEMINI_API_KEY`                       | the real key (course ingestion, OCR, lessons)                                                                                  |
-   | `FREE_QUESTION_LIMIT`                  | `8`                                                                                                                            |
+
+| `GEMINI_TUTOR_MODEL` | `gemini-3.5-flash-lite`, the same model the web app uses. The code default (`gemini-3.8-flash`) timed out on this key, and courses then fell back to raw headings |
+| `FREE_QUESTION_LIMIT` | `8` |
 
 3. When it's **Live**, `https://<service>.onrender.com/health` answers OK. Put that address in
    `.env.production-values` as `API_BASE_URL=…`.

@@ -1,7 +1,7 @@
 # Soft launch: what's done and what's left
 
 A handover for finishing the production setup. The app is **live at https://app.myneb.si** with
-asking (all AI) **switched off**. The website, myneb.si, is untouched and stays on the waitlist
+asking (all AI) **switched on** (2026-11-14). The website, myneb.si, is untouched and stays on the waitlist
 until launch day.
 
 The full background is in [PRODUCTION_SETUP.md](PRODUCTION_SETUP.md), and how it all fits
@@ -50,7 +50,7 @@ Open **https://app.myneb.si** in a private window and sign up with a real email.
 - **Expect:** the desk shows **"8 of 8 questions left"**.
 - **If it fails:** check Vercel → `neb-app` → **Logs**, and Render → `neb-api` → **Logs**.
 
-### 2. Switch asking on (owner)
+### 2. Switch asking on (owner): done 2026-11-14
 
 1. Vercel → `neb-app` → **Settings → Environment Variables** → `NEB_ASK_ENABLED` (Production)
    → **Edit** → `true` → **Save**.
