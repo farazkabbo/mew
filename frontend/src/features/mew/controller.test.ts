@@ -237,3 +237,80 @@ describe("handing turns to the tutor", () => {
     );
   });
 });
+
+describe("holding Ctrl+Alt to talk", () => {
+  const answer = () =>
+    gateReturning({
+      output: { label: "answer_question", confidence: 0.95, reason: "question" },
+      source: "model",
+      latencyMs: 50,
+    });
+  /** What speech-to-text does at a pause: the words are kept, then offered to Mew. */
+  const say = (mew: MewController, text: string) => {
+    useVoice.getState().commit(text);
+    mew.utterance(text);
+  };
+
+  it("asks once, on release, however often the student pauses", async () => {
+    const gate = answer();
+    const onRespond = vi.fn();
+    const mew = new MewController(gate, clock, { onRespond });
+    say(mew, "earlier words");
+    await flush();
+    gate.decide.mockClear();
+    onRespond.mockClear();
+
+    mew.holdStarted();
+    say(mew, "how do I");
+    say(mew, "isolate x here");
+    await flush();
+    expect(gate.decide).not.toHaveBeenCalled();
+
+    expect(mew.holdReleased()).toBe(true);
+    await flush();
+
+    expect(gate.decide).toHaveBeenCalledTimes(1);
+    expect(gate.decide.mock.calls[0]?.[0]).toMatchObject({
+      trigger: "summon",
+      lastUtterance: "how do I isolate x here",
+      recentTranscript: ["earlier words"],
+    });
+    expect(onRespond).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't ask again when the last words arrive after the release", async () => {
+    const gate = answer();
+    const mew = new MewController(gate, clock);
+    mew.holdStarted();
+    useVoice.setState({ partial: "what is three x" });
+
+    expect(mew.holdReleased()).toBe(true);
+    say(mew, "what is three x");
+    await flush();
+    expect(gate.decide).toHaveBeenCalledTimes(1);
+
+    // The next thing said is a new utterance again.
+    say(mew, "and why");
+    await flush();
+    expect(gate.decide).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks nothing itself when nothing was said, or the hold was cancelled", async () => {
+    const gate = answer();
+    const mew = new MewController(gate, clock);
+    mew.holdStarted();
+    expect(mew.holdReleased()).toBe(false);
+
+    mew.holdStarted();
+    say(mew, "never mind");
+    mew.holdCancelled();
+    expect(mew.holdReleased()).toBe(false);
+    await flush();
+    expect(gate.decide).not.toHaveBeenCalled();
+
+    // Listening goes back to normal afterwards.
+    say(mew, "is this right");
+    await flush();
+    expect(gate.decide).toHaveBeenCalledTimes(1);
+  });
+});

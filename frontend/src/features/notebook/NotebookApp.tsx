@@ -717,9 +717,9 @@ export function NotebookApp({
       const { status } = useVoice.getState();
       if (status === "off" || status === "error") mew.startListening();
     },
-    release: (heldAt) => {
+    release: () => {
       setHolding(null);
-      mew.hold.release(heldAt);
+      mew.hold.release();
     },
     cancel: () => {
       setHolding(null);
@@ -961,7 +961,7 @@ export function NotebookApp({
       return;
     }
     setHolding(null);
-    mew.hold.release(Date.now());
+    mew.hold.release();
   };
   // K10 §8.2: the lasso's selection, for "neb read:" on that line.
   const [lassoed, setLassoed] = useState<readonly Stroke[] | null>(null);
