@@ -125,6 +125,34 @@ describe("the free allowance", () => {
   });
 });
 
+describe("who may call the allowance functions", () => {
+  const calls = [
+    ["reserve_question", "select public.reserve_question('user_attacker', null, 8, false, true)"],
+    ["refund_question", "select public.refund_question('00000000-0000-4000-8000-000000000000')"],
+    [
+      "finish_question",
+      "select public.finish_question('00000000-0000-4000-8000-000000000000', 'm', 1, 1)",
+    ],
+    ["ask_to_notify", "select public.ask_to_notify('user_attacker', 8)"],
+  ] as const;
+
+  it.each(calls)(
+    "%s: not the browser roles (anon, signed in), only the API service",
+    async (_, sql) => {
+      await expect(db.as(null, () => db.query(sql))).rejects.toThrow(/permission denied/);
+      await expect(db.as(AYESHA, () => db.query(sql))).rejects.toThrow(/permission denied/);
+      await expect(asService(() => db.query(sql))).resolves.toBeDefined();
+      // The API service's call really ran: leave nothing behind for the other tests.
+      await asService(() =>
+        db.exec(
+          "delete from public.question_log where user_id = 'user_attacker'; " +
+            "delete from public.question_quota where user_id = 'user_attacker';",
+        ),
+      );
+    },
+  );
+});
+
 describe("emailing when more open up", () => {
   it("flags a learner who ran out, and only the API service can", async () => {
     await asService(() => db.query("select public.ask_to_notify($1, 8)", ["user_ran_out"]));

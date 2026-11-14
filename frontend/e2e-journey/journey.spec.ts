@@ -11,7 +11,9 @@ import { type APIRequestContext, expect, type Page, test } from "@playwright/tes
 
 const remote = Boolean(process.env.JOURNEY_BASE_URL);
 const site = process.env.JOURNEY_SITE_URL;
-const DEVICE = "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d";
+// A deploy keeps each computer's count (8 per computer, as well as per account), so every run
+// there plays a new computer; locally the database starts empty each time.
+const DEVICE = remote ? crypto.randomUUID() : "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d";
 
 const base64url = (bytes: Buffer) => bytes.toString("base64url");
 
@@ -93,12 +95,17 @@ test("Ayesha's journey, steps 1 to 12", async ({ page, request, baseURL }) => {
         image: { jpeg: image, width: 320, height: 180 },
       },
     });
-  const left = async () =>
-    (
-      (await (await request.get("/api/screen/quota", { headers: app })).json()) as {
-        remaining: number;
+  // A small backend (Render's free plan) can time out for a moment after a burst; the count is
+  // what's checked here, so wait for an answer.
+  const left = async () => {
+    for (let attempt = 0; ; attempt++) {
+      const response = await request.get("/api/screen/quota", { headers: app });
+      if (response.ok() || attempt >= 10) {
+        return ((await response.json()) as { remaining: number }).remaining;
       }
-    ).remaining;
+      await new Promise((resolve) => setTimeout(resolve, 3_000));
+    }
+  };
 
   // 6. The first question: answered, and 7 left.
   const first = await ask("where is the pivot table button?");
@@ -150,8 +157,10 @@ test("Ayesha's journey, steps 1 to 12", async ({ page, request, baseURL }) => {
   const body = (await refused.json()) as { code: string; error: string };
   expect(body.code).toBe("QUOTA_EXCEEDED");
   expect(body.error).toContain("free questions");
-  // The notebook still works at 0.
-  expect((await request.get("/notebook")).status()).toBe(200);
+  // The notebook still works at 0. Locally only: on a deploy with Clerk, a signed-out request
+  // that isn't a page load gets a 404 by design (the journey holds a device token, not a browser
+  // session), so there the manual checklist covers it.
+  if (!remote) expect((await request.get("/notebook")).status()).toBe(200);
 
   // 10. Getting around it fails: 50 at once never get one more through.
   const burst = await Promise.all(Array.from({ length: 50 }, (_, i) => ask(`burst ${i}`)));
