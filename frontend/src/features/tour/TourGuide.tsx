@@ -104,6 +104,8 @@ function Guide({
   const bubble = useRef<HTMLDivElement>(null);
   const [seen, setSeen] = useState<Seen>({ place: null, box: null, dialogs: 0 });
   const [height, setHeight] = useState(220);
+  /** A paced step's thing has been done: its button is free. */
+  const [ready, setReady] = useState(false);
   const { advance, back, end } = useTour.getState();
   const next = () => advance(step.id, desktop);
 
@@ -136,30 +138,40 @@ function Guide({
     };
   }, [step, desktop]);
 
-  // What the app reports: a line written, the keys let go, a question asked on screen.
+  // What the app reports: a line written, the keys let go, a PDF in, a question asked on screen.
+  // It either finishes the step, or frees the button of a step the student paces.
+  const awaited =
+    step.done.by === "signal"
+      ? step.done.signal
+      : step.done.by === "next"
+        ? (step.done.after ?? null)
+        : null;
+  const paced = step.done.by === "next";
   useEffect(() => {
-    const done = step.done;
-    if (done.by !== "signal") return;
-    const finish = () => useTour.getState().advance(step.id, desktop);
+    if (!awaited || awaited === "coach-on") return;
+    const happened = () => {
+      if (paced) setReady(true);
+      else useTour.getState().advance(step.id, desktop);
+    };
     const onSignal = (event: Event) => {
-      if ((event as CustomEvent<TourSignal>).detail === done.signal) finish();
+      if ((event as CustomEvent<TourSignal>).detail === awaited) happened();
     };
     window.addEventListener(TOUR_SIGNAL_EVENT, onSignal);
-    const screen = done.signal === "screen-asked" ? SCREEN_ASKED : [];
-    for (const name of screen) window.addEventListener(name, finish);
+    const screen = awaited === "screen-asked" ? SCREEN_ASKED : [];
+    for (const name of screen) window.addEventListener(name, happened);
     return () => {
       window.removeEventListener(TOUR_SIGNAL_EVENT, onSignal);
-      for (const name of screen) window.removeEventListener(name, finish);
+      for (const name of screen) window.removeEventListener(name, happened);
     };
-  }, [step, desktop]);
+  }, [step, desktop, awaited, paced]);
 
-  // Screen Coach is turned on in the Windows app's own settings: ask it until it is.
+  // Screen Coach is turned on in the Windows app's own settings: ask it, and keep asking.
   useEffect(() => {
-    if (step.done.by !== "coach-on") return;
+    if (awaited !== "coach-on") return;
     let live = true;
     const ask = () =>
       void screenCoachForOnboarding(false).then((on) => {
-        if (live && on) useTour.getState().advance(step.id, desktop);
+        if (live) setReady(on === true);
       });
     ask();
     const timer = window.setInterval(ask, COACH_POLL_MS);
@@ -167,7 +179,7 @@ function Guide({
       live = false;
       window.clearInterval(timer);
     };
-  }, [step, desktop]);
+  }, [awaited]);
 
   // The top layer, so the card stays readable over the app's own dialogs (shown again when one
   // opens, which puts it back on top).
@@ -186,6 +198,9 @@ function Guide({
   const made = useTour.getState();
   const there = elsewhere && step.place ? hrefOf(step.place, made) : null;
   const box = elsewhere ? null : seen.box;
+  /** A paced step still waiting for its thing, and one whose thing is done. */
+  const waiting = paced && awaited !== null && !ready;
+  const waited = paced && awaited !== null && ready;
   const centred = step.id === "welcome" || step.id === "done";
   const position = centred ? null : place(box, height);
 
@@ -238,7 +253,15 @@ function Guide({
               {step.title}
             </h2>
             <p className="text-sm leading-relaxed text-ink/80">{step.body}</p>
-            {step.note && <p className="text-xs leading-relaxed text-muted">{step.note}</p>}
+            {step.note && !waited && (
+              <p className="text-xs leading-relaxed text-muted">{step.note}</p>
+            )}
+            {waited && (
+              <p className="text-xs font-medium text-neb-ink" data-testid="tour-ready">
+                ✓ {awaited === "coach-on" ? "Screen Coach is on." : "Done."} Carry on when
+                you&apos;re ready.
+              </p>
+            )}
             {elsewhere && step.place && (
               <p className="text-xs leading-relaxed text-neb-ink">
                 This happens on {PLACE_NAMES[step.place]}.
@@ -257,7 +280,7 @@ function Guide({
               </button>
             )}
             <span className="flex-1" />
-            {step.done.by !== "next" && (
+            {(step.done.by !== "next" || waiting) && (
               <button
                 type="button"
                 onClick={next}
@@ -276,7 +299,7 @@ function Guide({
                 Take me there
               </button>
             )}
-            {step.done.by === "coach-on" && (
+            {awaited === "coach-on" && waiting && (
               <button
                 type="button"
                 onClick={() => void screenCoachForOnboarding(true)}
@@ -285,7 +308,7 @@ function Guide({
                 Open its settings
               </button>
             )}
-            {step.done.by === "next" && !elsewhere && (
+            {step.done.by === "next" && !elsewhere && !waiting && (
               <button type="button" onClick={next} className={buttonClass("neb", { dense: true })}>
                 {step.done.label ?? "Next"}
               </button>

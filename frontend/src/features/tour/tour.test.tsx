@@ -45,7 +45,21 @@ describe("the guided tour's steps (decision U32)", () => {
 
   it("warns before every step that spends a question, and lets a PDF be skipped", () => {
     const noted = TOUR_STEPS.filter((s) => s.note).map((s) => s.id);
-    expect(noted).toEqual(["ask", "pdf", "circle"]);
+    expect(noted).toEqual(["ask", "pdf", "island", "circle"]);
+  });
+
+  it("lets the student pace the steps where something has to be watched or heard", () => {
+    const paced = TOUR_STEPS.flatMap((s) =>
+      s.done.by === "next" && s.done.after ? [`${s.id}: ${s.done.after}`] : [],
+    );
+    expect(paced).toEqual([
+      "write: wrote",
+      "ask: asked",
+      "coach: coach-on",
+      "circle: screen-asked",
+    ]);
+    // Only a finished import moves on by itself.
+    expect(TOUR_STEPS.filter((s) => s.done.by === "signal").map((s) => s.id)).toEqual(["pdf"]);
   });
 
   it("points at a real control wherever the student has to press one", () => {

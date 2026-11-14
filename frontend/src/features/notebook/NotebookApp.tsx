@@ -815,6 +815,7 @@ export function NotebookApp({
   const importPdf = async (info: PdfInfo, choice: ImportChoice) => {
     const result = await carryOutImport(info, choice, { repo, tree, makeCourseMaterial });
     setImporting(null);
+    tourSignal("pdf");
     const first = result.firstPageId ? await repo.getPage(result.firstPageId) : null;
     if (first) {
       openPage(first);
@@ -1504,10 +1505,7 @@ export function NotebookApp({
           nodeId={importing.nodeId}
           file={importing.file}
           onImport={importPdf}
-          onClose={() => {
-            setImporting(null);
-            tourSignal("pdf");
-          }}
+          onClose={() => setImporting(null)}
         />
       )}
       <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

@@ -1135,3 +1135,20 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **Motion:** `tour-in`, `tour-ring`, `tour-arrow` in `globals.css`; still under reduced
       motion. Tested in `e2e/tour.spec.ts` (browser, Windows app, first run), with screenshots
       in `design/u/screenshots/tour/`.
+33. **U33. The tour goes at the student's pace (2026-11-14, `fix/tour-pacing`).** From the first
+    try of U32 in the Windows app:
+    - **Paced steps:** writing, asking, turning Screen Coach on and circling on screen no longer
+      move on by themselves. Next appears once the thing is done ("Done. Carry on when you're
+      ready"), so a mark can be seen and an answer heard first. Only a finished PDF import moves
+      on by itself.
+    - **The PDF step** finishes when the import does (not when the dialog closes), and the next
+      step carries on wherever the import left the student.
+    - **Screen Coach is always shown:** with it already on, its step says so and waits for Next.
+    - **The island steps match the app:** with Screen Coach on, holding Ctrl + Alt does nothing
+      on screen; the island's selection tool and microphone ask. The step says that.
+    - **The island over Neb's own window:** a double tap of Ctrl + Alt now reaches the island
+      even while Neb's window is in front (`desktop/src-tauri/src/screen/keys.rs`; a hold there
+      is still the notebook page's). This needs a new installer; older ones are told to click
+      another window first.
+    - **Review says why it's empty** (`NothingDue` in `ReviewApp.tsx`): course material still
+      being prepared, material that's ready but not studied yet (with a link to it), or none.

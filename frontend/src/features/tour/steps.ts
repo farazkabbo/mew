@@ -5,14 +5,15 @@ export type TourPlace = "desk" | "home" | "page" | "review";
 
 /** What finishes a step. */
 export type TourDone =
-  /** Reading it: the student presses the step's button. */
-  | { by: "next"; label?: string }
+  /**
+   * The student presses the step's button, at their own pace. With `after`, the button waits
+   * until they've done the thing (written, asked, turned Screen Coach on).
+   */
+  | { by: "next"; label?: string; after?: TourSignal | "coach-on" }
   /** Getting somewhere, by doing the real thing (creating a notebook opens it). */
   | { by: "place"; places: readonly TourPlace[] }
-  /** Doing something the app reports (`signals.ts`). */
-  | { by: "signal"; signal: TourSignal }
-  /** Screen Coach being on (asked of the Windows app). */
-  | { by: "coach-on" };
+  /** Something that's plainly finished when the app reports it (a PDF imported). */
+  | { by: "signal"; signal: TourSignal };
 
 export type TourStep = {
   id: string;
@@ -60,10 +61,10 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "write",
     title: "Write a line",
-    body: "Write some working with the mouse, a pen or your finger: 3x + 7 = 19, then 3x = 26 below it. When you pause, I read the line. A tick if it's right, a circle where something slipped.",
+    body: "Write some working with the mouse, a pen or your finger: 3x + 7 = 19, then 3x = 26 below it. Each time you pause, I read the line: a tick if it's right, a circle where something slipped. Take your time, and carry on when you've seen a mark.",
     place: "page",
     target: '[data-testid="sheet"]',
-    done: { by: "signal", signal: "wrote" },
+    done: { by: "next", after: "wrote" },
   },
   {
     id: "marks",
@@ -76,9 +77,9 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "ask",
     title: "Hold Ctrl + Alt to ask",
-    body: "Hold both keys, ask your question out loud, and let go. While you hold, you can also circle the line you mean. I answer once you let go.",
+    body: "Hold both keys. While they're down, circle the line you mean and ask your question out loud. Then let go, and I answer: out loud, and in writing beside your work. Carry on when I've finished.",
     place: "page",
-    done: { by: "signal", signal: "asked" },
+    done: { by: "next", after: "asked" },
     note: USES_A_QUESTION,
   },
   {
@@ -100,7 +101,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "pdf",
     title: "Add your course material",
-    body: "Add your slides, a syllabus or a chapter as a PDF. I read it and build lessons and quizzes from the subject.",
+    body: "Add your slides, a syllabus or a chapter as a PDF. I read it and build lessons and quizzes from the subject. I'll carry on as soon as it's in.",
     place: "home",
     target: '[data-testid="add-material"], [data-tour="import-pdf"]',
     done: { by: "signal", signal: "pdf" },
@@ -109,9 +110,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "study",
     title: "Study from it",
-    body: "Once I've read a PDF, a Study tab appears here with a plan, lessons and quizzes. Reading takes a minute or two, and you can keep working meanwhile.",
-    place: "home",
-    target: TABS,
+    body: "Once a PDF is in, its pages sit in the notebook for you to write on, and I read it in the background, which takes a minute or two. Then the notebook's home gets a Study tab with a plan, lessons and quizzes.",
     done: { by: "next" },
   },
   {
@@ -132,7 +131,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "review",
     title: "What's due today",
-    body: "Each notebook gets a folder here. Inside are the topics I'll quiz you on and the things you saved, brought back just before you'd forget them. It stays empty until you've studied something.",
+    body: "Each notebook gets a folder here, with the topics I'll quiz you on and the things you saved, brought back just before you'd forget them. It's empty for now: nothing is due until you've taken a lesson or a quiz from a notebook's Study tab.",
     place: "review",
     target: '[data-testid="review-folders"]',
     done: { by: "next" },
@@ -141,21 +140,22 @@ export const TOUR_STEPS: readonly TourStep[] = [
     id: "coach",
     title: "Turn on Screen Coach",
     body: "Screen Coach lets me help over any app on your PC: a slide, a PDF, a video. Its settings say exactly what I can see. Turn it on there, then come back here.",
-    done: { by: "coach-on" },
+    done: { by: "next", after: "coach-on" },
     desktopOnly: true,
   },
   {
     id: "island",
     title: "Find the island",
-    body: "Tap Ctrl + Alt twice, quickly. A black bar appears at the top of your screen, with a pen, a selection tool, a microphone and your music. Tap twice again to hide it.",
+    body: "Tap Ctrl + Alt twice, quickly. A black bar appears at the top of your screen: that's the island, with a pen, a selection tool, a microphone and your music. Tap twice again to hide it.",
     done: { by: "next", label: "I see it" },
+    note: "Nothing there? Click on another window first, then tap twice again.",
     desktopOnly: true,
   },
   {
     id: "circle",
     title: "Circle anything and ask",
-    body: "Hold Ctrl + Alt and drag a circle round something on your screen, this box if you like. Ask out loud and let go. I explain it step by step, right beside it.",
-    done: { by: "signal", signal: "screen-asked" },
+    body: "Open something to study in another window: slides, a PDF, a video. On the island, pick the selection tool and draw round the part you mean. Press the island's microphone, ask out loud, and press it again. I explain it step by step, right beside it. Come back here afterwards.",
+    done: { by: "next", after: "screen-asked" },
     note: USES_A_QUESTION,
     desktopOnly: true,
   },
