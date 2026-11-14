@@ -203,6 +203,7 @@ the installer runs with a small progress bar, closes Neb and reopens it on 0.1.1
 
 ## Release history
 
-| Version | Date       | Notes                                                                       |
-| ------- | ---------- | --------------------------------------------------------------------------- |
-| 0.1.0   | 2026-11-14 | First signed build. Given to testers directly; no GitHub Release published. |
+| Version | Date       | Notes                                                                                                                 |
+| ------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| 0.1.0   | 2026-11-14 | First signed build. Given to testers directly; no GitHub Release published.                                           |
+| 0.1.1   | 2026-11-14 | A double tap of Ctrl+Alt opens the island while neb's own window is in front. Built; no GitHub Release published yet. |
