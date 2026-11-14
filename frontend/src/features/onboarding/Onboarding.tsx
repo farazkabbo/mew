@@ -171,12 +171,12 @@ export function Onboarding({
               or tap the dot. It answers out loud and writes on your page.
             </p>
             <p data-testid="onboarding-guide">
-              Not sure where to start? Uploading a PDF, getting a quiz and asking about your screen
-              are all in{" "}
+              Next comes a three-minute tour where you try each thing yourself. It&apos;s also under
+              your initial at the top right of your desk, with{" "}
               <Link href="/guide" className="font-medium text-ink underline underline-offset-2">
                 How to use neb
               </Link>
-              , under your initial at the top right of your desk.
+              .
             </p>
           </div>
         )}

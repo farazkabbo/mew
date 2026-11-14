@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { SignOutMenuItem } from "@/components/AccountControls";
 
 const LINKS = [
+  { href: "/tour", label: "Take the tour" },
   { href: "/guide", label: "How to use neb" },
   { href: "/teach", label: "Teach neb" },
   { href: "/settings", label: "Settings" },
@@ -13,7 +14,7 @@ const LINKS = [
 
 /**
  * The avatar on the desk (docs/NEB_APP_UI.md §5.1, decisions U14 and U26): the student's
- * initial, opening the guide (U30), Teach neb, Settings and the account. Courses live in their notebooks, and
+ * initial, opening the tour (U31), the guide (U30), Teach neb, Settings and the account. Courses live in their notebooks, and
  * Review has its own button in the header.
  */
 export function DeskMenu({ name }: { name: string | null }) {
