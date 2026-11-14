@@ -3,17 +3,22 @@ import type { TourSignal } from "./signals";
 /** Where in the app a step happens. */
 export type TourPlace = "desk" | "home" | "page" | "review";
 
+/** Something on screen (a CSS selector): the Study tab's plan, a quiz's feedback. */
+export type TourSight = { present: string };
+
 /** What finishes a step. */
 export type TourDone =
   /**
    * The student presses the step's button, at their own pace. With `after`, the button waits
-   * until they've done the thing (written, asked, turned Screen Coach on).
+   * until they've done the thing (written, asked, turned Screen Coach on, had an answer marked).
    */
-  | { by: "next"; label?: string; after?: TourSignal | "coach-on" }
+  | { by: "next"; label?: string; after?: TourSignal | "coach-on" | TourSight }
   /** Getting somewhere, by doing the real thing (creating a notebook opens it). */
   | { by: "place"; places: readonly TourPlace[] }
   /** Something that's plainly finished when the app reports it (a PDF imported). */
-  | { by: "signal"; signal: TourSignal };
+  | { by: "signal"; signal: TourSignal }
+  /** Something appearing on screen because of what the student did, or what neb finished. */
+  | { by: "present"; selector: string };
 
 export type TourStep = {
   id: string;
@@ -29,8 +34,14 @@ export type TourStep = {
   note?: string;
   /** Only in the Windows app (the browser has no Screen Coach). */
   desktopOnly?: boolean;
+  /** Where "Skip this step" goes when the steps after it can't be done without this one. */
+  skipTo?: string;
 };
 
+const STUDY = '[data-testid="course-study"]';
+const TOPICS = '[data-testid="review-concept"]';
+const PLAN = '[data-testid="plan-summary"]';
+const QUIZ = '[data-testid="quiz-card"]';
 const TABS = '[role="tablist"][aria-label="Notebook"]';
 const USES_A_QUESTION = "A real question uses one of your free ones. To keep it, skip this step.";
 
@@ -101,17 +112,66 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "pdf",
     title: "Add your course material",
-    body: "Add your slides, a syllabus or a chapter as a PDF. I read it and build lessons and quizzes from the subject. I'll carry on as soon as it's in.",
+    body: "Add your slides, a syllabus or a chapter as a PDF, and leave \"Use as course material\" ticked. I read it and build lessons and quizzes from the subject. I'll carry on as soon as it's in.",
     place: "home",
     target: '[data-testid="add-material"], [data-tour="import-pdf"]',
     done: { by: "signal", signal: "pdf" },
     note: "No PDF to hand? Skip this step and add one later.",
+    skipTo: "to-desk",
   },
   {
-    id: "study",
-    title: "Study from it",
-    body: "Once a PDF is in, its pages sit in the notebook for you to write on, and I read it in the background, which takes a minute or two. Then the notebook's home gets a Study tab with a plan, lessons and quizzes.",
-    done: { by: "next" },
+    id: "back-home",
+    title: "Your PDF is in",
+    body: "Its pages are in the notebook now, for you to write on. Press the notebook's name up here to go back to its home.",
+    place: "page",
+    target: '[data-testid="breadcrumb"] button',
+    done: { by: "place", places: ["home"] },
+    skipTo: "to-desk",
+  },
+  {
+    id: "study-tab",
+    title: "Open Study",
+    body: "The notebook has a Study tab now. Press it.",
+    place: "home",
+    target: "#home-tab-study",
+    done: { by: "present", selector: STUDY },
+    skipTo: "to-desk",
+  },
+  {
+    id: "reading",
+    title: "I'm reading your PDF",
+    body: "This takes a minute or two. I'll carry on by myself when the topics are ready.",
+    place: "home",
+    done: { by: "present", selector: `${TOPICS}, ${PLAN}` },
+    note: "If it says the course couldn't be built, skip this step and try another PDF later.",
+    skipTo: "to-desk",
+  },
+  {
+    id: "topics",
+    title: "Check the topics",
+    body: "These are the topics I found. Untick any you don't need, then press Start studying.",
+    place: "home",
+    target: '[data-tour="start-studying"]',
+    done: { by: "present", selector: PLAN },
+    skipTo: "to-desk",
+  },
+  {
+    id: "quiz",
+    title: "Take a quiz",
+    body: "This is your study plan: each topic, with a lesson. Press Quiz me to try a question now.",
+    place: "home",
+    target: '[data-tour="quiz-me"]',
+    done: { by: "present", selector: QUIZ },
+    skipTo: "to-desk",
+  },
+  {
+    id: "answer",
+    title: "Answer on the page",
+    body: "Write your answer on the page, or say it, then press Check my answer. I mark it and tell you why. Try another if you like, then press End quiz and carry on.",
+    place: "page",
+    // Nothing ringed: the card stays in the corner, clear of where the answer is written.
+    done: { by: "next", after: { present: '[data-testid="quiz-feedback"]' } },
+    skipTo: "to-desk",
   },
   {
     id: "to-desk",
@@ -131,7 +191,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   {
     id: "review",
     title: "What's due today",
-    body: "Each notebook gets a folder here, with the topics I'll quiz you on and the things you saved, brought back just before you'd forget them. It's empty for now: nothing is due until you've taken a lesson or a quiz from a notebook's Study tab.",
+    body: "Each notebook gets a folder here, with the topics you've started and the things you saved. What you just practised is in it, and comes back for another look just before you'd forget it. A notebook you haven't studied from has no folder yet.",
     place: "review",
     target: '[data-testid="review-folders"]',
     done: { by: "next" },

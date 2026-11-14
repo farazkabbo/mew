@@ -815,7 +815,6 @@ export function NotebookApp({
   const importPdf = async (info: PdfInfo, choice: ImportChoice) => {
     const result = await carryOutImport(info, choice, { repo, tree, makeCourseMaterial });
     setImporting(null);
-    tourSignal("pdf");
     const first = result.firstPageId ? await repo.getPage(result.firstPageId) : null;
     if (first) {
       openPage(first);
@@ -833,6 +832,9 @@ export function NotebookApp({
           : `Imported ${pages} pages.`,
       tone: result.courseFailed ? "error" : "info",
     });
+    // The tour carries on from where the import leaves the student: told once the page it
+    // opened is on screen and in the address (U29), not before.
+    window.setTimeout(() => tourSignal("pdf"), 400);
   };
   useEffect(() => {
     const isPdf = (event: DragEvent) =>

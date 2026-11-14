@@ -80,6 +80,15 @@ function look(step: TourStep): Seen {
   return { place, box, dialogs };
 }
 
+/** Whether anything matching `selector` is showing. */
+function onScreen(selector: string): boolean {
+  for (const element of document.querySelectorAll(selector)) {
+    const rect = element.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) return true;
+  }
+  return false;
+}
+
 const sameBox = (a: Box | null, b: Box | null) =>
   a === b ||
   (a !== null &&
@@ -108,6 +117,11 @@ function Guide({
   const [ready, setReady] = useState(false);
   const { advance, back, end } = useTour.getState();
   const next = () => advance(step.id, desktop);
+  const skip = () => {
+    const to = step.skipTo;
+    if (to && stepsFor(desktop).some((s) => s.id === to)) useTour.getState().skip(step.id, to);
+    else next();
+  };
 
   // Watch the real app: where the student is, where the control is, whether they got there.
   useEffect(() => {
@@ -118,9 +132,17 @@ function Guide({
         ...(now.place === "home" && { nodeId: params.get("node") }),
         ...(now.place === "page" && { pageId: params.get("page") }),
       });
-      if (step.done.by === "place" && now.place && step.done.places.includes(now.place)) {
+      const done = step.done;
+      if (
+        (done.by === "place" && now.place !== null && done.places.includes(now.place)) ||
+        (done.by === "present" && onScreen(done.selector))
+      ) {
         useTour.getState().advance(step.id, desktop);
         return;
+      }
+      // A paced step whose button waits for something to show (a quiz's feedback).
+      if (done.by === "next" && typeof done.after === "object" && onScreen(done.after.present)) {
+        setReady(true);
       }
       setSeen((was) =>
         was.place === now.place && was.dialogs === now.dialogs && sameBox(was.box, now.box)
@@ -144,11 +166,13 @@ function Guide({
     step.done.by === "signal"
       ? step.done.signal
       : step.done.by === "next"
-        ? (step.done.after ?? null)
+        ? typeof step.done.after === "object"
+          ? "sight"
+          : (step.done.after ?? null)
         : null;
   const paced = step.done.by === "next";
   useEffect(() => {
-    if (!awaited || awaited === "coach-on") return;
+    if (!awaited || awaited === "coach-on" || awaited === "sight") return;
     const happened = () => {
       if (paced) setReady(true);
       else useTour.getState().advance(step.id, desktop);
@@ -283,7 +307,7 @@ function Guide({
             {(step.done.by !== "next" || waiting) && (
               <button
                 type="button"
-                onClick={next}
+                onClick={skip}
                 className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
               >
                 Skip this step

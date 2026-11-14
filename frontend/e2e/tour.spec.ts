@@ -118,7 +118,7 @@ async function throughReview(page: Page, total: number, importPdf: boolean) {
   await pointsAt(page, page.getByTestId("add-material"));
   await expect(guide(page)).toContainText("No PDF to hand?");
   if (importPdf) {
-    // A real import: closing the dialog doesn't move on, the PDF arriving does, by itself.
+    // A real import, as course material: the PDF arriving moves on, closing the dialog doesn't.
     await page.getByTestId("add-material").getByRole("button").first().click();
     const importing = page.getByRole("dialog", { name: "Import a PDF" });
     await importing.locator('input[type="file"]').setInputFiles({
@@ -127,14 +127,56 @@ async function throughReview(page: Page, total: number, importPdf: boolean) {
       buffer: makePdf(CHAPTER),
     });
     await expect(importing).toContainText("3 pages");
-    await importing.getByRole("checkbox", { name: /Use as course material/ }).uncheck();
     await importing.getByRole("button", { name: "Import", exact: true }).click();
-  } else await press(page, "Skip this step");
 
-  // Wherever the import left the student (the PDF's first page), the card carries on there.
-  await onStep(page, "study");
-  await expect(guide(page).getByRole("button", { name: "Take me there" })).toHaveCount(0);
-  await press(page, "Next");
+    // The import opens the PDF's first page: back to the notebook with its own name.
+    await expect(guide(page)).toHaveAttribute("data-step", "back-home", { timeout: 30_000 });
+    await page.getByTestId("breadcrumb").getByRole("button").first().click();
+
+    await onStep(page, "study-tab");
+    const study = page.getByRole("tab", { name: "Study" });
+    await pointsAt(page, study);
+    await study.click();
+
+    // neb reads the PDF; the card carries on by itself when the topics are there.
+    await expect(guide(page)).toHaveAttribute("data-step", "topics", { timeout: 30_000 });
+    const start = page.getByRole("button", { name: /Start studying/ });
+    await pointsAt(page, start);
+    await start.click();
+
+    await onStep(page, "quiz");
+    const quizMe = page.getByRole("button", { name: "Quiz me" });
+    await pointsAt(page, quizMe);
+    await page.waitForTimeout(450); // the card has arrived
+    await page.screenshot({ path: `${SHOTS}/quiz.png` });
+    await quizMe.click();
+
+    // The quiz is the student's to pace: Next waits for a marked answer.
+    await onStep(page, "answer");
+    const card = page.getByTestId("quiz-card");
+    await expect(card).toBeVisible();
+    await expect(guide(page).getByRole("button", { name: "Next" })).toHaveCount(0);
+    await expect(page.getByTestId("quiz-question")).toBeVisible();
+    const canvas = await page.getByTestId("notebook-canvas").boundingBox();
+    if (!canvas) throw new Error("no page");
+    for (let i = 0; i < 4; i++) {
+      const left = canvas.x + 520 + i * 26;
+      await page.mouse.move(left, canvas.y + 328);
+      await page.mouse.down();
+      await page.mouse.move(left + 9, canvas.y + 300, { steps: 4 });
+      await page.mouse.move(left + 18, canvas.y + 328, { steps: 4 });
+      await page.mouse.up();
+    }
+    await card.getByRole("button", { name: "Check my answer" }).click();
+    await expect(page.getByTestId("quiz-feedback")).toHaveText("Yes, that's it.");
+    await expect(page.getByTestId("tour-ready")).toBeVisible();
+    await expect(card.getByTestId("concept-status")).toHaveText("Checked");
+    await card.getByRole("button", { name: "End quiz" }).click();
+    await press(page, "Next");
+  } else {
+    // Without a PDF there's no quiz to take: skipping goes past all of it.
+    await press(page, "Skip this step");
+  }
 
   await onStep(page, "to-desk");
   const back = page.getByRole("button", { name: "Back to the desk" });
@@ -145,19 +187,27 @@ async function throughReview(page: Page, total: number, importPdf: boolean) {
   await pointsAt(page, page.getByTestId("desk-review"));
   await page.getByTestId("desk-review").click();
 
-  // Review says why it's empty.
   await onStep(page, "review");
-  await expect(page.getByTestId("review-empty")).toContainText("Nothing is due yet.");
-  await expect(guide(page)).toContainText("It's empty for now");
+  if (importPdf) {
+    // What was just practised has a folder.
+    await expect(page.getByTestId("review-folders")).toContainText("Tour physics");
+    await expect(page.getByTestId("tour-ring")).toBeVisible();
+    await page.waitForTimeout(450); // the card has arrived
+    await page.screenshot({ path: `${SHOTS}/review.png` });
+  }
   await press(page, "Next");
 }
 
-test("the tour walks the real app: a notebook, a page, writing, asking, a PDF and Review", async ({
+test("the tour walks the real app: a notebook, a page, writing, asking, a PDF, a quiz and Review", async ({
   page,
 }) => {
+  test.setTimeout(120_000);
+  await page.route("**/api/quiz/grade", (route) =>
+    route.fulfill({ json: { verdict: "correct", feedback: "Yes, that's it.", note: "" } }),
+  );
   await page.goto("/tour");
   await expect(page).toHaveURL(/\/desk$/);
-  await throughReview(page, 14, true);
+  await throughReview(page, 19, true);
 
   await onStep(page, "done");
   await page.waitForTimeout(450); // the card has arrived
@@ -191,7 +241,7 @@ test("in the Windows app the tour goes on to Screen Coach, the island and circli
     });
   });
   await page.goto("/tour");
-  await throughReview(page, 18, false);
+  await throughReview(page, 23, false);
 
   // Screen Coach: the card waits until the Windows app says it's on.
   await onStep(page, "coach");

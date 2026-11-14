@@ -111,7 +111,7 @@ export function StudyPlan({
         </dl>
         <div className="flex flex-wrap gap-2">
           {onQuiz ? (
-            <button type="button" onClick={onQuiz} className={quizClass}>
+            <button type="button" onClick={onQuiz} className={quizClass} data-tour="quiz-me">
               Quiz me
             </button>
           ) : (

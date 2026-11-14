@@ -189,6 +189,7 @@ export function ScopeReview({
         </label>
         <span className="flex-1" />
         <button
+          data-tour="start-studying"
           onClick={() => void start()}
           disabled={saving || active.length === 0}
           className="inline-flex h-12 items-center gap-2 rounded-full bg-ink px-[26px] text-[15px] font-semibold text-paper transition-opacity duration-[120ms] hover:opacity-90 disabled:opacity-40"

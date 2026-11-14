@@ -18,6 +18,8 @@ type TourState = Saved & {
   start(): void;
   /** On to the step after `fromId` (a late signal for an earlier step does nothing). */
   advance(fromId: string, desktop: boolean): void;
+  /** "Skip this step" on a step the next ones depend on: straight to `toId`, from `fromId`. */
+  skip(fromId: string, toId: string): void;
   back(desktop: boolean): void;
   end(): void;
   visited(made: Partial<Pick<Saved, "nodeId" | "pageId">>): void;
@@ -63,6 +65,9 @@ export const useTour = create<TourState>((set, get) => {
       const steps = stepsFor(desktop);
       const next = steps[steps.findIndex((s) => s.id === fromId) + 1];
       save(next ? { stepId: next.id } : NONE);
+    },
+    skip: (fromId, toId) => {
+      if (get().stepId === fromId) save({ stepId: toId });
     },
     back: (desktop) => {
       const steps = stepsFor(desktop);

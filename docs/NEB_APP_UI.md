@@ -1152,3 +1152,9 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       another window first.
     - **Review says why it's empty** (`NothingDue` in `ReviewApp.tsx`): course material still
       being prepared, material that's ready but not studied yet (with a link to it), or none.
+    - **From the PDF to a quiz, then Review** (the owner's order): after the import the tour
+      goes back to the notebook, opens Study, waits while neb reads the PDF, has the student
+      check the topics and press Start studying, then Quiz me, and answer one question on the
+      page. Review then has that notebook's folder with the topic in it, instead of being
+      empty. These steps watch for what's on screen (the plan, the quiz card, its feedback).
+      Without a PDF, "Skip this step" on any of them goes straight to the desk and Review.
