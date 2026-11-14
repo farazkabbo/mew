@@ -1,148 +1,208 @@
 # Shipping the Neb desktop app
 
-A plain guide to building the app, getting it to users and updating it. The exact commands are also
-in [desktop/README.md](../desktop/README.md), under "Releasing an update".
+Everything a developer needs to build the Windows installer, sign it, publish an update and look
+after the keys. This is the one guide. [desktop/README.md](../desktop/README.md) covers running the
+app in development.
 
-## What users do
+## In short
 
-1. Download `Neb_<version>_x64-setup.exe` from the website.
-2. Run it, then sign in.
+- The desktop app is a window onto the web app at **https://app.myneb.si**. Web and backend changes
+  reach every user when they deploy, so **only changes in `desktop/` need a new installer.**
+- A release is an `.exe` plus a small `latest.json`, published as a **GitHub Release** of
+  `farazkabbo/mew`.
+- Installed apps check **https://app.myneb.si/desktop/latest.json**, which redirects to the newest
+  release. They then download, verify and offer the update themselves.
+- Every update must be signed with **the update key**. Without it, there are no more updates, ever.
 
-That's all. The installer sets up Neb for that Windows user, and later updates arrive inside the app.
+## The keys and the password
 
-Two things they may notice:
+| What                              | Where                                                   | Secret?             |
+| --------------------------------- | ------------------------------------------------------- | ------------------- |
+| Update private key                | `~/.tauri/neb-updater.key`, on the PC that generated it | **Yes**             |
+| Its password                      | `~/.tauri/neb-updater.password`, next to it             | **Yes**             |
+| Update public key                 | `pubkey` in `desktop/src-tauri/tauri.release.conf.json` | No, committed       |
+| Code-signing certificate (future) | not bought yet                                          | Yes, when it exists |
 
-- **A Windows SmartScreen warning**, until the `.exe` is signed with a code-signing certificate.
-- **A short extra download** if the PC doesn't have WebView2. Windows 11 already has it.
+`~` is `C:\Users\<you>`. The pair was generated on 2026-11-14 with:
 
-## Where the build goes
+```sh
+pnpm --filter @mew/desktop exec tauri signer generate -w ~/.tauri/neb-updater.key -p "<password>" --ci
+```
 
-`pnpm bundle:release`, run in `desktop/`, creates these files in
-`desktop/src-tauri/target/release/bundle/nsis/`:
+**Rules:**
 
-| File                              | What it's for                                                               |
-| --------------------------------- | --------------------------------------------------------------------------- |
-| `Neb_<version>_x64-setup.exe`     | The installer. The website's download button uses it.                       |
-| `Neb_<version>_x64-setup.exe.sig` | Its signature. It goes inside `latest.json`, so don't upload it.            |
-| `latest.json`                     | Tells installed apps the newest version. `pnpm update-manifest` creates it. |
+- **Back up both files** in the team's password manager, and share them only through it: never in
+  chat, email, an issue or the repo.
+- **If they're lost,** installed apps can never accept another update. Every user would have to
+  download a new installer by hand, built with a new key.
+- **If they leak,** someone else could sign an update that installed apps would accept. They would
+  still need control of the update address or the GitHub releases, but treat a leak as an
+  incident: make a new key, ship a release with it, and ask users to reinstall.
+- **Never generate a new pair** while the current one exists. Apps only trust the public key they
+  were built with.
+- **To build on another PC,** copy both files into that PC's `~/.tauri/`.
 
-This folder is not in Git and stays on the computer that built it. Users only get these files once
-you upload the `.exe` and `latest.json` to a public host.
+**The update key isn't a code-signing certificate.** The update key proves to Neb that an update
+came from us. A code-signing (Authenticode) certificate proves it to **Windows**, and removes the
+"Windows protected your PC" warning. We don't have one yet, so users click **More info → Run
+anyway** on first install. The options are Azure Trusted Signing (cheapest; check its eligibility
+rules) or an OV certificate from a certificate authority.
 
-## Do you need a new release?
+## What's built in, and where
 
-| What changed                                  | What to do                               |
-| --------------------------------------------- | ---------------------------------------- |
-| The website (`frontend/`) or backend          | Just deploy. Users get it automatically. |
-| Anything in `desktop/` (tray, overlays, Rust) | Publish a new desktop release.           |
+| Setting              | Where                                                         | Value                                                |
+| -------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| Version              | `tauri.conf.json`, `Cargo.toml`, `package.json` in `desktop/` | `0.1.0`, the same in all three                       |
+| The web app it opens | `MEW_APP_URL` **at build time**                               | `https://app.myneb.si`                               |
+| Update public key    | `desktop/src-tauri/tauri.release.conf.json`                   | `pubkey`                                             |
+| Update address       | `desktop/src-tauri/tauri.release.conf.json`                   | `https://app.myneb.si/desktop/latest.json`           |
+| Where that redirects | the web app's `DESKTOP_UPDATE_MANIFEST_URL`                   | unset: the newest GitHub Release of `farazkabbo/mew` |
+| `neb://` links       | `tauri.conf.json`, `deep-link`                                | registered by the installer                          |
+| WebView2             | `tauri.conf.json`, `webviewInstallMode`                       | downloaded during install if the PC doesn't have it  |
 
-The app is a window onto the website, which is why most changes don't need a new `.exe`.
+**`MEW_APP_URL` matters.** The app opens `MEW_APP_URL` from the user's environment if it's set,
+otherwise the value built in, otherwise `http://localhost:3000`. A build without it shows
+"localhost refused to connect" to every user. A tester can point an installed app somewhere else
+with `setx MEW_APP_URL "<address>"`, and must undo it with `setx MEW_APP_URL ""`.
 
-## How updates work
+**The update address is permanent.** Every installed copy has it built in. It's a route in the web
+app ([route.ts](<../frontend/src/app/(site)/desktop/latest.json/route.ts>)) that only redirects, so
+the files can move without stranding anyone: set `DESKTOP_UPDATE_MANIFEST_URL` (https only) on the
+`neb-app` Vercel project and redeploy. Never delete or rename the route.
 
-Neb can't tell that a new version exists until the devs publish one. It keeps asking a fixed web
-address whether there's something newer, and that address is a small file called `latest.json`.
+## Building the installer
 
-### On the user's computer
+On Windows, in **Git Bash**, from the repo root, on an up-to-date `main`:
 
-1. **Neb asks:** 30 seconds after it opens, and every 6 hours while it's running, Neb reads
-   `latest.json` from the host.
-2. **Neb compares:** the file says something like "newest version is 0.2.0, and here's the download
-   link and signature". If the user has 0.1.0, that counts as an update. If they already have 0.2.0,
-   nothing happens and they never notice.
-3. **Neb downloads:** the new installer downloads in the background while they keep working, and Neb
-   checks its signature. If the signature doesn't match, Neb rejects the download.
-4. **Neb tells them:** they get a notification saying the new version is ready, and "Restart to
-   update" appears in the tray.
-5. **They choose when:** when they click it, the installer runs with a small progress bar and Neb
-   reopens on the new version. Their notes aren't touched by this. Neb never restarts by itself.
+```sh
+git checkout main && git pull
+pnpm install
 
-Neb keeps running in the tray when its window is closed, so the 6-hour check still happens. If the PC
-is offline, the check fails quietly and tries again at the next one.
+export MEW_APP_URL="https://app.myneb.si"
+export TAURI_SIGNING_PRIVATE_KEY="$HOME/.tauri/neb-updater.key"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat ~/.tauri/neb-updater.password)"
+pnpm --filter @mew/desktop bundle:release
+```
 
-### What the devs do for each update
+It takes about 3 minutes and writes to `desktop/src-tauri/target/release/bundle/nsis/`:
 
-Say the devs fixed a bug in `desktop/`:
+| File                              | What it is                                                           |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `Neb_<version>_x64-setup.exe`     | The installer, about 3 MB. What users run.                           |
+| `Neb_<version>_x64-setup.exe.sig` | Its update signature. It goes inside `latest.json`; don't upload it. |
 
-1. **Raise the version:** change it from `0.1.0` to `0.2.0` in the three version files.
-2. **Build it:** run `pnpm bundle:release`, which creates the new installer and signs it with the
-   private key.
-3. **Create the file:** run `pnpm update-manifest`, which writes the new `latest.json`.
-4. **Upload both:** put the `.exe` on the host first, then replace `latest.json`.
+Then write `latest.json`, naming where the `.exe` will be published:
 
-That's the whole job. There's no list of users and nothing is sent to anyone. As soon as
-`latest.json` is replaced, each installed copy finds the update at its next check, so everyone whose
-PC is on and running Neb should have it within about 6 hours.
+```sh
+V=0.1.1   # the version you just built
+pnpm --filter @mew/desktop update-manifest \
+  --base-url "https://github.com/farazkabbo/mew/releases/download/desktop-v$V" \
+  --notes "What changed, in a sentence"
+```
 
-If the change is only to the website or backend, the devs just deploy as usual. Users get it the next
-time Neb loads the page, with no update prompt.
+**Check before you hand it out:**
 
-The full commands are under [Publishing a release](#publishing-a-release).
+- `grep -c "https://app.myneb.si" desktop/src-tauri/target/release/mew-desktop.exe` prints at least
+  `1`. If it prints `0`, `MEW_APP_URL` wasn't set, so build again.
+- The build printed "Finished 1 updater signature". If it complains about the key or the password,
+  the two `TAURI_SIGNING_…` exports are wrong.
 
-### Why this has to be set up first
+**Which build is which:**
 
-The address and the public key are built into the copy a user installs. If that copy was built before
-they were set, it has nowhere to look, so that user would have to download the next version by hand.
-That's why the key and host need to be in place before the first public release.
+| Command               | Updates itself? | Use it for                         |
+| --------------------- | --------------- | ---------------------------------- |
+| `pnpm tauri dev`      | No              | Development                        |
+| `pnpm bundle`         | No              | A quick local installer, no key    |
+| `pnpm bundle:release` | **Yes**         | Anything a user or tester installs |
 
-## Setup before the first release
+## Publishing an update
 
-Done on 2026-11-14:
+Only needed when something in `desktop/` changed: the tray, overlays, island or Rust code.
 
-1. **The signing key** is at `~/.tauri/neb-updater.key` on the developer's PC, with its password in
-   `~/.tauri/neb-updater.password`. Keep both in a password manager, and never commit them. If you
-   lose them, installed apps can't accept another update. If they leak, someone else could sign an
-   update.
-2. **The address** every installed copy checks is `https://app.myneb.si/desktop/latest.json`. It's a
-   route in the web app (`frontend/src/app/(site)/desktop/latest.json/route.ts`) that redirects to
-   the newest **GitHub Release** of `farazkabbo/mew`. To host the files somewhere else later, set
-   `DESKTOP_UPDATE_MANIFEST_URL` on Vercel. Installed copies keep working, because their built-in
-   address doesn't change.
-3. **`desktop/src-tauri/tauri.release.conf.json`** holds the public key and that address.
+1. **Raise the version** in all three files: `desktop/src-tauri/tauri.conf.json`,
+   `desktop/src-tauri/Cargo.toml` and `desktop/package.json`. Installed apps only accept a
+   **greater** version (0.1.0 → 0.1.1 → 0.2.0). Commit it.
+2. **Build** and **write `latest.json`**, as above.
+3. **Publish on GitHub:** `farazkabbo/mew` → **Releases → Draft a new release**:
+   - **Tag:** `desktop-v0.1.1`, exactly matching `--base-url`. Target: `main`.
+   - **Attach** `Neb_0.1.1_x64-setup.exe` and `latest.json`, but not the `.sig`.
+   - Leave **Set as the latest release** ticked → **Publish release**.
+4. **Check:** `curl -sL https://app.myneb.si/desktop/latest.json` shows the new version.
 
-The website (myneb.si) isn't involved, so releases don't put a download on it. On launch day, copy
-the same `.exe` to where `/download` points.
+From then on, each running copy picks it up within about 6 hours, or at its next start.
 
-Still optional but recommended: **a code-signing certificate**, to reduce the SmartScreen warning.
-It's separate from the update key.
+**Pulling a bad release:** delete the release, or untick "latest" on it, and the previous release
+is the newest again. Copies that already updated stay on the bad version until you publish a
+newer, fixed one, so the usual fix is to ship the next version quickly.
 
-## Publishing a release
+**The repo must stay public** for this. Release files on a private repo need a GitHub login, so
+updates would fail. If it goes private, host the two files on another public https address and set
+`DESKTOP_UPDATE_MANIFEST_URL` to its `latest.json`.
 
-1. Raise the version in `desktop/src-tauri/tauri.conf.json`, `desktop/src-tauri/Cargo.toml` and
-   `desktop/package.json`. Installed apps only take a **greater** version.
+**Launch day:** the website's `/download` needs the same `.exe` copied to where it points. Releases
+on GitHub don't touch the website, and the website doesn't touch updates.
 
-2. Build it, in Git Bash from the repo root:
+## How the update flow works
 
-   ```sh
-   export MEW_APP_URL="https://app.myneb.si"
-   export TAURI_SIGNING_PRIVATE_KEY="$HOME/.tauri/neb-updater.key"
-   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(cat ~/.tauri/neb-updater.password)"
-   pnpm --filter @mew/desktop bundle:release
+The code is [updates.rs](../desktop/src-tauri/src/updates.rs), using the official Tauri updater
+plugin.
 
-   V=0.2.0   # the new version
-   pnpm --filter @mew/desktop update-manifest      --base-url "https://github.com/farazkabbo/mew/releases/download/desktop-v$V"      --notes "What changed"
-   ```
+```
+installed Neb 0.1.0
+  │ 30 s after start, then every 6 h (or "Check for updates" in the tray or Settings)
+  ▼
+GET https://app.myneb.si/desktop/latest.json ──302──▶ github.com/…/releases/latest/download/latest.json
+  │ { version: "0.1.1", url: "…/Neb_0.1.1_x64-setup.exe", signature: "…" }
+  │ not newer → nothing happens, and the user never notices
+  ▼ newer
+download the .exe in the background (progress shows in Settings)
+  │ check its signature against the public key built into 0.1.0
+  │ bad signature → thrown away
+  ▼
+notification: "Version 0.1.1 is ready. Restart from the tray icon when it suits you."
+tray and Settings: "Restart to update to 0.1.1"
+  │ the user clicks it (Neb never restarts by itself)
+  ▼
+the installer runs with a small progress bar, closes Neb and reopens it on 0.1.1
+```
 
-   Don't forget `MEW_APP_URL`. Without it, the app opens `localhost:3000` and users see "localhost
-   refused to connect".
+**Details:**
 
-3. On GitHub, **Releases → Draft a new release**:
-   - Tag: `desktop-v0.2.0` (the same as in `--base-url`), target `main`.
-   - Attach `Neb_0.2.0_x64-setup.exe` **and** `latest.json` from
-     `desktop/src-tauri/target/release/bundle/nsis/`. Don't attach the `.sig`.
-   - Leave **Set as the latest release** ticked, then **Publish**.
+- **Notes are safe.** They live in the web app's database, not on the PC.
+- **Offline,** the check fails quietly and runs again at the next one.
+- **Closing the window** leaves Neb in the tray, so the 6-hour check still runs.
+- **Until a release exists,** the check gets "not found" and fails quietly. That's normal.
+- **Only `bundle:release` builds update.** A copy built with `pnpm bundle`, or before 2026-11-14
+  when the key and address were empty, says "Updates are off in this build" and must be replaced
+  by hand.
+- **Only Settings and the tray can start an update.** The web page in the window can't: the
+  plugin's commands are granted to no page.
 
-   Installed apps see the new version at their next check. To pull a bad release, delete it (or
-   untick "latest") and the previous release becomes the newest again. Copies that already
-   updated stay on it until a newer version is published.
+## Testing a release
 
-4. Hand testers the `.exe` from the release page, or wait for launch day for the website.
+**A new installer,** on a PC without a development build of Neb:
 
-## Before relying on this
+1. **Install:** "Windows protected your PC" → **More info → Run anyway** (until we code-sign).
+2. **Sign in:** **Sign in** → the browser shows sign-up → sign up → "Connect neb on a Windows PC,
+   started just now?" → **Continue** → allow Edge to open neb. Neb greets you.
+3. **Ask:** hold **Ctrl+Alt**, circle something on screen and ask. You get an answer, and the
+   count of questions left drops by one.
+4. **Polling:** sign out, sign in again, and click **Cancel** on Edge's "Open neb?". It still
+   connects within about 2 seconds.
+5. **Cancelling:** start a sign-in and click **This wasn't me**. Neb says it was cancelled.
 
-These haven't been tested yet:
+**The update path.** This has never been tried end to end, so do it once before launch day:
 
-- Updating from one installed version to the next. The first release (0.1.0) needs the
-  `/desktop/latest.json` route deployed to app.myneb.si; then publish 0.1.1 and watch an installed
-  0.1.0 update.
-- "Show Neb in screen shares and recordings" in a real OBS or Teams capture.
+1. Install 0.1.0 and sign in.
+2. Raise the version to 0.1.1, build, write `latest.json` and publish the `desktop-v0.1.1` release.
+3. Quit and reopen Neb 0.1.0. Within about 30 seconds you get the notification, and "Restart to
+   update to 0.1.1" appears in the tray.
+4. Click it. The installer runs, Neb reopens, Settings shows 0.1.1, and you're still signed in.
+
+**Also untested:** "Show Neb in screen shares and recordings" in a real OBS or Teams capture.
+
+## Release history
+
+| Version | Date       | Notes                                                                       |
+| ------- | ---------- | --------------------------------------------------------------------------- |
+| 0.1.0   | 2026-11-14 | First signed build. Given to testers directly; no GitHub Release published. |

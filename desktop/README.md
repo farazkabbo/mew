@@ -59,33 +59,8 @@ PowerShell's name.
 The window shows the web app, so **web changes reach everyone when the site deploys**. A desktop
 release is only needed when something in `desktop/` changes.
 
-How the app updates (`src-tauri/src/updates.rs`, the official Tauri updater plugin):
-
-1. 30 seconds after start, then every 6 hours, or from the tray or the settings page, it fetches
-   the `latest.json` named in `src-tauri/tauri.release.conf.json` (https only).
-2. If that version is newer, it downloads the installer in the background and checks its signature
-   against the public key built into the app. A bad signature is discarded.
-3. The student sees one notification, and the tray and settings page offer "Restart to update". It
-   never restarts by itself. The installer then runs with a progress bar and reopens Neb.
-
-Only `pnpm bundle:release` builds update themselves; `pnpm bundle` and debug builds don't.
-
-**Set up** (done 2026-11-14): the private key is `~/.tauri/neb-updater.key` on the developer's
-PC, with its password in `~/.tauri/neb-updater.password`. Keep both in a password manager and out of
-the repo: **if the key is lost, installed apps can't accept another update, and if it leaks, anyone
-can sign one.** `src-tauri/tauri.release.conf.json` holds the public key and the address
-`https://app.myneb.si/desktop/latest.json`, a web app route that redirects to the newest GitHub
-Release (or to `DESKTOP_UPDATE_MANIFEST_URL`). If the repo ever goes private, its release files need
-a login: move them to another public host and set that variable. The release build refuses to run
-without the private key.
-
-**Each release:** see [docs/DESKTOP_RELEASE.md](../docs/DESKTOP_RELEASE.md#publishing-a-release).
-Raise the version, build with `MEW_APP_URL`, `TAURI_SIGNING_PRIVATE_KEY` and its password set, run
-`pnpm update-manifest --base-url "https://github.com/farazkabbo/mew/releases/download/desktop-v<version>"`,
-then publish a GitHub Release tagged `desktop-v<version>` with the `.exe` and `latest.json`.
-
-The `.exe` should also be Authenticode-signed before it goes on the website, or Windows SmartScreen
-warns about an unknown publisher. That certificate is separate from the update key.
+Building the installer, the update key and its password, publishing an update and how the update
+flow works are all in **[docs/DESKTOP_RELEASE.md](../docs/DESKTOP_RELEASE.md)**.
 
 ## Security
 
