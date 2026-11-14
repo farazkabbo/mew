@@ -98,7 +98,7 @@ function createPipeline() {
   let circled: (Circled & { at: number }) | null = null;
   /** The printed text under the hold's loops, being read from the PDF pages' text layers. */
   let reading: Promise<void> = Promise.resolve();
-  /** Bumped when a hold starts again or is cancelled: a slow read then keeps nothing. */
+  /** Bumped when a hold starts or is cancelled: a slow read then keeps nothing. */
   let holds = 0;
   /** K9: a line's open live mark, for the tutor's context (set once the annotator exists). */
   let markOf: (line: Line) => { kind: LiveMarkKind; note: string | null } | null = () => null;
@@ -500,22 +500,32 @@ function createPipeline() {
         })
         .catch(() => undefined);
     },
-    /** The hold started again or was cancelled: nothing circled is kept. */
-    clearCircled() {
+    /**
+     * Ctrl+Alt went down: nothing circled before is kept, and what's said from now waits for the
+     * release (asked once, not at each pause).
+     */
+    startHold() {
       holds++;
       circled = null;
+      gate.holdStarted();
+    },
+    /** The hold was cancelled: nothing circled or said in it is asked. */
+    cancelHold() {
+      holds++;
+      circled = null;
+      gate.holdCancelled();
     },
     /**
      * Letting go of Ctrl+Alt (K6 §6.3): words said during the hold are asked (about what was
      * circled, if anything); circling without words explains the circled lines, as an empty ask
      * bar does ("explain this", §11.2); neither is a tap on the mascot.
      */
-    releaseHold(heldAt: number) {
-      const { partial, segments } = useVoice.getState();
-      const said = partial.trim() !== "" || segments.some((s) => s.at >= heldAt);
-      // What the loops took in on a PDF page is known first (it's read from the device).
+    releaseHold() {
+      // What the loops took in on a PDF page is known first (it's read from the device). Words
+      // still count as the hold's until then.
       void reading.then(() => {
-        if (said || !circled) {
+        if (gate.holdReleased()) return;
+        if (!circled) {
           gate.summon();
           return;
         }
@@ -633,13 +643,13 @@ export function useMewSession(
   /** Holding Ctrl+Alt on the page (K6 §6.3): loops drawn meanwhile, then letting go. */
   const hold = useMemo(
     () => ({
-      start: () => pipeline.clearCircled(),
+      start: () => pipeline.startHold(),
       circle: (loop: readonly Vec[]) => pipeline.circle(loop),
-      release: (heldAt: number) => {
+      release: () => {
         tutor.unlockAudio();
-        pipeline.releaseHold(heldAt);
+        pipeline.releaseHold();
       },
-      cancel: () => pipeline.clearCircled(),
+      cancel: () => pipeline.cancelHold(),
     }),
     [pipeline, tutor],
   );

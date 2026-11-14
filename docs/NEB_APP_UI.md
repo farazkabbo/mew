@@ -1107,3 +1107,31 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
     - **Skippable** at every step and as a whole; Next waits for the step's task otherwise.
     - **Motion:** `tour-in`, `tour-draw`, `tour-drop`, `tour-pulse` in `globals.css`; reduced
       motion shows the end state. Tested in `e2e/tour.spec.ts` (browser, Windows app, first run).
+32. **U32. The tour is a guide over the real app (2026-11-14, `feat/guided-tour`).** This replaces
+    U31's practice screens: the owner wanted students walked through the app itself, and the
+    practice versions had drifted from it (the hold step needed an on-screen button in the
+    Windows app, and the circle step crashed).
+    - **What it is:** a small card from neb (`features/tour/TourGuide.tsx`, in the app's layout)
+      that sits over the real screens. It rings the real control, draws an arrow to it, and moves
+      on when the student has done the thing. It never clicks for them and never blocks the app.
+    - **Steps** (`features/tour/steps.ts`): make a notebook; open a page; write a line; the mark
+      level; hold Ctrl + Alt to ask; the notebook's home and its tabs; add course material; the
+      Study tab; back to the desk; Review. In the Windows app it goes on to: turn on Screen Coach
+      (it waits until the app says it's on); the island; circle and ask on the screen; Moments.
+    - **What's real:** everything. The notebook and page are kept. Two steps spend a free
+      question if the student asks for real (the hold, and circling on screen), and adding a PDF
+      builds a course: each says so, and each can be skipped.
+    - **How it knows:** the address (U29) says where the student is; the app reports writing, the
+      hold's release and the PDF dialog closing (`features/tour/signals.ts`); the Windows app's
+      own events report a question asked on screen. No desktop change was needed, so it works
+      with installed copies. The island step can't be detected and has an "I see it" button.
+    - **Its place** is kept in this device's storage (`features/tour/store.ts`), so it survives
+      moving between screens and F5. Where a step happens elsewhere, the card says so and offers
+      "Take me there" (the tour's own notebook or page).
+    - **When it shows:** as U31: once, when the introduction closes on the desk; later from the
+      desk's avatar menu and the guide. `/tour` now only starts it and goes to the desk.
+    - **Over dialogs:** the card is a popover in the top layer, shown again when a dialog opens,
+      so it stays readable over "New notebook" (its buttons don't work until the dialog closes).
+    - **Motion:** `tour-in`, `tour-ring`, `tour-arrow` in `globals.css`; still under reduced
+      motion. Tested in `e2e/tour.spec.ts` (browser, Windows app, first run), with screenshots
+      in `design/u/screenshots/tour/`.

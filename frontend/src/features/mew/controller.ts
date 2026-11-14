@@ -57,6 +57,8 @@ export type MewHooks = {
   skip?(trigger: MewTrigger): boolean;
 };
 
+/** After a hold is asked, the words still being transcribed at the release arrive within this. */
+const HELD_TAIL_MS = 5_000;
 /** An erase within this window counts as "just erased". */
 const JUST_ERASED_MS = 10_000;
 const RECENT_LINE_MS = 60_000;
@@ -71,6 +73,15 @@ export class MewController {
   private unsubscribe: (() => void) | null = null;
   private lastStrokeAt: number | null = null;
   private lastEraseAt: number | null = null;
+  /**
+   * Ctrl+Alt is held (K6 §6.3): the id of the last thing said before it (-1 if nothing was).
+   * Words said since wait for the release, however long the student pauses between them.
+   */
+  private heldAfter: number | null = null;
+  /** The hold being asked right now: its words aren't also the turn's earlier transcript. */
+  private askingAfter: number | null = null;
+  /** A hold was asked mid-word: those words, once transcribed, aren't a second question. */
+  private tailUntil: number | null = null;
 
   constructor(
     private readonly gate: MewGate,
@@ -88,7 +99,53 @@ export class MewController {
   }
 
   utterance(text: string): void {
+    // Said while holding: it's asked when the student lets go, not at each pause.
+    if (this.heldAfter !== null) return;
+    const tail = this.tailUntil;
+    this.tailUntil = null;
+    // The end of a question the release already asked.
+    if (tail !== null && this.clock.now() < tail) return;
     this.triggers.utterance(text);
+  }
+
+  /** Ctrl+Alt went down: what's said from now on is one question, asked on release. */
+  holdStarted(): void {
+    this.heldAfter = useVoice.getState().segments.at(-1)?.id ?? -1;
+  }
+
+  /** The hold was cancelled (another key, the window lost focus): nothing said in it is asked. */
+  holdCancelled(): void {
+    this.heldAfter = null;
+  }
+
+  /** Everything said during the hold so far, in order. */
+  heldWords(): string {
+    if (this.heldAfter === null) return "";
+    const { partial, segments } = useVoice.getState();
+    const after = this.heldAfter;
+    return [...segments.filter((s) => s.id > after).map((s) => s.text), partial]
+      .map((text) => text.trim())
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  /**
+   * Ctrl+Alt came up. Words said during the hold are asked once, as a summon, and this returns
+   * true; with none, nothing is asked and the caller decides what the hold meant.
+   */
+  holdReleased(): boolean {
+    const words = this.heldWords();
+    const after = this.heldAfter;
+    this.heldAfter = null;
+    if (!words || after === null) return false;
+    if (useVoice.getState().partial.trim()) this.tailUntil = this.clock.now() + HELD_TAIL_MS;
+    this.askingAfter = after;
+    try {
+      this.triggers.summon(words);
+    } finally {
+      this.askingAfter = null;
+    }
+    return true;
   }
 
   speech(): void {
@@ -213,7 +270,9 @@ export class MewController {
   }
 
   private buildInput(trigger: Evaluation["trigger"], utterance: string): MewInput {
-    const segments = useVoice.getState().segments;
+    const all = useVoice.getState().segments;
+    const asking = this.askingAfter;
+    const segments = asking === null ? all : all.filter((s) => s.id <= asking);
     // The utterance being evaluated is normally the latest segment; context is what came before.
     const previous = segments.at(-1)?.text === utterance ? segments.slice(0, -1) : segments;
     return {

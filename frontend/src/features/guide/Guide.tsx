@@ -19,7 +19,7 @@ export function Guide() {
         <>
           What you can do, and where to click for each. Two minutes to read. Prefer to try it?{" "}
           <Link href="/tour" className="font-medium text-ink underline underline-offset-2">
-            Take the interactive tour
+            Let neb show you round
           </Link>
           .
         </>

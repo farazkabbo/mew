@@ -6,8 +6,8 @@ import { HoldGestureTracker } from "./hold";
 
 type HoldHandlers = {
   start(): void;
-  /** Let go: `heldAt` is when the hold started (words since then were said during it). */
-  release(heldAt: number): void;
+  /** Let go: what was said and circled during the hold is asked. */
+  release(): void;
   /** Another key came in, or the page lost the keyboard: nothing is asked. */
   cancel?(): void;
 };
@@ -24,12 +24,9 @@ export function useHoldToTalk(handlers: HoldHandlers): void {
   });
 
   useEffect(() => {
-    let heldAt = 0;
     const tracker = new HoldGestureTracker((signal) => {
-      if (signal === "started") {
-        heldAt = Date.now();
-        ref.current.start();
-      } else if (signal === "ended") ref.current.release(heldAt);
+      if (signal === "started") ref.current.start();
+      else if (signal === "ended") ref.current.release();
       else ref.current.cancel?.();
     });
     const onKey = (event: KeyboardEvent) => tracker.key(event);

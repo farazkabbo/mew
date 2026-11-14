@@ -175,6 +175,7 @@ export function AddTile({
   onClick,
   tall = false,
   ariaKeys,
+  tour,
 }: {
   icon: LucideIcon;
   label: string;
@@ -183,12 +184,15 @@ export function AddTile({
   /** A chapter-card-sized tile, not a page-sized one. */
   tall?: boolean;
   ariaKeys?: string | undefined;
+  /** The guided tour's name for this control (decision U32). */
+  tour?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={keys}
+      data-tour={tour}
       data-keytip={keys}
       aria-keyshortcuts={ariaKeys}
       className={`flex w-full flex-col items-center justify-center gap-2 border-[1.5px] border-dashed border-line bg-transparent font-medium text-ink transition-colors duration-[120ms] hover:border-ink/40 ${tall ? "min-h-[168px] rounded-xl text-[15px]" : "h-[124px] rounded-md text-sm"}`}
