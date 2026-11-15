@@ -10,6 +10,7 @@ pub mod http;
 pub mod indicator;
 pub mod input;
 pub mod media_session;
+pub mod mouse;
 pub mod ocr;
 pub mod pen_input;
 pub mod system;

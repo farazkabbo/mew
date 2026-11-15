@@ -140,7 +140,9 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
     let status = app
         .try_state::<ScreenCoach>()
         .map_or(Status::Idle, |coach| coach.view().status);
-    let answering = circle::with_session(app, |s| s.stage == Stage::Answering).unwrap_or(false);
+    let answering = circle::with_session(app, |s| s.stage == Stage::Answering).unwrap_or(false)
+        || super::screen_write::writing()
+        || super::screen_hand::active();
     let view = IslandView {
         tool,
         shape,

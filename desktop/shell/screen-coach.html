@@ -92,7 +92,8 @@
             a conclusion” and Neb types its suggestion into the document in front of you, at your
             cursor (over the text you selected). It stops if you switch windows or press
             <kbd>Esc</kbd>, and <kbd>Ctrl+Z</kbd> undoes it. It never types into terminals or
-            password fields, and never clicks anything.
+            password fields, and never clicks anything unless you turn on “Let Neb click for me”
+            under Privacy.
           </li>
           <li>
             <strong>You choose how much Neb gives away</strong> in the bar: Quiet, Hint, Coach, or
@@ -303,6 +304,20 @@
               Viewers will see Neb's bar, ink, cards and pointer, and anything written in them. The
               violet frame stays visible only to you, and Neb's own pictures still leave all of this
               out.
+            </span>
+          </span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="let-neb-click" />
+          <span>
+            Let Neb click for me
+            <span class="hint">
+              When you ask (“open the Insert tab”, “click that for me”, “scroll down”), Neb's own
+              violet cursor goes and does it, one step at a time, looking at your screen after each
+              step. Your own mouse stays yours the whole time; press <kbd>Esc</kbd> and Neb stops at
+              once. It never presses anything that buys, sends, deletes, signs in or installs: those
+              it leaves to you. It doesn't click or type in terminals, password fields or Windows
+              settings.
             </span>
           </span>
         </label>

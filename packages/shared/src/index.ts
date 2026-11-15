@@ -46,6 +46,7 @@ export * from "./quiz";
 export * from "./reconcile";
 export * from "./saved-solution";
 export * from "./screen";
+export * from "./screen-act";
 export * from "./screen-intent";
 export * from "./screen-watch";
 export * from "./screen-write";

@@ -1,8 +1,9 @@
-//! Typing into a document ("type a conclusion", "rewrite this sentence", "fix the grammar"):
-//! the words and the screen go to the server, which writes the text; Neb says what it's typing
-//! and types it into the app in front, at the student's cursor. Text they selected is replaced,
-//! the way typing over a selection always does. Nothing is drawn: it's their document that
-//! changes, and Ctrl+Z takes it back.
+//! Typing into a document ("write an essay on cats", "rewrite this sentence", "fix the
+//! grammar"): the words and the screen go to the server, which writes the text and streams it
+//! back as it's written; Neb says what it's typing and types it into the app in front, at the
+//! student's cursor, a key at a time as the text arrives (`win::typing`). Text they selected is
+//! replaced, the way typing over a selection always does. Nothing is drawn: it's their document
+//! that changes, and Ctrl+Z takes it back.
 //!
 //! It only ever types where the student asked, and stops rather than guess:
 //! - never into a terminal or a shell (`refused_app`), where a new line would run a command;
@@ -10,8 +11,10 @@
 //! - only into the window that was in front when they asked, and it stops at once if another
 //!   window comes in front, or they press Esc (`win::typing`).
 //!
-//! Pure parts (the body, the reply, which apps it refuses) are at the bottom and tested.
+//! Pure parts (the body, the stream's events, which apps it refuses) are at the bottom and
+//! tested.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -25,15 +28,28 @@ use super::frame::FrameMeta;
 use super::page;
 use super::pipeline::Captured;
 use super::privacy::Focus;
-use super::protocol::{is_uuid, with_image, SPEECH_CHARS};
+use super::protocol::{is_uuid, with_image, within, LineSplitter, SPEECH_CHARS};
 use super::secret::SecretBytes;
 use super::win::input::foreground;
-use super::win::typing::{type_into, Typed};
+use super::win::typing::{Typed, Typist};
 
-/// The longest text typed at once (mirrors packages/shared/src/screen-write.ts).
-pub const TEXT_CHARS: usize = 2000;
+/// The most typed for one request (mirrors packages/shared/src/screen-write.ts).
+pub const TEXT_CHARS: usize = 12_000;
+/// The most text in one piece of the stream.
+pub const PIECE_CHARS: usize = 2000;
 /// How long the focus check may take on the capture worker.
 const FOCUS_WAIT: Duration = Duration::from_secs(2);
+/// How long to wait for the next piece of the stream before giving up.
+const STREAM_WAIT: Duration = Duration::from_secs(45);
+
+/// Neb is writing (from the request until the last key is typed, or it's refused): the island
+/// says "Thinking…", so the student keeps their document in front rather than clicking away.
+static WRITING: AtomicBool = AtomicBool::new(false);
+
+/// Whether Neb is writing something to type.
+pub fn writing() -> bool {
+    WRITING.load(Ordering::SeqCst)
+}
 
 /// "Type …", "rewrite …": the captured screen and what was said.
 pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captured) {
@@ -52,84 +68,173 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
         return;
     }
     let handle = app.clone();
+    WRITING.store(true, Ordering::SeqCst);
+    super::screen_island::refresh(app);
     let spawned = std::thread::Builder::new()
         .name("mew-screen-write".into())
         .spawn(move || {
             write(&handle, &transcript, captured, window);
+            WRITING.store(false, Ordering::SeqCst);
             coach::settle(&handle);
         });
     if spawned.is_err() {
+        WRITING.store(false, Ordering::SeqCst);
+        super::screen_island::refresh(app);
         coach::notify(app, "Couldn't type that just now.");
     }
+}
+
+/// What the network thread passes to the typing one.
+enum Incoming {
+    Event(WriteEvent),
+    /// The request is over: how it ended.
+    End(Result<(), CallError>),
 }
 
 fn write<R: Runtime>(app: &AppHandle<R>, transcript: &str, captured: Captured, window: isize) {
     let Captured { jpeg, meta, .. } = captured;
     let body = write_body(transcript, &meta, jpeg.as_slice());
     drop(jpeg); // only the request body holds the image now
-    let reply = device_call::post(app, "api/screen/write", "write", body.as_slice());
-    drop(body);
-    let reply = match reply {
-        Ok(bytes) => match parse_write_reply(&bytes) {
-            Some(reply) => reply,
-            None => {
-                coach::notify(
-                    app,
-                    "I couldn't write that just now. Try again in a moment.",
-                );
+
+    // The text is read off the network as fast as it comes, and typed at a human's pace here.
+    let (sender, receiver) = mpsc::channel();
+    let handle = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("mew-screen-write-stream".into())
+        .spawn(move || {
+            let mut lines = LineSplitter::default();
+            let events = sender.clone();
+            let result = device_call::post_stream(
+                &handle,
+                "api/screen/write",
+                "write",
+                body.as_slice(),
+                |chunk| {
+                    for line in lines.push(chunk) {
+                        if let Some(event) = parse_write_event(&line) {
+                            let _ = events.send(Incoming::Event(event));
+                        }
+                    }
+                },
+            );
+            drop(body);
+            let _ = sender.send(Incoming::End(result));
+        });
+    if spawned.is_err() {
+        coach::notify(app, "Couldn't type that just now.");
+        return;
+    }
+
+    let mut typist: Option<Typist> = None;
+    let mut typed = 0usize;
+    loop {
+        let event = match receiver.recv_timeout(STREAM_WAIT) {
+            Ok(Incoming::Event(event)) => event,
+            Ok(Incoming::End(Ok(()))) => {
+                // The stream ended without saying it was done.
+                coach::notify(app, &stopped_short(typed));
                 return;
             }
-        },
-        Err(CallError::Account(message)) | Err(CallError::Limited(message)) => {
-            coach::notify(app, &message);
-            return;
+            Ok(Incoming::End(Err(error))) => {
+                coach::notify(app, &call_failed(error));
+                return;
+            }
+            Err(_) => {
+                coach::notify(app, &stopped_short(typed));
+                return;
+            }
+        };
+        match event {
+            WriteEvent::Start { speech, .. } => {
+                page::dispatch(app, page::SAY, json!({ "text": speech }));
+            }
+            WriteEvent::Text { text } => {
+                if typed + text.chars().count() > TEXT_CHARS {
+                    coach::notify(app, "That's as much as I type at once. Ask me to continue.");
+                    return;
+                }
+                if typist.is_none() {
+                    match ready_to_type(app, window) {
+                        Ok(ready) => typist = Some(ready),
+                        Err(why) => {
+                            coach::notify(app, why);
+                            return;
+                        }
+                    }
+                }
+                let Some(typist) = typist.as_mut() else {
+                    return;
+                };
+                match typist.type_text(&text) {
+                    Typed::All => typed += text.chars().count(),
+                    stopped => {
+                        coach::notify(app, why_stopped(stopped));
+                        return;
+                    }
+                }
+            }
+            WriteEvent::Done => {
+                if typed > 0 {
+                    coach::notify(app, "Typed. Press Ctrl+Z to undo it.");
+                }
+                return; // with nothing typed, it said why
+            }
+            WriteEvent::Error { message } => {
+                coach::notify(app, &message);
+                return;
+            }
         }
-        Err(CallError::Busy) => {
-            coach::notify(
-                app,
-                "You've asked me to type a lot just now. Try again in a little while.",
-            );
-            return;
-        }
-        Err(CallError::Failed) => {
-            coach::notify(
-                app,
-                "I couldn't reach Neb. Check your connection and try again.",
-            );
-            return;
-        }
-    };
-    page::dispatch(app, page::SAY, json!({ "text": reply.speech }));
-    if reply.text.is_empty() {
-        return; // it said why
     }
+}
+
+/// The checks just before the first key: the same window still in front, and the cursor
+/// somewhere ordinary.
+fn ready_to_type<R: Runtime>(app: &AppHandle<R>, window: isize) -> Result<Typist, &'static str> {
     if foreground() != window {
-        coach::notify(app, "I didn't type it: another window is in front. Click back into your document and ask again.");
-        return;
+        return Err("I didn't type it: another window is in front. Click back into your document and ask again.");
     }
     if focus_now(app) != Focus::Ordinary {
-        coach::notify(
-            app,
+        return Err(
             "I didn't type it: the cursor is in a password field or somewhere I can't check.",
         );
-        return;
     }
-    match type_into(window, &reply.text) {
-        Typed::All => coach::notify(app, "Typed. Press Ctrl+Z to undo it."),
-        Typed::WindowChanged => {
-            coach::notify(app, "I stopped typing: another window came in front.")
+    Typist::start(window).map_err(why_stopped)
+}
+
+fn why_stopped(typed: Typed) -> &'static str {
+    match typed {
+        Typed::All => "Typed. Press Ctrl+Z to undo it.",
+        Typed::WindowChanged => "I stopped typing: another window came in front.",
+        Typed::Cancelled => "Stopped. Press Ctrl+Z to undo what I typed.",
+        Typed::KeysHeld => "Let go of Ctrl, Alt and Shift, then ask me again.",
+        Typed::Refused => {
+            "Windows didn't let me type there (the app may be running as administrator)."
         }
-        Typed::Cancelled => coach::notify(app, "Stopped. Press Ctrl+Z to undo what I typed."),
-        Typed::KeysHeld => coach::notify(app, "Let go of Ctrl, Alt and Shift, then ask me again."),
-        Typed::Refused => coach::notify(
-            app,
-            "Windows didn't let me type there (the app may be running as administrator).",
-        ),
+    }
+}
+
+fn stopped_short(typed: usize) -> String {
+    if typed > 0 {
+        "I lost the connection part way, so I stopped there. Ask me to continue.".to_owned()
+    } else {
+        "I couldn't write that just now. Try again in a moment.".to_owned()
+    }
+}
+
+fn call_failed(error: CallError) -> String {
+    match error {
+        CallError::Account(message) | CallError::Limited(message) => message,
+        CallError::Busy => {
+            "You've asked me to type a lot just now. Try again in a little while.".to_owned()
+        }
+        CallError::Failed => {
+            "I couldn't reach Neb. Check your connection and try again.".to_owned()
+        }
     }
 }
 
 /// What has the keyboard focus now, asked on the capture worker (which owns UI Automation).
-fn focus_now<R: Runtime>(app: &AppHandle<R>) -> Focus {
+pub(super) fn focus_now<R: Runtime>(app: &AppHandle<R>) -> Focus {
     let (sender, receiver) = mpsc::channel();
     let queued = coach::on_worker(app, move |tools| {
         let _ = sender.send(tools.focus());
@@ -180,7 +285,7 @@ pub fn refused_app(app: Option<&str>) -> Option<&'static str> {
     }
 }
 
-/// `POST /api/screen/write`: what was said, the app, and the screen.
+/// The body of `POST /api/screen/write` (packages/shared/src/screen-write.ts).
 pub fn write_body(transcript: &str, meta: &FrameMeta, jpeg: &[u8]) -> SecretBytes {
     #[derive(Serialize)]
     struct Head<'a> {
@@ -203,29 +308,47 @@ pub enum WriteKind {
     Replace,
 }
 
-/// What `POST /api/screen/write` answers (packages/shared/src/screen-write.ts).
+/// One line of what `POST /api/screen/write` streams (packages/shared/src/screen-write.ts).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WriteReply {
-    pub speech: String,
-    pub kind: WriteKind,
-    pub text: String,
-    pub turn_id: String,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum WriteEvent {
+    /// What to say, before any typing.
+    Start {
+        speech: String,
+        kind: WriteKind,
+        #[serde(rename = "turnId")]
+        turn_id: String,
+    },
+    /// The next piece of the text, in order.
+    Text {
+        text: String,
+    },
+    Done,
+    /// It went wrong (in the server's words): nothing more is typed.
+    Error {
+        message: String,
+    },
 }
 
-/// The reply, checked: speech that can be said, text with no control keys but new lines and
-/// tabs, within the limits. None for anything else.
-pub fn parse_write_reply(bytes: &[u8]) -> Option<WriteReply> {
-    let reply: WriteReply = serde_json::from_slice(bytes).ok()?;
-    let speech_ok = !reply.speech.trim().is_empty()
-        && reply.speech.chars().count() <= SPEECH_CHARS
-        && !reply.speech.chars().any(char::is_control);
-    let text_ok = reply.text.chars().count() <= TEXT_CHARS
-        && reply
-            .text
-            .chars()
-            .all(|c| !c.is_control() || c == '\n' || c == '\t');
-    (speech_ok && text_ok && is_uuid(&reply.turn_id)).then_some(reply)
+/// One event, checked: speech and messages that can be said, text with no control keys but new
+/// lines and tabs, within the limits. None for anything else (the line is ignored).
+pub fn parse_write_event(line: &str) -> Option<WriteEvent> {
+    let event: WriteEvent = serde_json::from_str(line).ok()?;
+    let ok = match &event {
+        WriteEvent::Start {
+            speech, turn_id, ..
+        } => within(speech, SPEECH_CHARS) && is_uuid(turn_id),
+        WriteEvent::Text { text } => {
+            !text.is_empty()
+                && text.chars().count() <= PIECE_CHARS
+                && text
+                    .chars()
+                    .all(|c| !c.is_control() || c == '\n' || c == '\t')
+        }
+        WriteEvent::Done => true,
+        WriteEvent::Error { message } => within(message, SPEECH_CHARS),
+    };
+    ok.then_some(event)
 }
 
 #[cfg(test)]
@@ -244,30 +367,59 @@ mod tests {
     }
 
     #[test]
-    fn takes_text_with_new_lines_only() {
-        let ok = format!(
-            r#"{{"speech":"Here's a shorter one.","kind":"replace","text":"Cells divide.\nThen grow.","turnId":"{TURN}"}}"#
+    fn reads_the_stream_a_line_at_a_time() {
+        let start = serde_json::json!({
+            "type": "start", "speech": "Here's an essay on cats.", "kind": "insert", "turnId": TURN,
+        })
+        .to_string();
+        assert_eq!(
+            parse_write_event(&start),
+            Some(WriteEvent::Start {
+                speech: "Here's an essay on cats.".into(),
+                kind: WriteKind::Insert,
+                turn_id: TURN.into(),
+            })
         );
-        let reply = parse_write_reply(ok.as_bytes()).unwrap();
-        assert_eq!(reply.kind, WriteKind::Replace);
-        assert_eq!(reply.text, "Cells divide.\nThen grow.");
-
-        let escape = format!(
-            r#"{{"speech":"Typing.","kind":"insert","text":"a\u001b[2J","turnId":"{TURN}"}}"#
+        let text = serde_json::json!({ "type": "text", "text": "Cats nap.\n\tThen hunt. " });
+        assert_eq!(
+            parse_write_event(&text.to_string()),
+            Some(WriteEvent::Text {
+                text: "Cats nap.\n\tThen hunt. ".into()
+            })
         );
-        assert_eq!(parse_write_reply(escape.as_bytes()), None);
-        let long = format!(
-            r#"{{"speech":"Typing.","kind":"insert","text":"{}","turnId":"{TURN}"}}"#,
-            "x".repeat(TEXT_CHARS + 1)
+        assert_eq!(
+            parse_write_event(r#"{"type":"done"}"#),
+            Some(WriteEvent::Done)
         );
-        assert_eq!(parse_write_reply(long.as_bytes()), None);
+        assert_eq!(
+            parse_write_event(r#"{"type":"error","message":"I can't type that one."}"#),
+            Some(WriteEvent::Error {
+                message: "I can't type that one.".into()
+            })
+        );
     }
 
     #[test]
-    fn an_empty_text_is_a_polite_no() {
-        let no = format!(
-            r#"{{"speech":"That's a terminal, so I won't type there.","kind":"insert","text":"","turnId":"{TURN}"}}"#
-        );
-        assert_eq!(parse_write_reply(no.as_bytes()).unwrap().text, "");
+    fn takes_text_with_new_lines_only_and_nothing_it_doesnt_know() {
+        let piece = |text: &str| {
+            parse_write_event(&serde_json::json!({ "type": "text", "text": text }).to_string())
+        };
+        // An escape sequence, an empty piece, and one over the limit.
+        assert_eq!(piece("a\u{1b}[2J"), None);
+        assert_eq!(piece(""), None);
+        assert_eq!(piece(&"x".repeat(PIECE_CHARS + 1)), None);
+        assert!(piece(&"x".repeat(PIECE_CHARS)).is_some());
+        // A start without a real id, an unknown kind, an unknown event, and not JSON.
+        let bad_id = serde_json::json!({
+            "type": "start", "speech": "Typing.", "kind": "insert", "turnId": "nope",
+        });
+        assert_eq!(parse_write_event(&bad_id.to_string()), None);
+        let bad_kind = serde_json::json!({
+            "type": "start", "speech": "Typing.", "kind": "paste", "turnId": TURN,
+        });
+        assert_eq!(parse_write_event(&bad_kind.to_string()), None);
+        assert_eq!(parse_write_event(r#"{"type":"click","x":1,"y":2}"#), None);
+        assert_eq!(parse_write_event(r#"{"error":"Too many requests"}"#), None);
+        assert_eq!(parse_write_event("not json"), None);
     }
 }

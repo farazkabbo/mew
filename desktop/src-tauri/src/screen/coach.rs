@@ -132,6 +132,8 @@ enum Origin {
     Question(super::frame::ScreenRect),
     /// Watch: one look at the monitor while it's on (`screen_watch.rs`).
     Watch,
+    /// Neb's hand: a look at the monitor after each action (`screen_hand.rs`).
+    Hand,
 }
 
 /// Work for the capture worker thread, which owns the Windows objects in `Tools`.
@@ -742,6 +744,18 @@ pub fn capture_for_watch<R: Runtime>(app: &AppHandle<R>) -> bool {
     capture(app, Origin::Watch, Some(CaptureScope::Monitor))
 }
 
+/// Captures the monitor for Neb's hand's next look, after an action the student asked for.
+/// True if a capture started.
+pub fn capture_for_hand<R: Runtime>(app: &AppHandle<R>) -> bool {
+    capture(app, Origin::Hand, Some(CaptureScope::Monitor))
+}
+
+/// The student turned on "Let Neb click for me" in the settings.
+pub fn hand_allowed<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<ScreenCoach>()
+        .is_some_and(|coach| coach.lock().config.privacy.let_neb_click)
+}
+
 /// Screen Coach is connected to the student's Neb account.
 pub fn is_connected<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.try_state::<ScreenCoach>()
@@ -956,6 +970,7 @@ fn finish_capture<R: Runtime>(
     let mut for_circle = None;
     let mut for_question = None;
     let mut for_watch = None;
+    let mut for_hand = None;
     match result {
         Ok(captured) => {
             log_capture(&captured.meta, captured.jpeg.len());
@@ -974,6 +989,7 @@ fn finish_capture<R: Runtime>(
                     Origin::Circle => for_circle = Some(captured),
                     Origin::Question(area) => for_question = Some((area, captured)),
                     Origin::Watch => for_watch = Some(captured),
+                    Origin::Hand => for_hand = Some(captured),
                     Origin::Hotkey | Origin::Tray => {
                         let Captured { jpeg, meta, detail } = captured;
                         coach.slot.put(jpeg, meta, Some(detail), Instant::now());
@@ -987,6 +1003,8 @@ fn finish_capture<R: Runtime>(
             eprintln!("[screen] capture refused: {}", error.message());
             if origin == Origin::Watch {
                 super::screen_watch::capture_refused(app, &error.message());
+            } else if origin == Origin::Hand {
+                super::screen_hand::capture_refused(app, Some(&error.message()));
             } else {
                 notify(app, &error.message());
             }
@@ -1010,6 +1028,12 @@ fn finish_capture<R: Runtime>(
         super::screen_watch::on_captured(app, captured);
     } else if origin == Origin::Watch {
         super::screen_watch::look_dropped();
+    }
+    if let Some(captured) = for_hand {
+        super::screen_hand::on_captured(app, captured);
+    } else if origin == Origin::Hand {
+        // Paused meanwhile, or refused (said why already): its cursor goes.
+        super::screen_hand::capture_refused(app, None);
     }
     match (origin, kept) {
         (Origin::Tray, true) => ask::ask_in_background(app, String::new()),
@@ -1172,6 +1196,7 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
         circle::end_session(app);
         // Watch too: a look on its way is dropped with its frame.
         super::screen_watch::stop(app, None);
+        super::screen_hand::stop(app, None);
     } else {
         circle::start_tracker(app);
     }
@@ -1240,6 +1265,7 @@ pub fn screen_coach_set_enabled<R: Runtime>(
         super::screen_quiz::end_quietly(app);
         circle::end_session(app);
         super::screen_watch::stop(app, None);
+        super::screen_hand::stop(app, None);
     }
     refresh(app);
     circle::start_tracker(app);

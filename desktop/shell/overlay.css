@@ -1438,3 +1438,72 @@ body.capsule {
   text-transform: lowercase;
   color: var(--neb-ink);
 }
+
+/* ─── Neb's hand: Neb's own cursor, which clicks for the student (screen_hand.rs) ─────── */
+
+body.hand {
+  background: transparent;
+  overflow: hidden;
+}
+
+.neb-hand {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  overflow: visible;
+}
+
+.neb-hand .arrow {
+  fill: var(--neb);
+  stroke: #fff;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.neb-hand .tag {
+  fill: var(--neb);
+  stroke: #fff;
+  stroke-width: 1.2;
+}
+
+.neb-hand .mark {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.neb-hand .ring {
+  fill: none;
+  stroke: var(--neb);
+  stroke-width: 2;
+  opacity: 0;
+  transform-origin: 4px 4px;
+}
+
+.neb-hand[data-look="thinking"] .tag {
+  animation: blink 1s ease-in-out infinite;
+}
+
+.neb-hand[data-look="click"] .ring {
+  animation: hand-click 380ms ease-out 1;
+}
+
+@keyframes hand-click {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neb-hand[data-look="thinking"] .tag,
+  .neb-hand[data-look="click"] .ring {
+    animation: none;
+  }
+}

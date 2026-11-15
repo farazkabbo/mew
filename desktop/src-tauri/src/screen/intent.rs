@@ -34,6 +34,7 @@ pub fn parse_intent_reply(bytes: &[u8], coaching: bool, has_ink: bool) -> Option
     match reply.intent.as_str() {
         "ask" => Some(Intent::Ask),
         "write" => Some(Intent::Write),
+        "act" => Some(Intent::Act),
         "clip" => Some(Intent::Clip),
         "notes_check" => Some(Intent::NotesCheck { all: false }),
         "notes_check_all" => Some(Intent::NotesCheck { all: true }),
@@ -76,6 +77,9 @@ pub enum Intent {
     /// Type into the document in front ("rewrite this sentence", "type a conclusion", "fix the
     /// grammar"): Neb writes the text and types it at the cursor (`screen_write.rs`).
     Write,
+    /// Do something on the screen with Neb's own cursor ("open the Insert tab", "click that for
+    /// me", "scroll down"): `screen_hand.rs`.
+    Act,
     /// A word for the walkthrough in progress.
     Coach(CoachWord),
     /// Pause Screen Coach ("Neb, pause"; during a walkthrough, "pause" pauses the walkthrough).
@@ -124,6 +128,9 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     }
     if is_write(&words) {
         return Intent::Write;
+    }
+    if is_act(&words) {
+        return Intent::Act;
     }
     // Commands are short; a long sentence is a question even if it mentions saving.
     if words.is_empty() || words.len() > 9 {
@@ -533,6 +540,46 @@ fn is_write(words: &[String]) -> bool {
     false
 }
 
+/// Doing something on the screen for them: a request that starts by telling Neb to click,
+/// press or scroll ("click the Insert tab", "press the next button", "scroll down a bit"), or
+/// to do the thing for them ("do it for me", "click that for me"). Anything put another way is
+/// read by the model (`ask.rs`). "Where do I click?" stays a question.
+fn is_act(words: &[String]) -> bool {
+    if words.len() > MAX_GOAL_WORDS {
+        return false;
+    }
+    let text = after_lead_in(words);
+    let text = text.as_str();
+    if matches!(
+        text,
+        "do it for me"
+            | "do that for me"
+            | "do this for me"
+            | "do it"
+            | "click it"
+            | "click that"
+            | "click it for me"
+            | "click that for me"
+            | "scroll down"
+            | "scroll up"
+    ) {
+        return true;
+    }
+    [
+        "click on ",
+        "click the ",
+        "press the ",
+        "scroll down ",
+        "scroll up ",
+        "scroll to ",
+    ]
+    .iter()
+    .any(|start| {
+        text.strip_prefix(start)
+            .is_some_and(|rest| !rest.is_empty())
+    })
+}
+
 /// "Continue where we left off", "resume", "keep going".
 fn is_resume(words: &[String]) -> bool {
     matches!(
@@ -927,6 +974,35 @@ mod tests {
         for said in ["done", "I'm stuck", "yes", "stop"] {
             assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
         }
+    }
+
+    #[test]
+    fn asks_neb_to_do_it_with_its_own_cursor() {
+        for said in [
+            "Click the Insert tab.",
+            "hey neb, click on File",
+            "press the next button",
+            "scroll down",
+            "Scroll down to the references",
+            "do it for me",
+            "can you click that for me",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::Act, "{said}");
+        }
+        // Asking where or how is still a question.
+        for said in [
+            "where do I click?",
+            "which button do I press",
+            "how do I scroll to the end?",
+            "what does clicking this do",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
+        }
+        let act = serde_json::json!({ "intent": "act" }).to_string();
+        assert_eq!(
+            parse_intent_reply(act.as_bytes(), false, false),
+            Some(Intent::Act)
+        );
     }
 
     #[test]

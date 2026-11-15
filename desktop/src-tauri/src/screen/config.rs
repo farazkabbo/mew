@@ -107,6 +107,9 @@ pub struct Privacy {
     /// Let screen shares and recordings see Neb's overlays (off by default: they stay out). Neb's
     /// own pictures leave them out either way (`overlay::hide_for_own_capture`).
     pub show_in_captures: bool,
+    /// Neb's hand: Neb may click, scroll and press keys for the student when they ask it to
+    /// (off by default; `screen_hand.rs`).
+    pub let_neb_click: bool,
 }
 
 impl Default for Privacy {
@@ -117,6 +120,7 @@ impl Default for Privacy {
             ask_scope: CaptureScope::default(),
             pause_during_calls: true,
             show_in_captures: false,
+            let_neb_click: false,
         }
     }
 }
