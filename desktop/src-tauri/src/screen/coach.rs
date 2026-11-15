@@ -409,7 +409,10 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 /// Onboarding's "Try it" step (NEB_APP_UI §5.10, U9), from the web app's own window only: whether
 /// Screen Coach is on (yes or no, nothing else), and, when asked, the local settings page opened
 /// so the student can turn it on there. It changes no setting itself (decision 1).
-#[tauri::command]
+///
+/// `async`: it may create the settings window, and on Windows a window created from a command
+/// on the main thread comes up blank and dead (WebView2 waits on the thread that's creating it).
+#[tauri::command(async)]
 pub fn screen_coach_onboarding<R: Runtime>(
     window: WebviewWindow<R>,
     open_settings: bool,
@@ -473,7 +476,8 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
                 crate::summon(app);
             }
             HoldEvent::Ended | HoldEvent::Cancelled => super::status::hide_keys(app),
-            HoldEvent::DoubleTap => {}
+            // The island can't come out: say why, rather than nothing happening.
+            HoldEvent::DoubleTap => island_unavailable(app),
         }
         return;
     }
@@ -487,6 +491,33 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
         } else {
             screen_island::toggle(app);
         }
+    }
+}
+
+/// A double tap with Screen Coach off or paused: the island needs it, so the student is told,
+/// and when it's off (never turned on, or its explanation changed since) its settings open.
+fn island_unavailable<R: Runtime>(app: &AppHandle<R>) {
+    let Some(coach) = app.try_state::<ScreenCoach>() else {
+        return;
+    };
+    if coach.support.is_err() {
+        return; // the settings page says why this PC can't run it
+    }
+    let (on, paused) = {
+        let state = coach.lock();
+        (state.config.is_on(), state.config.paused)
+    };
+    if on && paused {
+        notify(
+            app,
+            "Screen Coach is paused. Resume it from the tray icon to use the island.",
+        );
+    } else if !on {
+        notify(
+            app,
+            "The island needs Screen Coach on. Turn it on in the settings that just opened.",
+        );
+        open_settings(app);
     }
 }
 
