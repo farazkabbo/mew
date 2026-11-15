@@ -2,7 +2,9 @@
 
 Context for a new working session. Read this, then [BUILD_BRIEF.md](BUILD_BRIEF.md) (the
 product brief), then the root [README.md](../README.md) and [backend/README.md](../backend/README.md).
-Last updated 2026-10-28, after K10 (handwriting) and the U series spec (the UI overhaul).
+Last updated 2026-11-15, after desktop 0.1.4 (what's said is read by a model, and holding
+Ctrl+Alt asks while Watch is on). Desktop releases and their history:
+[DESKTOP_RELEASE.md](DESKTOP_RELEASE.md).
 
 ## 1. Working agreement (from the project owner)
 
@@ -553,6 +555,38 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   design/u/notebook-home, with a `--sunk` token (`feat/ui-u11-notebook-home`). NEB_APP_UI.md
   decisions U27 and U28.
 - **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
+- **Desktop 0.1.2–0.1.4** (2026-11-14 and 15; the meeting of 2026-11-14 and the owner's requests;
+  SCREEN_COACH.md decisions 15 and 16; [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md) has each release):
+  - **0.1.2** (`feat/meetingFixes`): the island's help levels (Quiet, Hint, Coach, Answer), Watch
+    (`screen_watch.rs`, `/api/screen/watch`) and typing into documents (`screen_write.rs`,
+    `win/typing.rs`, `/api/screen/write`). Consent version 5.
+  - **0.1.3** (`fix/coach-settings-window`): the Screen Coach settings window opened from the tour
+    came up blank (it was made on the main thread; `screen_coach_onboarding` is `async` now), and
+    a double tap with Screen Coach off says so and opens its settings.
+  - **0.1.4** (`fix/typing-requests`, decision 16):
+    - **What's said is read by a model.** The words, never the screen, go to
+      `POST /api/screen/intent` (`server/screen-intent.ts`, prompt `screen-intent.v1` in
+      `packages/shared/src/screen-intent.ts`), which answers one intent from a fixed list; the
+      desktop checks it (`intent.rs` `parse_intent_reply`) and acts (`ask.rs` `resolve_intent`).
+      The old fixed rules are the fallback when the server can't answer within 3 s or answers
+      something that doesn't fit, and alone decide "Neb, pause" (never sent) and the words of a
+      quiz or Circle & Ask in progress.
+    - **Typing writes what was asked** (`screen-write.v2`): the whole piece, to the length asked
+      for, fitted to the document on screen ("write a 100 word essay on cats"); a change to
+      existing text needs a selection. It types into any app that takes keyboard input except
+      terminals, system windows, password fields and apps running as administrator.
+    - **Hold Ctrl+Alt while Watch is on** (`coach.rs` `on_hold`, `HELD_MIC`): the microphone is on
+      while the keys are held, and letting go asks about the screen as it is, with nothing to
+      select. Another key pressed meanwhile cancels it. With Watch off it does nothing, as before.
+  - **The tour** (web only, `fix/tour-clear-of-dialogs`): its card moves beside an open dialog
+    instead of over it, and rings nothing behind one.
+  - **A two-page quick guide** for students: [guide/neb-quick-guide.pdf](guide/neb-quick-guide.pdf),
+    printed from its HTML beside it with Edge (`msedge --headless=new --no-pdf-header-footer
+--print-to-pdf=…`). Reprint it when a feature it describes changes.
+  - **To verify by hand (Windows):** "rewrite", "hey write a conclusion" and "write a 100 word
+    essay on cats" in Word and Notepad; "is this right?" held over a solved equation in OneNote
+    with Watch on; the same with the network off (the fixed rules decide, so "write a 100 word
+    essay" is still typed, and "is this right?" is still a question).
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in
 [SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1–N5 built** (2026-10-23). The
@@ -951,7 +985,11 @@ Added in M10:
   `notify_checks`, `notify_skills`, `screen_coach_ask`, `screen_coach_spoken`,
   `screen_coach_link_finish` and (U9) `screen_coach_onboarding`, which answers only whether
   Screen Coach is on and can open its local settings page. None changes a Screen Coach setting
-  (decision 1). Add any new native feature in Rust, triggered by the shell, before considering
+  (decision 1).
+- Screen Coach's device routes (`/api/screen/*`, device token) send the screen only where it's
+  needed to answer. `/api/screen/intent` takes words only, never an image; its answer is one word
+  from a fixed list, checked again in Rust (`parse_intent_reply`) before anything happens, and
+  "Neb, pause" is decided on the computer so pausing never sends anything. Add any new native feature in Rust, triggered by the shell, before considering
   another permission.
 - Students' words leave the notebook for training only with opt-in; datasets (`ml/data`) are
   gitignored and must be handled like the database.
