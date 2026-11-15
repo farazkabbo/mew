@@ -160,6 +160,9 @@ export const RATE_RULES = {
   /** Typing into a document ("rewrite this sentence"): a model call with a screenshot. */
   screenWrite: { limit: 6, windowMs: MINUTE },
   screenWriteDaily: { limit: 100, windowMs: DAY },
+  /** Reading what the student meant by what they said (words only, a small fast call). */
+  screenIntent: { limit: 30, windowMs: MINUTE },
+  screenIntentDaily: { limit: 1500, windowMs: DAY },
   /** Reading a handwritten question the student selected on screen (one small image). */
   readQuestion: { limit: 10, windowMs: MINUTE },
   readQuestionDaily: { limit: 100, windowMs: DAY },

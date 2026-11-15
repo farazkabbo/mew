@@ -1,10 +1,57 @@
-//! What the student meant by what they said while holding the keys (decisions 9 and 10): fixed
-//! rules, no model. "Save this", "show that again", "check my notes" (Notes Check) and "Neb,
+//! What the student meant by what they said. A model reads the words first (`ask.rs` asks
+//! `POST /api/screen/intent`; decision 16), so any phrasing works; the fixed rules here are the
+//! fallback when it can't be reached, and they alone decide "Neb, pause" (nothing is sent for
+//! that) and the words of a quiz or Circle & Ask in progress. The rules (decisions 9 and 10): "Save this", "show that again", "check my notes" (Notes Check) and "Neb,
 //! pause" (K2: pausing had a hotkey before) are short commands; "teach me how to…" starts a walkthrough (coach mode, S4) and "continue where we left
 //! off" resumes one; during a walkthrough, "done", "I'm stuck", "yes", "no", "pause" and "stop"
 //! steer it. Anything else is a question for the tutor.
 //!
 //! A command must be the whole utterance, so "how do I save this file?" stays a question.
+
+/// The body of `POST /api/screen/intent` (packages/shared/src/screen-intent.ts): the words and
+/// what Neb is doing, never the screen.
+pub fn intent_body(transcript: &str, coaching: bool, has_ink: bool) -> Vec<u8> {
+    serde_json::json!({
+        "transcript": transcript,
+        "app": null,
+        "coaching": coaching,
+        "hasInk": has_ink,
+    })
+    .to_string()
+    .into_bytes()
+}
+
+/// The server's reading of the words, checked: one of the known intents, and one that fits what
+/// Neb is doing (a walkthrough's replies only during one, "show that again" only with ink).
+/// None for anything else: the fixed rules below decide instead.
+pub fn parse_intent_reply(bytes: &[u8], coaching: bool, has_ink: bool) -> Option<Intent> {
+    #[derive(serde::Deserialize)]
+    struct Reply {
+        intent: String,
+    }
+    let reply: Reply = serde_json::from_slice(bytes).ok()?;
+    let word = |word: CoachWord| coaching.then_some(Intent::Coach(word));
+    match reply.intent.as_str() {
+        "ask" => Some(Intent::Ask),
+        "write" => Some(Intent::Write),
+        "clip" => Some(Intent::Clip),
+        "notes_check" => Some(Intent::NotesCheck { all: false }),
+        "notes_check_all" => Some(Intent::NotesCheck { all: true }),
+        "coach_start" => Some(Intent::CoachStart),
+        "coach_resume" => Some(Intent::CoachResume),
+        "coach_recheck" => Some(Intent::CoachRecheck),
+        "quiz" => Some(Intent::Quiz),
+        "reannotate" => has_ink.then_some(Intent::Reannotate),
+        "pause" => Some(Intent::Pause),
+        "coach_done" => word(CoachWord::Done),
+        "coach_stuck" => word(CoachWord::Stuck),
+        "coach_yes" => word(CoachWord::Yes),
+        "coach_no" => word(CoachWord::No),
+        "coach_pause" => word(CoachWord::Pause),
+        "coach_stop" => word(CoachWord::Stop),
+        _ => None,
+    }
+}
 
 /// What to do with a held frame and the words said over it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -880,6 +927,36 @@ mod tests {
         for said in ["done", "I'm stuck", "yes", "stop"] {
             assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
         }
+    }
+
+    #[test]
+    fn takes_the_servers_reading_only_when_it_fits() {
+        let read = |intent: &str, coaching, has_ink| {
+            let body = serde_json::json!({ "intent": intent }).to_string();
+            parse_intent_reply(body.as_bytes(), coaching, has_ink)
+        };
+        assert_eq!(read("write", false, false), Some(Intent::Write));
+        assert_eq!(read("ask", false, false), Some(Intent::Ask));
+        assert_eq!(
+            read("notes_check_all", false, false),
+            Some(Intent::NotesCheck { all: true })
+        );
+        // A walkthrough's reply means nothing without one; ink can't be shown again without ink.
+        assert_eq!(read("coach_done", false, false), None);
+        assert_eq!(
+            read("coach_done", true, false),
+            Some(Intent::Coach(CoachWord::Done))
+        );
+        assert_eq!(read("reannotate", false, false), None);
+        assert_eq!(read("reannotate", false, true), Some(Intent::Reannotate));
+        // Anything else is refused, so the fixed rules decide.
+        assert_eq!(read("format_disk", false, false), None);
+        assert_eq!(parse_intent_reply(b"not json", false, false), None);
+        let body: serde_json::Value =
+            serde_json::from_slice(&intent_body("rewrite", true, false)).unwrap();
+        assert_eq!(body["transcript"], "rewrite");
+        assert_eq!(body["coaching"], true);
+        assert_eq!(body["hasInk"], false);
     }
 
     #[test]

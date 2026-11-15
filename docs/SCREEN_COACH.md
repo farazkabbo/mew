@@ -700,3 +700,25 @@ don't ask them again. Where a decision changes the brief above, the decision win
     - **Consent version 5:** the explanation said "never in the background" and "Neb never
       types for you"; both changed, so the settings page explains Watch, typing and the help
       level, and earlier consent no longer turns Screen Coach on until it's read again.
+16. **What was said is read by a model, and holding Ctrl+Alt asks while Watch is on** (decided
+    2026-11-15 by the owner: "the system has to dynamically interpret these statements, we can't
+    hard code anything"; `fix/typing-requests`). This replaces the "fixed rules, no model" part
+    of decisions 9 and 10.
+    - **Intent:** the words (never the screen) go to `POST /api/screen/intent` (prompt
+      `screen-intent.v1`, `packages/shared/src/screen-intent.ts`), which answers one intent from
+      a fixed list: a question, typing into the document, saving, Notes Check, a walkthrough, a
+      quiz, showing ink again, pausing. The desktop checks the answer (`parse_intent_reply`:
+      a walkthrough's replies only during one, ink only when there is some). It needs no
+      allowance; rate limits 30 a minute, 1500 a day.
+    - **The fixed rules stay as the fallback** (`intent.rs`): when the server can't be reached
+      within 3 seconds or answers something that doesn't fit. They alone decide "Neb, pause"
+      (pausing promises nothing is sent, so those words never leave the computer) and the words
+      of a quiz or Circle & Ask in progress.
+    - **Typing writes what was asked** (prompt `screen-write.v2`): the whole piece, to the
+      length asked for, fitted to the document on screen. A change to existing text needs a
+      selection.
+    - **Hold Ctrl+Alt while Watch is on:** the microphone is on while the keys are held, and
+      letting go asks about the screen as it is (one capture, no selecting first), exactly as
+      the island's mic button does. Another key pressed meanwhile cancels it. With Watch off,
+      holding the keys still does nothing while Screen Coach is on, and a hold that starts over
+      Neb's own window still belongs to the notebook page.
