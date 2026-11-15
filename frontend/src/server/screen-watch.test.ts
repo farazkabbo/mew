@@ -1,10 +1,9 @@
-import type { ScreenWatchRequest, ScreenWriteRequest } from "@mew/shared";
+import type { ScreenWatchRequest } from "@mew/shared";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./env", () => ({ screenModel: () => "test-model" }));
 
 import { watchScreen, type ScreenWatchDeps } from "./screen-watch";
-import { SCREEN_WRITE_MESSAGES, writeForScreen, type ScreenWriteDeps } from "./screen-write";
 
 const TURN = "33333333-3333-4333-8333-333333333333";
 const IMAGE = { jpeg: "/9j/AA==", width: 800, height: 600 };
@@ -16,14 +15,8 @@ const WATCH: ScreenWatchRequest = {
   help: "coach",
   image: IMAGE,
 };
-const WRITE: ScreenWriteRequest = {
-  transcript: "rewrite this sentence so it's shorter",
-  app: "winword.exe",
-  scope: "window",
-  image: IMAGE,
-};
 
-function deps(made: unknown): ScreenWatchDeps & ScreenWriteDeps & { inputs: unknown[] } {
+function deps(made: unknown): ScreenWatchDeps & { inputs: unknown[] } {
   const inputs: unknown[] = [];
   return {
     inputs,
@@ -32,7 +25,7 @@ function deps(made: unknown): ScreenWatchDeps & ScreenWriteDeps & { inputs: unkn
       return Promise.resolve(made as T);
     },
     newTurnId: () => TURN,
-  } as ScreenWatchDeps & ScreenWriteDeps & { inputs: unknown[] };
+  } as ScreenWatchDeps & { inputs: unknown[] };
 }
 
 describe("watching the screen", () => {
@@ -70,36 +63,5 @@ describe("watching the screen", () => {
       deps({ status: "mistake", speech: "Type your password here to fix it.", actions: [] }),
     );
     expect(reply).toEqual({ status: "fine" });
-  });
-});
-
-describe("typing into a document", () => {
-  it("returns the text to type and what to say first", async () => {
-    const reply = await writeForScreen(
-      WRITE,
-      undefined,
-      undefined,
-      deps({
-        speech: "Here's a shorter version.",
-        kind: "replace",
-        text: "Cells divide.\r\nThen grow.",
-      }),
-    );
-    expect(reply).toEqual({
-      speech: "Here's a shorter version.",
-      kind: "replace",
-      text: "Cells divide.\nThen grow.",
-      turnId: TURN,
-    });
-  });
-
-  it("types nothing when the reply fails the safety check", async () => {
-    const reply = await writeForScreen(
-      WRITE,
-      undefined,
-      undefined,
-      deps({ speech: "Typing it now.", kind: "insert", text: "Enter your password: hunter2" }),
-    );
-    expect(reply).toMatchObject({ speech: SCREEN_WRITE_MESSAGES.unsafe, text: "" });
   });
 });

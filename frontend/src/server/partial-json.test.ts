@@ -56,3 +56,35 @@ describe("reading the answer while it streams", () => {
     expect(completedStringField(garbage, "speech")).toBeNull();
   });
 });
+
+describe("a string field as far as it has arrived", () => {
+  const FULL = { speech: "Typing it.", kind: "insert", text: 'Cats "purr".\n\tThey nap. 😺 é' };
+  const RAW = JSON.stringify(FULL)
+    .replace("é", String.raw`\u00e9`)
+    .replace("😺", String.raw`\ud83d\ude3a`);
+
+  it("only ever grows, and ends as the whole value", async () => {
+    const { partialStringField } = await import("./partial-json");
+    let seen = "";
+    for (let cut = 0; cut <= RAW.length; cut++) {
+      const got = partialStringField(RAW.slice(0, cut), "text");
+      if (!got) continue;
+      expect(got.value.startsWith(seen)).toBe(true);
+      // Never half a surrogate pair.
+      const last = got.value.charCodeAt(got.value.length - 1);
+      expect(last >= 0xd800 && last <= 0xdbff).toBe(false);
+      seen = got.value;
+    }
+    expect(seen).toBe(FULL.text);
+    expect(partialStringField(RAW, "text")).toEqual({ value: FULL.text, done: true });
+  });
+
+  it("is null until the field starts, and survives rubbish", async () => {
+    const { partialStringField } = await import("./partial-json");
+    expect(partialStringField('{"speech": "hi", "kind": "ins', "text")).toBeNull();
+    expect(partialStringField('{"text": "a\\', "text")).toEqual({ value: "a", done: false });
+    expect(partialStringField('{"text": "a\\u00', "text")).toEqual({ value: "a", done: false });
+    expect(partialStringField('{"text": "a\\uzzzzb', "text")).toEqual({ value: "ab", done: false });
+    expect(partialStringField('{"text": 42}', "text")).toBeNull();
+  });
+});

@@ -69,3 +69,61 @@ export function completedArrayItems(partial: string, field: string): unknown[] {
   }
   return items;
 }
+
+/**
+ * The value of a string field as far as it has arrived in a partially streamed JSON object,
+ * decoded, and whether its closing quote has come. Null until the field starts. Used to type a
+ * passage into the student's document while the model is still writing it.
+ *
+ * An escape or a surrogate pair cut off by the end of the text is held back until it's whole,
+ * so what's returned only ever grows. Assumes, like `completedStringField`, that the first
+ * `"<field>": "` is the field itself.
+ */
+export function partialStringField(
+  partial: string,
+  field: string,
+): { value: string; done: boolean } | null {
+  const key = new RegExp(`"${escapeRegExp(field)}"\\s*:\\s*"`).exec(partial);
+  if (!key) return null;
+  const SIMPLE: Record<string, string> = {
+    '"': '"',
+    "\\": "\\",
+    "/": "/",
+    b: "\b",
+    f: "\f",
+    n: "\n",
+    r: "\r",
+    t: "\t",
+  };
+  let value = "";
+  let i = key.index + key[0].length;
+  while (i < partial.length) {
+    const c = partial[i]!;
+    if (c === '"') return { value, done: true };
+    if (c !== "\\") {
+      value += c;
+      i++;
+      continue;
+    }
+    const next = partial[i + 1];
+    if (next === undefined) break; // the escape isn't whole yet
+    if (next !== "u") {
+      value += SIMPLE[next] ?? next;
+      i += 2;
+      continue;
+    }
+    const hex = partial.slice(i + 2, i + 6);
+    if (hex.length < 4) break;
+    const unit = Number.parseInt(hex, 16);
+    if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+      i += 6; // not a real escape: dropped
+      continue;
+    }
+    value += String.fromCharCode(unit);
+    i += 6;
+  }
+  // Half of a surrogate pair waits for its other half.
+  const last = value.charCodeAt(value.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) value = value.slice(0, -1);
+  return { value, done: false };
+}
