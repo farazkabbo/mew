@@ -242,14 +242,18 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     }
 }
 
-/// What the words mean. The server's model reads them (words only, never the screen), so the
-/// student can say it any way they like; if it can't be reached in time, or answers something
-/// that doesn't fit, the fixed rules (`intent.rs`) decide. "Neb, pause" never leaves the
+/// What the words mean. The fixed rules (`intent.rs`) are tried first, because they cost
+/// nothing; whatever they don't recognise, the server's model reads (words only, never the
+/// screen), so the student can say it any way they like. If the server can't be reached in
+/// time, or answers something that doesn't fit, it's a question. "Neb, pause" never leaves the
 /// computer: pausing promises nothing is sent.
 fn resolve_intent<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Intent {
     let coaching = coach_mode::is_coaching(app);
     let local = intent_of(transcript, coaching);
-    if local == Intent::Pause || transcript.trim().is_empty() {
+    // A phrase the fixed rules already know ("write an essay on cats", "save this") is acted on
+    // at once: only what they can't place (they'd call it a question) is worth the second or so
+    // the model takes to read it.
+    if local != Intent::Ask || transcript.trim().is_empty() {
         return local;
     }
     let has_ink = annotate::turn_state(app) != TurnState::None;
