@@ -26,8 +26,11 @@ the `mew_api` package) but must never show to a student.
 
 ### 1.2 Onboarding
 
-- An introduction in steps, with "Try it" moments.
-- It can be replayed from Settings → Introduction.
+- The introduction is only the 60-second handwriting calibration, and can be skipped. Then neb
+  starts listening.
+- A five-step tour follows on the desk: a notebook, asking (the island in the Windows app),
+  quizzes from course material, Review, and the end.
+- It can be replayed from Settings → Introduction; the tour from the desk's avatar menu.
 
 ### 1.3 Linking the desktop app
 
@@ -223,6 +226,11 @@ A tutor over any Windows app. It's turned on, with consent, from the desktop app
   - Pen and Eraser.
   - Select, with a menu: freehand, rectangle or ellipse.
   - Mic: click, speak, then click again.
+  - **Help level**: Quiet, Hint, Coach or Answer (the full worked answer, with why and how).
+    Every answer on the screen follows it.
+  - **Watch** (the eye): neb checks the screen every few seconds while it's on and speaks up,
+    with ink, when it sees a slip in the student's working. Off with the eye, a pause, or after
+    45 minutes.
   - Clear and Close.
 - **Pen notes**: drawn on the screen only, never sent. They follow the page as it scrolls.
 - **Music (♫)**:
@@ -241,6 +249,13 @@ A tutor over any Windows app. It's turned on, with consent, from the desktop app
 - **When the screen changes**:
   - The ink fades when the content moves.
   - "Show that again" puts it back.
+
+### 5.2.1 Typing into a document
+
+- "Rewrite this sentence", "type a conclusion", "fix the grammar", "suggest a better opening":
+  neb says what it's typing and types it at the cursor, replacing the selection if there is one.
+- Esc or switching windows stops it; Ctrl+Z undoes it.
+- Never into terminals, shells or password fields.
 
 ### 5.3 Circle & Ask
 

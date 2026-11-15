@@ -3,6 +3,8 @@ import {
   CLOSED_HEIGHT,
   type Control,
   EAR,
+  type Help,
+  HELPS,
   notchPath,
   RADIUS,
   type IslandView,
@@ -22,7 +24,8 @@ import { invoke, on } from "./tauri";
 /**
  * The island (`screen_island.rs`): Screen Coach's tools in a black bar at the top of the screen.
  * The pen and eraser are the student's own notes; select (with its shapes) is what Neb looks at;
- * the mic is click, speak, click again. Rust sends the view after every change and this page
+ * the mic is click, speak, click again. The mode switch (Quiet, Hint, Coach, Answer) is how much
+ * Neb gives away, and Watch keeps Neb looking for slips in the student's working. Rust sends the view after every change and this page
  * draws it; a click sends the button back. Its window never takes the focus, so it works with
  * the mouse, pen and touch. While a tool is on, the draw overlay takes the mouse and this page
  * may not see a click, so Rust passes each press on the island (`mew:island-press`); a button
@@ -54,6 +57,7 @@ const caret = document.getElementById("island-caret");
 const menu = document.getElementById("island-menu");
 const mic = document.getElementById("island-mic") as HTMLButtonElement | null;
 const clear = document.getElementById("island-clear") as HTMLButtonElement | null;
+const watch = document.getElementById("island-watch") as HTMLButtonElement | null;
 const close = document.getElementById("island-close");
 const musicButton = document.getElementById("island-music") as HTMLButtonElement | null;
 const musicPanel = document.getElementById("island-music-panel");
@@ -231,6 +235,15 @@ function render(next: IslandView): void {
         : "Microphone: click, speak, click again";
   }
   if (clear) clear.disabled = !next.clearable;
+  for (const button of document.querySelectorAll<HTMLButtonElement>("button[data-help]")) {
+    button.setAttribute("aria-checked", String(button.dataset.help === next.help));
+  }
+  if (watch) {
+    watch.setAttribute("aria-pressed", String(next.watching));
+    watch.dataset.tip = next.watching
+      ? "Watch is on: click to stop"
+      : "Watch: Neb keeps checking your screen and speaks up at a slip";
+  }
   for (const old of menu?.querySelectorAll("button") ?? []) actions.delete(old);
   menu?.replaceChildren(...SHAPES.map((shape) => menuItem(shape, shape === next.shape)));
 }
@@ -268,6 +281,18 @@ onPress(caret as HTMLButtonElement | null, () => {
 onPress(mic, () => {
   setMenu(false);
   send({ type: "mic" });
+});
+for (const button of document.querySelectorAll<HTMLButtonElement>("button[data-help]")) {
+  const help = button.dataset.help as Help;
+  if (!HELPS.includes(help)) continue;
+  onPress(button, () => {
+    setMenu(false);
+    send({ type: "help", help });
+  });
+}
+onPress(watch, () => {
+  setMenu(false);
+  send({ type: "watch" });
 });
 onPress(clear, () => {
   setMenu(false);

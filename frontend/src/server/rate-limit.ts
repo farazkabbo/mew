@@ -151,6 +151,15 @@ export const RATE_RULES = {
    */
   screenQuiz: { limit: 4, windowMs: MINUTE },
   screenQuizDaily: { limit: 40, windowMs: DAY },
+  /**
+   * Watch (the island's eye button): one look every few seconds while it's on, only when the
+   * screen changed. Each is a fast model call with a screenshot.
+   */
+  screenWatch: { limit: 8, windowMs: MINUTE },
+  screenWatchDaily: { limit: 600, windowMs: DAY },
+  /** Typing into a document ("rewrite this sentence"): a model call with a screenshot. */
+  screenWrite: { limit: 6, windowMs: MINUTE },
+  screenWriteDaily: { limit: 100, windowMs: DAY },
   /** Reading a handwritten question the student selected on screen (one small image). */
   readQuestion: { limit: 10, windowMs: MINUTE },
   readQuestionDaily: { limit: 100, windowMs: DAY },

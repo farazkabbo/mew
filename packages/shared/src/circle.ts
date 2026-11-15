@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { DestinationResolution } from "./destinations";
+import { HelpLevel } from "./help";
 import { CheckQuestion, FilingNote } from "./moments";
 import { FromNotes, NotebookEvent } from "./student-notes";
 import { Subject } from "./tutor";
@@ -144,6 +145,8 @@ export const CircleAskRequest = z.object({
       }),
     )
     .max(CIRCLE_LIMITS.history),
+  /** How much to give away: the island's mode (missing: "hint"). */
+  help: HelpLevel.optional(),
 });
 export type CircleAskRequest = z.infer<typeof CircleAskRequest>;
 

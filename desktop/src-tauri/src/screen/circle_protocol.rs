@@ -107,6 +107,9 @@ pub struct AskHead {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<SourceOut>,
     pub history: Vec<Turn>,
+    /// How much to give away (the island's mode switch; none: the server's default, a hint).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help: Option<super::config::HelpLevel>,
 }
 
 /// A JPEG and its size.
@@ -332,6 +335,7 @@ mod tests {
 
     fn head() -> AskHead {
         AskHead {
+            help: None,
             session_id: SESSION.into(),
             question: Question::None,
             marks: vec![MarkOut {

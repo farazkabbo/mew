@@ -22,7 +22,9 @@ use super::privacy::detect::RedactionRules;
 ///    short quotes from it with the findings.
 /// 4: Circle & Ask (S3.2): the pointer beside the cursor, drawing on the screen, and explanations
 ///    saved to the notebook automatically after a few seconds (with Undo).
-pub const CONSENT_VERSION: u32 = 4;
+/// 5: Watch (a picture every few seconds while it's on, when the screen changed) and typing into
+///    a document when asked: "never in the background" and "never types for you" changed.
+pub const CONSENT_VERSION: u32 = 5;
 
 const FILE_NAME: &str = "screen-coach.json";
 
@@ -36,6 +38,22 @@ pub enum SaveMode {
     /// Only when the student presses Save in the toast.
     Ask,
     Never,
+}
+
+/// How much Neb gives away when it answers on the screen (the island's mode switch; mirrors
+/// packages/shared/src/help.ts). The first three are the notebook's marking levels.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HelpLevel {
+    /// Confirms, or points at where to look: no working.
+    Quiet,
+    /// A hint or the first step.
+    #[default]
+    Hint,
+    /// Guides: a leading question or the next small step.
+    Coach,
+    /// The worked answer, written on the screen, with why and how.
+    Answer,
 }
 
 /// Circle & Ask's settings (S3.2 §2.1, §2.5, §4). Every field has a default.
@@ -138,6 +156,9 @@ pub struct ScreenConfig {
     /// Circle & Ask (S3.2).
     #[serde(default)]
     pub circle: CircleSettings,
+    /// How much Neb gives away (the island's mode switch).
+    #[serde(default)]
+    pub help: HelpLevel,
 }
 
 impl ScreenConfig {
@@ -232,7 +253,7 @@ mod tests {
     fn older_files_load_and_their_hotkeys_become_the_new_gesture() {
         // A file written by S0 (before privacy settings, with the old three-key hotkeys) loads
         // with the defaults; its hotkeys go, and "Shortcuts got simpler" waits to be read.
-        let on = r#"{"enabled":true,"consentVersion":4,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
+        let on = r#"{"enabled":true,"consentVersion":5,"paused":false,"hotkeys":{"talk":"Ctrl+Alt+Space","pause":"Ctrl+Alt+P"}}"#;
         let Loaded::Read(config) = parse(on) else {
             panic!("an S0 file should load");
         };
@@ -248,14 +269,14 @@ mod tests {
         let odd = on.replace("Ctrl+Alt+P", "Alt+Space");
         assert!(matches!(parse(&odd), Loaded::Read(c) if c.is_on() && c.shortcuts_notice));
         // A new file (no hotkeys) has no notice.
-        let fresh = r#"{"enabled":true,"consentVersion":4,"paused":false}"#;
+        let fresh = r#"{"enabled":true,"consentVersion":5,"paused":false}"#;
         assert!(matches!(parse(fresh), Loaded::Read(c) if c.is_on() && !c.shortcuts_notice));
         // Consent given before S3 explained clips, before Notes Check explained sending the
-        // screen's text, or before Circle & Ask explained the pointer and saving, no longer turns
-        // Screen Coach on.
-        for older in ["1", "2", "3"] {
+        // screen's text, before Circle & Ask explained the pointer and saving, or before Watch and
+        // typing were explained, no longer turns Screen Coach on.
+        for older in ["1", "2", "3", "4"] {
             let before = on.replace(
-                r#""consentVersion":4"#,
+                r#""consentVersion":5"#,
                 &format!(r#""consentVersion":{older}"#),
             );
             assert!(
@@ -268,7 +289,7 @@ mod tests {
     #[test]
     fn overlays_stay_out_of_screen_shares_unless_the_student_says_otherwise() {
         // Files written before the setting existed, and damaged ones, keep them hidden.
-        let older = r#"{"enabled":true,"consentVersion":4,"paused":false,"privacy":{"pauseDuringCalls":true}}"#;
+        let older = r#"{"enabled":true,"consentVersion":5,"paused":false,"privacy":{"pauseDuringCalls":true}}"#;
         assert!(matches!(parse(older), Loaded::Read(c) if !c.privacy.show_in_captures));
         assert!(!parse("{").into_config().privacy.show_in_captures);
         let chosen = older.replace(
@@ -282,15 +303,15 @@ mod tests {
     fn a_damaged_or_unexpected_file_turns_everything_off() {
         for bad in [
             // A hand-edited blocked list with a path in it.
-            r#"{"enabled":true,"consentVersion":4,"paused":false,"privacy":{"blockedApps":["C:\x.exe"]}}"#,
+            r#"{"enabled":true,"consentVersion":5,"paused":false,"privacy":{"blockedApps":["C:\x.exe"]}}"#,
             // A privacy setting we don't know.
-            r#"{"enabled":true,"consentVersion":4,"paused":false,"privacy":{"sendEverything":true}}"#,
+            r#"{"enabled":true,"consentVersion":5,"paused":false,"privacy":{"sendEverything":true}}"#,
             "",
             "{",
             "null",
             r#"{"enabled":true}"#,
             // Unknown fields are refused, not ignored.
-            r#"{"enabled":true,"consentVersion":4,"paused":false,"blockedApps":[]}"#,
+            r#"{"enabled":true,"consentVersion":5,"paused":false,"blockedApps":[]}"#,
         ] {
             let loaded = parse(bad);
             assert!(
@@ -298,6 +319,16 @@ mod tests {
                 "{bad:?} → {loaded:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_file_from_before_the_help_level_gives_hints() {
+        let config = parse(r#"{"enabled":true,"consentVersion":5,"paused":false}"#).into_config();
+        assert_eq!(config.help, HelpLevel::Hint);
+        assert_eq!(
+            serde_json::to_value(HelpLevel::Answer).unwrap(),
+            serde_json::json!("answer")
+        );
     }
 
     #[test]
@@ -322,6 +353,7 @@ mod tests {
                 save: SaveMode::Ask,
                 ..CircleSettings::default()
             },
+            help: HelpLevel::Answer,
         };
         save(&path, &config).unwrap();
         assert_eq!(load(&path), Loaded::Read(config));

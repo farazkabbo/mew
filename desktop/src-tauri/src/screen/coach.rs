@@ -130,6 +130,8 @@ enum Origin {
     Circle,
     /// Circle & Ask: the area the student selected around their question.
     Question(super::frame::ScreenRect),
+    /// Watch: one look at the monitor while it's on (`screen_watch.rs`).
+    Watch,
 }
 
 /// Work for the capture worker thread, which owns the Windows objects in `Tools`.
@@ -678,6 +680,35 @@ pub fn capture_for_question<R: Runtime>(app: &AppHandle<R>, area: super::frame::
     capture(app, Origin::Question(area), Some(CaptureScope::Monitor));
 }
 
+/// Captures the monitor under the island (or the cursor) for one look while Watch is on, which
+/// the student turned on themselves. True if a capture started.
+pub fn capture_for_watch<R: Runtime>(app: &AppHandle<R>) -> bool {
+    capture(app, Origin::Watch, Some(CaptureScope::Monitor))
+}
+
+/// Screen Coach is connected to the student's Neb account.
+pub fn is_connected<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<ScreenCoach>()
+        .is_some_and(|coach| coach.lock().connected)
+}
+
+/// How much Neb gives away (the island's mode switch).
+pub fn help_level<R: Runtime>(app: &AppHandle<R>) -> config::HelpLevel {
+    app.try_state::<ScreenCoach>()
+        .map(|coach| coach.lock().config.help)
+        .unwrap_or_default()
+}
+
+/// The island's mode switch: kept in the settings on this computer.
+pub fn set_help_level<R: Runtime>(app: &AppHandle<R>, help: config::HelpLevel) {
+    let Some(coach) = app.try_state::<ScreenCoach>() else {
+        return;
+    };
+    if coach.update(|config| config.help = help).is_err() {
+        notify(app, "Couldn't save Screen Coach settings.");
+    }
+}
+
 /// On, not paused, on a supported PC (the pointer and draw mode run only then).
 pub fn is_usable<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.try_state::<ScreenCoach>()
@@ -801,6 +832,8 @@ pub struct CaptureReach {
     pub listening: bool,
     /// A walkthrough is running: coach mode sees the monitor.
     pub coaching: bool,
+    /// Watch is on: Neb looks at the monitor every few seconds.
+    pub watching: bool,
     /// Screen Coach is on and not paused.
     pub usable: bool,
 }
@@ -808,7 +841,7 @@ pub struct CaptureReach {
 impl CaptureReach {
     /// The frame shows exactly while one of them can capture, and never while neb can't.
     pub fn wants_frame(self) -> bool {
-        self.usable && (self.selecting || self.listening || self.coaching)
+        self.usable && (self.selecting || self.listening || self.coaching || self.watching)
     }
 }
 
@@ -822,6 +855,7 @@ pub fn refresh_frame<R: Runtime>(app: &AppHandle<R>) {
         selecting: circle::tool(app).0 == Tool::Select,
         listening: mic_on(app),
         coaching: coach_mode::is_coaching(app),
+        watching: super::screen_watch::watching(),
         usable: usable(&coach),
     };
     let Ok(mut frame) = coach.frame.lock() else {
@@ -865,6 +899,7 @@ fn finish_capture<R: Runtime>(
     let mut for_coach = None;
     let mut for_circle = None;
     let mut for_question = None;
+    let mut for_watch = None;
     match result {
         Ok(captured) => {
             log_capture(&captured.meta, captured.jpeg.len());
@@ -873,12 +908,16 @@ fn finish_capture<R: Runtime>(
             if coach.lock().config.paused {
                 drop(captured);
             } else {
-                indicator::flash(monitor, dpi);
+                // Watch holds the coach frame the whole time it's on: no flash every few seconds.
+                if origin != Origin::Watch {
+                    indicator::flash(monitor, dpi);
+                }
                 match origin {
                     Origin::Clip(purpose) => for_clip = Some((purpose, captured)),
                     Origin::Coach(kind) => for_coach = Some((kind, captured)),
                     Origin::Circle => for_circle = Some(captured),
                     Origin::Question(area) => for_question = Some((area, captured)),
+                    Origin::Watch => for_watch = Some(captured),
                     Origin::Hotkey | Origin::Tray => {
                         let Captured { jpeg, meta, detail } = captured;
                         coach.slot.put(jpeg, meta, Some(detail), Instant::now());
@@ -890,7 +929,11 @@ fn finish_capture<R: Runtime>(
         }
         Err(error) => {
             eprintln!("[screen] capture refused: {}", error.message());
-            notify(app, &error.message());
+            if origin == Origin::Watch {
+                super::screen_watch::capture_refused(app, &error.message());
+            } else {
+                notify(app, &error.message());
+            }
         }
     }
     // Only now: an ask waiting for this capture reads the flag first, then the slot.
@@ -906,6 +949,11 @@ fn finish_capture<R: Runtime>(
     }
     if let Some((area, captured)) = for_question {
         super::circle_answer::on_question_captured(app, area, captured);
+    }
+    if let Some(captured) = for_watch {
+        super::screen_watch::on_captured(app, captured);
+    } else if origin == Origin::Watch {
+        super::screen_watch::look_dropped();
     }
     match (origin, kept) {
         (Origin::Tray, true) => ask::ask_in_background(app, String::new()),
@@ -1066,6 +1114,8 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
         coach_mode::end_quietly(app);
         super::screen_quiz::end_quietly(app);
         circle::end_session(app);
+        // Watch too: a look on its way is dropped with its frame.
+        super::screen_watch::stop(app, None);
     } else {
         circle::start_tracker(app);
     }
@@ -1133,6 +1183,7 @@ pub fn screen_coach_set_enabled<R: Runtime>(
         coach_mode::end_quietly(app);
         super::screen_quiz::end_quietly(app);
         circle::end_session(app);
+        super::screen_watch::stop(app, None);
     }
     refresh(app);
     circle::start_tracker(app);

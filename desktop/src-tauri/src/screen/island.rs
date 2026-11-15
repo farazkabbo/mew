@@ -3,20 +3,22 @@
 //! From left to right: what Neb is doing (listening, looking, thinking, speaking), the pen and
 //! eraser (the student's own notes on the screen, never sent anywhere), the select tool with its
 //! shapes (freehand, rectangle, ellipse: the area Neb looks at, as Circle & Ask marks), the
-//! microphone (on, speak, off: then Neb answers), music (what's playing and pinned playlists:
-//! `music.rs`), Clear and Close.
+//! microphone (on, speak, off: then Neb answers), Watch (Neb keeps looking and speaks up at a
+//! slip: `screen_watch.rs`), the help level (Quiet, Hint, Coach, Answer: how much Neb gives
+//! away), music (what's playing and pinned playlists: `music.rs`), Clear and Close.
 //!
 //! Pure: what the tools are, where the bar goes, the paths of the select shapes, and the view
 //! the bar's page is sent. The windows and buttons are `screen_island.rs`.
 
 use serde::{Deserialize, Serialize};
 
+use super::config::HelpLevel;
 use super::frame::ScreenRect;
 use super::marks::Pt;
 
 /// The island's bar in CSS pixels, and its height with the shapes menu open below the tools.
 /// Like a Mac's notch it hangs from the top edge of the screen.
-pub const ISLAND_SIZE: (f64, f64) = (520.0, 58.0);
+pub const ISLAND_SIZE: (f64, f64) = (820.0, 58.0);
 pub const ISLAND_MENU_HEIGHT: f64 = 110.0;
 /// The tallest the music panel makes the island (six pins, a notice and the pin button).
 pub const ISLAND_MUSIC_HEIGHT: f64 = 460.0;
@@ -182,6 +184,10 @@ pub struct IslandView {
     pub activity: Activity,
     /// The student has notes on the screen, or marks: Clear has something to clear.
     pub clearable: bool,
+    /// How much Neb gives away (the mode switch).
+    pub help: HelpLevel,
+    /// Watch is on: Neb keeps looking for slips in the student's working.
+    pub watching: bool,
 }
 
 #[cfg(test)]
@@ -239,7 +245,7 @@ mod tests {
             bottom: 1620,
         };
         let spot = island_spot(monitor, 1.5, ISLAND_SIZE.1);
-        assert_eq!(spot.width(), 780);
+        assert_eq!(spot.width(), 1230);
         assert_eq!(spot.height(), 87);
         assert_eq!(spot.top, 0, "it hangs from the top edge");
         assert_eq!(spot.left - monitor.left, monitor.right - spot.right);
@@ -277,12 +283,15 @@ mod tests {
             silent: false,
             activity: Activity::Listening,
             clearable: false,
+            help: HelpLevel::Coach,
+            watching: true,
         };
         assert_eq!(
             serde_json::to_value(&view).unwrap(),
             serde_json::json!({
                 "tool": "select", "shape": "ellipse", "mic": true, "silent": false,
-                "activity": "listening", "clearable": false
+                "activity": "listening", "clearable": false, "help": "coach",
+                "watching": true
             })
         );
     }

@@ -87,6 +87,17 @@ pub struct Tools {
 }
 
 impl Tools {
+    /// What has keyboard focus right now (a password field, or not; `Unknown` if UI Automation
+    /// can't tell).
+    pub fn focus(&mut self) -> Focus {
+        if self.automation.is_none() {
+            self.automation = Automation::new().ok();
+        }
+        self.automation
+            .as_ref()
+            .map_or(Focus::Unknown, Automation::focus)
+    }
+
     /// What Windows' media controls say about `app`'s video, if anything.
     pub fn media_state(&mut self, app: &str) -> Option<MediaState> {
         if self.media.is_none() {

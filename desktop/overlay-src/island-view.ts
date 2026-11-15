@@ -6,6 +6,8 @@
 export type Tool = "none" | "pen" | "eraser" | "select";
 export type Shape = "free" | "rect" | "ellipse";
 export type Activity = "ready" | "listening" | "looking" | "thinking" | "speaking" | "paused";
+/** How much Neb gives away (packages/shared/src/help.ts). */
+export type Help = "quiet" | "hint" | "coach" | "answer";
 
 export type IslandView = {
   tool: Tool;
@@ -14,9 +16,13 @@ export type IslandView = {
   silent: boolean;
   activity: Activity;
   clearable: boolean;
+  help: Help;
+  /** Watch is on: Neb keeps looking for slips. */
+  watching: boolean;
 };
 
 const TOOLS: readonly Tool[] = ["none", "pen", "eraser", "select"];
+export const HELPS: readonly Help[] = ["quiet", "hint", "coach", "answer"];
 const SHAPES: readonly Shape[] = ["free", "rect", "ellipse"];
 const ACTIVITIES: readonly Activity[] = [
   "ready",
@@ -33,12 +39,21 @@ function oneOf<T extends string>(value: unknown, options: readonly T[]): value i
 
 export function parseIslandView(detail: unknown): IslandView | null {
   if (typeof detail !== "object" || detail === null) return null;
-  const { tool, shape, mic, silent, activity, clearable } = detail as Record<string, unknown>;
+  const { tool, shape, mic, silent, activity, clearable, help, watching } = detail as Record<
+    string,
+    unknown
+  >;
   if (!oneOf(tool, TOOLS) || !oneOf(shape, SHAPES) || !oneOf(activity, ACTIVITIES)) return null;
-  if (typeof mic !== "boolean" || typeof silent !== "boolean" || typeof clearable !== "boolean") {
+  if (!oneOf(help, HELPS)) return null;
+  if (
+    typeof mic !== "boolean" ||
+    typeof silent !== "boolean" ||
+    typeof clearable !== "boolean" ||
+    typeof watching !== "boolean"
+  ) {
     return null;
   }
-  return { tool, shape, mic, silent, activity, clearable };
+  return { tool, shape, mic, silent, activity, clearable, help, watching };
 }
 
 /** What's playing (`music.rs`'s `NowPlaying`), as the music panel shows it. */

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { geometryTexts, moleculeTexts } from "./figures";
+import { HelpLevel } from "./help";
 import { FromNotes, NotebookEvent } from "./student-notes";
 import { DrawGeometry, DrawMolecule, DrawShapes } from "./tutor";
 
@@ -240,6 +241,8 @@ export const ScreenAskRequest = z.object({
   videoPlaying: z.boolean().optional(),
   /** Asked in the middle of a walkthrough (S4): the tutor answers in its context. */
   walkthroughId: z.uuid().optional(),
+  /** How much to give away: the island's mode (missing: "hint"). */
+  help: HelpLevel.optional(),
   image: ScreenImage,
 });
 export type ScreenAskRequest = z.infer<typeof ScreenAskRequest>;

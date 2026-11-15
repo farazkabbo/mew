@@ -16,6 +16,7 @@ pub mod system;
 pub mod target;
 #[cfg(test)]
 pub mod test_window;
+pub mod typing;
 pub mod uia;
 pub mod winevent;
 

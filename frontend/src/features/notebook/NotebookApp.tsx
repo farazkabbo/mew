@@ -1582,7 +1582,6 @@ export function NotebookApp({
             }
           }}
           onStartListening={mew.startListening}
-          onHand={setHand}
         />
       )}
     </div>

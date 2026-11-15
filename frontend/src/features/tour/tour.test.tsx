@@ -15,62 +15,30 @@ const localStorage = {
 };
 vi.stubGlobal("window", { localStorage });
 
-describe("the guided tour's steps (decision U32)", () => {
-  it("walks the real app in the order a new student meets it", () => {
-    expect(stepsFor(false).map((s) => s.id)).toEqual([
-      "welcome",
+describe("the guided tour's steps (decisions U32, U34)", () => {
+  it("is five steps: a notebook, asking, quizzes, Review, and the end", () => {
+    expect(stepsFor(false).map((s) => s.id)).toEqual(["notebook", "ask", "quiz", "review", "done"]);
+    expect(stepsFor(true).map((s) => s.id)).toEqual([
       "notebook",
-      "page",
-      "write",
-      "marks",
-      "ask",
-      "to-home",
-      "home",
-      "pdf",
-      "back-home",
-      "study-tab",
-      "reading",
-      "topics",
+      "island",
       "quiz",
-      "answer",
-      "to-desk",
-      "review-open",
       "review",
       "done",
     ]);
   });
 
-  it("adds Screen Coach in the Windows app only, before the end", () => {
-    const extra = stepsFor(true)
-      .map((s) => s.id)
-      .filter((id) => !stepsFor(false).some((s) => s.id === id));
-    expect(extra).toEqual(["coach", "island", "circle", "moments"]);
-    expect(stepsFor(true).at(-1)?.id).toBe("done");
+  it("shows the island in the Windows app, with its modes and Watch", () => {
+    const island = stepsFor(true).find((s) => s.id === "island");
+    expect(island?.body).toMatch(/Quiet, Hint, Coach, or Answer/);
+    expect(island?.body).toMatch(/eye/);
+    // The island needs Screen Coach on: the step waits for it, with its settings a click away.
+    expect(island?.done).toEqual({ by: "next", after: "coach-on" });
   });
 
-  it("warns before every step that spends a question, and lets a PDF be skipped", () => {
-    const noted = TOUR_STEPS.filter((s) => s.note).map((s) => s.id);
-    expect(noted).toEqual(["ask", "pdf", "reading", "island", "circle"]);
-  });
-
-  it("lets the student pace the steps where something has to be watched or heard", () => {
-    const paced = TOUR_STEPS.filter((s) => s.done.by === "next" && s.done.after).map((s) => s.id);
-    expect(paced).toEqual(["write", "ask", "answer", "coach", "circle"]);
-    // Only a finished import moves on by itself.
-    expect(TOUR_STEPS.filter((s) => s.done.by === "signal").map((s) => s.id)).toEqual(["pdf"]);
-  });
-
-  it("goes from the PDF to a quiz before Review, and past them all without a PDF", () => {
-    const ids = stepsFor(false).map((s) => s.id);
-    expect(ids.indexOf("pdf")).toBeLessThan(ids.indexOf("quiz"));
-    expect(ids.indexOf("answer")).toBeLessThan(ids.indexOf("review-open"));
-    const needPdf = ["pdf", "back-home", "study-tab", "reading", "topics", "quiz", "answer"];
-    for (const id of needPdf) {
-      expect(TOUR_STEPS.find((s) => s.id === id)?.skipTo, id).toBe("to-desk");
-    }
-    useTour.setState({ stepId: "pdf" });
-    useTour.getState().skip("pdf", "to-desk");
-    expect(useTour.getState().stepId).toBe("to-desk");
+  it("warns before the step that can spend a question", () => {
+    expect(TOUR_STEPS.filter((s) => s.note?.includes("free ones")).map((s) => s.id)).toEqual([
+      "ask",
+    ]);
   });
 
   it("points at a real control wherever the student has to press one", () => {
@@ -104,26 +72,25 @@ describe("the tour's place in it", () => {
 
   it("moves on only from the step that finished", () => {
     useTour.getState().start();
-    expect(useTour.getState().stepId).toBe("welcome");
-    useTour.getState().advance("welcome", false);
     expect(useTour.getState().stepId).toBe("notebook");
+    useTour.getState().advance("notebook", false);
+    expect(useTour.getState().stepId).toBe("ask");
     // A late signal for an earlier step changes nothing.
-    useTour.getState().advance("welcome", false);
-    expect(useTour.getState().stepId).toBe("notebook");
+    useTour.getState().advance("notebook", false);
+    expect(useTour.getState().stepId).toBe("ask");
     useTour.getState().back(false);
-    expect(useTour.getState().stepId).toBe("welcome");
+    expect(useTour.getState().stepId).toBe("notebook");
   });
 
-  it("skips Screen Coach in the browser and ends after the last step", () => {
+  it("takes the Windows app to the island, and ends after the last step", () => {
+    useTour.setState({ stepId: "notebook" });
+    useTour.getState().advance("notebook", true);
+    expect(useTour.getState().stepId).toBe("island");
     useTour.setState({ stepId: "review" });
     useTour.getState().advance("review", false);
     expect(useTour.getState().stepId).toBe("done");
     useTour.getState().advance("done", false);
     expect(useTour.getState().stepId).toBeNull();
-
-    useTour.setState({ stepId: "review" });
-    useTour.getState().advance("review", true);
-    expect(useTour.getState().stepId).toBe("coach");
   });
 
   it("remembers the notebook and page made on the way, and survives a reload", () => {
@@ -132,7 +99,7 @@ describe("the tour's place in it", () => {
     useTour.getState().visited({ pageId: "p1" });
     expect(useTour.getState()).toMatchObject({ nodeId: "n1", pageId: "p1" });
     expect(JSON.parse(localStorage.getItem("neb.tour") ?? "{}")).toEqual({
-      stepId: "welcome",
+      stepId: "notebook",
       nodeId: "n1",
       pageId: "p1",
     });

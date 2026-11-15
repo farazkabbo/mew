@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { stepsFor } from "./steps";
+import { stepsFor, TOUR_STEPS } from "./steps";
 
 /**
  * The guided tour's place (decision U32). It's kept in this device's storage, because the tour
@@ -59,7 +59,7 @@ export const useTour = create<TourState>((set, get) => {
   };
   return {
     ...read(),
-    start: () => save({ stepId: "welcome", nodeId: null, pageId: null }),
+    start: () => save({ stepId: TOUR_STEPS[0]?.id ?? null, nodeId: null, pageId: null }),
     advance: (fromId, desktop) => {
       if (get().stepId !== fromId) return;
       const steps = stepsFor(desktop);

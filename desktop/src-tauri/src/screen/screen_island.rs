@@ -148,6 +148,8 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         silent: coach::circle_settings(app).silent,
         activity: activity(status, answering),
         clearable: circle::clearable(app),
+        help: coach::help_level(app),
+        watching: super::screen_watch::watching(),
     };
     if let Ok(view) = serde_json::to_value(&view) {
         overlay::dispatch(app, Surface::Island, ISLAND_SHOW, &view);
@@ -182,6 +184,12 @@ pub enum IslandAction {
         open: bool,
     },
     Mic,
+    /// Watch on or off: Neb keeps looking for slips in the student's working.
+    Watch,
+    /// How much Neb gives away (the mode switch).
+    Help {
+        help: super::config::HelpLevel,
+    },
     Clear,
     Close,
     /// The music panel opened (`height`: the island's height with it, measured by the page) or
@@ -234,6 +242,12 @@ pub fn screen_island<R: Runtime>(
             },
         ),
         IslandAction::Mic => coach::toggle_mic(app),
+        IslandAction::Watch => {
+            // Refreshes the island (and the coach frame) itself.
+            super::screen_watch::toggle(app);
+            return Ok(());
+        }
+        IslandAction::Help { help } => coach::set_help_level(app, help),
         IslandAction::Clear => circle::clear_all(app),
         IslandAction::Close => {
             hide(app);
