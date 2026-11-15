@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Neb quick guide</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 10mm 15mm 9mm;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #1e1d1a;
+        font: 9.5pt/1.38 "Segoe UI", system-ui, sans-serif;
+      }
+      h1 {
+        margin: 0;
+        font: 400 26pt/1.1 Georgia, serif;
+      }
+      .lede {
+        margin: 3pt 0 9pt;
+        color: #5f5a50;
+        font-size: 11.5pt;
+      }
+      h2 {
+        margin: 0 0 4pt;
+        font: 400 15pt/1.2 Georgia, serif;
+      }
+      h2 span {
+        display: inline-block;
+        width: 17pt;
+        height: 17pt;
+        margin-right: 6pt;
+        border-radius: 50%;
+        background: #6b4ee6;
+        color: #fff;
+        font: 600 9pt/17pt "Segoe UI", sans-serif;
+        text-align: center;
+        vertical-align: 2pt;
+      }
+      section {
+        margin-bottom: 7pt;
+        padding: 7pt 12pt;
+        border: 1px solid #d3cab7;
+        border-radius: 8pt;
+        background: #fbf8f0;
+        break-inside: avoid;
+      }
+      p {
+        margin: 0 0 4pt;
+      }
+      ol,
+      ul {
+        margin: 2pt 0 0;
+        padding-left: 16pt;
+      }
+      li {
+        margin-bottom: 2pt;
+      }
+      kbd {
+        padding: 0 4pt;
+        border: 1px solid #d3cab7;
+        border-bottom-width: 2px;
+        border-radius: 4pt;
+        background: #fffefb;
+        font: 600 9pt "Segoe UI", sans-serif;
+        white-space: nowrap;
+      }
+      .tag {
+        margin-left: 6pt;
+        padding: 1pt 6pt;
+        border-radius: 8pt;
+        background: #f1edff;
+        color: #3f2ba0;
+        font: 600 8pt "Segoe UI", sans-serif;
+        vertical-align: 2pt;
+      }
+      .tip {
+        color: #5f5a50;
+        font-size: 9.5pt;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      td,
+      th {
+        padding: 2.5pt 6pt 2.5pt 0;
+        border-bottom: 1px solid #d3cab7;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: #5f5a50;
+        font-size: 9pt;
+        font-weight: 600;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      .two {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 11pt;
+      }
+      .two section {
+        margin-bottom: 0;
+      }
+      .page {
+        break-before: page;
+      }
+      footer {
+        margin-top: 10pt;
+        color: #5f5a50;
+        font-size: 9pt;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Neb quick guide</h1>
+    <p class="lede">A quiet tutor that lives in your notebook. Here is how to use each part.</p>
+
+    <section>
+      <h2><span>1</span>Notebooks, chapters and pages</h2>
+      <p>Your desk holds your notebooks. Keep one notebook per class.</p>
+      <ol>
+        <li>On the desk, press <b>New notebook</b>, type your class's name and create it.</li>
+        <li>Inside it, add a <b>chapter</b> for each topic and a <b>page</b> to write on.</li>
+        <li>
+          Write on the page as you would on paper. The notebook's name at the top takes you back to
+          its home; the arrow takes you back to the desk.
+        </li>
+      </ol>
+      <p class="tip">Press <kbd>Ctrl</kbd> <kbd>K</kbd> to jump to any page, or say “open physics chapter 3”.</p>
+    </section>
+
+    <section>
+      <h2><span>2</span>Write, and let Neb check your work</h2>
+      <ol>
+        <li>Open a page and write a line of working.</li>
+        <li>Neb ticks what is right and circles a slip.</li>
+        <li>
+          Press <kbd>Alt</kbd> <kbd>C</kbd> (or say “check this”) to check your work and unfold
+          the margin, where Neb's notes sit beside yours.
+        </li>
+      </ol>
+    </section>
+
+    <section>
+      <h2><span>3</span>Ask a question out loud</h2>
+      <ol>
+        <li>On a page, <b>hold</b> <kbd>Ctrl</kbd> <kbd>Alt</kbd>.</li>
+        <li>Ask your question out loud. You can circle the thing you mean while you hold.</li>
+        <li>Let go. Neb answers out loud and in writing beside your work.</li>
+      </ol>
+      <p class="tip">
+        You start with 8 free questions. A follow-up on the same thing does not use one, and your
+        notebooks keep working at zero.
+      </p>
+    </section>
+
+    <section>
+      <h2><span>4</span>Quizzes from your course</h2>
+      <ol>
+        <li>
+          Open a notebook's home and press <b>Add course material</b>, or press
+          <kbd>Ctrl</kbd> <kbd>O</kbd>, or drop a PDF on the notebook.
+        </li>
+        <li>Choose the pages, keep <b>Use as course material</b> ticked, and press <b>Import</b>.</li>
+        <li>
+          Neb reads it and gives the notebook a <b>Study</b> tab: its topics, short lessons, and
+          <b>Quiz me</b>.
+        </li>
+        <li>In a quiz, answer on the page. Neb marks it and tells you why.</li>
+      </ol>
+      <p class="tip">Turn “Use as course material” off for PDFs that are not for study.</p>
+    </section>
+
+    <section>
+      <h2><span>5</span>Review</h2>
+      <p>
+        Review brings back what you have studied and saved, from every notebook, just before you
+        would forget it. Press <b>Review</b> on your desk. A few minutes a day keeps it.
+      </p>
+    </section>
+
+
+
+    <section>
+      <h2><span>6</span>The island <i class="tag">Windows app</i></h2>
+      <p>
+        The island is the black bar at the top of your screen. It works over any app.
+        <b>Tap <kbd>Ctrl</kbd> <kbd>Alt</kbd> twice, quickly</b>, to show or hide it.
+      </p>
+      <table>
+        <tr>
+          <th style="width: 27%">Button</th>
+          <th>What it does</th>
+        </tr>
+        <tr>
+          <td><b>Select</b></td>
+          <td>
+            Draw round what is confusing (freehand, a rectangle or an ellipse). Neb takes one
+            picture and explains it step by step, drawing beside it.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Mic</b></td>
+          <td>Turn it on, ask your question, turn it off. Neb looks once and answers.</td>
+        </tr>
+        <tr>
+          <td><b>Quiet, Hint, Coach, Answer</b></td>
+          <td>How much Neb gives away. Answer shows the full working, with why each step is done.</td>
+        </tr>
+        <tr>
+          <td><b>Eye (Watch)</b></td>
+          <td>
+            Neb watches while you work and speaks up when something slips. It stops when you press
+            the eye again, pause, or after 45 minutes.
+          </td>
+        </tr>
+        <tr>
+          <td><b>Pen and eraser</b></td>
+          <td>Write on your screen. Neb never looks at what you write with it.</td>
+        </tr>
+        <tr>
+          <td><b>Music</b></td>
+          <td>See and control what is playing.</td>
+        </tr>
+        <tr>
+          <td><b>Bin and ✕</b></td>
+          <td>Clear your marks, or close the island.</td>
+        </tr>
+      </table>
+      <p class="tip" style="margin-top: 5pt">
+        Nothing happens on a double tap? Screen Coach may be off or paused: see below.
+      </p>
+    </section>
+
+    <div class="two">
+      <section>
+        <h2><span>7</span>Things to say <i class="tag">Windows app</i></h2>
+        <p>With the island's mic on:</p>
+        <ul>
+          <li><b>“Save this”</b>: keeps what you circled in your notebook.</li>
+          <li><b>“Check my notes”</b>: compares the screen with your notes and marks what matches, differs or is missing.</li>
+          <li><b>“Rewrite this sentence”</b>: Neb types its suggestion at your cursor. <kbd>Esc</kbd> stops it, <kbd>Ctrl</kbd> <kbd>Z</kbd> undoes it.</li>
+          <li><b>“Neb, pause”</b>: stops Screen Coach until you resume.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2><span>8</span>Screen Coach settings <i class="tag">Windows app</i></h2>
+        <p>Right-click Neb's icon in the tray, near the clock, to:</p>
+        <ul>
+          <li>open <b>Screen Coach settings</b> and turn it on or off;</li>
+          <li><b>pause</b> it, or pause it for an hour;</li>
+          <li>choose <b>Look at my screen</b>.</li>
+        </ul>
+        <p class="tip">
+          Neb only looks when you ask, or while Watch is on. The screen edges glow violet each time.
+          Pictures are used to answer you and then discarded, unless you save them.
+        </p>
+      </section>
+    </div>
+
+    <section style="margin-top: 11pt">
+      <h2><span>9</span>Shortcuts</h2>
+      <table>
+        <tr>
+          <th style="width: 27%">Keys</th>
+          <th style="width: 38%">What it does</th>
+          <th>Or say</th>
+        </tr>
+        <tr>
+          <td>Hold <kbd>Ctrl</kbd> <kbd>Alt</kbd></td>
+          <td>Ask, on a page in Neb</td>
+          <td>“what's this?”</td>
+        </tr>
+        <tr>
+          <td>Tap <kbd>Ctrl</kbd> <kbd>Alt</kbd> twice</td>
+          <td>Show or hide the island (Windows app)</td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><kbd>Alt</kbd> <kbd>C</kbd></td>
+          <td>Check my work, or unfold the margin</td>
+          <td>“check this”</td>
+        </tr>
+        <tr>
+          <td><kbd>Ctrl</kbd> <kbd>K</kbd></td>
+          <td>Jump to any page or moment</td>
+          <td>“open physics chapter 3”</td>
+        </tr>
+        <tr>
+          <td><kbd>Ctrl</kbd> <kbd>D</kbd></td>
+          <td>Choose where it is saved</td>
+          <td>“save it to physics chapter 5”</td>
+        </tr>
+        <tr>
+          <td><kbd>Alt</kbd> <kbd>B</kbd></td>
+          <td>New notebook (also <kbd>Ctrl</kbd> <kbd>N</kbd> in the Windows app)</td>
+          <td>“new notebook called chemistry”</td>
+        </tr>
+        <tr>
+          <td><kbd>Alt</kbd> <kbd>N</kbd></td>
+          <td>New chapter here</td>
+          <td>“add a chapter called optics”</td>
+        </tr>
+        <tr>
+          <td><kbd>Alt</kbd> <kbd>P</kbd></td>
+          <td>New page here</td>
+          <td>“new page”</td>
+        </tr>
+        <tr>
+          <td><kbd>Ctrl</kbd> <kbd>O</kbd></td>
+          <td>Bring in a PDF</td>
+          <td>or drop it on a notebook</td>
+        </tr>
+        <tr>
+          <td><kbd>Ctrl</kbd> <kbd>Z</kbd> / <kbd>Ctrl</kbd> <kbd>Y</kbd></td>
+          <td>Undo / redo</td>
+          <td></td>
+        </tr>
+      </table>
+    </section>
+
+    <footer>
+      New here? Take the guided tour from your initial, at the top right of your desk.
+    </footer>
+  </body>
+</html>
