@@ -25,8 +25,9 @@ use super::clip;
 use super::coach::{self, ScreenCoach};
 use super::coach_mode;
 use super::destination::save_to_phrase;
+use super::device_call;
 use super::frame::{CapturedFrame, FrameDetail, FrameMeta};
-use super::intent::{intent_of, Intent};
+use super::intent::{intent_body, intent_of, parse_intent_reply, Intent};
 use super::notes_check;
 use super::page::{self, require_app_page};
 use super::pipeline::Captured;
@@ -35,6 +36,8 @@ use super::win::{credential, http};
 
 /// A question asked right after the keys come up may beat the capture: wait this long for it.
 const FRAME_WAIT: Duration = Duration::from_secs(3);
+/// How long to wait for the server's reading of the words before the fixed rules decide.
+const INTENT_WAIT: Duration = Duration::from_secs(3);
 
 /// The page sends what the student said once the hold is released.
 #[tauri::command]
@@ -96,8 +99,17 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     let coach = app
         .try_state::<ScreenCoach>()
         .ok_or("Screen Coach isn't ready.")?;
+    // What they meant: read by the model, however it was said (the screen is being captured
+    // meanwhile). A quiz or Circle & Ask in progress takes the words itself, so only the fixed
+    // rule for pausing applies there.
+    let in_session = super::screen_quiz::takes_words(app) || super::circle::takes_words(app);
+    let intent = if in_session {
+        intent_of(transcript, coach_mode::is_coaching(app))
+    } else {
+        resolve_intent(app, transcript)
+    };
     // "Neb, pause" (K2: it was Ctrl+Alt+P): everything held is wiped by pausing.
-    if intent_of(transcript, coach_mode::is_coaching(app)) == Intent::Pause {
+    if intent == Intent::Pause {
         coach::pause(app);
         return Ok(());
     }
@@ -123,10 +135,9 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         jpeg, meta, detail, ..
     } = frame;
 
-    let intent = intent_of(transcript, coach_mode::is_coaching(app));
     // "Save this to Physics chapter 5" (K3 §4.2): a clip for that place, not a question.
     let save_to = match intent {
-        Intent::Ask => save_to_phrase(transcript),
+        Intent::Ask | Intent::Clip => save_to_phrase(transcript),
         _ => None,
     };
     let command = save_to.is_some()
@@ -228,6 +239,35 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             Err("You've asked Screen Coach a lot recently. Try again in a little while.".to_owned())
         }
         _ => Err("Screen Coach couldn't answer just now. Try again in a moment.".to_owned()),
+    }
+}
+
+/// What the words mean. The server's model reads them (words only, never the screen), so the
+/// student can say it any way they like; if it can't be reached in time, or answers something
+/// that doesn't fit, the fixed rules (`intent.rs`) decide. "Neb, pause" never leaves the
+/// computer: pausing promises nothing is sent.
+fn resolve_intent<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Intent {
+    let coaching = coach_mode::is_coaching(app);
+    let local = intent_of(transcript, coaching);
+    if local == Intent::Pause || transcript.trim().is_empty() {
+        return local;
+    }
+    let has_ink = annotate::turn_state(app) != TurnState::None;
+    let body = intent_body(transcript, coaching, has_ink);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let handle = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("mew-screen-intent".into())
+        .spawn(move || {
+            let reply = device_call::post(&handle, "api/screen/intent", "intent", &body);
+            let _ = sender.send(reply);
+        });
+    if spawned.is_err() {
+        return local;
+    }
+    match receiver.recv_timeout(INTENT_WAIT) {
+        Ok(Ok(bytes)) => parse_intent_reply(&bytes, coaching, has_ink).unwrap_or(local),
+        _ => local,
     }
 }
 

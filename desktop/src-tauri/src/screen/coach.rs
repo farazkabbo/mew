@@ -483,15 +483,47 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
     }
     // The island has the tools and the microphone now: a double tap shows or hides it (or, while
     // silent mode draws with the keyboard, ends that drawing, as it always has). Holding the keys
-    // does nothing with Screen Coach on.
-    if event == HoldEvent::DoubleTap {
-        if circle::keyboard_drawing(app) {
-            circle::set_tool(app, Tool::None);
-            screen_island::refresh(app);
-        } else {
-            screen_island::toggle(app);
+    // does nothing with Screen Coach on, except while Watch is on (decision 16): then it's the
+    // microphone, held to talk, and letting go asks about the screen as it is.
+    match event {
+        HoldEvent::DoubleTap => {
+            if circle::keyboard_drawing(app) {
+                circle::set_tool(app, Tool::None);
+                screen_island::refresh(app);
+            } else {
+                screen_island::toggle(app);
+            }
         }
+        HoldEvent::Started if super::screen_watch::watching() && !mic_on(app) => {
+            mic_start(app);
+            if mic_on(app) {
+                HELD_MIC.store(true, Ordering::SeqCst);
+                super::status::show_keys(app);
+            }
+            mic_changed(app);
+        }
+        // Only a microphone the hold turned on: one clicked on stays on.
+        HoldEvent::Ended | HoldEvent::Cancelled if HELD_MIC.swap(false, Ordering::SeqCst) => {
+            super::status::hide_keys(app);
+            mic_off(app, event == HoldEvent::Cancelled);
+            mic_changed(app);
+        }
+        _ => {}
     }
+}
+
+/// The hold of Ctrl+Alt turned the microphone on (Watch is on): letting go turns it off.
+static HELD_MIC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The card's mic button and the island show whether the microphone is on.
+fn mic_changed<R: Runtime>(app: &AppHandle<R>) {
+    super::overlay::dispatch(
+        app,
+        super::overlay::Surface::Card,
+        "mew:card-mic",
+        &serde_json::json!({ "on": mic_on(app) }),
+    );
+    screen_island::refresh(app);
 }
 
 /// A double tap with Screen Coach off or paused: the island needs it, so the student is told,
@@ -536,14 +568,7 @@ pub fn toggle_mic<R: Runtime>(app: &AppHandle<R>) {
     } else {
         mic_start(app);
     }
-    // The card's mic button shows whether the microphone is on.
-    super::overlay::dispatch(
-        app,
-        super::overlay::Surface::Card,
-        "mew:card-mic",
-        &serde_json::json!({ "on": mic_on(app) }),
-    );
-    screen_island::refresh(app);
+    mic_changed(app);
 }
 
 fn mic_start<R: Runtime>(app: &AppHandle<R>) {

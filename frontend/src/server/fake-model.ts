@@ -24,6 +24,7 @@ export class FakeModelFailure extends Error {
 }
 
 const ANSWERS: Record<string, unknown> = {
+  "screen-intent": { intent: "ask" },
   "screen-ask": {
     speech: "That's the Insert tab. Have a look for PivotTable there.",
     actions: [],
