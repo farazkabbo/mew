@@ -26,6 +26,9 @@ pub enum Intent {
     CoachRecheck,
     /// S6: questions about what's on the screen ("quiz me on this").
     Quiz,
+    /// Type into the document in front ("rewrite this sentence", "type a conclusion", "fix the
+    /// grammar"): Neb writes the text and types it at the cursor (`screen_write.rs`).
+    Write,
     /// A word for the walkthrough in progress.
     Coach(CoachWord),
     /// Pause Screen Coach ("Neb, pause"; during a walkthrough, "pause" pauses the walkthrough).
@@ -71,6 +74,9 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     }
     if is_quiz(&words) {
         return Intent::Quiz;
+    }
+    if is_write(&words) {
+        return Intent::Write;
     }
     // Commands are short; a long sentence is a question even if it mentions saving.
     if words.is_empty() || words.len() > 9 {
@@ -325,6 +331,135 @@ fn is_quiz(words: &[String]) -> bool {
         text.as_str(),
         "quiz me" | "make me a quiz" | "give me a quiz" | "quiz me please" | "test me"
     )
+}
+
+/// Typing into a document: a request that starts by asking Neb to type, write, rewrite or fix
+/// something there ("type a conclusion", "rewrite this sentence", "can you fix the grammar in
+/// this paragraph", "suggest a better opening line", "make this more formal", "finish this
+/// sentence"). A question about writing ("how do I write a thesis?") stays a question.
+fn is_write(words: &[String]) -> bool {
+    if words.len() > MAX_GOAL_WORDS {
+        return false;
+    }
+    let text = after_lead_in(words);
+    let text = text.as_str();
+    let rest_of = |prefix: &str| text.strip_prefix(prefix).map(str::trim);
+    // "Type …" always means typing ("type that for me", "type a summary here").
+    if rest_of("type ").is_some_and(|rest| !rest.is_empty()) {
+        return true;
+    }
+    // Changing text: "rewrite this", "reword the second sentence", "proofread my paragraph".
+    const EDIT: &[&str] = &[
+        "rewrite ",
+        "reword ",
+        "rephrase ",
+        "paraphrase ",
+        "shorten ",
+        "proofread ",
+        "polish ",
+        "tidy up ",
+        "clean up ",
+        "edit ",
+        "improve ",
+        "translate ",
+        "simplify ",
+        "summarise ",
+        "summarize ",
+    ];
+    const OBJECT: &[&str] = &[
+        "this", "that", "it", "the", "my", "these", "those", "what", "his", "her", "our",
+    ];
+    let has_object = |rest: &str| {
+        rest.split_whitespace()
+            .next()
+            .is_some_and(|first| OBJECT.contains(&first))
+    };
+    if EDIT
+        .iter()
+        .any(|verb| rest_of(verb).is_some_and(has_object))
+    {
+        return true;
+    }
+    // "Fix the grammar", "fix my spelling", "correct this paragraph".
+    const FIXABLE: &[&str] = &[
+        "grammar",
+        "spelling",
+        "punctuation",
+        "typo",
+        "typos",
+        "sentence",
+        "sentences",
+        "paragraph",
+        "paragraphs",
+        "wording",
+        "essay",
+        "intro",
+        "introduction",
+        "conclusion",
+        "email",
+        "text",
+        "writing",
+    ];
+    for verb in ["fix ", "correct "] {
+        if let Some(rest) = rest_of(verb) {
+            if rest.split_whitespace().any(|w| FIXABLE.contains(&w)) {
+                return true;
+            }
+        }
+    }
+    // "Write a conclusion", "write me an intro", "write the next sentence".
+    if let Some(rest) = rest_of("write ") {
+        let first = rest.split_whitespace().next().unwrap_or("");
+        if matches!(
+            first,
+            "a" | "an" | "me" | "the" | "some" | "down" | "this" | "that" | "it"
+        ) {
+            return true;
+        }
+    }
+    // "Suggest a better word", "suggest some edits", "suggest changes to this paragraph".
+    if let Some(rest) = rest_of("suggest ") {
+        let first = rest.split_whitespace().next().unwrap_or("");
+        if matches!(
+            first,
+            "a" | "an" | "some" | "better" | "changes" | "edits" | "improvements" | "another"
+        ) {
+            return true;
+        }
+    }
+    // "Make this more formal", "make it shorter", "make changes to this".
+    if let Some(rest) = rest_of("make ") {
+        let mut it = rest.split_whitespace();
+        let (first, second) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
+        if matches!(first, "this" | "that" | "it" | "my" | "the") && !second.is_empty() {
+            return true;
+        }
+        if matches!(first, "changes" | "edits" | "suggestions") {
+            return true;
+        }
+    }
+    // "Finish this sentence", "continue my paragraph", "complete the list", "add a conclusion".
+    for verb in ["finish ", "continue ", "complete ", "add "] {
+        if let Some(rest) = rest_of(verb) {
+            let mut it = rest.split_whitespace();
+            let first = it.next().unwrap_or("");
+            let second = it.next().unwrap_or("");
+            let doc_word = |w: &str| {
+                FIXABLE.contains(&w)
+                    || matches!(
+                        w,
+                        "line" | "list" | "title" | "heading" | "point" | "bullet" | "summary"
+                    )
+            };
+            if matches!(first, "this" | "my" | "the" | "a" | "an" | "another") && doc_word(second) {
+                return true;
+            }
+            if verb == "continue " && first == "writing" {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// "Continue where we left off", "resume", "keep going".
@@ -719,6 +854,43 @@ mod tests {
         }
         // Coach words mean nothing outside a walkthrough ("pause" pauses Screen Coach instead).
         for said in ["done", "I'm stuck", "yes", "stop"] {
+            assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
+        }
+    }
+
+    #[test]
+    fn asks_to_type_into_a_document() {
+        for said in [
+            "Type a conclusion for this essay.",
+            "Neb, can you rewrite this sentence so it's shorter?",
+            "reword the second paragraph",
+            "Fix the grammar in this paragraph.",
+            "please fix my spelling",
+            "Write a title for this.",
+            "write me an intro",
+            "Suggest a better opening line.",
+            "make this more formal",
+            "Finish this sentence.",
+            "add a conclusion",
+            "continue writing",
+            "translate this into French",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::Write, "{said}");
+        }
+    }
+
+    #[test]
+    fn questions_about_writing_stay_questions() {
+        for said in [
+            "how do I write a thesis statement?",
+            "what does this paragraph mean",
+            "is my grammar right here?",
+            "why is this sentence wrong",
+            "fix this",
+            "can you explain how to fix this error",
+            "suggest how I should start",
+            "what should I write next?",
+        ] {
             assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
         }
     }

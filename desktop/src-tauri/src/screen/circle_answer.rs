@@ -290,6 +290,7 @@ fn build_request<R: Runtime>(
             kind: content_kind(meta, source.as_ref()),
             source,
             history,
+            help: Some(coach::help_level(app)),
         };
         let body = ask_body(
             &head,

@@ -675,3 +675,28 @@ don't ask them again. Where a decision changes the brief above, the decision win
     letters. The safety rules cover all four languages; a native speaker should review them. Still
     in English: fixed lines (coach praise, `SAFE_FALLBACK`), spoken commands in `intent.rs`, and
     full worked solutions.
+15. **The island's help level, Watch, and typing into documents** (decided 2026-11-14, from the
+    team meeting; `feat/meetingFixes`):
+    - **Help level:** the island has Quiet, Hint, Coach (the notebook's three marking levels)
+      and **Answer**, which gives the worked answer on the screen with why and how. It's kept in
+      `screen-coach.json` (`help`, default Hint) and sent with every screen question and Circle &
+      Ask (`help` in the request; `HELP_RULE` in `packages/shared/src/help.ts`). Prompts
+      `screen-tutor.v6` and `circle-ask.v8`.
+    - **Watch** (the eye on the island, `screen_watch.rs`): while on, a monitor capture every 6 s
+      through the usual privacy pipeline, skipped while the student is using Neb and when the
+      screen hasn't changed (`glance`). `POST /api/screen/watch` (prompt `screen-watch.v1`)
+      answers fine, nothing or a mistake; only a mistake is said and inked, and the last one said
+      goes with the next look so it isn't repeated. The coach frame shows the whole time; it
+      stops on the button, on pause, after 45 minutes, or after 3 failures. Like live marks it
+      needs the allowance but doesn't spend a question; rate limits 8 a minute, 600 a day.
+    - **Typing into a document** (`screen_write.rs`, `win/typing.rs`): "rewrite this sentence",
+      "type a conclusion", "fix the grammar" (the `Write` intent) send the words and the screen to
+      `POST /api/screen/write` (prompt `screen-write.v1`), which returns the text and a sentence
+      to say. The desktop types it with `SendInput` at the cursor (over a selection, which
+      replaces it). It never types into terminals, shells or unknown apps, never into a password
+      field (checked again just before), only into the window that was in front, and stops on a
+      window change or Esc. Only Enter and Tab are sent besides characters. Rate limits 6 a
+      minute, 100 a day.
+    - **Consent version 5:** the explanation said "never in the background" and "Neb never
+      types for you"; both changed, so the settings page explains Watch, typing and the help
+      level, and earlier consent no longer turns Screen Coach on until it's read again.

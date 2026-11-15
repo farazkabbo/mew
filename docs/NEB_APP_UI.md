@@ -1158,3 +1158,18 @@ Recorded on 2026-10-27, when the owner's brief was fitted to the code. They bind
       page. Review then has that notebook's folder with the topic in it, instead of being
       empty. These steps watch for what's on screen (the plan, the quiz card, its feedback).
       Without a PDF, "Skip this step" on any of them goes straight to the desk and Review.
+34. **U34. A five-step tour, and an introduction that's only the handwriting (2026-11-14,
+    `feat/meetingFixes`).** From the team meeting: the tour was too long.
+    - **The introduction** is only K10's handwriting calibration, skippable. The writing hand,
+      the marking level and "Try it on your screen" went: each has its own control in the app
+      (the pencil case, the level switch, the island). Finishing or skipping it starts listening,
+      and the dialog says so first ("it stays quiet until you ask").
+    - **The tour** is five steps, the same count in both apps: make a notebook; then asking
+      (the island in the Windows app, with its modes and Watch; writing and holding Ctrl + Alt in
+      the browser); quizzes from course material (on the notebook's home); Review (on the desk);
+      and the end. The island step waits for Screen Coach to be on, with "Open its settings".
+    - **The app's own way there:** where a step happens elsewhere and there's no address for it
+      yet, the card rings the control that leads there (the notebook's name on a page, the back
+      arrow to the desk) instead of "Take me there" (`ways` in `features/tour/steps.ts`).
+    - U33's paced PDF, study and quiz steps are gone; their machinery (signals, "present") stays
+      for later steps. Tested in `e2e/tour.spec.ts`.

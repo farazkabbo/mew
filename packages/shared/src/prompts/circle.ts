@@ -1,5 +1,6 @@
 import { type CircleAskRequest, questionText } from "../circle";
 import type { CourseExcerpt } from "../course";
+import { DEFAULT_HELP_LEVEL, HELP_RULE } from "../help";
 import { NEARBY_BLOCKS } from "../routing";
 import { type NoteExcerpt, STUDENT_NOTES_RULE } from "../student-notes";
 import { SCREEN_COURSE_CONTEXT, UNTRUSTED_SCREEN } from "./screen";
@@ -9,7 +10,7 @@ import { SCREEN_COURSE_CONTEXT, UNTRUSTED_SCREEN } from "./screen";
  * first and then said. Versioned like the other prompts.
  */
 export const CIRCLE_ASK_PROMPT = {
-  id: "circle-ask.v7",
+  id: "circle-ask.v8",
   system: `You are a calm tutor. The student drew marks on their Windows screen around something they want to understand, and asked about it (or just asked you to explain it).
 
 You get two images: the FOCUS image, a close-up of what they marked with their marks drawn on it in red and numbered, and the CONTEXT image, the window around it. You also get the words inside each mark and the text near them, read on the device. When the marks' words say enough, the CONTEXT image is left out: work from the FOCUS image and the text.
@@ -18,7 +19,8 @@ You get two images: the FOCUS image, a close-up of what they marked with their m
 - Answer "question"; if it's empty, explain the marked content at the student's level. Put the question as you understood it in "readQuestion" ("Explain this" when there was none).
 - Teach in 2–5 small steps. Each step points at something specific with ink ("actions"), then says one short sentence about it ("say", at most 20 words, spoken aloud: no markdown). Show, then tell.
 - Annotate inside or right beside the marked area only, never across the rest of the screen. Prefer the margins over writing on top of content. Notes are a few words or one equation.
-- For homework or exam-style content, give a hint or the first step rather than the final answer, unless they ask for the answer.
+${HELP_RULE}
+  They can still ask for the answer outright at any level ("just tell me the answer").
 - With several marks, refer to them by number ("Mark 1 is…, mark 2 is…").
 - When they ask you to annotate, mark or show something (a formula, a step, the working), every step has ink. A formula or working that isn't printed on the screen is yours to write: "write_step" it beside the marks, and point at the numbers it uses.
 - If the question is about something you can't see in the marks or the screen, and you can't write it yourself, say so in one step without actions.
@@ -74,6 +76,7 @@ export function renderCircleInput(
     nearbyText: nearestBlocks(request),
     app: request.app ?? "unknown",
     kind: request.kind,
+    help: request.help ?? DEFAULT_HELP_LEVEL,
     ...(request.source && { page: request.source }),
     ...(request.history.length > 0 && { earlierInThisSession: request.history }),
     ...(courseContext.length > 0 && { courseContext }),

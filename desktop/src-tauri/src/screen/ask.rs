@@ -137,6 +137,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             | Intent::CoachResume
             | Intent::CoachRecheck
             | Intent::Quiz
+            | Intent::Write
             | Intent::Coach(_) => true,
             Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
             Intent::Ask | Intent::Pause => false,
@@ -155,6 +156,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             Intent::CoachResume => coach_mode::resume(app, captured),
             Intent::CoachRecheck => coach_mode::recheck(app, transcript.to_owned(), captured),
             Intent::Quiz => super::screen_quiz::start(app, captured),
+            Intent::Write => super::screen_write::start(app, transcript.to_owned(), captured),
             Intent::Coach(word) => coach_mode::on_word(app, word, captured),
             _ => annotate::reannotate(app, captured, false),
         }
@@ -173,6 +175,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         &meta,
         meta.video_playing,
         walkthrough.as_deref(),
+        Some(coach::help_level(app)),
         jpeg.as_slice(),
     );
     drop(jpeg); // wiped; only the request body holds the image now
@@ -392,6 +395,7 @@ pub(crate) mod tests {
         let body = ask_body(
             "What should I do on this page?",
             &captured.meta,
+            None,
             None,
             None,
             captured.jpeg.as_slice(),

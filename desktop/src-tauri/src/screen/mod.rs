@@ -44,6 +44,12 @@
 //! - Music on the island (`screen_music.rs`, pure: `music.rs`): what's playing (Windows' media
 //!   session) with its playback buttons, and pinned Spotify playlists that open in Spotify.
 //!
+//! - Watch and the help level on the island (`screen_watch.rs`): Neb keeps looking at the
+//!   monitor while Watch is on and speaks up at a slip in the student's working; the mode switch
+//!   (Quiet, Hint, Coach, Answer) says how much any answer gives away.
+//! - Typing into a document (`screen_write.rs`, `win/typing.rs`): "rewrite this sentence", "type
+//!   a conclusion": Neb writes the text and types it at the cursor.
+//!
 //! Where to start reading: `coach.rs` (`on_hold`: what the gesture does), then
 //! `pipeline.rs` (one capture, step by step), then `ask.rs` (asking about it), then
 //! `annotate.rs` and `clip.rs`.
@@ -93,6 +99,8 @@ pub mod coach;
 #[cfg(windows)]
 pub mod coach_mode;
 #[cfg(windows)]
+pub mod device_call;
+#[cfg(windows)]
 pub mod keys;
 #[cfg(windows)]
 pub mod note_scroll;
@@ -112,6 +120,10 @@ pub mod screen_island;
 pub mod screen_music;
 #[cfg(windows)]
 pub mod screen_quiz;
+#[cfg(windows)]
+pub mod screen_watch;
+#[cfg(windows)]
+pub mod screen_write;
 #[cfg(windows)]
 pub mod sign_in;
 #[cfg(windows)]

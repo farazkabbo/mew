@@ -104,7 +104,7 @@ describe("screen schemas", () => {
     const text = renderScreenInput(ask, undefined, [passage]);
     expect((JSON.parse(text) as { courseContext: unknown }).courseContext).toEqual([passage]);
     expect(SCREEN_TUTOR_PROMPT.system).toContain("courseContext");
-    expect(SCREEN_TUTOR_PROMPT.id).toBe("screen-tutor.v5");
+    expect(SCREEN_TUTOR_PROMPT.id).toBe("screen-tutor.v6");
   });
 });
 

@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::base64;
+use super::config::HelpLevel;
 use super::frame::{FrameMeta, TargetKind};
 use super::secret::SecretBytes;
 
@@ -33,12 +34,14 @@ pub fn clean_transcript(raw: &str) -> String {
 
 /// The JSON body of `POST /api/screen/ask`, built straight into a wipeable buffer (it holds the
 /// screenshot).
-/// `walkthrough`: the walkthrough in progress, if any (coach mode, S4).
+/// `walkthrough`: the walkthrough in progress, if any (coach mode, S4); `help`: how much to give
+/// away (the island's mode switch; none: the server's default, a hint).
 pub fn ask_body(
     transcript: &str,
     meta: &FrameMeta,
     video_playing: Option<bool>,
     walkthrough: Option<&str>,
+    help: Option<HelpLevel>,
     jpeg: &[u8],
 ) -> SecretBytes {
     #[derive(Serialize)]
@@ -51,6 +54,8 @@ pub fn ask_body(
         video_playing: Option<bool>,
         #[serde(skip_serializing_if = "Option::is_none")]
         walkthrough_id: Option<&'a str>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        help: Option<HelpLevel>,
     }
     let head = Head {
         transcript,
@@ -58,6 +63,7 @@ pub fn ask_body(
         scope: scope_name(meta.kind),
         video_playing,
         walkthrough_id: walkthrough,
+        help,
     };
     with_image(&head, jpeg, meta.width, meta.height)
 }
@@ -770,7 +776,14 @@ mod tests {
 
     #[test]
     fn builds_the_ask_body_the_server_expects() {
-        let body = ask_body("what's \"this\"?", &meta(), None, None, b"\xff\xd8\xff");
+        let body = ask_body(
+            "what's \"this\"?",
+            &meta(),
+            None,
+            None,
+            None,
+            b"\xff\xd8\xff",
+        );
         let value: serde_json::Value = serde_json::from_slice(body.as_slice()).unwrap();
         assert_eq!(
             value,
@@ -781,13 +794,24 @@ mod tests {
                 "image": { "jpeg": "/9j/", "width": 1600, "height": 900 }
             })
         );
-        let playing = ask_body("hi", &meta(), Some(true), None, b"\xff\xd8\xff");
+        let playing = ask_body("hi", &meta(), Some(true), None, None, b"\xff\xd8\xff");
         let value: serde_json::Value = serde_json::from_slice(playing.as_slice()).unwrap();
         assert_eq!(value["videoPlaying"], true);
         assert!(value.get("walkthroughId").is_none());
-        let coached = ask_body("why?", &meta(), None, Some(TURN), b"\xff\xd8\xff");
+        let coached = ask_body("why?", &meta(), None, Some(TURN), None, b"\xff\xd8\xff");
         let value: serde_json::Value = serde_json::from_slice(coached.as_slice()).unwrap();
         assert_eq!(value["walkthroughId"], TURN);
+        assert!(value.get("help").is_none());
+        let answer = ask_body(
+            "is this right?",
+            &meta(),
+            None,
+            None,
+            Some(HelpLevel::Answer),
+            b"\xff\xd8\xff",
+        );
+        let value: serde_json::Value = serde_json::from_slice(answer.as_slice()).unwrap();
+        assert_eq!(value["help"], "answer");
     }
 
     #[test]

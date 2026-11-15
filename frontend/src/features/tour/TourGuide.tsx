@@ -26,8 +26,8 @@ const SCREEN_ASKED = [
 ] as const;
 
 type Box = { top: number; left: number; width: number; height: number };
-/** What the guide last saw of the app. */
-type Seen = { place: TourPlace | null; box: Box | null; dialogs: number };
+/** What the guide last saw of the app; `way`: the box is the way to the step's place. */
+type Seen = { place: TourPlace | null; box: Box | null; dialogs: number; way: boolean };
 
 const PLACE_NAMES: Record<TourPlace, string> = {
   desk: "your desk",
@@ -64,8 +64,12 @@ function look(step: TourStep): Seen {
   const place = placeOf(window.location.pathname, window.location.search);
   const dialogs = document.querySelectorAll("dialog[open]").length;
   let box: Box | null = null;
-  if (step.target && (!step.place || step.place === place)) {
-    for (const element of document.querySelectorAll(step.target)) {
+  const here = !step.place || step.place === place;
+  // Elsewhere, the app's own way to the step's place, if it has one from here.
+  const way = !here && place ? step.ways?.[place] : undefined;
+  const target = here ? step.target : way?.target;
+  if (target) {
+    for (const element of document.querySelectorAll(target)) {
       const rect = element.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
       box = {
@@ -77,7 +81,7 @@ function look(step: TourStep): Seen {
       break;
     }
   }
-  return { place, box, dialogs };
+  return { place, box, dialogs, way: way !== undefined && box !== null };
 }
 
 /** Whether anything matching `selector` is showing. */
@@ -111,7 +115,7 @@ function Guide({
 }) {
   const layer = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
-  const [seen, setSeen] = useState<Seen>({ place: null, box: null, dialogs: 0 });
+  const [seen, setSeen] = useState<Seen>({ place: null, box: null, dialogs: 0, way: false });
   const [height, setHeight] = useState(220);
   /** A paced step's thing has been done: its button is free. */
   const [ready, setReady] = useState(false);
@@ -145,7 +149,10 @@ function Guide({
         setReady(true);
       }
       setSeen((was) =>
-        was.place === now.place && was.dialogs === now.dialogs && sameBox(was.box, now.box)
+        was.place === now.place &&
+        was.dialogs === now.dialogs &&
+        was.way === now.way &&
+        sameBox(was.box, now.box)
           ? was
           : now,
       );
@@ -221,11 +228,13 @@ function Guide({
   const elsewhere = step.place !== undefined && seen.place !== step.place;
   const made = useTour.getState();
   const there = elsewhere && step.place ? hrefOf(step.place, made) : null;
-  const box = elsewhere ? null : seen.box;
+  // Elsewhere, only the way there is ringed.
+  const box = elsewhere && !seen.way ? null : seen.box;
+  const way = elsewhere && seen.way && seen.place ? step.ways?.[seen.place] : undefined;
   /** A paced step still waiting for its thing, and one whose thing is done. */
   const waiting = paced && awaited !== null && !ready;
   const waited = paced && awaited !== null && ready;
-  const centred = step.id === "welcome" || step.id === "done";
+  const centred = step.id === "done";
   const position = centred ? null : place(box, height);
 
   return (
@@ -289,7 +298,7 @@ function Guide({
             {elsewhere && step.place && (
               <p className="text-xs leading-relaxed text-neb-ink">
                 This happens on {PLACE_NAMES[step.place]}.
-                {!there && " Open a notebook from your desk to carry on."}
+                {way ? ` ${way.hint}` : !there && " Open a notebook from your desk to carry on."}
               </p>
             )}
           </div>
@@ -313,7 +322,7 @@ function Guide({
                 Skip this step
               </button>
             )}
-            {there && (
+            {there && !way && (
               <button
                 type="button"
                 // A full load: the notebook restores its place from the address (U29).

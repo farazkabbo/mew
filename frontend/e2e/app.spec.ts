@@ -53,23 +53,12 @@ test("the introduction shows once, can be skipped, and can be shown again", asyn
   await setSettings(page, { onboarded: false });
   await page.goto("/notebook");
 
-  // U7 (§5.10): the hand, the handwriting, how much neb marks, then listening; any can be skipped.
+  // U34: only the handwriting, which can be skipped.
   const intro = page.getByTestId("onboarding");
-  await expect(intro.getByRole("heading", { name: "Which hand do you write with?" })).toBeVisible();
-  await intro.getByRole("button", { name: "Left hand" }).click();
-  // The pencil case moves to the other side at once.
-  await expect(page.getByRole("button", { name: /Writing hand: left/ })).toBeAttached();
   await expect(intro.getByRole("heading", { name: "Teach neb your handwriting" })).toBeVisible();
+  await expect(intro).toContainText("it stays quiet until you ask");
   await intro.getByRole("button", { name: "Skip, neb will learn as you go" }).click();
-  await expect(intro.getByRole("heading", { name: "How much should neb mark?" })).toBeVisible();
-  await expect(intro.getByRole("radio", { name: /^Hint/ })).toHaveAttribute("aria-checked", "true");
-  await intro.getByRole("radio", { name: /^Coach/ }).click();
-  await intro.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(intro.getByRole("button", { name: "Start listening" })).toBeFocused();
-  await intro.getByRole("button", { name: "Not now" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  // The level chosen is the notebook's.
-  await expect(page.getByRole("button", { name: "How much neb marks: Coach" })).toBeVisible();
 
   // Remembered on the account.
   await page.reload();
@@ -268,41 +257,4 @@ test("the web app is installable (manifest and icons)", async ({ page }) => {
     const response = await page.request.get(icon.src, { headers: ORIGIN_HEADER(page) });
     expect(response.headers()["content-type"]).toBe("image/png");
   }
-});
-
-test("in the desktop app, onboarding offers to try Screen Coach on a sample slide (U9)", async ({
-  page,
-}) => {
-  await setSettings(page, { onboarded: false });
-  // The desktop app's bridge, stubbed: Screen Coach starts off, and its settings turn it on.
-  await page.addInitScript(() => {
-    let on = false;
-    const calls: unknown[] = [];
-    Object.assign(window, {
-      __TAURI_INTERNALS__: {},
-      __calls: calls,
-      __TAURI__: {
-        core: {
-          invoke: (cmd: string, args: { openSettings?: boolean }) => {
-            calls.push({ cmd, args });
-            if (cmd !== "screen_coach_onboarding") return Promise.resolve(null);
-            if (args.openSettings) on = true;
-            return Promise.resolve(on);
-          },
-        },
-      },
-    });
-  });
-  await page.goto("/notebook");
-  const intro = page.getByTestId("onboarding");
-  await intro.getByRole("button", { name: "Right hand" }).click();
-  await intro.getByRole("button", { name: "Skip, neb will learn as you go" }).click();
-  await intro.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(intro.getByRole("heading", { name: "Try it on your screen" })).toBeVisible();
-  await expect(intro).toContainText("Screen Coach is off");
-  await intro.getByRole("button", { name: "Turn on Screen Coach" }).click();
-  await expect(intro.getByTestId("try-slide")).toBeVisible();
-  await expect(intro).toContainText("pick Select, and circle the arrow");
-  await intro.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(intro.getByRole("heading", { name: "Talk while you study" })).toBeVisible();
 });

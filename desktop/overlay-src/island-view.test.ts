@@ -9,6 +9,8 @@ const VIEW = {
   silent: false,
   activity: "listening",
   clearable: true,
+  help: "answer",
+  watching: true,
 };
 
 describe("parseIslandView", () => {
@@ -22,6 +24,8 @@ describe("parseIslandView", () => {
     expect(parseIslandView({ ...VIEW, shape: "star" })).toBeNull();
     expect(parseIslandView({ ...VIEW, mic: "yes" })).toBeNull();
     expect(parseIslandView({ ...VIEW, activity: "<b>hi</b>" })).toBeNull();
+    expect(parseIslandView({ ...VIEW, help: "solve" })).toBeNull();
+    expect(parseIslandView({ ...VIEW, watching: "on" })).toBeNull();
   });
 });
 

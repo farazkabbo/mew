@@ -77,6 +77,58 @@
           </button>
         </span>
         <span class="island-divider" aria-hidden="true"></span>
+        <span class="island-modes" role="radiogroup" aria-label="How much Neb gives away">
+          <button
+            type="button"
+            role="radio"
+            data-help="quiet"
+            aria-checked="false"
+            title="Quiet: a tick, or where to look"
+          >
+            Quiet
+          </button>
+          <button
+            type="button"
+            role="radio"
+            data-help="hint"
+            aria-checked="true"
+            title="Hint: a hint or the first step"
+          >
+            Hint
+          </button>
+          <button
+            type="button"
+            role="radio"
+            data-help="coach"
+            aria-checked="false"
+            title="Coach: guides you to do it yourself"
+          >
+            Coach
+          </button>
+          <button
+            type="button"
+            role="radio"
+            data-help="answer"
+            aria-checked="false"
+            title="Answer: the full answer, with why and how"
+          >
+            Answer
+          </button>
+        </span>
+        <button
+          type="button"
+          id="island-watch"
+          class="island-watch"
+          aria-pressed="false"
+          aria-label="Watch"
+          title="Watch: Neb keeps checking your screen and speaks up at a slip"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z" />
+            <circle cx="12" cy="12" r="2.8" />
+          </svg>
+        </button>
+        <span class="island-divider" aria-hidden="true"></span>
         <button
           type="button"
           id="island-music"

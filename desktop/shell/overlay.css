@@ -1029,6 +1029,57 @@ body.island {
   transform: rotate(180deg);
 }
 
+/* How much Neb gives away: four words in a pill, the chosen one filled. */
+.island-modes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.island-bar .island-modes button {
+  width: auto;
+  height: 32px;
+  padding: 0 10px;
+  font-family: var(--font-neb);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.island-bar .island-modes button[aria-checked="true"] {
+  background: #fffefb;
+  color: #1e1d1a;
+}
+
+/* Answer gives it all away: it looks different when it's on. */
+.island-bar .island-modes button[data-help="answer"][aria-checked="true"] {
+  background: #f2b84b;
+  color: #1e1d1a;
+}
+
+/* Watch: on, it's violet and its pupil pulses (Neb is looking). */
+.island-bar button.island-watch[aria-pressed="true"] {
+  background: #6b4ee6;
+  color: #ffffff;
+}
+
+.island-bar button.island-watch[aria-pressed="true"] circle {
+  animation: island-watch 2.4s ease-in-out infinite;
+  transform-origin: 12px 12px;
+}
+
+@keyframes island-watch {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.6);
+  }
+}
+
 .island-divider {
   width: 1px;
   height: 24px;
@@ -1297,6 +1348,7 @@ body.island {
 @media (prefers-reduced-motion: reduce) {
   .island-dot,
   .island-dots i,
+  .island-bar button.island-watch[aria-pressed="true"] circle,
   .card-mic[aria-pressed="true"] {
     animation: none;
   }
@@ -1308,6 +1360,7 @@ body.island {
     stroke: CanvasText;
   }
   .island-bar button[aria-pressed="true"],
+  .island-bar .island-modes button[aria-checked="true"],
   .island-bar button.island-music[aria-expanded="true"] {
     outline: 2px solid Highlight;
   }
