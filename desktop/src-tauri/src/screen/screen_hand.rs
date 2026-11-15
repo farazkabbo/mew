@@ -48,6 +48,8 @@ const HISTORY_ITEMS: usize = 12;
 const HISTORY_CHARS: usize = 160;
 const LABEL_CHARS: usize = 80;
 const TYPE_CHARS: usize = 200;
+/// What to write, handed to Neb's typing (a spoken request's length).
+const REQUEST_CHARS: usize = 500;
 const SCROLL_NOTCHES: i32 = 10;
 /// After an action, before looking again: menus open, pages scroll, tabs switch.
 const SETTLE: Duration = Duration::from_millis(750);
@@ -76,6 +78,8 @@ struct HandState {
     parked: Option<(i32, i32)>,
     /// Where Neb's own cursor is.
     at: (i32, i32),
+    /// The place to write is ready: the next look goes to Neb's typing, with this request.
+    write: Option<String>,
 }
 
 static STATE: Mutex<HandState> = Mutex::new(HandState {
@@ -87,6 +91,7 @@ static STATE: Mutex<HandState> = Mutex::new(HandState {
     home: None,
     parked: None,
     at: (0, 0),
+    write: None,
 });
 
 fn state() -> MutexGuard<'static, HandState> {
@@ -128,13 +133,23 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
         s.home = Some(home);
         s.parked = None;
         s.at = home;
+        s.write = None;
         s.generation
     };
     // Esc's "pressed since" bit is cleared, so only a press from now on stops it.
     let _ = escape_pressed();
     show_hand(app, home);
     screen_island::refresh(app);
-    act_in_background(app, generation, captured);
+    // The question's picture may be of one window; Neb's hand works with the whole monitor
+    // (the taskbar, other windows, menus), so it looks again before its first action.
+    drop(captured);
+    let _ = generation;
+    if !coach::capture_for_hand(app) {
+        stop(
+            app,
+            Some("I couldn't look at your screen just now. Try again."),
+        );
+    }
 }
 
 /// Stops Neb's hand (`notice`: said why): its cursor goes, and the student's goes back where
@@ -149,6 +164,7 @@ pub fn stop<R: Runtime>(app: &AppHandle<R>, notice: Option<&str>) {
         s.generation += 1;
         s.history.clear();
         s.goal.clear();
+        s.write = None;
         match (s.home.take(), s.parked.take(), cursor()) {
             // Only if it's still where Neb left it: never yank a mouse they're using.
             (Some(home), Some(parked), Some(now)) if !took_over(parked, now) => Some(home),
@@ -168,13 +184,19 @@ pub fn stop<R: Runtime>(app: &AppHandle<R>, notice: Option<&str>) {
 
 /// The capture for the next look arrived.
 pub fn on_captured<R: Runtime>(app: &AppHandle<R>, captured: Captured) {
-    let generation = {
-        let s = state();
+    let (generation, write) = {
+        let mut s = state();
         if !s.on {
             return; // wiped unsent
         }
-        s.generation
+        (s.generation, s.write.take())
     };
+    // The document is ready: Neb's cursor goes, and its typing writes what was asked there.
+    if let Some(request) = write {
+        stop(app, None);
+        super::screen_write::start(app, request, captured);
+        return;
+    }
     act_in_background(app, generation, captured);
 }
 
@@ -239,6 +261,21 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
 
     let did = match reply.action {
         Action::Done | Action::Stop => return stop(app, None), // it said why
+        Action::Write { request } => {
+            // One more look, of the document as it is now, for the typing to write into.
+            state().write = Some(request);
+            std::thread::sleep(SETTLE);
+            if !current(generation) {
+                return;
+            }
+            if !coach::capture_for_hand(app) {
+                stop(
+                    app,
+                    Some("I couldn't look at the document, so I've stopped."),
+                );
+            }
+            return;
+        }
         Action::Click {
             point,
             label,
@@ -629,6 +666,10 @@ pub enum Action {
     Key {
         key: PlainKey,
     },
+    /// The place to write is ready: Neb's typing takes over, with what to write.
+    Write {
+        request: String,
+    },
     Done,
     Stop,
 }
@@ -657,6 +698,7 @@ pub fn parse_act_reply(bytes: &[u8]) -> Option<ActReply> {
                 && text.chars().count() <= TYPE_CHARS
                 && text.chars().all(|c| !c.is_control() || c == '\t')
         }
+        Action::Write { request } => within(request, REQUEST_CHARS),
         Action::Key { .. } | Action::Done | Action::Stop => true,
     };
     (action_ok && within(&reply.speech, SPEECH_CHARS) && is_uuid(&reply.turn_id)).then_some(reply)
@@ -707,6 +749,14 @@ mod tests {
                 .action,
             Action::Key {
                 key: PlainKey::Enter
+            }
+        );
+        assert_eq!(
+            reply(json!({ "type": "write", "request": "an essay on cats" }))
+                .unwrap()
+                .action,
+            Action::Write {
+                request: "an essay on cats".into()
             }
         );
         assert_eq!(

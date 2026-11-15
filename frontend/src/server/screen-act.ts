@@ -73,7 +73,11 @@ export async function actOnScreen(
   }
   const turnId = deps.newTurnId();
   const { action } = made;
-  const said = [made.speech, ...(action.type === "type" ? [action.text] : [])];
+  const said = [
+    made.speech,
+    ...(action.type === "type" ? [action.text] : []),
+    ...(action.type === "write" ? [action.request] : []),
+  ];
   const blocked = [...new Set(said.flatMap(unsafeReasons))];
   if (blocked.length > 0) {
     // Counts only: never what was said or typed.

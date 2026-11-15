@@ -97,6 +97,17 @@ describe("Neb's hand: the next action", () => {
     }
   });
 
+  it("hands over to the typing when the goal asks for a passage", async () => {
+    const action = { type: "write" as const, request: "an essay on cats" };
+    const reply = await actOnScreen(
+      { ...ACT, goal: "open a blank document and then write an essay on cats" },
+      undefined,
+      undefined,
+      deps({ speech: "The document's ready. Writing your essay.", action }),
+    );
+    expect(ScreenActReply.parse(reply).action).toEqual(action);
+  });
+
   it("says the model is unavailable when it fails", async () => {
     const failing = {
       generate: () => Promise.reject(new Error("down")),
