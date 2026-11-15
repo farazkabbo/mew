@@ -691,7 +691,7 @@ don't ask them again. Where a decision changes the brief above, the decision win
       needs the allowance but doesn't spend a question; rate limits 8 a minute, 600 a day.
     - **Typing into a document** (`screen_write.rs`, `win/typing.rs`): "rewrite this sentence",
       "type a conclusion", "fix the grammar" (the `Write` intent) send the words and the screen to
-      `POST /api/screen/write` (prompt `screen-write.v1`), which returns the text and a sentence
+      `POST /api/screen/write` (prompt `screen-write.v2`: it writes the whole piece asked for, such as "write a 100 word essay on cats", the owner's call of 2026-11-15), which returns the text and a sentence
       to say. The desktop types it with `SendInput` at the cursor (over a selection, which
       replaces it). It never types into terminals, shells or unknown apps, never into a password
       field (checked again just before), only into the window that was in front, and stops on a

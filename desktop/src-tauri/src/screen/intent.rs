@@ -380,6 +380,13 @@ fn is_write(words: &[String]) -> bool {
     {
         return true;
     }
+    // The verb alone, with the text selected: "rewrite", "proofread".
+    if matches!(
+        text,
+        "rewrite" | "reword" | "rephrase" | "paraphrase" | "proofread"
+    ) {
+        return true;
+    }
     // "Fix the grammar", "fix my spelling", "correct this paragraph".
     const FIXABLE: &[&str] = &[
         "grammar",
@@ -412,8 +419,25 @@ fn is_write(words: &[String]) -> bool {
         let first = rest.split_whitespace().next().unwrap_or("");
         if matches!(
             first,
-            "a" | "an" | "me" | "the" | "some" | "down" | "this" | "that" | "it"
-        ) {
+            "a" | "an"
+                | "me"
+                | "the"
+                | "some"
+                | "down"
+                | "this"
+                | "that"
+                | "it"
+                | "about"
+                | "something"
+                | "my"
+                | "one"
+                | "two"
+                | "three"
+                | "four"
+                | "five"
+                | "ten"
+        ) || first.starts_with(|c: char| c.is_ascii_digit())
+        {
             return true;
         }
     }
@@ -874,6 +898,12 @@ mod tests {
             "add a conclusion",
             "continue writing",
             "translate this into French",
+            "rewrite",
+            "Rewrite.",
+            "hey write a conclusion",
+            "write a 100 word essay on cats",
+            "write 100 words about cats",
+            "write about my weekend",
         ] {
             assert_eq!(intent_of(said, false), Intent::Write, "{said}");
         }
