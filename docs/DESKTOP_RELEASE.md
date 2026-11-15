@@ -203,7 +203,8 @@ the installer runs with a small progress bar, closes Neb and reopens it on 0.1.1
 
 ## Release history
 
-| Version | Date       | Notes                                                                                                                 |
-| ------- | ---------- | --------------------------------------------------------------------------------------------------------------------- |
-| 0.1.0   | 2026-11-14 | First signed build. Given to testers directly; no GitHub Release published.                                           |
-| 0.1.1   | 2026-11-14 | A double tap of Ctrl+Alt opens the island while neb's own window is in front. Built; no GitHub Release published yet. |
+| Version | Date       | Notes                                                                                                                                                                               |
+| ------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.1.0   | 2026-11-14 | First signed build. Given to testers directly; no GitHub Release published.                                                                                                         |
+| 0.1.1   | 2026-11-14 | A double tap of Ctrl+Alt opens the island while neb's own window is in front. Built; no GitHub Release published yet.                                                               |
+| 0.1.2   | 2026-11-14 | The island's help levels (Quiet, Hint, Coach, Answer), Watch, and typing into documents. Screen Coach consent version 5 (asked again once). Built; no GitHub Release published yet. |
