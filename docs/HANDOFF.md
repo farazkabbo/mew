@@ -583,6 +583,23 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **A two-page quick guide** for students: [guide/neb-quick-guide.pdf](guide/neb-quick-guide.pdf),
     printed from its HTML beside it with Edge (`msedge --headless=new --no-pdf-header-footer
 --print-to-pdf=…`). Reprint it when a feature it describes changes.
+  - **Unreleased, on `feat/live-typing-and-neb-cursor`** (decision 17; it needs a desktop build,
+    0.1.5, and the web app deployed with it):
+    - **Typing is streamed and typed a key at a time** (`/api/screen/write` is NDJSON now, so a
+      0.1.4 app can't read it: ship the two together). `server/screen-write.ts` is an async
+      generator; `partial-json.ts` `partialStringField` reads the text while it's still being
+      written; `win/typing.rs` `Typist` types it at a person's pace. "An essay" is 5 paragraphs.
+    - **Neb's hand** (`screen_hand.rs`, `win/mouse.rs`, `/api/screen/act`): Neb's own cursor
+      clicks, scrolls and presses keys when asked, one look and one action at a time. Off until
+      "Let Neb click for me" is turned on in the settings; the mouse or Esc stops it; it never
+      presses anything that buys, sends, deletes, signs in or installs.
+    - **Not yet tried on a real screen:** nothing here has run against the real model or moved
+      a real mouse. Try first, in this order: "write an essay on cats" in Word, Notepad and
+      Google Docs (the pace, Esc, switching windows part way); then, with the switch on, "open
+      the Insert tab" in Word, "scroll down" in a browser, "click Send" in a mail app (it must
+      refuse), and moving the mouse while it works (it must stop). Check a second monitor and
+      150 % scaling: the click point is mapped from the picture to the screen in
+      `screen_hand.rs` `to_screen`.
   - **To verify by hand (Windows):** "rewrite", "hey write a conclusion" and "write a 100 word
     essay on cats" in Word and Notepad; "is this right?" held over a solved equation in OneNote
     with Watch on; the same with the network off (the fixed rules decide, so "write a 100 word
@@ -989,7 +1006,13 @@ Added in M10:
 - Screen Coach's device routes (`/api/screen/*`, device token) send the screen only where it's
   needed to answer. `/api/screen/intent` takes words only, never an image; its answer is one word
   from a fixed list, checked again in Rust (`parse_intent_reply`) before anything happens, and
-  "Neb, pause" is decided on the computer so pausing never sends anything. Add any new native feature in Rust, triggered by the shell, before considering
+  "Neb, pause" is decided on the computer so pausing never sends anything.
+- Neb only ever sends keys and clicks to the student's apps in two places, both started by
+  their own words: typing (`screen_write.rs`) and Neb's hand (`screen_hand.rs`, off by default).
+  Each reply is parsed strictly in Rust (text with no control keys, one of six known actions, a
+  point inside the picture), each refuses terminals and password fields, and Neb's hand refuses
+  controls that buy, send, delete, sign in or install, on the server and again in Rust. Keep
+  both lists (`RISKY_LABEL`, `RISKY_WORDS`) the same. Add any new native feature in Rust, triggered by the shell, before considering
   another permission.
 - Students' words leave the notebook for training only with opt-in; datasets (`ml/data`) are
   gitignored and must be handled like the database.

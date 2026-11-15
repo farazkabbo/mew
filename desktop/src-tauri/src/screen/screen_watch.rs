@@ -183,6 +183,8 @@ fn engaged<R: Runtime>(app: &AppHandle<R>) -> bool {
         || super::circle::in_session(app)
         || super::coach_mode::is_coaching(app)
         || super::screen_quiz::takes_words(app)
+        || super::screen_hand::active()
+        || super::screen_write::writing()
 }
 
 /// A capture for a look ended without a picture (already said why, or paused meanwhile).

@@ -9,7 +9,7 @@
 
 use windows::Win32::Foundation::{HWND, POINT};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_LBUTTON, VK_LCONTROL, VK_LMENU, VK_RBUTTON, VK_RMENU,
+    GetAsyncKeyState, VK_ESCAPE, VK_LBUTTON, VK_LCONTROL, VK_LMENU, VK_RBUTTON, VK_RMENU,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetCursorPos, GetForegroundWindow, GetSystemMetrics, IsWindow, SetForegroundWindow,
@@ -54,6 +54,14 @@ pub fn primary_button_down() -> bool {
     let button = if swapped { VK_RBUTTON } else { VK_LBUTTON };
     let state = unsafe { GetAsyncKeyState(i32::from(button.0)) };
     state < 0
+}
+
+/// Esc is down, or was pressed since this was last asked (asking clears that): how the student
+/// stops Neb's hand. "Pressed or not" only.
+pub fn escape_pressed() -> bool {
+    // SAFETY: a plain value argument; reads the key's state only.
+    let state = unsafe { GetAsyncKeyState(i32::from(VK_ESCAPE.0)) };
+    state as u16 & 0x8001 != 0
 }
 
 /// Where the cursor is, in screen pixels.

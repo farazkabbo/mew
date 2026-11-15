@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Neb</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="overlay.css" />
+    <script src="gen/hand.js" defer></script>
+  </head>
+  <body class="hand">
+    <!-- Neb's hand: Neb's own cursor, beside the student's. Rust moves its window (the arrow's
+         tip is the window's top-left corner plus 4 px); click-through, so it's never in the way. -->
+    <svg id="hand" class="neb-hand" data-look="moving" viewBox="0 0 40 40" aria-hidden="true">
+      <circle class="ring" cx="4" cy="4" r="3" />
+      <path class="arrow" d="M4 4 L4 27 L10.5 21.5 L15 31 L19.5 29 L15 19.5 L23 19 Z" />
+      <circle class="tag" cx="29" cy="30" r="7" />
+      <path
+        class="mark"
+        d="M25.5 33 V29.5 C25.5 27 27 26 28.8 26 C30.6 26 32 27 32 29.5 V31.5 L33.2 32.8"
+      />
+    </svg>
+  </body>
+</html>

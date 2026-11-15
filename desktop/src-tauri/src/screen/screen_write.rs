@@ -234,7 +234,7 @@ fn call_failed(error: CallError) -> String {
 }
 
 /// What has the keyboard focus now, asked on the capture worker (which owns UI Automation).
-fn focus_now<R: Runtime>(app: &AppHandle<R>) -> Focus {
+pub(super) fn focus_now<R: Runtime>(app: &AppHandle<R>) -> Focus {
     let (sender, receiver) = mpsc::channel();
     let queued = coach::on_worker(app, move |tools| {
         let _ = sender.send(tools.focus());

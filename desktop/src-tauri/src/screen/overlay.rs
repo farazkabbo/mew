@@ -70,6 +70,8 @@ pub enum Surface {
     Capsule,
     /// The held Ctrl+Alt keys, with Screen Coach off or paused (`status.rs`, U8).
     Keys,
+    /// Neb's hand: Neb's own cursor, which goes and clicks for the student (`screen_hand.rs`).
+    Hand,
 }
 
 /// Size of the pill, in CSS pixels.
@@ -98,7 +100,7 @@ pub fn card_fit(window: ScreenRect, monitor: ScreenRect, wanted: f64, scale: f64
 
 impl Surface {
     /// Every overlay kept out of captures (the preview is an ordinary window, in them already).
-    const OVERLAYS: [Surface; 11] = [
+    const OVERLAYS: [Surface; 12] = [
         Surface::Ink,
         Surface::Pill,
         Surface::Notes,
@@ -110,6 +112,7 @@ impl Surface {
         Surface::Island,
         Surface::Capsule,
         Surface::Keys,
+        Surface::Hand,
     ];
 
     /// The overlays that can paint an empty white box while hidden (seen with the card once the
@@ -133,6 +136,7 @@ impl Surface {
             Surface::Island => "screen-island",
             Surface::Capsule => "screen-capsule",
             Surface::Keys => "screen-keys",
+            Surface::Hand => "screen-hand",
         }
     }
 
@@ -150,6 +154,7 @@ impl Surface {
             Surface::Island => "island.html",
             Surface::Capsule => "capsule.html",
             Surface::Keys => "keys-hint.html",
+            Surface::Hand => "hand.html",
         }
     }
 }
@@ -240,7 +245,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
                     super::status::KEYS_SIZE.1
                 },
             ),
-        Surface::Pointer | Surface::Draw => builder
+        Surface::Pointer | Surface::Draw | Surface::Hand => builder
             .title("Neb")
             .transparent(true)
             .decorations(false)
@@ -312,6 +317,7 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> Option<Webvie
             | Surface::Island
             | Surface::Capsule
             | Surface::Keys
+            | Surface::Hand
     ) {
         let _ = window.set_ignore_cursor_events(true);
     }

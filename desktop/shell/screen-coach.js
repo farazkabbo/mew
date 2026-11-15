@@ -146,6 +146,7 @@ function renderPrivacy(view) {
   }
   $("pause-during-calls").checked = privacy.pauseDuringCalls;
   $("show-in-captures").checked = privacy.showInCaptures;
+  $("let-neb-click").checked = privacy.letNebClick;
   $("show-in-captures-paused").hidden = !(privacy.showInCaptures && privacy.pauseDuringCalls);
   for (const box of document.querySelectorAll("input[data-rule]")) {
     box.checked = privacy.redaction[box.dataset.rule];
@@ -196,6 +197,10 @@ $("pause-during-calls").addEventListener("change", (event) =>
 
 $("show-in-captures").addEventListener("change", (event) =>
   savePrivacy({ showInCaptures: event.target.checked }),
+);
+
+$("let-neb-click").addEventListener("change", (event) =>
+  savePrivacy({ letNebClick: event.target.checked }),
 );
 
 for (const box of document.querySelectorAll("input[data-rule]")) {

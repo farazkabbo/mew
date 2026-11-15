@@ -710,15 +710,58 @@ don't ask them again. Where a decision changes the brief above, the decision win
       quiz, showing ink again, pausing. The desktop checks the answer (`parse_intent_reply`:
       a walkthrough's replies only during one, ink only when there is some). It needs no
       allowance; rate limits 30 a minute, 1500 a day.
-    - **The fixed rules stay as the fallback** (`intent.rs`): when the server can't be reached
-      within 3 seconds or answers something that doesn't fit. They alone decide "Neb, pause"
-      (pausing promises nothing is sent, so those words never leave the computer) and the words
-      of a quiz or Circle & Ask in progress.
-    - **Typing writes what was asked** (prompt `screen-write.v2`): the whole piece, to the
-      length asked for, fitted to the document on screen. A change to existing text needs a
-      selection.
+    - **The fixed rules are tried first, because they cost nothing** (`intent.rs`; changed
+      2026-11-15 with decision 17, for speed): a phrase they recognise is acted on at once, and
+      only what they'd call a question goes to the model (about 1.5 s). If the server can't be
+      reached within 3 seconds or answers something that doesn't fit, it's a question. They
+      alone decide "Neb, pause" (pausing promises nothing is sent, so those words never leave
+      the computer) and the words of a quiz or Circle & Ask in progress.
+    - **Typing writes what was asked** (prompt `screen-write.v2`; v3 in decision 17): the whole
+      piece, to the length asked for, fitted to the document on screen. A change to existing
+      text needs a selection.
     - **Hold Ctrl+Alt while Watch is on:** the microphone is on while the keys are held, and
       letting go asks about the screen as it is (one capture, no selecting first), exactly as
       the island's mic button does. Another key pressed meanwhile cancels it. With Watch off,
       holding the keys still does nothing while Screen Coach is on, and a hold that starts over
       Neb's own window still belongs to the notebook page.
+17. **Typing is streamed and typed a key at a time, and Neb has a hand** (decided 2026-11-15 by
+    the owner; `feat/live-typing-and-neb-cursor`).
+    - **Streamed typing** (`screen-write.v3`): `POST /api/screen/write` answers newline-delimited
+      JSON: `start` (what to say), then `text` pieces as the model writes them, then `done`, or
+      `error`. The server sends text on a word at a time and runs the rule-based safety check on
+      each new piece with the last 200 characters already sent; a piece that fails stops the
+      typing there. The desktop reads the stream on one thread and types on another
+      (`win/typing.rs` `Typist`): one character at a time, 8 to 21 ms apart (about 70 a second),
+      with a breath after a comma, a sentence and a paragraph. It was 16 to 26 s of nothing and
+      then a paste; the first words now come as soon as the model writes them.
+    - **Length:** "an essay" with no length is 5 paragraphs, about 400 to 500 words; a named
+      length is kept, up to about 1,500 words (12,000 characters, the most typed for one
+      request). Never an outline or a first line in its place.
+    - **Neb's hand** (`screen_hand.rs`, `win/mouse.rs`, `Surface::Hand`, `shell/hand.html`;
+      `POST /api/screen/act`, prompt `screen-act.v1`, `packages/shared/src/screen-act.ts`): on
+      "open the Insert tab", "click that for me", "scroll down" (the `act` intent), Neb's own
+      cursor, a violet arrow beside the student's, does it. One look, one action: the monitor
+      (through the usual privacy pipeline), the goal and what's been done so far go to the
+      server, which answers one action (a click, a scroll, Enter/Escape/Tab/Backspace, one
+      short line of typing, done or stop); Neb says it, its cursor glides there and acts, and it
+      looks again. At most 12 actions for one request. The real cursor is put on the spot for
+      each click (Windows has only one) and goes back where the student left it at the end. A
+      click's point is moved onto the words it names when OCR finds them nearby.
+    - **Its limits (the owner should confirm these; they're the cautious defaults):**
+      - **Off until turned on:** "Let Neb click for me" under Privacy in the settings
+        (`privacy.letNebClick`, default off). Asked for while off, Neb says so and opens the
+        settings. The consent version stays 5: nothing clicks until this switch is turned on,
+        and the switch explains itself.
+      - **The student takes over at any time:** moving the mouse (28 px from where Neb left it)
+        or pressing Esc stops it at once; so does pausing Screen Coach.
+      - **It never presses** a control whose name says it buys, pays, orders, sends, posts,
+        shares, submits, deletes, removes, formats, installs, signs in or out, changes a
+        password, or accepts, allows or confirms something. The prompt forbids it, the server
+        turns such a click into a stop (`RISKY_LABEL`), and the desktop refuses it again
+        (`risky_label`); Neb says "that one's yours to press".
+      - **Never in** terminals, the Registry Editor, Task Manager, Windows Settings, Control
+        Panel or an installer, an app it can't name, or a password field (for typing). Windows
+        itself ignores its input for apps running as administrator.
+      - Watch doesn't look while Neb's hand or its typing is busy.
+    - Rate limits: 30 actions a minute, 400 a day; like typing, it needs the allowance but
+      doesn't spend a question.

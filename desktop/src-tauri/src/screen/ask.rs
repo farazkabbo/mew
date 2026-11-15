@@ -149,6 +149,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             | Intent::CoachRecheck
             | Intent::Quiz
             | Intent::Write
+            | Intent::Act
             | Intent::Coach(_) => true,
             Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
             Intent::Ask | Intent::Pause => false,
@@ -168,6 +169,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             Intent::CoachRecheck => coach_mode::recheck(app, transcript.to_owned(), captured),
             Intent::Quiz => super::screen_quiz::start(app, captured),
             Intent::Write => super::screen_write::start(app, transcript.to_owned(), captured),
+            Intent::Act => super::screen_hand::start(app, transcript.to_owned(), captured),
             Intent::Coach(word) => coach_mode::on_word(app, word, captured),
             _ => annotate::reannotate(app, captured, false),
         }

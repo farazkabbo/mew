@@ -115,6 +115,8 @@ pub mod pipeline;
 #[cfg(windows)]
 pub mod reanchor;
 #[cfg(windows)]
+pub mod screen_hand;
+#[cfg(windows)]
 pub mod screen_island;
 #[cfg(windows)]
 pub mod screen_music;
