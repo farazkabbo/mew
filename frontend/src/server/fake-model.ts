@@ -25,6 +25,7 @@ export class FakeModelFailure extends Error {
 
 const ANSWERS: Record<string, unknown> = {
   "screen-intent": { intent: "ask" },
+  "screen-act": { speech: "That's done.", action: { type: "done" } },
   "screen-write": {
     speech: "Here's a sentence to start with.",
     kind: "insert",

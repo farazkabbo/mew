@@ -14,6 +14,7 @@ import { AppName, SCREEN_LIMITS } from "./screen";
 export const SCREEN_INTENTS = [
   "ask",
   "write",
+  "act",
   "clip",
   "notes_check",
   "notes_check_all",
@@ -54,6 +55,7 @@ export const SCREEN_INTENT_PROMPT = {
 Choose exactly one "intent":
 - "ask": a question, or a request to explain, check, mark or help with what's on the screen ("is this right?", "check my answer", "what did I do wrong", "explain this", "why is that negative"). This is the default: when unsure, choose "ask".
 - "write": they want Neb to put text into the document or editor in front of them, at their cursor or over their selection: write, type, draft, rewrite, reword, shorten, expand, fix grammar or spelling, translate, summarise into the document, continue or finish their text, in any wording and any language ("rewrite", "hey write a conclusion", "write a 100 word essay on cats", "make this sound more formal", "jot down three bullet points about photosynthesis"). A question about how to write something ("how do I write a thesis statement?", "what should I write next?") is "ask".
+- "act": they want Neb to do something on the screen for them with its own cursor: click, press, open, close, select, scroll, go to or switch to something ("click that for me", "open the Insert tab", "scroll down to the references", "do it for me", "press the next button", "go to the second slide"). Asking how or where to do it ("how do I open the Insert tab?", "where's the Insert tab?") is "ask"; asking to be taught is "coach_start"; asking for text to be written into the document is "write".
 - "clip": save what's on the screen, or the part Neb marked, to their notebook ("save this", "keep that in my notes", "save this to physics chapter 5").
 - "notes_check": compare what's on the screen with their notes in the notebook they're working in ("check my notes", "did I miss anything in my notes?"). "notes_check_all": the same across all their notebooks ("check all my notebooks").
 - "coach_start": teach them, step by step, how to do a task in the app in front ("teach me how to make a pivot table", "walk me through adding a header"). A plain how-to question without asking to be walked through is "ask".
