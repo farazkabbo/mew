@@ -125,6 +125,30 @@ describe("where the card and its arrow go", () => {
     expect(place(null, 200, VIEW)).toEqual(corner);
   });
 
+  it("keeps clear of an open dialog: beside it, else under it, else on screen", () => {
+    type Rect = { top: number; left: number; width: number; height: number };
+    const centre = (width: number, height: number): Rect => ({
+      top: (VIEW.height - height) / 2,
+      left: (VIEW.width - width) / 2,
+      width,
+      height,
+    });
+    const cardFor = (dialog: Rect) => cardBox(place(null, 200, VIEW, dialog), 200, VIEW);
+    const overlaps = (card: Rect, dialog: Rect) =>
+      card.left < dialog.left + dialog.width &&
+      dialog.left < card.left + card.width &&
+      card.top < dialog.top + dialog.height &&
+      dialog.top < card.top + card.height;
+    const small = centre(Math.min(540, VIEW.width - 800), 380);
+    expect(overlaps(cardFor(small), small)).toBe(false);
+    const wide = centre(VIEW.width - 100, 200);
+    expect(overlaps(cardFor(wide), wide)).toBe(false);
+    // A dialog that fills the window can't be avoided; the card still lands on screen.
+    const card = cardFor(centre(VIEW.width - 40, VIEW.height - 40));
+    expect(card.top).toBeGreaterThanOrEqual(0);
+    expect(card.top + card.height).toBeLessThanOrEqual(VIEW.height);
+  });
+
   it("draws an arrow from the card to the control, pointing at it", () => {
     const spot = place(button, 200, VIEW);
     const arrow = arrowPath(cardBox(spot, 200, VIEW), button);

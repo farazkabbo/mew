@@ -27,7 +27,14 @@ const SCREEN_ASKED = [
 
 type Box = { top: number; left: number; width: number; height: number };
 /** What the guide last saw of the app; `way`: the box is the way to the step's place. */
-type Seen = { place: TourPlace | null; box: Box | null; dialogs: number; way: boolean };
+type Seen = {
+  place: TourPlace | null;
+  box: Box | null;
+  dialogs: number;
+  way: boolean;
+  /** The app's open dialog, if any: the card keeps clear of it. */
+  dialog: Box | null;
+};
 
 const PLACE_NAMES: Record<TourPlace, string> = {
   desk: "your desk",
@@ -60,9 +67,21 @@ export function TourGuide() {
   return <Guide key={step.id} step={step} index={index} total={steps.length} desktop={desktop} />;
 }
 
+const boxOf = (rect: DOMRect): Box => ({
+  top: Math.round(rect.top),
+  left: Math.round(rect.left),
+  width: Math.round(rect.width),
+  height: Math.round(rect.height),
+});
+
 function look(step: TourStep): Seen {
   const place = placeOf(window.location.pathname, window.location.search);
-  const dialogs = document.querySelectorAll("dialog[open]").length;
+  const open = [...document.querySelectorAll("dialog[open]")];
+  const dialogs = open.length;
+  // The last one opened is on top.
+  const top = open.at(-1);
+  const topRect = top?.getBoundingClientRect();
+  const dialog = topRect && topRect.width > 0 && topRect.height > 0 ? boxOf(topRect) : null;
   let box: Box | null = null;
   const here = !step.place || step.place === place;
   // Elsewhere, the app's own way to the step's place, if it has one from here.
@@ -72,16 +91,13 @@ function look(step: TourStep): Seen {
     for (const element of document.querySelectorAll(target)) {
       const rect = element.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
-      box = {
-        top: Math.round(rect.top),
-        left: Math.round(rect.left),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      };
+      // Behind an open dialog it can't be pressed: nothing is ringed until the dialog closes.
+      if (top && !top.contains(element)) continue;
+      box = boxOf(rect);
       break;
     }
   }
-  return { place, box, dialogs, way: way !== undefined && box !== null };
+  return { place, box, dialogs, way: way !== undefined && box !== null, dialog };
 }
 
 /** Whether anything matching `selector` is showing. */
@@ -92,6 +108,8 @@ function onScreen(selector: string): boolean {
   }
   return false;
 }
+
+const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(value, high));
 
 const sameBox = (a: Box | null, b: Box | null) =>
   a === b ||
@@ -115,7 +133,13 @@ function Guide({
 }) {
   const layer = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
-  const [seen, setSeen] = useState<Seen>({ place: null, box: null, dialogs: 0, way: false });
+  const [seen, setSeen] = useState<Seen>({
+    place: null,
+    box: null,
+    dialogs: 0,
+    way: false,
+    dialog: null,
+  });
   const [height, setHeight] = useState(220);
   /** A paced step's thing has been done: its button is free. */
   const [ready, setReady] = useState(false);
@@ -152,7 +176,8 @@ function Guide({
         was.place === now.place &&
         was.dialogs === now.dialogs &&
         was.way === now.way &&
-        sameBox(was.box, now.box)
+        sameBox(was.box, now.box) &&
+        sameBox(was.dialog, now.dialog)
           ? was
           : now,
       );
@@ -235,7 +260,7 @@ function Guide({
   const waiting = paced && awaited !== null && !ready;
   const waited = paced && awaited !== null && ready;
   const centred = step.id === "done";
-  const position = centred ? null : place(box, height);
+  const position = centred ? null : place(box, height, undefined, seen.dialog);
 
   return (
     <div
@@ -361,10 +386,13 @@ export function place(
   box: Box | null,
   height: number,
   view = { width: window.innerWidth, height: window.innerHeight },
+  dialog: Box | null = null,
 ): { top: number; left: number } | { right: number; bottom: number } {
   const corner = { right: EDGE, bottom: EDGE };
-  if (!box || box.height > view.height * 0.6) return corner;
   const width = Math.min(BUBBLE_WIDTH, view.width - EDGE * 2);
+  // One of the app's dialogs is open and nothing in it is ringed: keep clear of it.
+  if (!box && dialog) return beside(dialog, { width, height }, view) ?? corner;
+  if (!box || box.height > view.height * 0.6) return corner;
   const left = Math.max(
     EDGE,
     Math.min(box.left + box.width / 2 - width / 2, view.width - width - EDGE),
@@ -373,6 +401,42 @@ export function place(
   if (below + height <= view.height - EDGE) return { top: below, left };
   const above = box.top - GAP - height;
   return above >= EDGE ? { top: above, left } : corner;
+}
+
+/**
+ * A spot for the card clear of `dialog`: to its right, its left, under it or over it, whichever
+ * has room first; failing that, the screen corner that covers least of it.
+ */
+function beside(
+  dialog: Box,
+  card: { width: number; height: number },
+  view: { width: number; height: number },
+): { top: number; left: number } | null {
+  const maxLeft = view.width - card.width - EDGE;
+  const maxTop = view.height - card.height - EDGE;
+  if (maxLeft < EDGE || maxTop < EDGE) return null;
+  const top = clamp(dialog.top, EDGE, maxTop);
+  const left = clamp(dialog.left + dialog.width / 2 - card.width / 2, EDGE, maxLeft);
+  const right = dialog.left + dialog.width + EDGE;
+  if (right <= maxLeft) return { top, left: right };
+  const before = dialog.left - EDGE - card.width;
+  if (before >= EDGE) return { top, left: before };
+  const under = dialog.top + dialog.height + EDGE;
+  if (under <= maxTop) return { top: under, left };
+  const over = dialog.top - EDGE - card.height;
+  if (over >= EDGE) return { top: over, left };
+  const span = (a: number, aSize: number, b: number, bSize: number) =>
+    Math.max(0, Math.min(a + aSize, b + bSize) - Math.max(a, b));
+  const covered = (spot: { top: number; left: number }) =>
+    span(spot.left, card.width, dialog.left, dialog.width) *
+    span(spot.top, card.height, dialog.top, dialog.height);
+  const corners = [
+    { top: maxTop, left: maxLeft },
+    { top: maxTop, left: EDGE },
+    { top: EDGE, left: maxLeft },
+    { top: EDGE, left: EDGE },
+  ];
+  return corners.reduce((best, spot) => (covered(spot) < covered(best) ? spot : best));
 }
 
 type Spot = ReturnType<typeof place>;
@@ -393,8 +457,6 @@ export function cardBox(
         height,
       };
 }
-
-const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(value, high));
 
 /**
  * The arrow's line, from the card's edge to just short of the control: a gentle curve with a
