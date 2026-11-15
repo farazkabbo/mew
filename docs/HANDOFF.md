@@ -2,8 +2,8 @@
 
 Context for a new working session. Read this, then [BUILD_BRIEF.md](BUILD_BRIEF.md) (the
 product brief), then the root [README.md](../README.md) and [backend/README.md](../backend/README.md).
-Last updated 2026-11-15, after desktop 0.1.4 (what's said is read by a model, and holding
-Ctrl+Alt asks while Watch is on). Desktop releases and their history:
+Last updated 2026-11-15, after desktop 0.1.5 (typing is streamed and typed a key at a time,
+and Neb's hand: its own cursor clicks for the student when asked). Desktop releases and their history:
 [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md).
 
 ## 1. Working agreement (from the project owner)
@@ -555,7 +555,7 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   design/u/notebook-home, with a `--sunk` token (`feat/ui-u11-notebook-home`). NEB_APP_UI.md
   decisions U27 and U28.
 - **After the U series:** S7 (polish and ship). Notes Check (S3.5) N1–N5 are built; see below.
-- **Desktop 0.1.2–0.1.4** (2026-11-14 and 15; the meeting of 2026-11-14 and the owner's requests;
+- **Desktop 0.1.2–0.1.5** (2026-11-14 and 15; the meeting of 2026-11-14 and the owner's requests;
   SCREEN_COACH.md decisions 15 and 16; [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md) has each release):
   - **0.1.2** (`feat/meetingFixes`): the island's help levels (Quiet, Hint, Coach, Answer), Watch
     (`screen_watch.rs`, `/api/screen/watch`) and typing into documents (`screen_write.rs`,
@@ -583,8 +583,8 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
   - **A two-page quick guide** for students: [guide/neb-quick-guide.pdf](guide/neb-quick-guide.pdf),
     printed from its HTML beside it with Edge (`msedge --headless=new --no-pdf-header-footer
 --print-to-pdf=…`). Reprint it when a feature it describes changes.
-  - **Unreleased, on `feat/live-typing-and-neb-cursor`** (decision 17; it needs a desktop build,
-    0.1.5, and the web app deployed with it):
+  - **0.1.5** (`feat/live-typing-and-neb-cursor`, decision 17; the web app must be deployed with
+    it, and a 0.1.4 app can no longer type once it is):
     - **Typing is streamed and typed a key at a time** (`/api/screen/write` is NDJSON now, so a
       0.1.4 app can't read it: ship the two together). `server/screen-write.ts` is an async
       generator; `partial-json.ts` `partialStringField` reads the text while it's still being
