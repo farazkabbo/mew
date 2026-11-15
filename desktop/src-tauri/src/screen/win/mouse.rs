@@ -1,13 +1,17 @@
 //! Mouse input for Neb's hand (`screen_hand.rs`): a click or a turn of the wheel at a point on
 //! the screen, and a few plain keys, with `SendInput`.
 //!
-//! Windows has one real cursor, so a click happens where it is: the real cursor is put on the
-//! point for the click (Neb's own cursor, an overlay, has already glided there, so the student
-//! sees Neb do it). `screen_hand.rs` puts it back where the student left it when it's done.
-//! Windows ignores this input for apps running as administrator.
+//! Windows has one mouse cursor, and it's the student's. So Neb's ordinary click is a **touch
+//! tap** (`tap_at`, touch injection): it lands on a point without moving the mouse at all, the
+//! way a finger on a touch screen does, which is what lets Neb's cursor (an overlay that has
+//! already glided there) and the student's mouse be two separate things. What a tap can't do (a
+//! right click, the wheel) borrows the real cursor for a few hundredths of a second and puts it
+//! straight back (`click_and_return`, `scroll_and_return`).
+//! Windows ignores all of this for apps running as administrator.
 
 use std::time::Duration;
 
+use windows::Win32::Foundation::{POINT, RECT};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
     KEYEVENTF_KEYUP, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
@@ -15,9 +19,17 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY, VK_BACK, VK_ESCAPE, VK_RETURN,
     VK_TAB,
 };
-use windows::Win32::UI::WindowsAndMessaging::{
-    GetSystemMetrics, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+use windows::Win32::UI::Input::Pointer::{
+    InitializeTouchInjection, InjectTouchInput, POINTER_FLAGS, POINTER_FLAG_DOWN,
+    POINTER_FLAG_INCONTACT, POINTER_FLAG_INRANGE, POINTER_FLAG_UP, POINTER_INFO,
+    POINTER_TOUCH_INFO, TOUCH_FEEDBACK_NONE,
 };
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetSystemMetrics, PT_TOUCH, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN, SM_XVIRTUALSCREEN,
+    SM_YVIRTUALSCREEN, TOUCH_MASK_CONTACTAREA, TOUCH_MASK_ORIENTATION, TOUCH_MASK_PRESSURE,
+};
+
+use super::input::cursor;
 
 /// One notch of the wheel.
 const WHEEL_DELTA: i32 = 120;
@@ -99,7 +111,7 @@ pub fn move_to(x: i32, y: i32) -> bool {
 }
 
 /// Clicks at a screen point (the real cursor stays there). False if Windows refused the input.
-pub fn click_at(x: i32, y: i32, button: Button, double: bool) -> bool {
+fn click_at(x: i32, y: i32, button: Button, double: bool) -> bool {
     if !move_to(x, y) {
         return false;
     }
@@ -120,7 +132,7 @@ pub fn click_at(x: i32, y: i32, button: Button, double: bool) -> bool {
 }
 
 /// Turns the wheel over a screen point: `notches` up (positive) or down (negative).
-pub fn scroll_at(x: i32, y: i32, notches: i32) -> bool {
+fn scroll_at(x: i32, y: i32, notches: i32) -> bool {
     if !move_to(x, y) {
         return false;
     }
@@ -137,6 +149,85 @@ pub fn scroll_at(x: i32, y: i32, notches: i32) -> bool {
         std::thread::sleep(Duration::from_millis(25));
     }
     true
+}
+
+/// One finger at a screen point, going down or coming up.
+fn contact(x: i32, y: i32, flags: POINTER_FLAGS) -> POINTER_TOUCH_INFO {
+    POINTER_TOUCH_INFO {
+        pointerInfo: POINTER_INFO {
+            pointerType: PT_TOUCH,
+            pointerId: 0,
+            pointerFlags: flags,
+            ptPixelLocation: POINT { x, y },
+            ..Default::default()
+        },
+        touchMask: TOUCH_MASK_CONTACTAREA | TOUCH_MASK_ORIENTATION | TOUCH_MASK_PRESSURE,
+        // A fingertip: a few pixels across, pressing lightly, upright.
+        rcContact: RECT {
+            left: x - 2,
+            top: y - 2,
+            right: x + 2,
+            bottom: y + 2,
+        },
+        orientation: 90,
+        pressure: 32000,
+        ..Default::default()
+    }
+}
+
+/// Taps a screen point as a finger would (twice for `double`), without moving the mouse. False
+/// if Windows doesn't take touch input here, or refused it: the caller clicks with the mouse.
+pub fn tap_at(x: i32, y: i32, double: bool) -> bool {
+    // SAFETY: plain value arguments; sets this app up to send one touch contact at a time, with
+    // none of Windows' own touch ripples (Neb's cursor shows the click).
+    if unsafe { InitializeTouchInjection(1, TOUCH_FEEDBACK_NONE) }.is_err() {
+        return false;
+    }
+    let tap = || {
+        let down = [contact(
+            x,
+            y,
+            POINTER_FLAG_DOWN | POINTER_FLAG_INRANGE | POINTER_FLAG_INCONTACT,
+        )];
+        // SAFETY: a valid slice of one initialised contact for the call.
+        if unsafe { InjectTouchInput(&down) }.is_err() {
+            return false;
+        }
+        std::thread::sleep(BEAT);
+        // The finger always comes up again, even if that fails to be delivered.
+        // SAFETY: as above.
+        unsafe { InjectTouchInput(&[contact(x, y, POINTER_FLAG_UP)]) }.is_ok()
+    };
+    if !tap() {
+        return false;
+    }
+    if double {
+        std::thread::sleep(BEAT * 2);
+        return tap();
+    }
+    true
+}
+
+/// Runs `act` (which moves the real cursor), then puts the cursor back where the student had
+/// it.
+fn and_return(act: impl FnOnce() -> bool) -> bool {
+    let before = cursor();
+    let done = act();
+    std::thread::sleep(BEAT);
+    if let Some((x, y)) = before {
+        move_to(x, y);
+    }
+    done
+}
+
+/// Clicks at a screen point with the real mouse, and puts it straight back.
+pub fn click_and_return(x: i32, y: i32, button: Button, double: bool) -> bool {
+    and_return(|| click_at(x, y, button, double))
+}
+
+/// Turns the wheel over a screen point, and puts the real mouse straight back.
+pub fn scroll_and_return(x: i32, y: i32, notches: i32) -> bool {
+    and_return(|| scroll_at(x, y, notches))
 }
 
 /// Presses and lets go of one plain key.

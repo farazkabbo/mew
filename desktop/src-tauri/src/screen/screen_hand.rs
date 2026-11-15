@@ -4,14 +4,14 @@
 //!
 //! One look, one action: the screen (through the usual privacy pipeline) and the goal go to
 //! `POST /api/screen/act`, which answers the single next action; Neb says it, its cursor glides
-//! there and acts, then it looks again, until the server says it's done. Windows has one real
-//! cursor, so it's put on the spot for each click (`win::mouse`) and goes back where the student
-//! left it when Neb is done.
+//! there and acts, then it looks again, until the server says it's done. Neb's cursor and the
+//! student's mouse are two separate things: Neb's click is a touch tap, which lands without
+//! moving the mouse (`win::mouse`), so the student keeps theirs the whole time.
 //!
 //! - **Off until the student turns it on** in Screen Coach settings ("Let Neb click for me"),
 //!   and only ever started by their own words.
-//! - **The student takes over at any time**: moving the mouse or pressing Esc stops it at once,
-//!   as does pausing Screen Coach.
+//! - **The student stops it at any time**: pressing Esc stops it at once, as does pausing
+//!   Screen Coach.
 //! - **It never presses** anything whose name says it buys, sends, deletes, signs in, installs
 //!   or agrees to something (`risky_label`; the server refuses the same list): it points at it
 //!   and says it's theirs to press. It never types into a terminal or a password field, and
@@ -59,8 +59,6 @@ const GLIDE_FRAME: Duration = Duration::from_millis(16);
 /// The cursor's window, in CSS pixels, and where the arrow's tip is in it.
 const HAND_SIZE: f64 = 40.0;
 const HAND_TIP: f64 = 4.0;
-/// The student moved the mouse this far from where Neb left it: they've taken over.
-const TOOK_OVER_PX: i32 = 28;
 const HAND_LOOK: &str = "mew:hand-look";
 
 #[derive(Default)]
@@ -72,10 +70,6 @@ struct HandState {
     /// What's been done so far, in Neb's own words (sent with each look).
     history: Vec<String>,
     steps: u32,
-    /// Where the student's cursor was when Neb started: it goes back there at the end.
-    home: Option<(i32, i32)>,
-    /// Where Neb last put the real cursor (a click or a scroll happens under it).
-    parked: Option<(i32, i32)>,
     /// Where Neb's own cursor is.
     at: (i32, i32),
     /// The place to write is ready: the next look goes to Neb's typing, with this request.
@@ -88,8 +82,6 @@ static STATE: Mutex<HandState> = Mutex::new(HandState {
     goal: String::new(),
     history: Vec::new(),
     steps: 0,
-    home: None,
-    parked: None,
     at: (0, 0),
     write: None,
 });
@@ -130,8 +122,6 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
         s.goal = transcript;
         s.history.clear();
         s.steps = 0;
-        s.home = Some(home);
-        s.parked = None;
         s.at = home;
         s.write = None;
         s.generation
@@ -152,10 +142,9 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
     }
 }
 
-/// Stops Neb's hand (`notice`: said why): its cursor goes, and the student's goes back where
-/// they left it unless they've moved it since.
+/// Stops Neb's hand (`notice`: said why): its cursor goes.
 pub fn stop<R: Runtime>(app: &AppHandle<R>, notice: Option<&str>) {
-    let back = {
+    {
         let mut s = state();
         if !s.on {
             return;
@@ -165,14 +154,6 @@ pub fn stop<R: Runtime>(app: &AppHandle<R>, notice: Option<&str>) {
         s.history.clear();
         s.goal.clear();
         s.write = None;
-        match (s.home.take(), s.parked.take(), cursor()) {
-            // Only if it's still where Neb left it: never yank a mouse they're using.
-            (Some(home), Some(parked), Some(now)) if !took_over(parked, now) => Some(home),
-            _ => None,
-        }
-    };
-    if let Some((x, y)) = back {
-        mouse::move_to(x, y);
     }
     overlay::hide_quietly_named(app, Surface::Hand);
     if let Some(notice) = notice {
@@ -285,19 +266,29 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
             if risky_label(&label) {
                 return stop(app, Some(&format!("That one's yours to press: {label}.")));
             }
-            // The model's point, moved onto the words it named when they're there to be read.
-            let mut target = to_screen(point, meta.bounds);
-            let radius = 120.0 * meta.dpi.max(96) as f32 / 96.0;
-            if let Some(spot) = detail.text.spot_for_label(&label, target, radius) {
-                target = ((spot.left + spot.right) / 2, (spot.top + spot.bottom) / 2);
-            }
+            // The model's point; centred on the control's own words only when it's already on
+            // them (a caption under a picture names the picture, and isn't the thing to press).
+            let at = to_screen(point, meta.bounds);
+            let scale = meta.dpi.max(96) as f32 / 96.0;
+            let words = detail.text.spot_for_label(&label, at, 48.0 * scale);
+            let target = aim(at, words, (8.0 * scale) as i32);
             if !glide(app, generation, target) {
                 return;
             }
-            if !mouse::click_at(target.0, target.1, button, double) {
+            // A tap leaves the student's mouse where it is; what a tap can't do borrows it.
+            let tapped = button == Button::Left && mouse::tap_at(target.0, target.1, double);
+            // Where it pressed, never what: for working out a click that lands off its mark.
+            eprintln!(
+                "[screen] hand: pressed at ({}, {}), model's point ({}, {}), {}",
+                target.0,
+                target.1,
+                at.0,
+                at.1,
+                if tapped { "tap" } else { "mouse" }
+            );
+            if !tapped && !mouse::click_and_return(target.0, target.1, button, double) {
                 return stop(app, Some(REFUSED));
             }
-            parked(target);
             look(app, "click");
             describe_click(&label, button, double)
         }
@@ -315,10 +306,9 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
                 Direction::Up => notches,
                 Direction::Down => -notches,
             };
-            if !mouse::scroll_at(target.0, target.1, turn) {
+            if !mouse::scroll_and_return(target.0, target.1, turn) {
                 return stop(app, Some(REFUSED));
             }
-            parked(target);
             format!(
                 "Scrolled {} {notches}.",
                 if turn > 0 { "up" } else { "down" }
@@ -399,23 +389,9 @@ fn current(generation: u64) -> bool {
     s.on && s.generation == generation
 }
 
-/// Why Neb's hand should stop now, if the student has taken over: Esc, or the mouse moved from
-/// where Neb left it.
+/// Why Neb's hand should stop now, if the student pressed Esc.
 fn interrupted() -> Option<&'static str> {
-    if escape_pressed() {
-        return Some("Stopped.");
-    }
-    let parked = state().parked;
-    match (parked, cursor()) {
-        (Some(parked), Some(now)) if took_over(parked, now) => {
-            Some("You've got the mouse, so I've stopped.")
-        }
-        _ => None,
-    }
-}
-
-fn parked(at: (i32, i32)) {
-    state().parked = Some(at);
+    escape_pressed().then_some("Stopped.")
 }
 
 fn look<R: Runtime>(app: &AppHandle<R>, look: &str) {
@@ -559,9 +535,19 @@ pub fn risky_label(label: &str) -> bool {
         .any(|risky| line.contains(&format!(" {risky} ")))
 }
 
-/// The student moved the mouse away from where Neb left it.
-pub fn took_over(parked: (i32, i32), now: (i32, i32)) -> bool {
-    (parked.0 - now.0).abs() > TOOK_OVER_PX || (parked.1 - now.1).abs() > TOOK_OVER_PX
+/// Where to press: the model's point, or the middle of the control's own words (`words`, where
+/// OCR read its name) when the point is already on them or within `slack` pixels. Words further
+/// off are something else with the same name, such as a caption under the picture to press.
+pub fn aim(point: (i32, i32), words: Option<ScreenRect>, slack: i32) -> (i32, i32) {
+    match words {
+        Some(spot)
+            if (spot.left - slack..=spot.right + slack).contains(&point.0)
+                && (spot.top - slack..=spot.bottom + slack).contains(&point.1) =>
+        {
+            ((spot.left + spot.right) / 2, (spot.top + spot.bottom) / 2)
+        }
+        _ => point,
+    }
 }
 
 /// A point of the picture (0–1000 across and down it) on the screen.
@@ -872,10 +858,24 @@ mod tests {
     }
 
     #[test]
-    fn moving_the_mouse_takes_over() {
-        assert!(!took_over((500, 500), (500, 500)));
-        assert!(!took_over((500, 500), (510, 480))); // a nudge of the desk
-        assert!(took_over((500, 500), (560, 500)));
-        assert!(took_over((500, 500), (500, 420)));
+    fn presses_the_thing_itself_not_a_caption_with_its_name() {
+        // "Blank document": the model points at the thumbnail, and the caption is 90 px below.
+        let caption = ScreenRect {
+            left: 60,
+            top: 196,
+            right: 150,
+            bottom: 212,
+        };
+        assert_eq!(aim((115, 110), Some(caption), 8), (115, 110));
+        // A text button: the point is on its words, so it's centred on them.
+        let button = ScreenRect {
+            left: 300,
+            top: 40,
+            right: 350,
+            bottom: 56,
+        };
+        assert_eq!(aim((304, 53), Some(button), 8), (325, 48));
+        assert_eq!(aim((296, 60), Some(button), 8), (325, 48)); // just off them
+        assert_eq!(aim((304, 53), None, 8), (304, 53));
     }
 }

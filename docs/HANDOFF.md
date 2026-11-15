@@ -591,13 +591,13 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
       written; `win/typing.rs` `Typist` types it at a person's pace. "An essay" is 5 paragraphs.
     - **Neb's hand** (`screen_hand.rs`, `win/mouse.rs`, `/api/screen/act`): Neb's own cursor
       clicks, scrolls and presses keys when asked, one look and one action at a time. Off until
-      "Let Neb click for me" is turned on in the settings; the mouse or Esc stops it; it never
+      "Let Neb click for me" is turned on in the settings; Esc stops it (the student's mouse stays theirs: Neb's click is a touch tap); it never
       presses anything that buys, sends, deletes, signs in or installs.
     - **Not yet tried on a real screen:** nothing here has run against the real model or moved
       a real mouse. Try first, in this order: "write an essay on cats" in Word, Notepad and
       Google Docs (the pace, Esc, switching windows part way); then, with the switch on, "open
       the Insert tab" in Word, "scroll down" in a browser, "click Send" in a mail app (it must
-      refuse), and moving the mouse while it works (it must stop). Check a second monitor and
+      refuse), and moving the mouse while it works (Neb must carry on, and the mouse must stay where it is put). Check a second monitor and
       150 % scaling: the click point is mapped from the picture to the screen in
       `screen_hand.rs` `to_screen`.
   - **To verify by hand (Windows):** "rewrite", "hey write a conclusion" and "write a 100 word

@@ -738,22 +738,25 @@ don't ask them again. Where a decision changes the brief above, the decision win
       length is kept, up to about 1,500 words (12,000 characters, the most typed for one
       request). Never an outline or a first line in its place.
     - **Neb's hand** (`screen_hand.rs`, `win/mouse.rs`, `Surface::Hand`, `shell/hand.html`;
-      `POST /api/screen/act`, prompt `screen-act.v1`, `packages/shared/src/screen-act.ts`): on
+      `POST /api/screen/act`, prompt `screen-act.v2`, `packages/shared/src/screen-act.ts`): on
       "open the Insert tab", "click that for me", "scroll down" (the `act` intent), Neb's own
       cursor, a violet arrow beside the student's, does it. One look, one action: the monitor
       (through the usual privacy pipeline), the goal and what's been done so far go to the
       server, which answers one action (a click, a scroll, Enter/Escape/Tab/Backspace, one
       short line of typing, done or stop); Neb says it, its cursor glides there and acts, and it
-      looks again. At most 12 actions for one request. The real cursor is put on the spot for
-      each click (Windows has only one) and goes back where the student left it at the end. A
-      click's point is moved onto the words it names when OCR finds them nearby.
+      looks again. At most 12 actions for one request. Neb's cursor and the student's mouse are two
+      separate things: a left click is a touch tap (`win/mouse.rs` `tap_at`, touch injection),
+      which lands without moving the mouse; a right click and the wheel borrow the real cursor
+      for a few hundredths of a second and put it straight back. A click goes where the model
+      pointed; it's centred on the control's own words only when the point is already on them
+      (`aim`), because a caption under a thumbnail names it without being the thing to press.
     - **Its limits (the owner should confirm these; they're the cautious defaults):**
       - **Off until turned on:** "Let Neb click for me" under Privacy in the settings
         (`privacy.letNebClick`, default off). Asked for while off, Neb says so and opens the
         settings. The consent version stays 5: nothing clicks until this switch is turned on,
         and the switch explains itself.
-      - **The student takes over at any time:** moving the mouse (28 px from where Neb left it)
-        or pressing Esc stops it at once; so does pausing Screen Coach.
+      - **The student stops it at any time:** Esc stops it at once; so does pausing Screen
+        Coach. Moving the mouse doesn't: it's theirs to use while Neb works.
       - **It never presses** a control whose name says it buys, pays, orders, sends, posts,
         shares, submits, deletes, removes, formats, installs, signs in or out, changes a
         password, or accepts, allows or confirms something. The prompt forbids it, the server
