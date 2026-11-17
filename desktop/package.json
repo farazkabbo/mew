@@ -1,6 +1,6 @@
 {
   "name": "@mew/desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "description": "Neb for Windows: a Tauri v2 shell around the web app, with a summon gesture (hold Ctrl+Alt), review reminders and Screen Coach.",
