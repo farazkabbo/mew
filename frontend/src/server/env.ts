@@ -65,9 +65,16 @@ export const geminiEnv = defineEnv(
     GEMINI_VERIFIER_MODEL: z.string().min(1),
     /** Notes Check comparisons (S3.5); unset = the screen model. */
     GEMINI_NOTES_MODEL: z.string().min(1).optional(),
+    /**
+     * Answers in place of any model that is overloaded (503) or out of quota (429), so a busy
+     * spike on the main model doesn't stop a run partway. A different model has its own capacity
+     * and quota.
+     */
+    GEMINI_FALLBACK_MODEL: z.string().min(1),
   }),
   {
     defaults: {
+      GEMINI_FALLBACK_MODEL: "gemini-3.5-flash-lite",
       GEMINI_GATE_MODEL: "gemini-3.5-flash-lite",
       GEMINI_TUTOR_MODEL: "gemini-3.8-flash",
       GEMINI_VERIFIER_MODEL: "gemini-3.5-flash-lite",

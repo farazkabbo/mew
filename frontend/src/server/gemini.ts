@@ -143,6 +143,23 @@ export function resetModelCooldowns(): void {
   busyUntil.clear();
 }
 
+/** The error means the model is overloaded or out of quota (not that the request was wrong). */
+function isLoadError(error: unknown): boolean {
+  return error instanceof ModelBusyError || cooldownFor(error) !== null;
+}
+
+/**
+ * The same request on the fallback model, when the error was about load and the fallback is a
+ * different model; otherwise null (the caller rethrows).
+ */
+function fallbackRequest<R extends GenerationRequest>(request: R, error: unknown): R | null {
+  if (request.signal?.aborted || !isLoadError(error)) return null;
+  const fallback = geminiEnv().GEMINI_FALLBACK_MODEL;
+  if (fallback === request.model) return null;
+  console.warn(`[gemini] ${request.model} unavailable; answering with ${fallback} instead`);
+  return { ...request, model: fallback };
+}
+
 /** Signature shared by the real generator and test doubles. */
 export type GenerateStructured = <T>(request: StructuredRequest<T>) => Promise<T>;
 export type StreamStructuredText = (request: StructuredRequest<unknown>) => AsyncIterable<string>;
@@ -198,7 +215,8 @@ function options(request: GenerationRequest) {
 
 /**
  * One structured (JSON) generation. The output is validated against `schema`; invalid output is
- * retried once, then reported as a StructuredOutputError so callers can degrade gracefully.
+ * retried once, then reported as a StructuredOutputError so callers can degrade gracefully. If
+ * the model is overloaded or out of quota, the fallback model answers instead.
  */
 export const generateStructured: GenerateStructured = async <T>(request: StructuredRequest<T>) => {
   if (fakeModel()) {
@@ -209,6 +227,16 @@ export const generateStructured: GenerateStructured = async <T>(request: Structu
     if (parsed.success) return parsed.data;
     throw new StructuredOutputError("The fake model's answer doesn't fit this schema");
   }
+  try {
+    return await generateOn(request);
+  } catch (error) {
+    const fallback = fallbackRequest(request, error);
+    if (!fallback) throw error;
+    return generateOn(fallback);
+  }
+};
+
+async function generateOn<T>(request: StructuredRequest<T>): Promise<T> {
   let problem = "no attempt";
   for (let attempt = 0; attempt < 2; attempt++) {
     assertNotBusy(request.model);
@@ -227,9 +255,13 @@ export const generateStructured: GenerateStructured = async <T>(request: Structu
     problem = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
   }
   throw new StructuredOutputError(`Model output failed validation: ${problem}`);
-};
+}
 
-/** Streams the raw JSON text of a structured generation as it is produced (not validated). */
+/**
+ * Streams the raw JSON text of a structured generation as it is produced (not validated). If the
+ * model is overloaded or out of quota before any text arrives, the fallback model streams instead
+ * (after text has arrived, switching would splice two answers together, so the error stands).
+ */
 export const streamStructuredText: StreamStructuredText = async function* (request) {
   if (fakeModel()) {
     const text = fakeAnswer(request.purpose ?? "", request.input);
@@ -237,6 +269,20 @@ export const streamStructuredText: StreamStructuredText = async function* (reque
     reportUsage(request, { total_input_tokens: 1000, total_output_tokens: 100 });
     return;
   }
+  let sent = false;
+  try {
+    for await (const text of streamOn(request)) {
+      sent = true;
+      yield text;
+    }
+  } catch (error) {
+    const fallback = sent ? null : fallbackRequest(request, error);
+    if (!fallback) throw error;
+    yield* streamOn(fallback);
+  }
+};
+
+async function* streamOn(request: StructuredRequest<unknown>): AsyncIterable<string> {
   assertNotBusy(request.model);
   try {
     const stream = await gemini().interactions.create(
@@ -255,7 +301,7 @@ export const streamStructuredText: StreamStructuredText = async function* (reque
     noteFailure(request.model, error);
     throw error;
   }
-};
+}
 
 export function parseJson(text: string | undefined): unknown {
   try {
