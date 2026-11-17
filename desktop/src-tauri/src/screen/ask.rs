@@ -32,12 +32,13 @@ use super::notes_check;
 use super::page::{self, require_app_page};
 use super::pipeline::Captured;
 use super::protocol::{ask_body, clean_transcript, parse_event, LineSplitter, StreamEvent};
+use super::screen_hand::Mode;
 use super::win::{credential, http};
 
 /// A question asked right after the keys come up may beat the capture: wait this long for it.
 const FRAME_WAIT: Duration = Duration::from_secs(3);
 /// How long to wait for the server's reading of the words before the fixed rules decide.
-const INTENT_WAIT: Duration = Duration::from_secs(3);
+const INTENT_WAIT: Duration = Duration::from_secs(5);
 
 /// The page sends what the student said once the hold is released.
 #[tauri::command]
@@ -108,6 +109,13 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     } else {
         resolve_intent(app, transcript)
     };
+    // "Where can I sign out?" is shown by Neb's hand when the student has turned it on;
+    // otherwise it's a question like any other, answered in words and ink.
+    let intent = if intent == Intent::Show && !coach::hand_allowed(app) {
+        Intent::Ask
+    } else {
+        intent
+    };
     // "Neb, pause" (K2: it was Ctrl+Alt+P): everything held is wiped by pausing.
     if intent == Intent::Pause {
         coach::pause(app);
@@ -150,6 +158,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             | Intent::Quiz
             | Intent::Write
             | Intent::Act
+            | Intent::Show
             | Intent::Coach(_) => true,
             Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
             Intent::Ask | Intent::Pause => false,
@@ -169,7 +178,12 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             Intent::CoachRecheck => coach_mode::recheck(app, transcript.to_owned(), captured),
             Intent::Quiz => super::screen_quiz::start(app, captured),
             Intent::Write => super::screen_write::start(app, transcript.to_owned(), captured),
-            Intent::Act => super::screen_hand::start(app, transcript.to_owned(), captured),
+            Intent::Act => {
+                super::screen_hand::start(app, transcript.to_owned(), Mode::Do, captured)
+            }
+            Intent::Show => {
+                super::screen_hand::start(app, transcript.to_owned(), Mode::Show, captured)
+            }
             Intent::Coach(word) => coach_mode::on_word(app, word, captured),
             _ => annotate::reannotate(app, captured, false),
         }

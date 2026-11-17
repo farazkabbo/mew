@@ -1,6 +1,8 @@
 //! Neb's hand: the student asks Neb to do something on their screen ("open the Insert tab",
 //! "click that for me", "scroll down to the references") and Neb's own cursor, a violet arrow
-//! beside theirs, goes and does it, one visible action at a time.
+//! beside theirs, goes and does it, one visible action at a time. Asked where something is
+//! ("where can I sign out in VS Code?", `Mode::Show`), it opens what hides it and ends with its
+//! cursor resting on the thing, pressing nothing.
 //!
 //! One look, one action: the screen (through the usual privacy pipeline) and the goal go to
 //! `POST /api/screen/act`, which answers the single next action; Neb says it, its cursor glides
@@ -8,21 +10,28 @@
 //! student's mouse are two separate things: Neb's click is a touch tap, which lands without
 //! moving the mouse (`win::mouse`), so the student keeps theirs the whole time.
 //!
+//! A long task ("research the water cycle and save it in a doc") is the same loop, many times.
+//! The model finds its own route, and keeps two things between looks, which live here in
+//! memory until the run ends: its `plan` and its `notes` (what it read, and where). When a
+//! document is ready it asks for the writing (`screen_write::start_for_hand`, with the notes as
+//! the material), and carries on when the typing ends (`after_write`), to name and save it.
+//!
 //! - **Off until the student turns it on** in Screen Coach settings ("Let Neb click for me"),
 //!   and only ever started by their own words.
 //! - **The student stops it at any time**: pressing Esc stops it at once, as does pausing
 //!   Screen Coach.
 //! - **It never presses** anything whose name says it buys, sends, deletes, signs in, installs
 //!   or agrees to something (`risky_label`; the server refuses the same list): it points at it
-//!   and says it's theirs to press. It never types into a terminal or a password field, and
-//!   types one short line at most.
-//! - At most `MAX_STEPS` actions for one request.
+//!   and says it's theirs to press. It never types or presses keys in a terminal or a system
+//!   window, never types into a password field, and types one short line at most. Its keys are
+//!   a fixed list (`win::mouse::PlainKey`): nothing that closes, deletes, pastes or runs.
+//! - At most `MAX_STEPS` actions and `MAX_TIME` for one request.
 //!
 //! Pure parts (the body, the reply, the list of controls it leaves alone, the glide) are at the
 //! bottom and tested.
 
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -39,12 +48,19 @@ use super::protocol::{is_uuid, with_image, within, Point, SPEECH_CHARS};
 use super::screen_island;
 use super::secret::SecretBytes;
 use super::win::input::{cursor, escape_pressed, foreground};
+use super::win::launch;
 use super::win::mouse::{self, Button, PlainKey};
 use super::win::typing::{Typed, Typist};
 
 /// Actions for one request, at most (mirrors packages/shared/src/screen-act.ts).
-pub const MAX_STEPS: u32 = 12;
-const HISTORY_ITEMS: usize = 12;
+pub const MAX_STEPS: u32 = 80;
+/// How long one request may go on for.
+const MAX_TIME: Duration = Duration::from_secs(15 * 60);
+/// Neb's own memory between looks: its plan, and the notes it keeps.
+const PLAN_CHARS: usize = 600;
+const NOTES: usize = 30;
+const NOTE_CHARS: usize = 800;
+const HISTORY_ITEMS: usize = 20;
 const HISTORY_CHARS: usize = 160;
 const LABEL_CHARS: usize = 80;
 const TYPE_CHARS: usize = 200;
@@ -52,7 +68,18 @@ const TYPE_CHARS: usize = 200;
 const REQUEST_CHARS: usize = 500;
 const SCROLL_NOTCHES: i32 = 10;
 /// After an action, before looking again: menus open, pages scroll, tabs switch.
-const SETTLE: Duration = Duration::from_millis(750);
+const SETTLE: Duration = Duration::from_millis(500);
+/// A look that got no answer (the model busy, the network) is asked again this many times,
+/// this far apart: long enough in all for the server's own 20-second pause to pass.
+const RETRIES: u32 = 4;
+const RETRY_WAIT: Duration = Duration::from_secs(8);
+/// After opening an app or an address: its window takes a moment to come up.
+const OPENING: Duration = Duration::from_millis(2500);
+/// A "wait": a page loading, an app starting.
+const WAIT: Duration = Duration::from_millis(1500);
+/// How long Neb's cursor rests on what it was asked to show, in steps of `REST_STEP`.
+const REST: Duration = Duration::from_secs(8);
+const REST_STEP: Duration = Duration::from_millis(100);
 /// The glide of Neb's cursor to its next spot: frames, and the time each lasts.
 const GLIDE_FRAMES: u32 = 22;
 const GLIDE_FRAME: Duration = Duration::from_millis(16);
@@ -61,9 +88,21 @@ const HAND_SIZE: f64 = 40.0;
 const HAND_TIP: f64 = 4.0;
 const HAND_LOOK: &str = "mew:hand-look";
 
+/// What was asked for (mirrors `ScreenActMode`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    /// Carry the request out.
+    #[default]
+    Do,
+    /// Find the thing and point at it, without pressing it.
+    Show,
+}
+
 #[derive(Default)]
 struct HandState {
     on: bool,
+    mode: Mode,
     /// Bumped at every start and stop: a look or a reply from before belongs to an older run.
     generation: u64,
     goal: String,
@@ -74,16 +113,25 @@ struct HandState {
     at: (i32, i32),
     /// The place to write is ready: the next look goes to Neb's typing, with this request.
     write: Option<String>,
+    /// What's left to do, in the model's words at its last look.
+    plan: String,
+    /// What the model chose to keep of what it read, oldest first. Never saved or logged.
+    notes: Vec<String>,
+    started: Option<Instant>,
 }
 
 static STATE: Mutex<HandState> = Mutex::new(HandState {
     on: false,
+    mode: Mode::Do,
     generation: 0,
     goal: String::new(),
     history: Vec::new(),
     steps: 0,
     at: (0, 0),
     write: None,
+    plan: String::new(),
+    notes: Vec::new(),
+    started: None,
 });
 
 fn state() -> MutexGuard<'static, HandState> {
@@ -97,8 +145,9 @@ pub fn active() -> bool {
     state().on
 }
 
-/// "Open the Insert tab", "click that for me": the captured screen and what was said.
-pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captured) {
+/// "Open the Insert tab", "click that for me" (`Mode::Do`), "where can I sign out?"
+/// (`Mode::Show`): the captured screen and what was said.
+pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, mode: Mode, captured: Captured) {
     if !coach::hand_allowed(app) {
         coach::notify(
             app,
@@ -107,7 +156,15 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
         coach::open_settings(app);
         return;
     }
-    if let Some(reason) = refused_app(captured.meta.app.as_deref()) {
+    // A terminal or a system window in front: not there. An app Windows can't name (the
+    // desktop, a system surface) is fine to start from, since Neb can open what it needs;
+    // typing and keys are checked against the app in front when they happen.
+    if let Some(reason) = captured
+        .meta
+        .app
+        .as_deref()
+        .and_then(|named| refused_app(Some(named)))
+    {
         coach::notify(app, reason);
         return;
     }
@@ -118,12 +175,16 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
     let generation = {
         let mut s = state();
         s.on = true;
+        s.mode = mode;
         s.generation += 1;
         s.goal = transcript;
         s.history.clear();
         s.steps = 0;
         s.at = home;
         s.write = None;
+        s.plan.clear();
+        s.notes.clear();
+        s.started = Some(Instant::now());
         s.generation
     };
     // Esc's "pressed since" bit is cleared, so only a press from now on stops it.
@@ -154,6 +215,9 @@ pub fn stop<R: Runtime>(app: &AppHandle<R>, notice: Option<&str>) {
         s.history.clear();
         s.goal.clear();
         s.write = None;
+        s.plan.clear();
+        s.notes.clear();
+        s.started = None;
     }
     overlay::hide_quietly_named(app, Surface::Hand);
     if let Some(notice) = notice {
@@ -170,15 +234,70 @@ pub fn on_captured<R: Runtime>(app: &AppHandle<R>, captured: Captured) {
         if !s.on {
             return; // wiped unsent
         }
-        (s.generation, s.write.take())
+        let write = s.write.take().map(|request| (request, s.notes.join("\n")));
+        (s.generation, write)
     };
-    // The document is ready: Neb's cursor goes, and its typing writes what was asked there.
-    if let Some(request) = write {
-        stop(app, None);
-        super::screen_write::start(app, request, captured);
+    // The document is ready: Neb's typing writes what was asked there, from the notes kept on
+    // the way, and the hand carries on when it ends (`after_write`).
+    if let Some((request, material)) = write {
+        look(app, "thinking");
+        super::screen_write::start_for_hand(app, request, material, captured);
         return;
     }
     act_in_background(app, generation, captured);
+}
+
+/// The writing Neb's hand asked for has ended (`all`: every word was typed). It looks again and
+/// carries on with what's left (naming and saving the document); if the typing was stopped or
+/// failed, which has been said, so does the hand.
+pub fn after_write<R: Runtime>(app: &AppHandle<R>, all: bool) {
+    if !all {
+        return stop(app, None);
+    }
+    let generation = {
+        let mut s = state();
+        if !s.on {
+            return;
+        }
+        s.history.push("Wrote it into the document.".to_owned());
+        if s.history.len() > HISTORY_ITEMS {
+            s.history.remove(0);
+        }
+        s.steps += 1;
+        s.generation
+    };
+    look_again(app, generation);
+}
+
+/// After an action: waits for the screen to settle and asks for the next look, unless the run
+/// has ended, the student pressed Esc, or it has gone on long enough.
+fn look_again<R: Runtime>(app: &AppHandle<R>, generation: u64) {
+    let more = {
+        let s = state();
+        if !s.on || s.generation != generation {
+            return;
+        }
+        within_limits(s.steps, s.started.map_or(Duration::ZERO, |at| at.elapsed()))
+    };
+    if !more {
+        return stop(
+            app,
+            Some("That's as far as I go in one go. Ask me to carry on if there's more."),
+        );
+    }
+    std::thread::sleep(SETTLE);
+    if !current(generation) {
+        return;
+    }
+    if let Some(why) = interrupted() {
+        return stop(app, Some(why));
+    }
+    if !coach::capture_for_hand(app) {
+        stop(
+            app,
+            Some("I couldn't look at the screen again, so I've stopped."),
+        );
+    }
 }
 
 /// A capture for a look was refused (a blocked app in front, a password field) or dropped.
@@ -200,23 +319,41 @@ fn act_in_background<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: 
 /// One look: ask for the next action, do it, and look again.
 fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
     let Captured { jpeg, meta, detail } = captured;
-    let (goal, history) = {
+    let body = {
         let s = state();
         if !s.on || s.generation != generation {
             return;
         }
-        (s.goal.clone(), s.history.clone())
+        let memory = Memory {
+            history: &s.history,
+            plan: &s.plan,
+            notes: &s.notes,
+        };
+        act_body(&s.goal, s.mode, &meta, memory, jpeg.as_slice())
     };
     look(app, "thinking");
-    let body = act_body(&goal, &meta, &history, jpeg.as_slice());
     drop(jpeg); // only the request body holds the image now
-    let reply = device_call::post(app, "api/screen/act", "act", body.as_slice());
+                // A long task is many calls, and one of them will find the model busy or the network
+                // slow: that's a pause, not the end. The same look is asked again a few times first.
+    let mut tries = 0;
+    let reply = loop {
+        let reply = device_call::post(app, "api/screen/act", "act", body.as_slice())
+            .map(|bytes| parse_act_reply(&bytes));
+        if !current(generation) {
+            return;
+        }
+        tries += 1;
+        if tries > RETRIES || !worth_retrying(&reply) {
+            break reply;
+        }
+        eprintln!("[screen] hand: no answer, asking again ({tries} of {RETRIES})");
+        if !pause(app, generation, RETRY_WAIT) {
+            return;
+        }
+    };
     drop(body);
     look(app, "moving");
-    if !current(generation) {
-        return;
-    }
-    let reply = match reply.map(|bytes| parse_act_reply(&bytes)) {
+    let reply = match reply {
         Ok(Some(reply)) => reply,
         Ok(None) => return stop(app, Some("I couldn't work out the next step. Try again.")),
         Err(CallError::Account(message)) | Err(CallError::Limited(message)) => {
@@ -225,7 +362,7 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
         Err(CallError::Busy) => {
             return stop(
                 app,
-                Some("I've done a lot just now. Try again in a little while."),
+                Some("The model's been busy for a while, so I've stopped. Ask me to carry on in a minute."),
             )
         }
         Err(CallError::Failed) => {
@@ -238,7 +375,32 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
     if let Some(why) = interrupted() {
         return stop(app, Some(why));
     }
+    {
+        // Its memory for the next look: the plan as it is now, and anything it chose to keep.
+        let mut s = state();
+        if !s.on || s.generation != generation {
+            return;
+        }
+        if let Some(plan) = reply.plan {
+            s.plan = plan;
+        }
+        if let Some(note) = reply.note.filter(|note| !note.trim().is_empty()) {
+            if s.notes.len() < NOTES {
+                s.notes.push(note);
+            }
+        }
+    }
     page::dispatch(app, page::SAY, json!({ "text": reply.speech }));
+    // What kind of action, never what it pressed, typed or noted.
+    let (step, kept) = {
+        // One lock, let go before anything else: two in one statement would wait on itself.
+        let s = state();
+        (s.steps + 1, s.notes.len())
+    };
+    eprintln!(
+        "[screen] hand: step {step}, {}, {kept} notes kept",
+        action_kind(&reply.action)
+    );
 
     let did = match reply.action {
         Action::Done | Action::Stop => return stop(app, None), // it said why
@@ -257,6 +419,54 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
             }
             return;
         }
+        Action::Point { point, .. } => {
+            // "Here it is": the cursor goes there and rests on it, pressing nothing.
+            let target = to_screen(point, meta.bounds);
+            if glide(app, generation, target) {
+                rest(app, generation);
+            }
+            return;
+        }
+        Action::Open { what, target } => {
+            let opened = match what {
+                OpenWhat::Site => launch::open_url(&target)
+                    .then(|| format!("Opened {} in the browser.", clip(&target, 100))),
+                OpenWhat::App => {
+                    let apps = launch::start_apps();
+                    launch::pick_app(&target, &apps)
+                        .filter(|found| launch::open_app(found))
+                        .map(|found| format!("Opened {}.", clip(&found.name, 60)))
+                }
+            };
+            eprintln!(
+                "[screen] hand: open {}: {}",
+                if what == OpenWhat::Site {
+                    "site"
+                } else {
+                    "app"
+                },
+                if opened.is_some() {
+                    "opened"
+                } else {
+                    "nothing opened"
+                }
+            );
+            match opened {
+                Some(did) => {
+                    std::thread::sleep(OPENING.saturating_sub(SETTLE));
+                    did
+                }
+                // Not the end of the run: the model hears it and finds another way.
+                None => format!(
+                    "Couldn't open “{}”: no installed app has that name, or it's one I leave to you.",
+                    clip(&target, 60)
+                ),
+            }
+        }
+        Action::Wait => {
+            std::thread::sleep(WAIT.saturating_sub(SETTLE));
+            "Waited for the screen.".to_owned()
+        }
         Action::Click {
             point,
             label,
@@ -264,7 +474,18 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
             double,
         } => {
             if risky_label(&label) {
-                return stop(app, Some(&format!("That one's yours to press: {label}.")));
+                // The server points at these instead; one that slipped through is pointed at
+                // here, and never pressed.
+                page::dispatch(
+                    app,
+                    page::SAY,
+                    json!({ "text": format!("That one's yours to press: {label}.") }),
+                );
+                let target = to_screen(point, meta.bounds);
+                if glide(app, generation, target) {
+                    rest(app, generation);
+                }
+                return;
             }
             // The model's point; centred on the control's own words only when it's already on
             // them (a caption under a picture names the picture, and isn't the thing to press).
@@ -316,9 +537,12 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
         }
         Action::Type { text } => {
             if let Some(reason) = refused_app(app_in_front().as_deref()) {
+                eprintln!("[screen] hand: didn't type (the app in front)");
                 return stop(app, Some(reason));
             }
-            if super::screen_write::focus_now(app) != Focus::Ordinary {
+            let focus = super::screen_write::focus_now(app);
+            if focus != Focus::Ordinary {
+                eprintln!("[screen] hand: didn't type (focus {focus:?})");
                 return stop(
                     app,
                     Some("I didn't type it: the cursor is in a password field or somewhere I can't check."),
@@ -328,20 +552,26 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
             match typed {
                 Ok(Typed::All) => format!("Typed “{}”.", clip(&text, 60)),
                 Ok(Typed::Cancelled) => return stop(app, Some("Stopped.")),
-                _ => return stop(app, Some("I couldn't type that there.")),
+                other => {
+                    eprintln!("[screen] hand: couldn't type ({other:?})");
+                    return stop(app, Some("I couldn't type that there."));
+                }
             }
         }
         Action::Key { key } => {
+            if let Some(reason) = refused_app(app_in_front().as_deref()) {
+                return stop(app, Some(reason));
+            }
             if !mouse::press(key) {
                 return stop(app, Some(REFUSED));
             }
             // Neb's own Esc isn't the student stopping it.
             let _ = escape_pressed();
-            format!("Pressed {}.", key_name(key))
+            format!("Pressed {}.", key.name())
         }
     };
 
-    let more = {
+    {
         let mut s = state();
         if !s.on || s.generation != generation {
             return;
@@ -351,27 +581,8 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
             s.history.remove(0);
         }
         s.steps += 1;
-        s.steps < MAX_STEPS
-    };
-    if !more {
-        return stop(
-            app,
-            Some("That's as far as I go in one go. Ask me to carry on if there's more."),
-        );
     }
-    std::thread::sleep(SETTLE);
-    if !current(generation) {
-        return;
-    }
-    if let Some(why) = interrupted() {
-        return stop(app, Some(why));
-    }
-    if !coach::capture_for_hand(app) {
-        stop(
-            app,
-            Some("I couldn't look at the screen again, so I've stopped."),
-        );
-    }
+    look_again(app, generation);
 }
 
 const REFUSED: &str =
@@ -392,6 +603,40 @@ fn current(generation: u64) -> bool {
 /// Why Neb's hand should stop now, if the student pressed Esc.
 fn interrupted() -> Option<&'static str> {
     escape_pressed().then_some("Stopped.")
+}
+
+/// Waits `how_long` with the cursor thinking. False if the run ended or the student pressed Esc
+/// meanwhile (the hand has stopped).
+fn pause<R: Runtime>(app: &AppHandle<R>, generation: u64, how_long: Duration) -> bool {
+    let steps = how_long.as_millis() / REST_STEP.as_millis().max(1);
+    for _ in 0..steps {
+        if !current(generation) {
+            return false;
+        }
+        if let Some(why) = interrupted() {
+            stop(app, Some(why));
+            return false;
+        }
+        std::thread::sleep(REST_STEP);
+    }
+    current(generation)
+}
+
+/// Neb's cursor rests on what it was asked to show, then goes. Esc, or anything that ends the
+/// run, sends it away sooner.
+fn rest<R: Runtime>(app: &AppHandle<R>, generation: u64) {
+    look(app, "here");
+    let steps = REST.as_millis() / REST_STEP.as_millis().max(1);
+    for _ in 0..steps {
+        if !current(generation) {
+            return;
+        }
+        if escape_pressed() {
+            break;
+        }
+        std::thread::sleep(REST_STEP);
+    }
+    stop(app, None);
 }
 
 fn look<R: Runtime>(app: &AppHandle<R>, look: &str) {
@@ -465,6 +710,22 @@ const NEVER_ACT_IN: &[&str] = &[
     "control.exe",
     "msiexec.exe",
 ];
+
+/// Whether asking for the same look again could help: the model was busy, the network or the
+/// server failed, or the answer couldn't be read. Not when the account or a limit said no,
+/// unless that limit is only the model being busy for a moment.
+pub fn worth_retrying(reply: &Result<Option<ActReply>, CallError>) -> bool {
+    match reply {
+        Ok(Some(_)) | Err(CallError::Account(_)) => false,
+        Ok(None) | Err(CallError::Busy) | Err(CallError::Failed) => true,
+        Err(CallError::Limited(message)) => message.to_lowercase().contains("busy"),
+    }
+}
+
+/// Whether a run that has taken `steps` actions over `elapsed` may take another.
+pub fn within_limits(steps: u32, elapsed: Duration) -> bool {
+    steps < MAX_STEPS && elapsed < MAX_TIME
+}
 
 /// Why Neb's hand won't act in `app`, if it won't.
 pub fn refused_app(app: Option<&str>) -> Option<&'static str> {
@@ -583,6 +844,22 @@ pub fn hand_rect(at: (i32, i32), scale: f64) -> ScreenRect {
     }
 }
 
+/// The kind of action, for the log.
+fn action_kind(action: &Action) -> &'static str {
+    match action {
+        Action::Click { .. } => "click",
+        Action::Open { .. } => "open",
+        Action::Scroll { .. } => "scroll",
+        Action::Type { .. } => "type",
+        Action::Key { key } => key.name(),
+        Action::Write { .. } => "write",
+        Action::Point { .. } => "point",
+        Action::Wait => "wait",
+        Action::Done => "done",
+        Action::Stop => "stop",
+    }
+}
+
 fn describe_click(label: &str, button: Button, double: bool) -> String {
     let how = match (button, double) {
         (Button::Right, _) => "Right-clicked",
@@ -592,34 +869,46 @@ fn describe_click(label: &str, button: Button, double: bool) -> String {
     format!("{how} “{label}”.")
 }
 
-fn key_name(key: PlainKey) -> &'static str {
-    match key {
-        PlainKey::Enter => "Enter",
-        PlainKey::Escape => "Escape",
-        PlainKey::Tab => "Tab",
-        PlainKey::Backspace => "Backspace",
-    }
-}
-
 /// At most `max` characters of `text`.
 fn clip(text: &str, max: usize) -> String {
     text.chars().take(max).collect()
 }
 
+/// What Neb's hand remembers between looks, sent with each: what it did, what it plans, and
+/// what it kept of what it read.
+#[derive(Debug, Clone, Copy)]
+pub struct Memory<'a> {
+    pub history: &'a [String],
+    pub plan: &'a str,
+    pub notes: &'a [String],
+}
+
 /// The body of `POST /api/screen/act` (packages/shared/src/screen-act.ts).
-pub fn act_body(goal: &str, meta: &FrameMeta, history: &[String], jpeg: &[u8]) -> SecretBytes {
+pub fn act_body(
+    goal: &str,
+    mode: Mode,
+    meta: &FrameMeta,
+    memory: Memory<'_>,
+    jpeg: &[u8],
+) -> SecretBytes {
     #[derive(Serialize)]
     struct Head<'a> {
         goal: &'a str,
         app: Option<&'a str>,
         scope: &'static str,
+        mode: Mode,
         history: &'a [String],
+        plan: &'a str,
+        notes: &'a [String],
     }
     let head = Head {
         goal,
         app: meta.app.as_deref(),
         scope: super::protocol::scope_name(meta.kind),
-        history,
+        mode,
+        history: memory.history,
+        plan: memory.plan,
+        notes: memory.notes,
     };
     with_image(&head, jpeg, meta.width, meta.height)
 }
@@ -629,6 +918,14 @@ pub fn act_body(goal: &str, meta: &FrameMeta, history: &[String], jpeg: &[u8]) -
 pub enum Direction {
     Up,
     Down,
+}
+
+/// What an `open` opens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OpenWhat {
+    App,
+    Site,
 }
 
 /// The one next thing for Neb's cursor to do.
@@ -656,6 +953,19 @@ pub enum Action {
     Write {
         request: String,
     },
+    /// Open one of the student's installed apps by name, or a web address in their browser
+    /// (`win::launch`).
+    Open {
+        what: OpenWhat,
+        target: String,
+    },
+    /// "Here it is": rest the cursor on something without pressing it. The last action.
+    Point {
+        point: Point,
+        label: String,
+    },
+    /// The screen is still loading: look again in a moment.
+    Wait,
     Done,
     Stop,
 }
@@ -664,6 +974,12 @@ pub enum Action {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActReply {
+    /// What's left to do, for the next look.
+    #[serde(default)]
+    pub plan: Option<String>,
+    /// Something read on this screen to keep for later.
+    #[serde(default)]
+    pub note: Option<String>,
     pub speech: String,
     pub action: Action,
     pub turn_id: String,
@@ -675,7 +991,9 @@ pub fn parse_act_reply(bytes: &[u8]) -> Option<ActReply> {
     let reply: ActReply = serde_json::from_slice(bytes).ok()?;
     let inside = |point: &Point| point.x <= 1000 && point.y <= 1000;
     let action_ok = match &reply.action {
-        Action::Click { point, label, .. } => inside(point) && within(label, LABEL_CHARS),
+        Action::Click { point, label, .. } | Action::Point { point, label } => {
+            inside(point) && within(label, LABEL_CHARS)
+        }
         Action::Scroll { point, amount, .. } => {
             inside(point) && (1..=SCROLL_NOTCHES).contains(amount)
         }
@@ -685,9 +1003,26 @@ pub fn parse_act_reply(bytes: &[u8]) -> Option<ActReply> {
                 && text.chars().all(|c| !c.is_control() || c == '\t')
         }
         Action::Write { request } => within(request, REQUEST_CHARS),
-        Action::Key { .. } | Action::Done | Action::Stop => true,
+        Action::Open { what, target } => match what {
+            OpenWhat::App => within(target, LABEL_CHARS),
+            OpenWhat::Site => launch::safe_url(target),
+        },
+        Action::Key { .. } | Action::Wait | Action::Done | Action::Stop => true,
     };
-    (action_ok && within(&reply.speech, SPEECH_CHARS) && is_uuid(&reply.turn_id)).then_some(reply)
+    let fits = |text: &Option<String>, max: usize| {
+        text.as_ref().is_none_or(|text| {
+            text.chars().count() <= max
+                && text
+                    .chars()
+                    .all(|c| !c.is_control() || c == '\n' || c == '\t')
+        })
+    };
+    (action_ok
+        && fits(&reply.plan, PLAN_CHARS)
+        && fits(&reply.note, NOTE_CHARS)
+        && within(&reply.speech, SPEECH_CHARS)
+        && is_uuid(&reply.turn_id))
+    .then_some(reply)
 }
 
 #[cfg(test)]
@@ -746,6 +1081,40 @@ mod tests {
             }
         );
         assert_eq!(
+            reply(json!({ "type": "key", "key": "ctrl+l" }))
+                .unwrap()
+                .action,
+            Action::Key {
+                key: PlainKey::CtrlL
+            }
+        );
+        assert_eq!(
+            reply(json!({ "type": "point", "point": { "x": 60, "y": 900 }, "label": "Sign Out" }))
+                .unwrap()
+                .action,
+            Action::Point {
+                point: Point { x: 60, y: 900 },
+                label: "Sign Out".into(),
+            }
+        );
+        assert_eq!(
+            reply(json!({ "type": "wait" })).unwrap().action,
+            Action::Wait
+        );
+        assert_eq!(
+            reply(json!({ "type": "open", "what": "app", "target": "Google Chrome" }))
+                .unwrap()
+                .action,
+            Action::Open {
+                what: OpenWhat::App,
+                target: "Google Chrome".into(),
+            }
+        );
+        assert!(reply(json!({
+            "type": "open", "what": "site", "target": "https://www.google.com/search?q=cats",
+        }))
+        .is_some());
+        assert_eq!(
             reply(json!({ "type": "done" })).unwrap().action,
             Action::Done
         );
@@ -766,6 +1135,13 @@ mod tests {
             json!({ "type": "scroll", "point": { "x": 5, "y": 5 }, "direction": "down", "amount": 50 }),
             json!({ "type": "type", "text": "dir\nformat c:" }),
             json!({ "type": "type", "text": "x".repeat(TYPE_CHARS + 1) }),
+            json!({ "type": "point", "point": { "x": 10, "y": 1400 }, "label": "Sign Out" }),
+            json!({ "type": "point", "point": { "x": 10, "y": 40 }, "label": "" }),
+            json!({ "type": "open", "what": "site", "target": "file:///C:/Windows/System32/cmd.exe" }),
+            json!({ "type": "open", "what": "site", "target": "http://example.com" }),
+            json!({ "type": "open", "what": "file", "target": "C:\\notes.txt" }),
+            json!({ "type": "open", "what": "app", "target": "" }),
+            json!({ "type": "key", "key": "alt+f4" }),
             json!({ "type": "key", "key": "delete" }),
             json!({ "type": "key", "key": "ctrl+w" }),
             json!({ "type": "run", "command": "calc.exe" }),
@@ -821,6 +1197,66 @@ mod tests {
         assert!(refused_app(None).is_some());
         assert_eq!(refused_app(Some("winword.exe")), None);
         assert_eq!(refused_app(Some("chrome.exe")), None);
+    }
+
+    #[test]
+    fn keeps_the_plan_and_a_note_from_a_reply_when_they_fit() {
+        let with = |plan: serde_json::Value, note: serde_json::Value| {
+            let body = json!({
+                "plan": plan, "note": note, "speech": "Reading this page.",
+                "action": { "type": "wait" }, "turnId": TURN,
+            });
+            parse_act_reply(body.to_string().as_bytes())
+        };
+        let kept = with(
+            json!("1. Open Word. 2. Write it up. 3. Save."),
+            json!("Evaporation: the sun heats water. (USGS, usgs.gov/water-cycle)"),
+        )
+        .unwrap();
+        assert_eq!(
+            kept.plan.as_deref(),
+            Some("1. Open Word. 2. Write it up. 3. Save.")
+        );
+        assert!(kept.note.unwrap().contains("usgs.gov"));
+        // Neither is needed (the first server sent none).
+        let bare = reply(json!({ "type": "wait" })).unwrap();
+        assert_eq!((bare.plan, bare.note), (None, None));
+        // Too long, or with control keys in it: the whole reply is refused.
+        assert_eq!(with(json!("x".repeat(PLAN_CHARS + 1)), json!("")), None);
+        assert_eq!(with(json!(""), json!("y".repeat(NOTE_CHARS + 1))), None);
+        assert_eq!(with(json!(""), json!("a\u{1b}[2Jb")), None);
+    }
+
+    #[test]
+    fn asks_again_when_the_model_is_busy_but_not_when_a_limit_says_no() {
+        assert!(worth_retrying(&Err(CallError::Busy)));
+        assert!(worth_retrying(&Err(CallError::Failed)));
+        assert!(worth_retrying(&Ok(None)));
+        assert!(worth_retrying(&Err(CallError::Limited(
+            "The tutor is busy right now (too many requests to the model). Try again in a minute."
+                .into()
+        ))));
+        assert!(!worth_retrying(&Err(CallError::Limited(
+            "You've used today's questions.".into()
+        ))));
+        assert!(!worth_retrying(&Err(CallError::Account(
+            "Signed out.".into()
+        ))));
+        assert!(!worth_retrying(&Ok(reply(json!({ "type": "done" })))));
+    }
+
+    #[test]
+    fn a_run_ends_after_enough_actions_or_enough_time() {
+        assert!(within_limits(0, Duration::ZERO));
+        assert!(within_limits(MAX_STEPS - 1, Duration::from_secs(60)));
+        assert!(!within_limits(MAX_STEPS, Duration::from_secs(60)));
+        assert!(!within_limits(3, MAX_TIME));
+    }
+
+    #[test]
+    fn says_whether_it_was_asked_to_do_it_or_to_show_where_it_is() {
+        assert_eq!(serde_json::to_value(Mode::Do).unwrap(), json!("do"));
+        assert_eq!(serde_json::to_value(Mode::Show).unwrap(), json!("show"));
     }
 
     #[test]

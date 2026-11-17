@@ -1501,9 +1501,20 @@ body.hand {
   }
 }
 
+/* Resting on what it was asked to show: the ring keeps spreading. */
+.neb-hand[data-look="here"] .ring {
+  animation: hand-click 1.1s ease-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .neb-hand[data-look="thinking"] .tag,
   .neb-hand[data-look="click"] .ring {
     animation: none;
+  }
+
+  .neb-hand[data-look="here"] .ring {
+    animation: none;
+    opacity: 0.9;
+    transform: scale(3);
   }
 }

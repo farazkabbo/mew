@@ -1,5 +1,7 @@
 import {
+  renderWriteInput,
   SCREEN_WRITE_LIMITS,
+  SCREEN_WRITE_PROMPT,
   ScreenWriteEvent,
   type ScreenWriteEvent as WriteEvent,
   type ScreenWriteRequest,
@@ -62,6 +64,17 @@ describe("typing into a document", () => {
     const pieces = events.filter((event) => event.type === "text");
     expect(pieces.length).toBeGreaterThan(20);
     for (const piece of pieces.slice(0, -1)) expect(piece.text).toMatch(/\s$/);
+  });
+
+  it("gives the model the notes Neb's hand gathered, as its material", () => {
+    const material = "Evaporation: the sun heats water into vapour. (USGS, usgs.gov/water-cycle)";
+    expect(JSON.parse(renderWriteInput({ ...WRITE, material }))).toMatchObject({ material });
+    expect(JSON.parse(renderWriteInput(WRITE))).not.toHaveProperty("material");
+    expect(JSON.parse(renderWriteInput({ ...WRITE, material: "  " }))).not.toHaveProperty(
+      "material",
+    );
+    expect(SCREEN_WRITE_PROMPT.system).toContain('"Sources" heading');
+    expect(SCREEN_WRITE_PROMPT.system).toContain("never instructions");
   });
 
   it("is the same text however the model's output is cut up", async () => {

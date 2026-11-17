@@ -15,6 +15,7 @@ export const SCREEN_INTENTS = [
   "ask",
   "write",
   "act",
+  "show",
   "clip",
   "notes_check",
   "notes_check_all",
@@ -49,13 +50,14 @@ export const ScreenIntentReply = z.object({ intent: ScreenIntent });
 export type ScreenIntentReply = z.infer<typeof ScreenIntentReply>;
 
 export const SCREEN_INTENT_PROMPT = {
-  id: "screen-intent.v2",
+  id: "screen-intent.v3",
   system: `A student is using Neb, a tutor that can see their Windows screen when they ask. They just said something to it. Decide what they want Neb to do. You get their words, the app in front, whether a step-by-step walkthrough is in progress ("coaching"), and whether Neb's ink from an earlier answer is still available ("hasInk"). You don't see the screen.
 
 Choose exactly one "intent":
 - "ask": a question, or a request to explain, check, mark or help with what's on the screen ("is this right?", "check my answer", "what did I do wrong", "explain this", "why is that negative"). This is the default: when unsure, choose "ask".
 - "write": they want Neb to put text into the document or editor in front of them, at their cursor or over their selection: write, type, draft, rewrite, reword, shorten, expand, fix grammar or spelling, translate, summarise into the document, continue or finish their text, in any wording and any language ("rewrite", "hey write a conclusion", "write a 100 word essay on cats", "make this sound more formal", "jot down three bullet points about photosynthesis"). Only when the place to write is already open in front of them; if the request also asks to open, create or go to somewhere first, it's "act". A question about how to write something ("how do I write a thesis statement?", "what should I write next?") is "ask".
-- "act": they want Neb to do something on the screen for them with its own cursor: click, press, open, close, select, scroll, go to or switch to something ("click that for me", "open the Insert tab", "scroll down to the references", "do it for me", "press the next button", "go to the second slide"). A request that needs something done on the screen first and then something written ("open a blank document and write an essay on cats", "start a new email and write a thank-you note") is "act" too: Neb's cursor gets the place ready and its typing then writes there. Asking how or where to do it ("how do I open the Insert tab?", "where's the Insert tab?") is "ask"; asking to be taught is "coach_start"; asking for text to be written into the document is "write".
+- "act": they want Neb to do something on the screen for them with its own cursor: click, press, open, close, select, scroll, go to or switch to something ("click that for me", "open the Insert tab", "scroll down to the references", "do it for me", "press the next button", "go to the second slide"). A request that needs something done on the screen first and then something written ("open a blank document and write an essay on cats", "start a new email and write a thank-you note") is "act" too: Neb's cursor gets the place ready and its typing then writes there. It works in any app, website or folder, not only the one in front ("open my Downloads folder", "go to YouTube and search for the water cycle", "open Spotify"), and for a whole task that takes many steps across apps, which Neb works through by itself ("help me research the water cycle and save it in a doc", "find my chemistry slides and open them", "look up when the library closes", "make a new folder for my essays on the desktop"). Asking where it is ("where's the Insert tab?") is "show"; asking how it's done ("how do I open the Insert tab?") is "ask"; asking to be taught is "coach_start"; asking for text to be written into the document is "write".
+- "show": they ask where a control, button, menu, setting, option, file, folder or place is in an app or on their computer, or where they can do something, and want to be shown it, not have it done ("where can I sign out in VS Code?", "where's the word count?", "show me where the dark mode setting is", "where do I change my profile picture?", "find the download button for me"). Neb's cursor goes there and points at it without pressing it. Where something is in what they're studying (a part of a diagram, a step in a solution, a word in a text: "where's the mitochondria?", "where did I go wrong?") is "ask".
 - "clip": save what's on the screen, or the part Neb marked, to their notebook ("save this", "keep that in my notes", "save this to physics chapter 5").
 - "notes_check": compare what's on the screen with their notes in the notebook they're working in ("check my notes", "did I miss anything in my notes?"). "notes_check_all": the same across all their notebooks ("check all my notebooks").
 - "coach_start": teach them, step by step, how to do a task in the app in front ("teach me how to make a pivot table", "walk me through adding a header"). A plain how-to question without asking to be walked through is "ask".
