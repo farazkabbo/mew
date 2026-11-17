@@ -2,7 +2,8 @@
 
 Context for a new working session. Read this, then [BUILD_BRIEF.md](BUILD_BRIEF.md) (the
 product brief), then the root [README.md](../README.md) and [backend/README.md](../backend/README.md).
-Last updated 2026-11-16, after desktop 0.1.6: H1 and H2 of Neb's hand anywhere (show me where,
+Last updated 2026-11-16, after desktop 0.1.7 (0.1.6 with presses going through the island and no
+guessed web addresses; SCREEN_COACH.md decision 18). Desktop 0.1.6: H1 and H2 of Neb's hand anywhere (show me where,
 shortcuts, opening apps and sites, and long tasks it finds its own way through), on top of
 desktop 0.1.5 (typing is streamed and typed a key at a time,
 and Neb's hand: its own cursor clicks for the student when asked). Desktop releases and their history:
