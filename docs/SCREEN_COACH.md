@@ -848,6 +848,16 @@ don't ask them again. Where a decision changes the brief above, the decision win
         than Flash-Lite, to be quick and dependable.
       - The log has each step's kind and whether an `open` worked, never what was pressed,
         typed or noted.
+    - **After 0.1.6 (2026-11-16, `fix/hand-island-and-dead-links`):**
+      - **Presses go through the island.** The island sits over the top of the screen, where
+        browsers keep their tabs, and isn't in Neb's pictures, so the model pointed at a tab
+        under it and the press landed on the island, again and again. For the moment of each
+        click and scroll the island lets the press through (`PressThrough`,
+        `screen_island::let_presses_through`), then takes clicks again.
+      - **No guessed addresses** (`screen-act.v6`): it opened dead links. A site is opened only
+        for a search, a front page, docs.new or an address readable on the screen; an article is
+        reached by searching and clicking a result, and an error page is a dead end to back out
+        of, never noted from.
     - **H3, after: precision.** The controls under the windows in front, from UI Automation
       (name, kind, rectangle), sent with each look so the model picks a control rather than a
       point; an eval set of recorded screens; a progress line on the island for long tasks.

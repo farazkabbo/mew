@@ -497,6 +497,8 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
                 return;
             }
             // A tap leaves the student's mouse where it is; what a tap can't do borrows it.
+            // The island may be over the spot (it isn't in the picture the model saw).
+            let _through = PressThrough::start(app);
             let tapped = button == Button::Left && mouse::tap_at(target.0, target.1, double);
             // Where it pressed, never what: for working out a click that lands off its mark.
             eprintln!(
@@ -527,6 +529,7 @@ fn act<R: Runtime>(app: &AppHandle<R>, generation: u64, captured: Captured) {
                 Direction::Up => notches,
                 Direction::Down => -notches,
             };
+            let _through = PressThrough::start(app);
             if !mouse::scroll_and_return(target.0, target.1, turn) {
                 return stop(app, Some(REFUSED));
             }
@@ -603,6 +606,26 @@ fn current(generation: u64) -> bool {
 /// Why Neb's hand should stop now, if the student pressed Esc.
 fn interrupted() -> Option<&'static str> {
     escape_pressed().then_some("Stopped.")
+}
+
+/// While this lives, Neb's island lets presses through to the app under it
+/// (`screen_island::let_presses_through`); it takes clicks again when this is dropped, however
+/// the press went.
+struct PressThrough<R: Runtime>(AppHandle<R>);
+
+impl<R: Runtime> PressThrough<R> {
+    fn start(app: &AppHandle<R>) -> Self {
+        screen_island::let_presses_through(app, true);
+        // Long enough for Windows to see the change before the press lands.
+        std::thread::sleep(Duration::from_millis(30));
+        Self(app.clone())
+    }
+}
+
+impl<R: Runtime> Drop for PressThrough<R> {
+    fn drop(&mut self) {
+        screen_island::let_presses_through(&self.0, false);
+    }
 }
 
 /// Waits `how_long` with the cursor thinking. False if the run ended or the student pressed Esc
