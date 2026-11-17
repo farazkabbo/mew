@@ -167,6 +167,8 @@ describe("cooldown after quota or overload errors", () => {
   });
 
   it("fails fast, without a request, while a model cools down; other models still work", async () => {
+    // No fallback here: the fallback model is the busy model itself.
+    vi.stubEnv("GEMINI_FALLBACK_MODEL", "gemini-test");
     const { generateStructured, ModelBusyError } = await import("./gemini");
     create.mockRejectedValueOnce(new Error("429 Rate limit exceeded. Please retry in 30s"));
 
@@ -180,5 +182,104 @@ describe("cooldown after quota or overload errors", () => {
     await expect(generateStructured({ ...request, model: "other-model" })).resolves.toMatchObject({
       label: "ignore",
     });
+  });
+});
+
+describe("fallback model when the main one is overloaded or out of quota", () => {
+  const ok = { output_text: '{"label":"ignore","confidence":0.9,"reason":"filler"}' };
+  const modelOf = (call: unknown[]) => (call[0] as { model: string }).model;
+
+  beforeEach(() => {
+    vi.resetModules();
+    create.mockReset();
+    vi.stubEnv("GEMINI_API_KEY", "test-key");
+    vi.stubEnv("GEMINI_FALLBACK_MODEL", "fallback-model");
+  });
+
+  it("answers with the fallback after a 503, and while the main model cools down", async () => {
+    const { generateStructured } = await import("./gemini");
+    create.mockRejectedValueOnce(new Error("503 model is currently experiencing high demand"));
+    create.mockResolvedValue(ok);
+
+    await expect(generateStructured(request)).resolves.toMatchObject({ label: "ignore" });
+    expect(create.mock.calls.map(modelOf)).toEqual(["gemini-test", "fallback-model"]);
+
+    // The main model is cooling down: straight to the fallback, no request to the main model.
+    await expect(generateStructured(request)).resolves.toMatchObject({ label: "ignore" });
+    expect(create.mock.calls.map(modelOf)).toEqual([
+      "gemini-test",
+      "fallback-model",
+      "fallback-model",
+    ]);
+  });
+
+  it("answers with the fallback after a 429 (quota)", async () => {
+    const { generateStructured } = await import("./gemini");
+    create.mockRejectedValueOnce(new Error("429 Rate limit exceeded. Please retry in 30s"));
+    create.mockResolvedValue(ok);
+
+    await expect(generateStructured(request)).resolves.toMatchObject({ label: "ignore" });
+    expect(create.mock.calls.map(modelOf)).toEqual(["gemini-test", "fallback-model"]);
+  });
+
+  it("doesn't fall back for errors that aren't about load, or once the caller aborted", async () => {
+    const { generateStructured } = await import("./gemini");
+    create.mockRejectedValueOnce(new Error("400 invalid argument"));
+    await expect(generateStructured(request)).rejects.toThrow(/400/);
+    expect(create).toHaveBeenCalledTimes(1);
+
+    const controller = new AbortController();
+    create.mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.reject(new Error("503 high demand"));
+    });
+    await expect(
+      generateStructured({ ...request, model: "other-model", signal: controller.signal }),
+    ).rejects.toThrow(/503/);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports the fallback's error when both models are busy", async () => {
+    const { generateStructured } = await import("./gemini");
+    create.mockRejectedValueOnce(new Error("503 high demand"));
+    create.mockRejectedValueOnce(new Error("429 Rate limit exceeded. Please retry in 30s"));
+
+    await expect(generateStructured(request)).rejects.toThrow(/429/);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it("streams from the fallback if the main model fails before any text", async () => {
+    const { streamStructuredText } = await import("./gemini");
+    create.mockRejectedValueOnce(new Error("503 high demand"));
+    create.mockResolvedValueOnce(
+      (async function* () {
+        yield { event_type: "step.delta", delta: { type: "text", text: '{"a":' } };
+        yield { event_type: "step.delta", delta: { type: "text", text: "1}" } };
+      })(),
+    );
+
+    const chunks: string[] = [];
+    for await (const chunk of streamStructuredText(request)) chunks.push(chunk);
+    expect(chunks.join("")).toBe('{"a":1}');
+    expect(create.mock.calls.map(modelOf)).toEqual(["gemini-test", "fallback-model"]);
+  });
+
+  it("keeps the error if the stream fails after text was sent", async () => {
+    const { streamStructuredText } = await import("./gemini");
+    create.mockResolvedValueOnce(
+      (async function* () {
+        yield { event_type: "step.delta", delta: { type: "text", text: '{"a":' } };
+        throw new Error("503 high demand");
+      })(),
+    );
+
+    const chunks: string[] = [];
+    await expect(
+      (async () => {
+        for await (const chunk of streamStructuredText(request)) chunks.push(chunk);
+      })(),
+    ).rejects.toThrow(/503/);
+    expect(chunks).toEqual(['{"a":']);
+    expect(create).toHaveBeenCalledTimes(1);
   });
 });
