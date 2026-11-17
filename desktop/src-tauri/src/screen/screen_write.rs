@@ -53,8 +53,33 @@ pub fn writing() -> bool {
 
 /// "Type …", "rewrite …": the captured screen and what was said.
 pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captured) {
+    begin(app, transcript, None, captured);
+}
+
+/// Neb's hand got a document ready and asks for the writing (`screen_hand.rs`): `request` is
+/// what to write and `material` the notes it kept on the way. The hand hears how it went
+/// (`screen_hand::after_write`) and carries on from there.
+pub fn start_for_hand<R: Runtime>(
+    app: &AppHandle<R>,
+    request: String,
+    material: String,
+    captured: Captured,
+) {
+    begin(app, request, Some(material), captured);
+}
+
+fn begin<R: Runtime>(
+    app: &AppHandle<R>,
+    transcript: String,
+    material: Option<String>,
+    captured: Captured,
+) {
+    let for_hand = material.is_some();
     if let Some(reason) = refused_app(captured.meta.app.as_deref()) {
         coach::notify(app, reason);
+        if for_hand {
+            super::screen_hand::after_write(app, false);
+        }
         return;
     }
     // The window they were typing in (the island never takes the focus, so it's still in front).
@@ -65,6 +90,9 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
         .unwrap_or_else(foreground);
     if window == 0 {
         coach::notify(app, "Click into your document first, then ask again.");
+        if for_hand {
+            super::screen_hand::after_write(app, false);
+        }
         return;
     }
     let handle = app.clone();
@@ -73,14 +101,21 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, captured: Captu
     let spawned = std::thread::Builder::new()
         .name("mew-screen-write".into())
         .spawn(move || {
-            write(&handle, &transcript, captured, window);
+            let all = write(&handle, &transcript, material.as_deref(), captured, window);
             WRITING.store(false, Ordering::SeqCst);
-            coach::settle(&handle);
+            if for_hand {
+                super::screen_hand::after_write(&handle, all);
+            } else {
+                coach::settle(&handle);
+            }
         });
     if spawned.is_err() {
         WRITING.store(false, Ordering::SeqCst);
         super::screen_island::refresh(app);
         coach::notify(app, "Couldn't type that just now.");
+        if for_hand {
+            super::screen_hand::after_write(app, false);
+        }
     }
 }
 
@@ -91,9 +126,16 @@ enum Incoming {
     End(Result<(), CallError>),
 }
 
-fn write<R: Runtime>(app: &AppHandle<R>, transcript: &str, captured: Captured, window: isize) {
+/// Asks for the text and types it as it comes. True when all of it was typed.
+fn write<R: Runtime>(
+    app: &AppHandle<R>,
+    transcript: &str,
+    material: Option<&str>,
+    captured: Captured,
+    window: isize,
+) -> bool {
     let Captured { jpeg, meta, .. } = captured;
-    let body = write_body(transcript, &meta, jpeg.as_slice());
+    let body = write_body(transcript, material, &meta, jpeg.as_slice());
     drop(jpeg); // only the request body holds the image now
 
     // The text is read off the network as fast as it comes, and typed at a human's pace here.
@@ -122,7 +164,7 @@ fn write<R: Runtime>(app: &AppHandle<R>, transcript: &str, captured: Captured, w
         });
     if spawned.is_err() {
         coach::notify(app, "Couldn't type that just now.");
-        return;
+        return false;
     }
 
     let mut typist: Option<Typist> = None;
@@ -133,15 +175,15 @@ fn write<R: Runtime>(app: &AppHandle<R>, transcript: &str, captured: Captured, w
             Ok(Incoming::End(Ok(()))) => {
                 // The stream ended without saying it was done.
                 coach::notify(app, &stopped_short(typed));
-                return;
+                return false;
             }
             Ok(Incoming::End(Err(error))) => {
                 coach::notify(app, &call_failed(error));
-                return;
+                return false;
             }
             Err(_) => {
                 coach::notify(app, &stopped_short(typed));
-                return;
+                return false;
             }
         };
         match event {
@@ -151,25 +193,25 @@ fn write<R: Runtime>(app: &AppHandle<R>, transcript: &str, captured: Captured, w
             WriteEvent::Text { text } => {
                 if typed + text.chars().count() > TEXT_CHARS {
                     coach::notify(app, "That's as much as I type at once. Ask me to continue.");
-                    return;
+                    return false;
                 }
                 if typist.is_none() {
                     match ready_to_type(app, window) {
                         Ok(ready) => typist = Some(ready),
                         Err(why) => {
                             coach::notify(app, why);
-                            return;
+                            return false;
                         }
                     }
                 }
                 let Some(typist) = typist.as_mut() else {
-                    return;
+                    return false;
                 };
                 match typist.type_text(&text) {
                     Typed::All => typed += text.chars().count(),
                     stopped => {
                         coach::notify(app, why_stopped(stopped));
-                        return;
+                        return false;
                     }
                 }
             }
@@ -177,11 +219,11 @@ fn write<R: Runtime>(app: &AppHandle<R>, transcript: &str, captured: Captured, w
                 if typed > 0 {
                     coach::notify(app, "Typed. Press Ctrl+Z to undo it.");
                 }
-                return; // with nothing typed, it said why
+                return typed > 0; // with nothing typed, it said why
             }
             WriteEvent::Error { message } => {
                 coach::notify(app, &message);
-                return;
+                return false;
             }
         }
     }
@@ -286,17 +328,26 @@ pub fn refused_app(app: Option<&str>) -> Option<&'static str> {
 }
 
 /// The body of `POST /api/screen/write` (packages/shared/src/screen-write.ts).
-pub fn write_body(transcript: &str, meta: &FrameMeta, jpeg: &[u8]) -> SecretBytes {
+/// `material`: the notes Neb's hand kept for the piece, when it asked for the writing.
+pub fn write_body(
+    transcript: &str,
+    material: Option<&str>,
+    meta: &FrameMeta,
+    jpeg: &[u8],
+) -> SecretBytes {
     #[derive(Serialize)]
     struct Head<'a> {
         transcript: &'a str,
         app: Option<&'a str>,
         scope: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        material: Option<&'a str>,
     }
     let head = Head {
         transcript,
         app: meta.app.as_deref(),
         scope: super::protocol::scope_name(meta.kind),
+        material: material.filter(|notes| !notes.trim().is_empty()),
     };
     with_image(&head, jpeg, meta.width, meta.height)
 }

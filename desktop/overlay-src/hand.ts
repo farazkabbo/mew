@@ -3,9 +3,10 @@ import { on } from "./tauri";
 /**
  * Neb's hand (`screen_hand.rs`): Neb's own cursor, which goes and clicks what the student asked
  * for. Rust moves its window; this page only shows its look: moving, thinking (choosing the next
- * action), or a click (a ring that spreads from the tip, once per click).
+ * action), a click (a ring that spreads from the tip, once per click), or here (rings that keep
+ * spreading while it rests on what it was asked to show).
  */
-const LOOKS: readonly string[] = ["moving", "thinking", "click"];
+const LOOKS: readonly string[] = ["moving", "thinking", "click", "here"];
 
 const hand = document.getElementById("hand");
 

@@ -2,7 +2,9 @@
 
 Context for a new working session. Read this, then [BUILD_BRIEF.md](BUILD_BRIEF.md) (the
 product brief), then the root [README.md](../README.md) and [backend/README.md](../backend/README.md).
-Last updated 2026-11-15, after desktop 0.1.5 (typing is streamed and typed a key at a time,
+Last updated 2026-11-16, after desktop 0.1.6: H1 and H2 of Neb's hand anywhere (show me where,
+shortcuts, opening apps and sites, and long tasks it finds its own way through), on top of
+desktop 0.1.5 (typing is streamed and typed a key at a time,
 and Neb's hand: its own cursor clicks for the student when asked). Desktop releases and their history:
 [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md).
 
@@ -604,6 +606,45 @@ append` (follow-ups). Rate limits `circleAsk*` (10/min, 150/day, 1,500/month) an
     essay on cats" in Word and Notepad; "is this right?" held over a solved equation in OneNote
     with Watch on; the same with the network off (the fixed rules decide, so "write a 100 word
     essay" is still typed, and "is this right?" is still a question).
+
+- **Neb's hand anywhere, H1 and H2 built** (2026-11-16, `feat/neb-hand-anywhere`; SCREEN_COACH.md
+  decision 18, which also lists H3 and what the owner has to decide; desktop 0.1.6, and the
+  web app must be deployed with it):
+  - **Show me where:** "where can I sign out in VS Code?" is the `show` intent
+    (`screen-intent.v3`) → `screen_hand::start(…, Mode::Show, …)` → `mode: "show"` in
+    `/api/screen/act` (`screen-act.v3`). Neb's cursor opens what hides the thing and ends with a
+    `point` action: it rests there 8 s (`rest`, the `here` look in `overlay-src/hand.ts`) and
+    presses nothing. A click on a never-press name becomes a `point` on the server
+    (`server/screen-act.ts`) and again in `screen_hand.rs`, in both modes.
+  - **More moves:** `wait`, and the keys and shortcuts in `SCREEN_ACT_KEYS` / `PlainKey`
+    (`win/mouse.rs` `press` holds the modifier and lets it go in one batch).
+  - **Long tasks (H2):** "research the water cycle and save it in a doc". The model keeps a
+    `plan` and `notes` between looks (`screen-act.v4`; held in `HandState`, sent with each look
+    as `Memory`, wiped at the end). `write` hands the notes to the typing as `material`
+    (`screen_write::start_for_hand`, `screen-write.v4`) and the hand carries on when it ends
+    (`screen_hand::after_write` → `look_again`). 80 actions and 15 minutes a request
+    (`within_limits`), 20 actions in the history, 1,000 actions a day.
+  - **Opening things:** the `open` action (`win/launch.rs`): an https address in the default
+    browser, or a Start menu app by name. "Open …", "go to …" and "research …" are decided by
+    `intent.rs` without the model. A look that gets no answer is asked again 4 times, 8 s apart
+    (`worth_retrying`).
+  - **Tried by the owner in dev on 2026-11-16** with `gemini-3.5-flash-lite` on the free tier:
+    it opens sites, reads, takes notes and writes into a Google Doc, slowly (3 to 15 s a step)
+    and every run met "model busy" (15 requests a minute). Not yet seen working: a full
+    research run to the end, naming the document, opening an app by name. For it to be quick
+    and dependable: billing on the Gemini key and a stronger `GEMINI_SCREEN_MODEL`. Still to
+    try, with "Let Neb click for me" on: "where can I sign out in VS Code?" (the
+    Accounts menu opens, the cursor rests on Sign Out, nothing is pressed); "where's the word
+    count?" in Word (already on screen: it points at once); the same question with the switch
+    off (an answer in words and ink); "open my Downloads folder" from the desktop; "go to
+    YouTube and search for the water cycle" (Ctrl+L, typing, Enter, a wait); "sign me out" (it
+    points at the button and says it's yours); Esc while the cursor rests. Then the long one:
+    "help me research the water cycle and save it in a doc" with Word installed, and again
+    asking for a Google Doc (signed in to Google in the browser). Watch for: sources opened and
+    read, a cookie banner declined, the write-up with its Sources list, the save under a
+    sensible name, Esc during the typing (both stop), and how long and how many actions it took
+    (`[screen] hand:` lines in the log give each press).
+  - **The quick guide's HTML has a new line; its PDF isn't reprinted yet.**
 
 **Notes Check (S3.5)** — brief and binding Decisions (1–39) in
 [SCREEN_COACH_NOTES_CHECK.md](SCREEN_COACH_NOTES_CHECK.md). **N1–N5 built** (2026-10-23). The

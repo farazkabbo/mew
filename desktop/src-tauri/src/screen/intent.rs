@@ -35,6 +35,7 @@ pub fn parse_intent_reply(bytes: &[u8], coaching: bool, has_ink: bool) -> Option
         "ask" => Some(Intent::Ask),
         "write" => Some(Intent::Write),
         "act" => Some(Intent::Act),
+        "show" => Some(Intent::Show),
         "clip" => Some(Intent::Clip),
         "notes_check" => Some(Intent::NotesCheck { all: false }),
         "notes_check_all" => Some(Intent::NotesCheck { all: true }),
@@ -80,6 +81,10 @@ pub enum Intent {
     /// Do something on the screen with Neb's own cursor ("open the Insert tab", "click that for
     /// me", "scroll down"): `screen_hand.rs`.
     Act,
+    /// Show where something is ("where can I sign out in VS Code?"): Neb's cursor goes there,
+    /// opening what hides it, and points at it without pressing it (`screen_hand.rs`). Only the
+    /// model reads this one; with Neb's hand off it's a question, answered with ink.
+    Show,
     /// A word for the walkthrough in progress.
     Coach(CoachWord),
     /// Pause Screen Coach ("Neb, pause"; during a walkthrough, "pause" pauses the walkthrough).
@@ -572,6 +577,17 @@ fn is_act(words: &[String]) -> bool {
         "scroll down ",
         "scroll up ",
         "scroll to ",
+        // Getting somewhere, and whole tasks: decided here so a slow network can't turn "open
+        // Spotify" into a question.
+        "open ",
+        "open up ",
+        "launch ",
+        "go to ",
+        "switch to ",
+        "search for ",
+        "look up ",
+        "research ",
+        "help me research ",
     ]
     .iter()
     .any(|start| {
@@ -986,6 +1002,14 @@ mod tests {
             "Scroll down to the references",
             "do it for me",
             "can you click that for me",
+            "open Spotify",
+            "Can you open Spotify for me?",
+            "hey neb, launch Word",
+            "go to my Downloads folder",
+            "switch to Chrome",
+            "search for the water cycle on YouTube",
+            "Help me research cats and save it in a doc.",
+            "research the French Revolution",
         ] {
             assert_eq!(intent_of(said, false), Intent::Act, "{said}");
         }
@@ -998,6 +1022,11 @@ mod tests {
         ] {
             assert_eq!(intent_of(said, false), Intent::Ask, "{said}");
         }
+        let show = serde_json::json!({ "intent": "show" }).to_string();
+        assert_eq!(
+            parse_intent_reply(show.as_bytes(), false, false),
+            Some(Intent::Show)
+        );
         let act = serde_json::json!({ "intent": "act" }).to_string();
         assert_eq!(
             parse_intent_reply(act.as_bytes(), false, false),

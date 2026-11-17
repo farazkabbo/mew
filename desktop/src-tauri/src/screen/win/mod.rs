@@ -9,6 +9,7 @@ pub mod encode;
 pub mod http;
 pub mod indicator;
 pub mod input;
+pub mod launch;
 pub mod media_session;
 pub mod mouse;
 pub mod ocr;

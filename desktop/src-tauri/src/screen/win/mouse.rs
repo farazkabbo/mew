@@ -16,8 +16,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYBD_EVENT_FLAGS,
     KEYEVENTF_KEYUP, MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
     MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_VIRTUALDESK,
-    MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY, VK_BACK, VK_ESCAPE, VK_RETURN,
-    VK_TAB,
+    MOUSEEVENTF_WHEEL, MOUSEINPUT, MOUSE_EVENT_FLAGS, VIRTUAL_KEY, VK_BACK, VK_CONTROL, VK_DOWN,
+    VK_END, VK_ESCAPE, VK_F, VK_F5, VK_HOME, VK_L, VK_LEFT, VK_LWIN, VK_MENU, VK_N, VK_NEXT,
+    VK_PRIOR, VK_RETURN, VK_RIGHT, VK_S, VK_SHIFT, VK_T, VK_TAB, VK_UP,
 };
 use windows::Win32::UI::Input::Pointer::{
     InitializeTouchInjection, InjectTouchInput, POINTER_FLAGS, POINTER_FLAG_DOWN,
@@ -44,7 +45,10 @@ pub enum Button {
     Right,
 }
 
-/// A key Neb's hand may press (never a shortcut: no modifiers).
+/// A key or shortcut Neb's hand may press: moving about, and a few shortcuts that open or find
+/// something. Nothing that closes, deletes, cuts, pastes, sends or runs (no Alt+F4, Ctrl+W,
+/// Delete, Ctrl+Enter, Win+R). The same list as `SCREEN_ACT_KEYS` in
+/// packages/shared/src/screen-act.ts; anything else in a reply doesn't parse.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlainKey {
@@ -52,6 +56,101 @@ pub enum PlainKey {
     Escape,
     Tab,
     Backspace,
+    Up,
+    Down,
+    Left,
+    Right,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    F5,
+    /// The Start menu.
+    Windows,
+    #[serde(rename = "shift+tab")]
+    ShiftTab,
+    /// Back.
+    #[serde(rename = "alt+left")]
+    AltLeft,
+    #[serde(rename = "ctrl+home")]
+    CtrlHome,
+    #[serde(rename = "ctrl+end")]
+    CtrlEnd,
+    /// A browser's address bar.
+    #[serde(rename = "ctrl+l")]
+    CtrlL,
+    /// A new browser tab.
+    #[serde(rename = "ctrl+t")]
+    CtrlT,
+    /// Find.
+    #[serde(rename = "ctrl+f")]
+    CtrlF,
+    /// A new document or window.
+    #[serde(rename = "ctrl+n")]
+    CtrlN,
+    /// Save.
+    #[serde(rename = "ctrl+s")]
+    CtrlS,
+}
+
+impl PlainKey {
+    /// The key held meanwhile, if it's a shortcut, and the key pressed.
+    pub fn chord(self) -> (Option<VIRTUAL_KEY>, VIRTUAL_KEY) {
+        match self {
+            Self::Enter => (None, VK_RETURN),
+            Self::Escape => (None, VK_ESCAPE),
+            Self::Tab => (None, VK_TAB),
+            Self::Backspace => (None, VK_BACK),
+            Self::Up => (None, VK_UP),
+            Self::Down => (None, VK_DOWN),
+            Self::Left => (None, VK_LEFT),
+            Self::Right => (None, VK_RIGHT),
+            Self::PageUp => (None, VK_PRIOR),
+            Self::PageDown => (None, VK_NEXT),
+            Self::Home => (None, VK_HOME),
+            Self::End => (None, VK_END),
+            Self::F5 => (None, VK_F5),
+            Self::Windows => (None, VK_LWIN),
+            Self::ShiftTab => (Some(VK_SHIFT), VK_TAB),
+            Self::AltLeft => (Some(VK_MENU), VK_LEFT),
+            Self::CtrlHome => (Some(VK_CONTROL), VK_HOME),
+            Self::CtrlEnd => (Some(VK_CONTROL), VK_END),
+            Self::CtrlL => (Some(VK_CONTROL), VK_L),
+            Self::CtrlT => (Some(VK_CONTROL), VK_T),
+            Self::CtrlF => (Some(VK_CONTROL), VK_F),
+            Self::CtrlN => (Some(VK_CONTROL), VK_N),
+            Self::CtrlS => (Some(VK_CONTROL), VK_S),
+        }
+    }
+
+    /// As it's said in the history ("Pressed Ctrl+L.").
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Enter => "Enter",
+            Self::Escape => "Escape",
+            Self::Tab => "Tab",
+            Self::Backspace => "Backspace",
+            Self::Up => "Up",
+            Self::Down => "Down",
+            Self::Left => "Left",
+            Self::Right => "Right",
+            Self::PageUp => "Page Up",
+            Self::PageDown => "Page Down",
+            Self::Home => "Home",
+            Self::End => "End",
+            Self::F5 => "F5",
+            Self::Windows => "the Windows key",
+            Self::ShiftTab => "Shift+Tab",
+            Self::AltLeft => "Alt+Left",
+            Self::CtrlHome => "Ctrl+Home",
+            Self::CtrlEnd => "Ctrl+End",
+            Self::CtrlL => "Ctrl+L",
+            Self::CtrlT => "Ctrl+T",
+            Self::CtrlF => "Ctrl+F",
+            Self::CtrlN => "Ctrl+N",
+            Self::CtrlS => "Ctrl+S",
+        }
+    }
 }
 
 /// The virtual desktop (every monitor), in screen pixels: left, top, width, height.
@@ -230,15 +329,10 @@ pub fn scroll_and_return(x: i32, y: i32, notches: i32) -> bool {
     and_return(|| scroll_at(x, y, notches))
 }
 
-/// Presses and lets go of one plain key.
+/// Presses and lets go of one key, or one shortcut (its modifier held meanwhile, and always let
+/// go again, in the same batch of input).
 pub fn press(key: PlainKey) -> bool {
-    let vk: VIRTUAL_KEY = match key {
-        PlainKey::Enter => VK_RETURN,
-        PlainKey::Escape => VK_ESCAPE,
-        PlainKey::Tab => VK_TAB,
-        PlainKey::Backspace => VK_BACK,
-    };
-    let event = |flags: KEYBD_EVENT_FLAGS| INPUT {
+    let event = |vk: VIRTUAL_KEY, flags: KEYBD_EVENT_FLAGS| INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
             ki: KEYBDINPUT {
@@ -250,7 +344,16 @@ pub fn press(key: PlainKey) -> bool {
             },
         },
     };
-    send(&[event(KEYBD_EVENT_FLAGS(0)), event(KEYEVENTF_KEYUP)])
+    let down = KEYBD_EVENT_FLAGS(0);
+    match key.chord() {
+        (None, vk) => send(&[event(vk, down), event(vk, KEYEVENTF_KEYUP)]),
+        (Some(held), vk) => send(&[
+            event(held, down),
+            event(vk, down),
+            event(vk, KEYEVENTF_KEYUP),
+            event(held, KEYEVENTF_KEYUP),
+        ]),
+    }
 }
 
 #[cfg(test)]
@@ -268,5 +371,37 @@ mod tests {
         assert!((32770..=32800).contains(&y), "{y}");
         // Off the desktop: kept on it.
         assert_eq!(absolute(9000, -50, desktop), (65535, 0));
+    }
+
+    fn key(name: &str) -> Option<PlainKey> {
+        serde_json::from_value(serde_json::Value::String(name.into())).ok()
+    }
+
+    #[test]
+    fn reads_the_keys_and_shortcuts_it_may_press_and_no_others() {
+        assert_eq!(key("enter"), Some(PlainKey::Enter));
+        assert_eq!(key("page_down"), Some(PlainKey::PageDown));
+        assert_eq!(key("windows"), Some(PlainKey::Windows));
+        assert_eq!(key("ctrl+l"), Some(PlainKey::CtrlL));
+        assert_eq!(key("shift+tab"), Some(PlainKey::ShiftTab));
+        assert_eq!(PlainKey::CtrlS.chord(), (Some(VK_CONTROL), VK_S));
+        assert_eq!(PlainKey::AltLeft.chord(), (Some(VK_MENU), VK_LEFT));
+        assert_eq!(PlainKey::Home.chord(), (None, VK_HOME));
+        // Nothing that closes, deletes, pastes, sends or runs.
+        for name in [
+            "alt+f4",
+            "ctrl+w",
+            "delete",
+            "ctrl+v",
+            "ctrl+x",
+            "ctrl+a",
+            "ctrl+enter",
+            "win+r",
+            "ctrl+shift+esc",
+            "CtrlL",
+            "ctrl_l",
+        ] {
+            assert_eq!(key(name), None, "{name}");
+        }
     }
 }

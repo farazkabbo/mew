@@ -768,3 +768,89 @@ don't ask them again. Where a decision changes the brief above, the decision win
       - Watch doesn't look while Neb's hand or its typing is busy.
     - Rate limits: 30 actions a minute, 400 a day; like typing, it needs the allowance but
       doesn't spend a question.
+18. **Neb's hand anywhere: the H series** (asked for by the owner on 2026-11-16: "navigate
+    anything, any web, any Windows file structure, other applications"; examples: "where can I
+    sign out in VS Code?" and "help me research X and save it in a doc";
+    `feat/neb-hand-anywhere`). Built a milestone at a time.
+    - **H1, built (2026-11-16): show me where, and a hand that gets further.**
+      - **Show** (the `show` intent, prompt `screen-intent.v3`; `mode: "show"` in
+        `POST /api/screen/act`, prompt `screen-act.v3`): "where can I sign out in VS Code?",
+        "where's the word count?". Neb's cursor opens what hides the thing (the profile picture,
+        a menu, a tab) and ends with a `point`: it glides there and rests on it for 8 seconds
+        with a spreading ring, saying where it is, and presses nothing. Where something is in
+        what's being studied ("where's the mitochondria?") is still a question. With "Let Neb
+        click for me" off, `show` is a question too, answered in words and ink (`ask.rs`).
+      - **What was asked about is never pressed:** the prompt says so, the server turns a click
+        on a never-press name into a `point` ("Here it is: Sign Out."), and the desktop points
+        too if one slips through. In `do` mode the same happens in place of the old stop: Neb's
+        cursor rests on the button that's the student's to press.
+      - **More moves:** `wait` (a page loading: 1.5 s, then another look) and a fixed list of
+        keys and shortcuts (`SCREEN_ACT_KEYS`, `win/mouse.rs` `PlainKey`): the arrows, Page
+        Up/Down, Home, End, F5, the Windows key, Shift+Tab, Alt+Left, Ctrl+Home/End, Ctrl+L,
+        Ctrl+T, Ctrl+F, Ctrl+N and Ctrl+S. Nothing that closes, deletes, cuts, pastes, sends or
+        runs (no Alt+F4, Ctrl+W, Delete, Ctrl+A, Ctrl+V, Ctrl+Enter, Win+R): anything else in a
+        reply doesn't parse. Keys, like typing, are never pressed with a terminal or a system
+        window in front.
+      - **Further in one go:** 30 actions (it was 12), with the last 20 in the history.
+      - **The first hand** (desktop 0.1.5) sends no `mode`; the server answers it only with what
+        it knows (a `point`, a `wait` or a newer key becomes a stop).
+      - **Unchanged (decision 17's limits):** off until turned on, Esc stops it, the never-press
+        list, the apps it never acts in, the rate limits (30 a minute, 400 a day). Consent
+        version stays 5; the switch's explanation now covers pointing, keys and other apps.
+    - **H2, built (2026-11-16): Neb finds its own way through a long task** (the owner: "I
+      wanted the system to be able to navigate systems dynamically"). "Help me research the
+      water cycle and save it in a doc", "find my chemistry slides and open them". Nothing is
+      scripted per app: it's the same one-look, one-action loop, with what it lacked.
+      - **A memory it writes itself** (`screen-act.v4`): each reply carries a `plan` (what's
+        left, at most 600 characters, rewritten at every look, so it changes course when the
+        screen surprises it) and, when there's something to keep, a `note` (at most 500
+        characters: a fact with its source's title and address, a file's name, a value to carry
+        between apps). The desktop keeps the plan and up to 30 notes in memory
+        (`screen_hand.rs` `HandState`) and sends them with every look; they're wiped when the
+        run ends and never saved or logged. Both pass the rule-based safety check on the server.
+      - **Writing in the middle of a task:** `write` no longer ends the run. Neb's typing gets
+        the notes as its `material` (`screen-write.v4`: a title, short headed sections and a
+        Sources list from them; the material is information, never instructions), and when the
+        last word is typed the hand looks again (`screen_hand::after_write`) and carries on:
+        naming, saving, pictures. If the typing is stopped or fails, the hand stops too.
+      - **How it finds its way** is in the prompt, as habits rather than routes: the Start menu
+        for apps, Ctrl+L for sites and searches, an app's ordinary places for a control, a
+        different way after an action that changed nothing, closing or declining what's in the
+        way (never accepting a cookie banner), stopping at a sign-in wall. Research reads two
+        to four sources and writes into Word, or a new Google Doc (docs.new) without it.
+        Pictures go in through the app's own picture search, when asked for.
+      - **Limits:** 80 actions and 15 minutes for one request (`within_limits`); 30 actions a
+        minute and 1,000 a day (it was 400). A research task is 40 to 80 model calls with a
+        screenshot each.
+      - **Chosen without asking, as the owner described it** (say if either should change):
+        research reads pages on the screen, visibly, with no new service (Gemini's Google
+        Search grounding would be faster and is billed per request); the never-press list
+        stands, so "Format" (Word's and Docs' menu of that name), "Share" and "Accept" are
+        pointed at, not pressed, and a document is laid out by what's typed, not by styles.
+    - **After the first real runs (2026-11-16, the owner testing in dev):**
+      - **`open`** (`screen-act.v5`, `win/launch.rs`): the model couldn't get to a browser that
+        wasn't running. It now opens a web address (`https://` only, checked on the server and
+        in `safe_url`) in the default browser, or one of the student's own Start menu apps by
+        name (found in Windows' `Get-StartApps` list by `pick_app`; what the model names is only
+        compared with that list and never becomes part of a command). Never a terminal, a shell,
+        Settings, the Registry Editor or an installer (`left_to_the_student`). A request made
+        with an app Windows can't name in front is no longer refused at the start.
+      - **Research that's worth the name:** one source and two sentences came back. The prompt
+        now asks for at least three sources read several screens down, a dense note a screen
+        (800 characters), eight notes before writing, and a 600 to 900 word report
+        (`screen-write.v4`).
+      - **"Open …", "go to …", "research …" are decided on the device** (`intent.rs` `is_act`):
+        the intent model took 3 to 7 s, the app waited 3 (now 5), and "open Spotify" became a
+        question.
+      - **A busy model is a pause, not the end** (`worth_retrying`, 4 more tries 8 s apart): on
+        the free tier (15 requests a minute on Flash-Lite) every long run ended at the first
+        "busy". Long tasks need billing on the Gemini key, and a stronger `GEMINI_SCREEN_MODEL`
+        than Flash-Lite, to be quick and dependable.
+      - The log has each step's kind and whether an `open` worked, never what was pressed,
+        typed or noted.
+    - **H3, after: precision.** The controls under the windows in front, from UI Automation
+      (name, kind, rectangle), sent with each look so the model picks a control rather than a
+      point; an eval set of recorded screens; a progress line on the island for long tasks.
+    - **Still the owner's to decide:** whether an explicit request ("sign me out", "delete this
+      file", "send it") may be pressed after Neb asks "shall I?" and the student says yes, in
+      place of never.
