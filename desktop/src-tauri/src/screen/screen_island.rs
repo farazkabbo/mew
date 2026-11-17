@@ -31,6 +31,19 @@ pub fn shown<R: Runtime>(app: &AppHandle<R>) -> bool {
     circle::state(app).is_some_and(|s| s.island.is_some())
 }
 
+/// Neb's hand is about to press something (`through`), or has just pressed it. The island sits
+/// over the top of the screen, where browsers keep their tabs, and Neb's pictures of the screen
+/// leave it out, so the model points at what's under it: for that moment the island lets the
+/// press through to the app below, and then takes clicks again.
+pub fn let_presses_through<R: Runtime>(app: &AppHandle<R>, through: bool) {
+    if !shown(app) {
+        return;
+    }
+    if let Some(window) = overlay::ensure(app, Surface::Island) {
+        overlay::set_click_through(&window, through);
+    }
+}
+
 /// The double tap: shows the island on the monitor under the cursor, or hides it.
 pub fn toggle<R: Runtime>(app: &AppHandle<R>) {
     if shown(app) {

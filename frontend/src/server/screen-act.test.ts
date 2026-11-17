@@ -245,6 +245,9 @@ describe("Neb's hand: the next action", () => {
 
     it("tells the model a browser needn't be running", () => {
       expect(SCREEN_ACT_PROMPT.system).toContain("No browser running is not a problem");
+      // Guessed addresses are dead links: it searches and clicks a result instead.
+      expect(SCREEN_ACT_PROMPT.system).toContain("Never make up the address of a page");
+      expect(SCREEN_ACT_PROMPT.system).toContain("A dead end");
     });
   });
 
