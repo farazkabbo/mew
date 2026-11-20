@@ -14,6 +14,7 @@
 //!   chores and the replay after each (F).
 //! - `settings`: the local settings (I).
 
+pub mod catch;
 pub mod doit;
 pub mod engine;
 pub mod euro;

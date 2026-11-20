@@ -2,6 +2,8 @@
 //! these modules, with its safety reasoning next to it.
 
 pub mod capture;
+pub mod catch_chip;
+pub mod catch_facts;
 pub mod chores;
 pub mod clipboard;
 pub mod credential;

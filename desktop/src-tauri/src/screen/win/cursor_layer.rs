@@ -753,4 +753,85 @@ mod tests {
             assert_eq!(alpha(395, 295), 0);
         }
     }
+
+    /// The draw code's time for a busy frame (ghost path, glow, caption, debug marks) on a
+    /// full-HD software bitmap: an upper bound for the GPU path. Printed for the docs.
+    #[test]
+    fn a_busy_frame_draws_well_within_a_frame() {
+        // SAFETY: as in the test above.
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let wic: IWICImagingFactory =
+                CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER).unwrap();
+            let bitmap = wic
+                .CreateBitmap(
+                    1920,
+                    1080,
+                    &GUID_WICPixelFormat32bppPBGRA,
+                    WICBitmapCacheOnLoad,
+                )
+                .unwrap();
+            let factory: ID2D1Factory1 =
+                D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None).unwrap();
+            let rt = factory
+                .CreateWicBitmapRenderTarget(
+                    &bitmap,
+                    &D2D1_RENDER_TARGET_PROPERTIES {
+                        r#type: D2D1_RENDER_TARGET_TYPE_DEFAULT,
+                        pixelFormat: D2D1_PIXEL_FORMAT {
+                            format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                            alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+                        },
+                        dpiX: 96.0,
+                        dpiY: 96.0,
+                        usage: D2D1_RENDER_TARGET_USAGE_NONE,
+                        minLevel: D2D1_FEATURE_LEVEL_DEFAULT,
+                    },
+                )
+                .unwrap();
+            let dwrite: IDWriteFactory = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).unwrap();
+            let (dots, round) = stroke_styles(&factory).unwrap();
+            let scene = Scene {
+                shapes: vec![
+                    ghost_path((200.0, 900.0), (1500.0, 200.0), 0.6),
+                    Shape::Glow {
+                        rect: ScreenRect {
+                            left: 1450,
+                            top: 180,
+                            right: 1560,
+                            bottom: 220,
+                        },
+                        scale: 1.6,
+                        alpha: 1.0,
+                        warn: false,
+                    },
+                    Shape::Caption {
+                        at: (230.0, 930.0),
+                        text: "Personalization".into(),
+                        warn: false,
+                        scale: 1.0,
+                    },
+                    Shape::Dot {
+                        at: (1490.0, 205.0),
+                        radius: 5.0,
+                        alpha: 0.9,
+                    },
+                    Shape::Ring {
+                        at: (1490.0, 205.0),
+                        radius: 30.0,
+                    },
+                ],
+            };
+            let runs = 60;
+            let started = std::time::Instant::now();
+            for _ in 0..runs {
+                rt.BeginDraw();
+                draw(&rt, &factory, &dwrite, (&dots, &round), &scene, (0, 0), 1.0).unwrap();
+                rt.EndDraw(None, None).unwrap();
+            }
+            let per = started.elapsed().as_secs_f64() * 1000.0 / f64::from(runs);
+            println!("busy frame, software, 1920x1080: {per:.2} ms");
+            assert!(per < 16.0, "{per}");
+        }
+    }
 }

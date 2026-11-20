@@ -23,6 +23,7 @@ use serde_json::json;
 use tauri::{AppHandle, Manager, Runtime};
 
 use super::coach;
+use super::cursor::catch::{self, Alert, Catcher, LogEntry, Outcome, Rule};
 use super::cursor::engine::{debug_scene, Engine, Input, Update};
 use super::cursor::euro::EuroParams;
 use super::cursor::lesson::{level_for, Effect, Lesson, Level};
@@ -39,6 +40,8 @@ use super::frame::ScreenRect;
 use super::page;
 use super::pipeline::Captured;
 use super::privacy::blocklist::is_blocked;
+use super::win::catch_chip;
+use super::win::catch_facts::{is_terminal_app, FactsWorker, Request};
 use super::win::cursor_layer::{list_monitors, CursorLayer};
 use super::win::mouse_stream::{now_ms, MouseEvent, MouseStream};
 use super::win::uia_targets::{TargetWatcher, Targets};
@@ -367,7 +370,43 @@ struct World<'a, R: Runtime> {
     cache: PathCache,
     /// The last lesson's request and when it started (asked again soon: show everything).
     last_lesson: Option<(String, Instant)>,
+    /// CATCH ME.
+    catch: CatchRun,
 }
+
+/// CATCH ME's part of the thread: its rules' state, the facts worker, the chip's answers.
+struct CatchRun {
+    catcher: Catcher,
+    facts: Option<FactsWorker>,
+    /// What the facts were last asked for: (window, generation, when).
+    asked: (isize, u64, Instant),
+    /// The window's guarded controls whose condition holds now (the pointer is followed).
+    risky: bool,
+    terminal_at: Instant,
+    chip: (Sender<Outcome>, Receiver<Outcome>),
+    /// The catch the chip is about: its rule and the app.
+    shown: Option<(Rule, String)>,
+}
+
+impl Default for CatchRun {
+    fn default() -> Self {
+        Self {
+            catcher: Catcher::default(),
+            facts: None,
+            asked: (0, u64::MAX, Instant::now()),
+            risky: false,
+            terminal_at: Instant::now(),
+            chip: mpsc::channel(),
+            shown: None,
+        }
+    }
+}
+
+/// How often the facts are read again while a guarded control is on screen (drafts change
+/// without the window's structure changing).
+const FACTS_EVERY: Duration = Duration::from_millis(1500);
+/// How often a terminal's typed line is looked at, while a terminal is in front.
+const TERMINAL_EVERY: Duration = Duration::from_millis(300);
 
 fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
     // The blocked apps, read again with the settings: a blocked app is never read at all.
@@ -393,6 +432,7 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
         planning: false,
         cache: load_cache(app),
         last_lesson: None,
+        catch: CatchRun::default(),
     };
     let mut engine = Engine::new(EuroParams::default());
     let mut hook: Option<MouseStream> = None;
@@ -410,10 +450,13 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
         .map(|d| d.join("cursor-traces"));
 
     loop {
+        world.catch_tick();
         let needs_pointer = world.live.settings.debug
             || world.live.settings.record_traces
             || world.lesson.is_some()
-            || world.replay.is_some();
+            || world.replay.is_some()
+            || world.catch.risky
+            || world.catch.catcher.alert.is_some();
         if needs_pointer && hook.is_none() {
             hook = MouseStream::start();
             engine = Engine::new(EuroParams::default());
@@ -490,6 +533,16 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
                 scene.shapes.extend(replay.frame(now, m, s).shapes);
             }
         }
+        if catch_active(&world.live.settings) {
+            world.catch_frame(&update, &set, now, monitor, scale);
+            let cursor = update
+                .kin
+                .map(|k| (k.x, k.y))
+                .or_else(|| super::win::input::cursor().map(|(x, y)| (f64::from(x), f64::from(y))));
+            scene
+                .shapes
+                .extend(world.catch.catcher.scene(cursor, monitor, scale).shapes);
+        }
         if scene != shown {
             layer.show(scene.clone());
             shown = scene;
@@ -520,7 +573,196 @@ fn monitor_of(update: &Update, monitors: &[(ScreenRect, f32)]) -> (ScreenRect, f
         .unwrap_or((ScreenRect::default(), 1.0))
 }
 
+/// The rules turned on now (not off, not snoozed).
+fn enabled_rules(settings: &CursorSettings) -> Vec<Rule> {
+    let now = now_s();
+    Rule::ALL
+        .into_iter()
+        .filter(|r| settings.rule_on(r.id(), now))
+        .collect()
+}
+
+/// Appends a catch's outcome to the log (rule, app, time, outcome; nothing else).
+fn log_catch<R: Runtime>(app: &AppHandle<R>, entry: LogEntry) {
+    let Some(path) = app
+        .path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join(catch::LOG_FILE))
+    else {
+        return;
+    };
+    let mut log: Vec<LogEntry> = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default();
+    log.push(entry);
+    let excess = log.len().saturating_sub(catch::LOG_MAX);
+    log.drain(..excess);
+    if let Ok(text) = serde_json::to_string(&log) {
+        let _ = std::fs::write(path, text);
+    }
+}
+
 impl<R: Runtime> World<'_, R> {
+    /// CATCH ME between frames: which guarded controls apply (asking for fresh facts when the
+    /// window changed), the terminal's typed line, and the chip's answers.
+    fn catch_tick(&mut self) {
+        if !catch_active(&self.live.settings) {
+            self.catch.risky = false;
+            self.catch.catcher.alert = None;
+            self.catch.facts = None;
+            return;
+        }
+        // Taken out while it's used (put back at the end), so the rest of the state stays free.
+        let Some(facts) = self.catch.facts.take().or_else(FactsWorker::start) else {
+            self.catch.risky = false;
+            return;
+        };
+        self.catch_with(&facts);
+        self.catch.facts = Some(facts);
+    }
+
+    fn catch_with(&mut self, facts: &FactsWorker) {
+        let enabled = enabled_rules(&self.live.settings);
+        let set = self.targets.latest();
+        let generation = self.targets.generation();
+        let guarded = catch::guarded(&set, &enabled);
+        let rules: Vec<Rule> = guarded
+            .iter()
+            .map(|(r, _)| *r)
+            .filter(|r| matches!(r, Rule::ReplyAll | Rule::Attachment | Rule::Delete))
+            .collect();
+        let (window, asked_gen, asked_at) = self.catch.asked;
+        if !rules.is_empty()
+            && (window != set.window || asked_gen != generation || asked_at.elapsed() > FACTS_EVERY)
+        {
+            facts.ask(Request {
+                window: set.window,
+                generation,
+                rules,
+            });
+            self.catch.asked = (set.window, generation, Instant::now());
+        }
+        let answer = facts.latest();
+        let known = if answer.window == set.window {
+            answer.facts
+        } else {
+            catch::Facts::default()
+        };
+        let now = now_s();
+        self.catch.risky = !catch::live_risks(&set, &known, &enabled, |r| {
+            self.catch.catcher.may_fire(r, now)
+        })
+        .is_empty();
+        // The terminal: the line being typed, before Enter.
+        if enabled.contains(&Rule::Terminal)
+            && is_terminal_app(&set.process)
+            && self.catch.terminal_at.elapsed() >= TERMINAL_EVERY
+        {
+            self.catch.terminal_at = Instant::now();
+            // The line asked for last time (the next is asked now): never waited for.
+            let line = facts.take_line();
+            facts.ask_line();
+            if let Some(line) = line {
+                if let Some(alert) = self.catch.catcher.terminal(&line, &enabled, now_ms(), now) {
+                    let process = set.process.clone();
+                    self.catch_fired(alert, &process, None);
+                }
+            }
+        }
+        // The chip's answer.
+        while let Ok(outcome) = self.catch.chip.1.try_recv() {
+            let Some((rule, process)) = self.catch.shown.take() else {
+                continue;
+            };
+            self.catch.catcher.alert = None;
+            log_catch(self.app, LogEntry::new(rule, &process, now, outcome));
+            match outcome {
+                Outcome::Continued => count(self.app, "catch_continued"),
+                Outcome::NotAMistake => {
+                    count(self.app, "catch_not_a_mistake");
+                    let key = catch::sensitivity_key(rule, &process);
+                    let _ = coach::update_cursor(self.app, |c| {
+                        *c.not_mistakes.entry(key).or_insert(0) += 1;
+                    });
+                }
+                Outcome::Snoozed => {
+                    count(self.app, "catch_snoozed");
+                    let _ = coach::update_cursor(self.app, |c| {
+                        c.snoozed.insert(rule.id().to_owned(), now + 3600);
+                    });
+                }
+                Outcome::Shown => {}
+            }
+        }
+    }
+
+    /// CATCH ME in a frame (the pointer is being followed).
+    fn catch_frame(
+        &mut self,
+        update: &Update,
+        set: &TargetSet,
+        now: f64,
+        monitor: ScreenRect,
+        scale: f32,
+    ) {
+        let Some(facts) = &self.catch.facts else {
+            return;
+        };
+        let answer = facts.latest();
+        let known = if answer.window == set.window {
+            answer.facts
+        } else {
+            catch::Facts::default()
+        };
+        let enabled = enabled_rules(&self.live.settings);
+        let params = self.live.settings.tuning();
+        if let Some(alert) = self.catch.catcher.frame(
+            update,
+            set,
+            &known,
+            &enabled,
+            &params,
+            &self.live.settings.not_mistakes,
+            now,
+            now_s(),
+        ) {
+            let cursor = update.kin.map(|k| (k.x as i32, k.y as i32));
+            let process = set.process.clone();
+            self.catch_fired(alert, &process, cursor.map(|c| (c, monitor, scale)));
+        }
+    }
+
+    /// A catch: said once, shown in amber, and the chip offered beside it.
+    fn catch_fired(
+        &mut self,
+        alert: Alert,
+        process: &str,
+        at: Option<((i32, i32), ScreenRect, f32)>,
+    ) {
+        count(self.app, "catch_shown");
+        say(self.app, &alert.message);
+        let (cursor, monitor, scale) = at.unwrap_or_else(|| {
+            let cursor = super::win::input::cursor().unwrap_or((0, 0));
+            let (monitor, scale) = list_monitors()
+                .into_iter()
+                .find(|(m, _)| m.contains(cursor.0, cursor.1))
+                .unwrap_or((ScreenRect::default(), 1.0));
+            (cursor, monitor, scale)
+        });
+        let place = catch_chip::place(cursor, alert.rect, monitor, scale);
+        // A newer chip replaces the answer channel's meaning.
+        self.catch.shown = Some((alert.rule, process.to_owned()));
+        catch_chip::show(
+            place,
+            scale,
+            alert.message.clone(),
+            self.live.show_in_captures,
+            self.catch.chip.0.clone(),
+        );
+    }
+
     fn handle(&mut self, command: Command) {
         match command {
             Command::ShowMe { goal, reply } => {
