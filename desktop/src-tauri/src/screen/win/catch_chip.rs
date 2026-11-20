@@ -41,24 +41,20 @@ const BUTTONS: [(&str, Outcome); 3] = [
 ];
 
 /// Where the chip goes: beside the cursor, on its monitor, clear of the risky control (padded)
-/// and of the cursor itself.
+/// and of the cursor itself. When nothing nearby is clear (a control in a corner), around the
+/// control instead; and if even that can't be done, no chip at all (the caption and the voice
+/// still say it): a chip must never be where the student is about to click.
 pub fn place(
     cursor: (i32, i32),
     avoid: Option<ScreenRect>,
     monitor: ScreenRect,
     scale: f32,
-) -> ScreenRect {
+) -> Option<ScreenRect> {
     let (w, h) = (
         (WIDTH_AT_100 as f32 * scale) as i32,
         (HEIGHT_AT_100 as f32 * scale) as i32,
     );
     let gap = (28.0 * scale) as i32;
-    let candidates = [
-        (cursor.0 + gap, cursor.1 + gap),
-        (cursor.0 + gap, cursor.1 - gap - h),
-        (cursor.0 - gap - w, cursor.1 + gap),
-        (cursor.0 - gap - w, cursor.1 - gap - h),
-    ];
     let pad = (24.0 * scale) as i32;
     let blocked = avoid.map(|a| ScreenRect {
         left: a.left - pad,
@@ -66,6 +62,22 @@ pub fn place(
         right: a.right + pad,
         bottom: a.bottom + pad,
     });
+    let mut candidates = vec![
+        (cursor.0 + gap, cursor.1 + gap),
+        (cursor.0 + gap, cursor.1 - gap - h),
+        (cursor.0 - gap - w, cursor.1 + gap),
+        (cursor.0 - gap - w, cursor.1 - gap - h),
+    ];
+    if let Some(b) = blocked {
+        candidates.extend([
+            (b.right - w, b.top - h),
+            (b.left, b.top - h),
+            (b.left - w, b.bottom - h),
+            (b.left - w, b.top),
+            (b.right, b.top),
+            (b.left, b.bottom),
+        ]);
+    }
     let rect_at = |(x, y): (i32, i32)| {
         let x = x.clamp(monitor.left, (monitor.right - w).max(monitor.left));
         let y = y.clamp(monitor.top, (monitor.bottom - h).max(monitor.top));
@@ -77,10 +89,9 @@ pub fn place(
         }
     };
     candidates
-        .iter()
-        .map(|c| rect_at(*c))
+        .into_iter()
+        .map(rect_at)
         .find(|r| blocked.is_none_or(|b| !intersects(*r, b)) && !r.contains(cursor.0, cursor.1))
-        .unwrap_or_else(|| rect_at(candidates[0]))
 }
 
 /// The buttons' rectangles inside a chip of this size.
@@ -328,7 +339,7 @@ mod tests {
 
     #[test]
     fn the_chip_is_never_over_the_control_or_the_cursor() {
-        // Heading for a Send button near the bottom right of a monitor left of the primary.
+        // Heading for a Send button in the bottom-right corner of a monitor left of the primary.
         let send = ScreenRect {
             left: -140,
             top: 1020,
@@ -336,11 +347,25 @@ mod tests {
             bottom: 1050,
         };
         for scale in [1.0, 1.5, 2.0] {
-            let chip = place((-100, 1035), Some(send), M, scale);
+            let chip = place((-100, 1035), Some(send), M, scale).expect("somewhere clear");
             assert!(!intersects(chip, send), "{scale}: {chip:?}");
             assert!(!chip.contains(-100, 1035));
             assert!(chip.left >= M.left && chip.right <= M.right && chip.bottom <= M.bottom);
         }
+        // A monitor too small to keep it clear: no chip.
+        let tiny = ScreenRect {
+            left: 0,
+            top: 0,
+            right: 400,
+            bottom: 90,
+        };
+        let middle = ScreenRect {
+            left: 150,
+            top: 30,
+            right: 250,
+            bottom: 60,
+        };
+        assert!(place((200, 45), Some(middle), tiny, 1.0).is_none());
     }
 
     #[test]

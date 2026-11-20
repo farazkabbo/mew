@@ -751,16 +751,20 @@ impl<R: Runtime> World<'_, R> {
                 .unwrap_or((ScreenRect::default(), 1.0));
             (cursor, monitor, scale)
         });
-        let place = catch_chip::place(cursor, alert.rect, monitor, scale);
-        // A newer chip replaces the answer channel's meaning.
         self.catch.shown = Some((alert.rule, process.to_owned()));
-        catch_chip::show(
-            place,
-            scale,
-            alert.message.clone(),
-            self.live.show_in_captures,
-            self.catch.chip.0.clone(),
-        );
+        // No room clear of the control: the caption and the voice say it, without a chip.
+        match catch_chip::place(cursor, alert.rect, monitor, scale) {
+            Some(place) => catch_chip::show(
+                place,
+                scale,
+                alert.message.clone(),
+                self.live.show_in_captures,
+                self.catch.chip.0.clone(),
+            ),
+            None => {
+                let _ = self.catch.chip.0.send(Outcome::Shown);
+            }
+        }
     }
 
     fn handle(&mut self, command: Command) {
