@@ -20,6 +20,7 @@ use super::cursor::engine::{debug_scene, Engine, Input};
 use super::cursor::euro::EuroParams;
 use super::cursor::scene::Scene;
 use super::cursor::settings::CursorSettings;
+use super::cursor::trace::{Device, Recorder};
 use super::frame::ScreenRect;
 use super::privacy::blocklist::is_blocked;
 use super::win::cursor_layer::{list_monitors, CursorLayer};
@@ -130,9 +131,15 @@ fn run<R: Runtime>(app: AppHandle<R>, commands: Receiver<Command>) {
     let mut monitors_at = Instant::now();
     let mut shown = Scene::default();
     let mut frame_ms = 0.0;
+    let mut recorder = Recorder::default();
+    let traces_dir = app
+        .path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("cursor-traces"));
 
     loop {
-        let needs_pointer = live.settings.debug;
+        let needs_pointer = live.settings.debug || live.settings.record_traces;
         if needs_pointer && hook.is_none() {
             hook = MouseStream::start();
             engine = Engine::new(EuroParams::default());
@@ -167,6 +174,9 @@ fn run<R: Runtime>(app: AppHandle<R>, commands: Receiver<Command>) {
         inputs.push(Input::Tick { t_ms: now_ms() });
         let update = engine.feed(&inputs);
         let set = targets.latest();
+        if live.settings.record_traces {
+            record(&mut recorder, &events, &set.targets, traces_dir.as_deref());
+        }
 
         if monitors_at.elapsed() > Duration::from_secs(2) {
             monitors = list_monitors();
@@ -210,4 +220,31 @@ fn live_with<R: Runtime>(
     layer.set_shown_in_captures(next.show_in_captures);
     *blocked.lock().unwrap_or_else(|p| p.into_inner()) = coach::privacy_of(app).blocked_apps;
     next
+}
+
+/// The debug view's trace recorder: positions and rectangles only, to a local folder.
+fn record(
+    recorder: &mut Recorder,
+    events: &[MouseEvent],
+    targets: &[super::cursor::target::Target],
+    dir: Option<&std::path::Path>,
+) {
+    for event in events {
+        match *event {
+            MouseEvent::Move { t_ms, x, y } => recorder.push(t_ms, x, y),
+            MouseEvent::Down { t_ms, x, y } => {
+                let Some(trace) = recorder.click(t_ms, x, y, targets, Device::Mouse) else {
+                    continue;
+                };
+                let (Some(dir), Ok(json)) = (dir, serde_json::to_string(&trace)) else {
+                    continue;
+                };
+                if std::fs::create_dir_all(dir).is_ok() {
+                    let name = format!("trace-{}.json", t_ms.round() as u64);
+                    let _ = std::fs::write(dir.join(name), json);
+                }
+            }
+            _ => {}
+        }
+    }
 }

@@ -42,6 +42,8 @@ pub struct TriggerParams {
     pub min_distance: f64,
     /// Slowing down: the speed now is under this share of the movement's peak.
     pub slowing: f64,
+    /// The wrong target must have been the likeliest for this many frames in a row (120 Hz).
+    pub stable_frames: u32,
 }
 
 impl Default for TriggerParams {
@@ -60,6 +62,7 @@ impl Default for TriggerParams {
             none_at_sigmas: 2.5,
             min_distance: 120.0,
             slowing: 0.85,
+            stable_frames: 3,
         }
     }
 }
@@ -78,7 +81,8 @@ impl TriggerParams {
             && self.sigma_max >= self.sigma_min
             && self.sigma_per_px >= 0.0
             && self.none_at_sigmas > 0.0
-            && self.min_distance >= 0.0;
+            && self.min_distance >= 0.0
+            && self.stable_frames <= 60;
         ok.then_some(())
             .ok_or_else(|| "Those cursor thresholds aren't valid.".to_owned())
     }
@@ -174,15 +178,30 @@ pub fn slowing(now: &Kin, peak_speed: f64, params: &TriggerParams) -> bool {
 #[derive(Debug, Clone, Default)]
 pub struct Trigger {
     fired: bool,
+    /// The candidate and for how many frames in a row it has held.
+    streak: Option<(u32, u32)>,
 }
 
 impl Trigger {
     /// A new movement began.
     pub fn reset(&mut self) {
         self.fired = false;
+        self.streak = None;
     }
 
-    /// SHOW ME: the wrong target the student is heading for, once, when every condition holds.
+    /// Counts `candidate` (None: the conditions don't hold this frame); true once it has held
+    /// for `frames` frames in a row.
+    fn held(&mut self, candidate: Option<u32>, frames: u32) -> bool {
+        self.streak = match (candidate, self.streak) {
+            (None, _) => None,
+            (Some(c), Some((s, n))) if s == c => Some((c, n + 1)),
+            (Some(c), _) => Some((c, 1)),
+        };
+        self.streak.is_some_and(|(_, n)| n >= frames.max(1))
+    }
+
+    /// SHOW ME: the wrong target the student is heading for, once, when every condition has
+    /// held for `stable_frames` frames.
     pub fn wrong_target(
         &mut self,
         prediction: &Prediction,
@@ -192,19 +211,22 @@ impl Trigger {
         expected: u32,
         params: &TriggerParams,
     ) -> Option<u32> {
-        if self.fired
-            || prediction.progress < params.min_progress
-            || prediction.distance < params.min_distance
-            || !slowing(now, peak_speed, params)
-            || post.of(expected) > params.p_expected_max
-        {
+        if self.fired {
             return None;
         }
-        let (top, p) = post.top()?;
-        (top != expected && p >= params.p_wrong).then(|| {
+        let candidate = (prediction.progress >= params.min_progress
+            && prediction.distance >= params.min_distance
+            && slowing(now, peak_speed, params)
+            && post.of(expected) <= params.p_expected_max)
+            .then(|| post.top())
+            .flatten()
+            .filter(|(top, p)| *top != expected && *p >= params.p_wrong)
+            .map(|(top, _)| top);
+        if self.held(candidate, params.stable_frames) {
             self.fired = true;
-            top
-        })
+            return candidate;
+        }
+        None
     }
 
     /// CATCH ME: the risky target the student is heading for, once. (A rule made less eager in
@@ -218,19 +240,25 @@ impl Trigger {
         risky: &[u32],
         params: &TriggerParams,
     ) -> Option<u32> {
-        if self.fired
-            || prediction.progress < params.catch_progress
-            || !slowing(now, peak_speed, params)
-        {
+        if self.fired {
             return None;
         }
-        let hit = risky
-            .iter()
-            .map(|id| (*id, post.of(*id)))
-            .filter(|(_, p)| *p >= params.p_risky)
-            .max_by(|a, b| a.1.total_cmp(&b.1))?;
-        self.fired = true;
-        Some(hit.0)
+        let candidate = (prediction.progress >= params.catch_progress
+            && slowing(now, peak_speed, params))
+        .then(|| {
+            risky
+                .iter()
+                .map(|id| (*id, post.of(*id)))
+                .filter(|(_, p)| *p >= params.p_risky)
+                .max_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(id, _)| id)
+        })
+        .flatten();
+        if self.held(candidate, params.stable_frames) {
+            self.fired = true;
+            return candidate;
+        }
+        None
     }
 }
 
@@ -365,14 +393,12 @@ mod tests {
             ..Kin::default()
         };
         let mut trigger = Trigger::default();
-        assert_eq!(
-            trigger.wrong_target(&p, &now, 1500.0, &post, 4, &params),
-            Some(0)
-        );
-        assert_eq!(
-            trigger.wrong_target(&p, &now, 1500.0, &post, 4, &params),
-            None
-        );
+        let fired: Vec<Option<u32>> = (0..6)
+            .map(|_| trigger.wrong_target(&p, &now, 1500.0, &post, 4, &params))
+            .collect();
+        // Not on the first frames (it must hold), then exactly once.
+        assert_eq!(fired[..2], [None, None]);
+        assert_eq!(fired.iter().filter(|f| **f == Some(0)).count(), 1);
         // Still speeding up: never.
         let mut trigger = Trigger::default();
         let fast = Kin {
@@ -380,10 +406,12 @@ mod tests {
             ax: 3000.0,
             ..Kin::default()
         };
-        assert_eq!(
-            trigger.wrong_target(&p, &fast, 1500.0, &post, 4, &params),
-            None
-        );
+        for _ in 0..6 {
+            assert_eq!(
+                trigger.wrong_target(&p, &fast, 1500.0, &post, 4, &params),
+                None
+            );
+        }
     }
 
     #[test]

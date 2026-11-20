@@ -19,3 +19,4 @@ pub mod scene;
 pub mod settings;
 pub mod stream;
 pub mod target;
+pub mod trace;
