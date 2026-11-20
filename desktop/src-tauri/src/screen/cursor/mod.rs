@@ -9,14 +9,20 @@
 //! - `predict`, `posterior`: endpoint prediction, intent, the intervention trigger (C).
 //! - `scene`: what the cursor layer draws (D).
 //! - `engine`: the per-frame pipeline every mode runs.
+//! - `path`, `plan`, `lesson`: SHOW ME's semantic paths, the planning reply, the lesson (E).
+//! - `settings_uri`: DO IT's Settings pages (F).
 //! - `settings`: the local settings (I).
 
 pub mod engine;
 pub mod euro;
+pub mod lesson;
+pub mod path;
+pub mod plan;
 pub mod posterior;
 pub mod predict;
 pub mod scene;
 pub mod settings;
+pub mod settings_uri;
 pub mod stream;
 pub mod target;
 pub mod trace;

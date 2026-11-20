@@ -15,6 +15,9 @@ pub const SPEECH: &str = "mew:screen-speech";
 pub const ANSWER: &str = "mew:screen-answer";
 /// Coach mode (S4): a line to say now, cutting off anything older.
 pub const SAY: &str = "mew:screen-say";
+/// A cursor mode's correction word (SHOW ME: "below", "left"…), said from the page's own
+/// pre-generated clips in the student's language, so it never waits on the network.
+pub const CUE: &str = "mew:screen-cue";
 /// Stop whatever is being said (Circle & Ask: a step skipped, paused or stopped).
 pub const HUSH: &str = "mew:screen-hush";
 /// A clip was saved: the page builds its notebook page (S3).

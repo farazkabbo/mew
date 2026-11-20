@@ -36,6 +36,8 @@ pub fn parse_intent_reply(bytes: &[u8], coaching: bool, has_ink: bool) -> Option
         "write" => Some(Intent::Write),
         "act" => Some(Intent::Act),
         "show" => Some(Intent::Show),
+        "show_me" => Some(Intent::ShowMe),
+        "do_it" => Some(Intent::DoIt),
         "clip" => Some(Intent::Clip),
         "notes_check" => Some(Intent::NotesCheck { all: false }),
         "notes_check_all" => Some(Intent::NotesCheck { all: true }),
@@ -85,6 +87,12 @@ pub enum Intent {
     /// opening what hides it, and points at it without pressing it (`screen_hand.rs`). Only the
     /// model reads this one; with Neb's hand off it's a question, answered with ink.
     Show,
+    /// SHOW ME (docs/CURSOR_MODES.md): "how do I turn on dark mode?": a ghost path to each
+    /// control in turn; the student clicks (`cursor_run.rs`).
+    ShowMe,
+    /// DO IT: one of the allowlisted chores ("find my lease PDF", "save this recipe", "rename
+    /// these photos by date", "turn on dark mode for me"), with a replay of what was done.
+    DoIt,
     /// A word for the walkthrough in progress.
     Coach(CoachWord),
     /// Pause Screen Coach ("Neb, pause"; during a walkthrough, "pause" pauses the walkthrough).
@@ -133,6 +141,12 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     }
     if is_write(&words) {
         return Intent::Write;
+    }
+    if is_show_me(&words) {
+        return Intent::ShowMe;
+    }
+    if is_do_it(&words) {
+        return Intent::DoIt;
     }
     if is_act(&words) {
         return Intent::Act;
@@ -596,6 +610,62 @@ fn is_act(words: &[String]) -> bool {
     })
 }
 
+/// SHOW ME, asked for by name: "show me how to change my wallpaper", "show me where the
+/// Bluetooth settings are". Any other wording ("how do I…") is read by the model.
+fn is_show_me(words: &[String]) -> bool {
+    if words.len() > MAX_GOAL_WORDS {
+        return false;
+    }
+    let text = after_lead_in(words);
+    [
+        "show me how to ",
+        "show me how do i ",
+        "show me how i ",
+        "show me where ",
+    ]
+    .iter()
+    .any(|start| {
+        text.strip_prefix(start)
+            .is_some_and(|rest| !rest.is_empty())
+    })
+}
+
+/// DO IT's chores, said plainly: "find my lease PDF", "save this recipe", "rename these photos
+/// by date", "open my Bluetooth settings", "turn on dark mode for me". Anything else is read by
+/// the model.
+fn is_do_it(words: &[String]) -> bool {
+    if words.len() > MAX_GOAL_WORDS {
+        return false;
+    }
+    let text = after_lead_in(words);
+    let text = text.as_str();
+    let recipe = matches!(
+        text,
+        "save this recipe" | "save the recipe" | "save recipe" | "save this recipe for me"
+    ) || (text.starts_with("save this recipe") || text.starts_with("save the recipe"))
+        && text.contains("recipe book");
+    let find = text
+        .strip_prefix("find my ")
+        .is_some_and(|rest| !rest.is_empty());
+    let rename = ["rename these ", "rename the ", "rename my ", "rename all "]
+        .iter()
+        .any(|s| text.starts_with(s))
+        && ["photo", "picture", "image", "pic"]
+            .iter()
+            .any(|w| text.contains(w))
+        && text.contains("date");
+    let setting = (text.starts_with("open ") || text.starts_with("open up "))
+        && (text.ends_with(" settings") || text.ends_with(" setting"));
+    let dark = matches!(
+        text,
+        "turn on dark mode"
+            | "turn on dark mode for me"
+            | "switch to dark mode"
+            | "turn off dark mode"
+    );
+    recipe || find || rename || setting || dark
+}
+
 /// "Continue where we left off", "resume", "keep going".
 fn is_resume(words: &[String]) -> bool {
     matches!(
@@ -714,6 +784,51 @@ fn normalise(text: &str) -> Vec<String> {
         .map(|w| w.trim_matches('\'').to_owned())
         .filter(|w| !w.is_empty())
         .collect()
+}
+
+#[cfg(test)]
+mod cursor_mode_tests {
+    use super::*;
+
+    #[test]
+    fn show_me_and_do_it_are_recognised_on_the_device() {
+        for said in [
+            "show me how to make a chart",
+            "show me how to change my wallpaper",
+            "Neb, show me how do I turn on dark mode?",
+            "show me where the Bluetooth settings are",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::ShowMe, "{said}");
+        }
+        for said in [
+            "find my lease PDF",
+            "save this recipe",
+            "Save the recipe to my recipe book",
+            "rename these photos by date",
+            "can you rename the pictures by the date they were taken",
+            "open my bluetooth settings",
+            "turn on dark mode for me",
+        ] {
+            assert_eq!(intent_of(said, false), Intent::DoIt, "{said}");
+        }
+        // Unchanged: these are still what they were.
+        assert_eq!(intent_of("how do I save this file?", false), Intent::Ask);
+        assert_eq!(intent_of("save this", false), Intent::Clip);
+        assert_eq!(intent_of("open Spotify", false), Intent::Act);
+        assert_eq!(intent_of("find the download button", false), Intent::Ask);
+    }
+
+    #[test]
+    fn the_model_may_answer_the_new_intents() {
+        assert_eq!(
+            parse_intent_reply(br#"{"intent":"show_me"}"#, false, false),
+            Some(Intent::ShowMe)
+        );
+        assert_eq!(
+            parse_intent_reply(br#"{"intent":"do_it"}"#, false, false),
+            Some(Intent::DoIt)
+        );
+    }
 }
 
 #[cfg(test)]
@@ -872,7 +987,7 @@ mod tests {
             "save this as a PDF",
             "put this formula in my calculator",
             "add this up for me",
-            "show me how to make a chart",
+            // "show me how to make a chart" is SHOW ME now (docs/CURSOR_MODES.md).
             "help me with question 3",
             "what's going on in this diagram?",
             "can you explain this again, but slower, and with an example please",

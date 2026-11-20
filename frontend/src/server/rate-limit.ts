@@ -163,6 +163,9 @@ export const RATE_RULES = {
   /** Neb's hand: one model call with a screenshot for each action of its cursor. */
   screenAct: { limit: 30, windowMs: MINUTE },
   screenActDaily: { limit: 1000, windowMs: DAY },
+  /** The cursor modes' plans (SHOW ME, DO IT): words and control names only, one question each. */
+  screenPlan: { limit: 10, windowMs: MINUTE },
+  screenPlanDaily: { limit: 200, windowMs: DAY },
   /** Reading what the student meant by what they said (words only, a small fast call). */
   screenIntent: { limit: 30, windowMs: MINUTE },
   screenIntentDaily: { limit: 1500, windowMs: DAY },
