@@ -306,6 +306,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     overlay_capabilities(app)?;
     refresh(app);
     circle::start_tracker(app);
+    super::cursor_run::setup(app);
     if shortcuts_notice {
         notify(
             app,
@@ -785,6 +786,26 @@ pub fn is_usable<R: Runtime>(app: &AppHandle<R>) -> bool {
         .is_some_and(|coach| usable(&coach))
 }
 
+/// The cursor modes' settings right now (docs/CURSOR_MODES.md).
+pub fn cursor_settings<R: Runtime>(app: &AppHandle<R>) -> super::cursor::settings::CursorSettings {
+    app.try_state::<ScreenCoach>()
+        .map(|coach| coach.lock().config.cursor.clone())
+        .unwrap_or_default()
+}
+
+/// Changes the cursor modes' settings (saved first), then lets the cursor runtime re-read them.
+pub fn update_cursor<R: Runtime>(
+    app: &AppHandle<R>,
+    change: impl FnOnce(&mut super::cursor::settings::CursorSettings),
+) -> Result<(), String> {
+    let coach = app
+        .try_state::<ScreenCoach>()
+        .ok_or("Screen Coach isn't ready.")?;
+    coach.update(|config| change(&mut config.cursor))?;
+    super::cursor_run::refresh(app);
+    Ok(())
+}
+
 /// Circle & Ask's settings right now.
 pub fn circle_settings<R: Runtime>(app: &AppHandle<R>) -> config::CircleSettings {
     app.try_state::<ScreenCoach>()
@@ -1171,6 +1192,7 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         let _ = window.eval(CHANGED_SCRIPT);
     }
     screen_island::refresh(app);
+    super::cursor_run::refresh(app);
 }
 
 fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView, String> {
