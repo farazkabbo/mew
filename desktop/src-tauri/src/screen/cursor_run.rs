@@ -28,9 +28,11 @@ use super::cursor::euro::EuroParams;
 use super::cursor::lesson::{level_for, Effect, Lesson, Level};
 use super::cursor::path::{self, Anchor, PathCache};
 use super::cursor::plan::{parse_plan, plan_body, Mode, Plan};
+use super::cursor::replay::Replay;
 use super::cursor::scene::{Scene, Shape};
 use super::cursor::settings::CursorSettings;
 use super::cursor::target::{self, TargetSet};
+use super::cursor::telemetry::Counts;
 use super::cursor::trace::{Device, Recorder};
 use super::device_call::{self, CallError};
 use super::frame::ScreenRect;
@@ -72,6 +74,8 @@ pub enum Command {
     },
     /// "Forget learned paths" (the settings page).
     ForgetPaths,
+    /// DO IT finished: show where things are.
+    Replay(Replay),
 }
 
 /// Kept in Tauri's state: the running thread's channel, if any.
@@ -79,6 +83,9 @@ pub enum Command {
 pub struct CursorRuntime {
     running: Mutex<Option<(u64, Sender<Command>)>>,
     epoch: AtomicU64,
+    /// Counts only (telemetry): interventions shown, accepted, dismissed; lessons finished;
+    /// chores and undos. Never what was on screen.
+    counts: Mutex<Option<Counts>>,
 }
 
 impl CursorRuntime {
@@ -92,9 +99,27 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) {
     refresh(app);
 }
 
+/// CATCH ME paused from the tray (until resumed, or the app restarts).
+static CATCH_PAUSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn catch_paused() -> bool {
+    CATCH_PAUSED.load(Ordering::SeqCst)
+}
+
+/// The tray's "Pause CATCH ME": one click pauses it, another resumes it.
+pub fn toggle_catch_pause<R: Runtime>(app: &AppHandle<R>) {
+    CATCH_PAUSED.fetch_xor(true, Ordering::SeqCst);
+    coach::refresh(app);
+}
+
+/// CATCH ME is watching: on, with its consent, and not paused from the tray.
+pub fn catch_active(settings: &CursorSettings) -> bool {
+    settings.catch_me_on() && !catch_paused()
+}
+
 /// Whether the settings alone want the thread (a lesson or replay keeps it too).
 fn wanted(settings: &CursorSettings) -> bool {
-    settings.debug || settings.record_traces || settings.catch_me_on()
+    settings.debug || settings.record_traces || catch_active(settings)
 }
 
 /// Starts or stops the engine thread to match the settings and Screen Coach's state; tells a
@@ -171,6 +196,21 @@ fn start<R: Runtime>(
 /// path that worked before, or planned now); false when the window in front exposes no
 /// controls to guide to (the caller falls back to Neb's hand or a question).
 pub fn show_me<R: Runtime>(app: &AppHandle<R>, goal: &str) -> bool {
+    // "Show me how", just after a chore: the same request as a lesson.
+    let plain = goal.trim().trim_end_matches(['.', '?', '!']).to_lowercase();
+    let after_chore = matches!(
+        plain.as_str(),
+        "show me how" | "show me how to do that" | "show me how you did that"
+    );
+    let goal = if after_chore {
+        match super::cursor_do::recent_goal() {
+            Some(recent) => recent,
+            None => return false,
+        }
+    } else {
+        goal.to_owned()
+    };
+    let goal = goal.as_str();
     let Some(sender) = ensure_running(app) else {
         return false;
     };
@@ -187,9 +227,56 @@ pub fn show_me<R: Runtime>(app: &AppHandle<R>, goal: &str) -> bool {
     answer.recv_timeout(SHOW_ME_DECIDE).unwrap_or(false)
 }
 
-/// DO IT (M4 builds the executor): until then a chore is Neb's hand's to do.
+/// DO IT for `goal` (`cursor_do.rs`).
 pub fn do_it<R: Runtime>(app: &AppHandle<R>, goal: String, captured: Captured) {
-    super::screen_hand::start(app, goal, super::screen_hand::Mode::Do, captured);
+    super::cursor_do::start(app, goal, captured);
+}
+
+/// DO IT's replay: about two seconds of Neb's ghost cursor and a caption of where things are.
+pub fn replay<R: Runtime>(app: &AppHandle<R>, crumbs: Vec<String>, verb: String, from: (f64, f64)) {
+    send(
+        app,
+        Command::Replay(Replay {
+            crumbs,
+            verb,
+            started_ms: now_ms(),
+            from,
+        }),
+    );
+}
+
+fn counts_path<R: Runtime>(app: &AppHandle<R>) -> Option<std::path::PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join(super::cursor::telemetry::COUNTS_FILE))
+}
+
+/// Adds one to a telemetry count (kept on this computer; counts only).
+pub fn count<R: Runtime>(app: &AppHandle<R>, key: &str) {
+    let Some(runtime) = app.try_state::<CursorRuntime>() else {
+        return;
+    };
+    let path = counts_path(app);
+    let mut counts = runtime.counts.lock().unwrap_or_else(|p| p.into_inner());
+    let counts = counts.get_or_insert_with(|| {
+        path.as_ref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .map(|t| Counts::parse(&t))
+            .unwrap_or_default()
+    });
+    counts.add(key);
+    if let (Some(path), Ok(text)) = (path, serde_json::to_string(&*counts)) {
+        let _ = std::fs::write(path, text);
+    }
+}
+
+/// The counts so far (the settings page shows them).
+pub fn counts<R: Runtime>(app: &AppHandle<R>) -> Counts {
+    counts_path(app)
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|t| Counts::parse(&t))
+        .unwrap_or_default()
 }
 
 /// "Forget learned paths": the cache file goes, and the running thread's copy.
@@ -273,6 +360,8 @@ struct World<'a, R: Runtime> {
     watcher: &'a TargetWatcher,
     targets: Targets,
     lesson: Option<Running>,
+    /// DO IT's replay in progress.
+    replay: Option<Replay>,
     /// A plan is on its way for this request.
     planning: bool,
     cache: PathCache,
@@ -300,6 +389,7 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
         targets: watcher.targets(),
         watcher: &watcher,
         lesson: None,
+        replay: None,
         planning: false,
         cache: load_cache(app),
         last_lesson: None,
@@ -322,7 +412,8 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
     loop {
         let needs_pointer = world.live.settings.debug
             || world.live.settings.record_traces
-            || world.lesson.is_some();
+            || world.lesson.is_some()
+            || world.replay.is_some();
         if needs_pointer && hook.is_none() {
             hook = MouseStream::start();
             engine = Engine::new(EuroParams::default());
@@ -348,7 +439,7 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
             }
             Err(RecvTimeoutError::Timeout) => {
                 // Nothing pending, nothing in progress, nothing wanted: done.
-                let busy = world.lesson.is_some() || world.planning;
+                let busy = world.lesson.is_some() || world.planning || world.replay.is_some();
                 if !busy && !wanted(&world.live.settings) {
                     break;
                 }
@@ -391,6 +482,14 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
         scene
             .shapes
             .extend(world.lesson_frame(&update, &set, generation, now, monitor, scale));
+        if let Some(replay) = &world.replay {
+            if replay.is_over(now) {
+                world.replay = None;
+            } else {
+                let (m, s) = monitor_at(replay.from, &monitors).unwrap_or((monitor, scale));
+                scene.shapes.extend(replay.frame(now, m, s).shapes);
+            }
+        }
         if scene != shown {
             layer.show(scene.clone());
             shown = scene;
@@ -400,6 +499,13 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
     }
     layer.clear();
     drop(hook);
+}
+
+fn monitor_at(at: (f64, f64), monitors: &[(ScreenRect, f32)]) -> Option<(ScreenRect, f32)> {
+    monitors
+        .iter()
+        .find(|(m, _)| m.contains(at.0 as i32, at.1 as i32))
+        .copied()
 }
 
 fn monitor_of(update: &Update, monitors: &[(ScreenRect, f32)]) -> (ScreenRect, f32) {
@@ -428,6 +534,7 @@ impl<R: Runtime> World<'_, R> {
                 result,
             } => self.planned(signature, goal, level, replan, result),
             Command::ForgetPaths => self.cache = PathCache::parse(""),
+            Command::Replay(replay) => self.replay = Some(replay),
             Command::Settings | Command::Stop => {}
         }
     }
@@ -594,6 +701,7 @@ impl<R: Runtime> World<'_, R> {
         match effect {
             Effect::Say(text) => say(self.app, &text),
             Effect::Cue(word) => {
+                count(self.app, "show_me_correction");
                 if self.live.settings.voice {
                     cue(self.app, word.key());
                 }
@@ -623,6 +731,7 @@ impl<R: Runtime> World<'_, R> {
                 self.plan(body, signature, goal, level, true);
             }
             Effect::Done { clean } => {
+                count(self.app, "show_me_completed");
                 if let Some(running) = self.lesson.take() {
                     let lesson = running.lesson;
                     let steps: Vec<Anchor> = lesson.steps.clone();

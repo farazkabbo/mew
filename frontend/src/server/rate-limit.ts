@@ -166,6 +166,9 @@ export const RATE_RULES = {
   /** The cursor modes' plans (SHOW ME, DO IT): words and control names only, one question each. */
   screenPlan: { limit: 10, windowMs: MINUTE },
   screenPlanDaily: { limit: 200, windowMs: DAY },
+  /** DO IT's recipe fallback: a page's text structured into a recipe (one question each). */
+  screenRecipe: { limit: 6, windowMs: MINUTE },
+  screenRecipeDaily: { limit: 60, windowMs: DAY },
   /** Reading what the student meant by what they said (words only, a small fast call). */
   screenIntent: { limit: 30, windowMs: MINUTE },
   screenIntentDaily: { limit: 1500, windowMs: DAY },

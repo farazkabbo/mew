@@ -288,6 +288,22 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
+    // The cursor modes (docs/CURSOR_MODES.md): CATCH ME's one-click pause, and DO IT's undo.
+    let catch_pause = CheckMenuItem::with_id(
+        app,
+        "cursor-catch-pause",
+        "Pause CATCH ME",
+        false,
+        false,
+        None::<&str>,
+    )?;
+    let undo_rename = MenuItem::with_id(
+        app,
+        "cursor-undo-rename",
+        "Undo rename",
+        cfg!(windows),
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(
         app,
         "screen-settings",
@@ -316,6 +332,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             &pause,
             &pause_hour,
             &stop_walkthrough,
+            &catch_pause,
+            &undo_rename,
             &settings,
             &separator2,
             &update,
@@ -339,6 +357,10 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             "screen-pause-hour" => screen::coach::pause_for_an_hour(app),
             #[cfg(windows)]
             "screen-coach-stop" => screen::coach_mode::stop_from_tray(app),
+            #[cfg(windows)]
+            "cursor-catch-pause" => screen::cursor_run::toggle_catch_pause(app),
+            #[cfg(windows)]
+            "cursor-undo-rename" => screen::cursor_do::undo_rename(app),
             #[cfg(windows)]
             "screen-settings" => screen::coach::open_settings(app),
             #[cfg(windows)]
@@ -366,6 +388,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         pause,
         pause_hour,
         stop_walkthrough,
+        catch_pause,
     });
     #[cfg(windows)]
     app.manage(updates::TrayItem(update));

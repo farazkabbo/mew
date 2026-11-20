@@ -51,6 +51,8 @@ pub struct TrayItems<R: Runtime> {
     pub pause_hour: MenuItem<R>,
     /// "Stop the walkthrough": enabled while one is in progress (S4).
     pub stop_walkthrough: MenuItem<R>,
+    /// "Pause CATCH ME": enabled while CATCH ME is on, checked while it's paused.
+    pub catch_pause: CheckMenuItem<R>,
 }
 
 pub struct ScreenCoach {
@@ -1187,6 +1189,11 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         let _ = items
             .stop_walkthrough
             .set_enabled(coach_mode::is_coaching(app));
+        let cursor = cursor_settings(app);
+        let _ = items.catch_pause.set_enabled(on && cursor.catch_me_on());
+        let _ = items
+            .catch_pause
+            .set_checked(super::cursor_run::catch_paused());
     }
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
         let _ = window.eval(CHANGED_SCRIPT);

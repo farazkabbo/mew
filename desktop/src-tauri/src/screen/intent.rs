@@ -617,17 +617,19 @@ fn is_show_me(words: &[String]) -> bool {
         return false;
     }
     let text = after_lead_in(words);
-    [
-        "show me how to ",
-        "show me how do i ",
-        "show me how i ",
-        "show me where ",
-    ]
-    .iter()
-    .any(|start| {
-        text.strip_prefix(start)
-            .is_some_and(|rest| !rest.is_empty())
-    })
+    // "Show me how", on its own, just after a chore: that chore as a lesson.
+    text == "show me how"
+        || [
+            "show me how to ",
+            "show me how do i ",
+            "show me how i ",
+            "show me where ",
+        ]
+        .iter()
+        .any(|start| {
+            text.strip_prefix(start)
+                .is_some_and(|rest| !rest.is_empty())
+        })
 }
 
 /// DO IT's chores, said plainly: "find my lease PDF", "save this recipe", "rename these photos
@@ -663,7 +665,11 @@ fn is_do_it(words: &[String]) -> bool {
             | "switch to dark mode"
             | "turn off dark mode"
     );
-    recipe || find || rename || setting || dark
+    let undo = matches!(
+        text,
+        "undo the rename" | "undo that rename" | "undo rename" | "undo the renaming"
+    );
+    recipe || find || rename || setting || dark || undo
 }
 
 /// "Continue where we left off", "resume", "keep going".
@@ -793,6 +799,7 @@ mod cursor_mode_tests {
     #[test]
     fn show_me_and_do_it_are_recognised_on_the_device() {
         for said in [
+            "show me how",
             "show me how to make a chart",
             "show me how to change my wallpaper",
             "Neb, show me how do I turn on dark mode?",
@@ -808,6 +815,7 @@ mod cursor_mode_tests {
             "can you rename the pictures by the date they were taken",
             "open my bluetooth settings",
             "turn on dark mode for me",
+            "undo the rename",
         ] {
             assert_eq!(intent_of(said, false), Intent::DoIt, "{said}");
         }

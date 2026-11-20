@@ -10,19 +10,26 @@
 //! - `scene`: what the cursor layer draws (D).
 //! - `engine`: the per-frame pipeline every mode runs.
 //! - `path`, `plan`, `lesson`: SHOW ME's semantic paths, the planning reply, the lesson (E).
-//! - `settings_uri`: DO IT's Settings pages (F).
+//! - `doit`, `find`, `rename`, `recipe`, `replay`, `settings_uri`: DO IT's allowlist, its four
+//!   chores and the replay after each (F).
 //! - `settings`: the local settings (I).
 
+pub mod doit;
 pub mod engine;
 pub mod euro;
+pub mod find;
 pub mod lesson;
 pub mod path;
 pub mod plan;
 pub mod posterior;
 pub mod predict;
+pub mod recipe;
+pub mod rename;
+pub mod replay;
 pub mod scene;
 pub mod settings;
 pub mod settings_uri;
 pub mod stream;
 pub mod target;
+pub mod telemetry;
 pub mod trace;

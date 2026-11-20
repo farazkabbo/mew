@@ -127,3 +127,49 @@ describe("POST /api/screen/plan", () => {
     expect(paths).toEqual([]);
   });
 });
+
+describe("POST /api/screen/recipe", () => {
+  const BODY = {
+    url: "https://food.example/khichuri",
+    title: "Khichuri",
+    text: "Bhuna khichuri. 1 cup rice, half a cup of lentils. Wash the rice, then cook.",
+  };
+
+  it("structures a page's text into a recipe", async () => {
+    api();
+    made = {
+      found: true,
+      title: "Spiced rice and lentils",
+      originalTitle: "ভুনা খিচুড়ি",
+      ingredients: ["1 cup rice"],
+      steps: ["Wash the rice."],
+      servings: null,
+      time: null,
+    };
+    const { POST } = await import("./screen/recipe/route");
+    const response = await POST(
+      new Request(`${ORIGIN}/api/screen/recipe`, {
+        method: "POST",
+        body: JSON.stringify(BODY),
+        headers: { "content-type": "application/json", ...bearer },
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ found: true, originalTitle: "ভুনা খিচুড়ি" });
+    expect(prompts[0]).toContain("khichuri");
+  });
+
+  it("refuses extra fields such as a picture", async () => {
+    api();
+    const { POST } = await import("./screen/recipe/route");
+    const response = await POST(
+      new Request(`${ORIGIN}/api/screen/recipe`, {
+        method: "POST",
+        body: JSON.stringify({ ...BODY, image: "x" }),
+        headers: { "content-type": "application/json", ...bearer },
+      }),
+    );
+    expect(response.status).toBe(400);
+    expect(prompts).toEqual([]);
+  });
+});
