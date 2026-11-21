@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { Keys } from "@/components/ui/Keycap";
 
+import { SummonShortcutHelp } from "../shortcuts/SummonShortcutHelp";
 import { CourseShell } from "../courses/CourseShell";
 
 /**
@@ -25,6 +26,9 @@ export function Guide() {
         </>
       }
     >
+      <p className="mb-6 text-sm text-muted">
+        <SummonShortcutHelp />
+      </p>
       <nav aria-label="On this page" className="mb-10 flex flex-wrap gap-2 text-sm">
         {TOPICS.map((topic) => (
           <a

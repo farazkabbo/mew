@@ -16,6 +16,7 @@ import { type KeyboardEvent, useState } from "react";
 
 import { Section } from "../settings/controls";
 import { useSettings } from "../settings/store";
+import { SummonShortcutHelp, useMacKeyboard } from "./SummonShortcutHelp";
 import { useShortcutKeys } from "./useShortcutKeys";
 
 type Recording = {
@@ -36,6 +37,7 @@ const FIXED_LABELS: Record<string, string> = { Equal: "+", Minus: "−" };
  */
 export function ShortcutsSection() {
   const keys = useShortcutKeys();
+  const mac = useMacKeyboard();
   const { platform, own } = keys;
   const [recording, setRecording] = useState<Recording | null>(null);
 
@@ -193,34 +195,36 @@ export function ShortcutsSection() {
               </li>
             ))}
             <li>
-              <kbd>Ctrl+Alt</kbd> held: talk to Neb, let go to ask
+              <SummonShortcutHelp />
             </li>
           </ul>
         </div>
 
-        <div>
-          <h3 className="font-medium">Screen Coach on Windows</h3>
-          <ul className="mt-2 space-y-1 text-sm">
-            <li>
-              <kbd>Ctrl+Alt</kbd> held while Watch is on: ask about your screen and let go to send
-            </li>
-            <li>
-              <kbd>Ctrl+Alt</kbd> twice: show or hide the island
-            </li>
-            <li>In the island, use Select to circle an area and the mic button to ask.</li>
-            <li>
-              <kbd>Esc</kbd>: stop (only while Neb is showing something)
-            </li>
-            <li>
-              In the ask bar: <kbd>Enter</kbd> ask, <kbd>Ctrl+S</kbd> save without an explanation,{" "}
-              <kbd>→</kbd> <kbd>←</kbd> next step and repeat, <kbd>Space</kbd> pause
-            </li>
-          </ul>
-          <p className="mt-2 text-sm text-muted">
-            Only left Ctrl and left Alt count, after a moment with no other key, so typing with
-            AltGr (@, €, {"{"}) never starts Neb.
-          </p>
-        </div>
+        {!mac && (
+          <div>
+            <h3 className="font-medium">Screen Coach on Windows</h3>
+            <ul className="mt-2 space-y-1 text-sm">
+              <li>
+                <kbd>Ctrl+Alt</kbd> held while Watch is on: ask about your screen and let go to send
+              </li>
+              <li>
+                <kbd>Ctrl+Alt</kbd> twice: show or hide the island
+              </li>
+              <li>In the island, use Select to circle an area and the mic button to ask.</li>
+              <li>
+                <kbd>Esc</kbd>: stop (only while Neb is showing something)
+              </li>
+              <li>
+                In the ask bar: <kbd>Enter</kbd> ask, <kbd>Ctrl+S</kbd> save without an explanation,{" "}
+                <kbd>→</kbd> <kbd>←</kbd> next step and repeat, <kbd>Space</kbd> pause
+              </li>
+            </ul>
+            <p className="mt-2 text-sm text-muted">
+              Only left Ctrl and left Alt count, after a moment with no other key, so typing with
+              AltGr (@, €, {"{"}) never starts Neb.
+            </p>
+          </div>
+        )}
       </div>
     </Section>
   );

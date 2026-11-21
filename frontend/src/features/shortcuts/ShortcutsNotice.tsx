@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { useScreenCoachAvailability } from "../desktop/useScreenCoachAvailability";
 import { useSettings } from "../settings/store";
+import { SummonShortcutHelp, useMacKeyboard } from "./SummonShortcutHelp";
 import { useShortcutKeys } from "./useShortcutKeys";
 
 /**
@@ -16,6 +17,7 @@ export function ShortcutsNotice({ hidden }: { hidden: boolean }) {
   const onboarded = useSettings((s) => s.settings.onboarded);
   const seen = useSettings((s) => s.settings.shortcuts_notice_seen);
   const keys = useShortcutKeys();
+  const mac = useMacKeyboard();
   const visible = !hidden && loaded && onboarded && !seen;
   const hasScreenCoach = useScreenCoachAvailability(visible);
   if (!visible) return null;
@@ -30,7 +32,7 @@ export function ShortcutsNotice({ hidden }: { hidden: boolean }) {
       <h2 id="shortcuts-notice-title" className="font-semibold">
         Shortcuts got simpler
       </h2>
-      <p className="mt-1 text-muted">Every Neb shortcut is two keys at most now.</p>
+      <p className="mt-1 text-muted">Notebook shortcuts are quick to reach.</p>
       <ul className="mt-2 list-disc space-y-1 pl-5">
         <li>
           Redo is <kbd>{keys.shown("redo")}</kbd> (Ctrl+Shift+Z is gone).
@@ -41,8 +43,9 @@ export function ShortcutsNotice({ hidden }: { hidden: boolean }) {
           check my work <kbd>{keys.shown("check_work")}</kbd>.
         </li>
         <li>
-          In a notebook, hold <kbd>Ctrl+Alt</kbd> or tap the neb dot to talk to Neb.
-          {hasScreenCoach &&
+          <SummonShortcutHelp />
+          {!mac &&
+            hasScreenCoach &&
             " In Screen Coach, double-tap Ctrl+Alt to open the island and use Select to circle something."}
         </li>
       </ul>

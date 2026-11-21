@@ -99,8 +99,14 @@ Don't fill the code with `#[cfg]`. Instead:
   `set_ignore_cursor_events`.
 - **Private windows** (`privacy/private_window.rs`): the lists use `.exe` names (`msedge.exe`
   and others). Add the macOS bundle ids: Safari, Chrome, Edge, Firefox, Arc, Brave.
-- **The hold keys:** Ctrl+Alt on Windows. Pick the Mac keys with the owner; Control+Option is
-  the direct equivalent. Update `keys.rs` and the shortcuts sheet.
+- **Summon keys:** Ctrl+Alt remains the Windows hold gesture. The Mac app registers
+  **Control+Shift+N (⌃⇧N)**: N for Neb, invoking the notebook summon action from any app
+  while Neb is running. It restores hidden/minimized Neb. This deliberately uses three keys
+  to avoid common Mac commands and Control+Option (VoiceOver). It does not capture the screen
+  or start the microphone; use the notebook mic to speak. Settings, the shortcut sheet and
+  guide check native registration status; if unavailable, use Ask Neb in the menu bar or the
+  notebook dot. Older native builds fall back safely. Mac Control+Option does not activate
+  the notebook hold gesture.
 - **Updater** (`updates.rs`, Windows-only now): the Tauri updater supports macOS (`.app.tar.gz`).
 
 **Rust crates:** the `objc2` family (`objc2-app-kit`, `objc2-foundation`,

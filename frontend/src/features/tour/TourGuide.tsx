@@ -7,6 +7,7 @@ import { NebDot } from "@/components/ui/NebDot";
 
 import { screenCoachForOnboarding } from "../desktop/bridge";
 import { useScreenCoachAvailability } from "../desktop/useScreenCoachAvailability";
+import { SummonShortcutHelp, useMacKeyboard } from "../shortcuts/SummonShortcutHelp";
 import { SCREEN_EVENTS } from "../screen/events";
 import { TOUR_SIGNAL_EVENT, type TourSignal } from "./signals";
 import { hrefOf, placeOf, stepsFor, type TourPlace, type TourStep } from "./steps";
@@ -151,6 +152,7 @@ function Guide({
   total: number;
   hasScreenCoach: boolean;
 }) {
+  const mac = useMacKeyboard();
   const layer = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
   const [seen, setSeen] = useState<Seen>({
@@ -331,7 +333,16 @@ function Guide({
             <h2 className={`font-serif leading-tight ${centred ? "text-[30px]" : "text-[22px]"}`}>
               {step.title}
             </h2>
-            <p className="text-sm leading-relaxed text-ink/80">{step.body}</p>
+            <p className="text-sm leading-relaxed text-ink/80">
+              {mac && step.id === "ask" ? (
+                <>
+                  {step.body.replace("Hold Ctrl + Alt, ask out loud, and let go. ", "")}{" "}
+                  <SummonShortcutHelp />
+                </>
+              ) : (
+                step.body
+              )}
+            </p>
             {step.note && !waited && (
               <p className="text-xs leading-relaxed text-muted">{step.note}</p>
             )}

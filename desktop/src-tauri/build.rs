@@ -2,6 +2,7 @@ fn main() {
     // Declaring the app's commands makes them deny-by-default: a page may only call one if a
     // capability grants it (see `remote_capability` and `screen::settings_capability`).
     let commands = tauri_build::AppManifest::new().commands(&[
+        "desktop_summon_shortcut",
         "notify_due",
         "notify_checks",
         "notify_skills",

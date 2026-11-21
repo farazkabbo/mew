@@ -22,6 +22,17 @@ type TauriGlobal = { core?: { invoke?: (cmd: string, args?: object) => Promise<u
 
 export const SUMMON_EVENT = "mew:summon";
 
+/** Null on older native builds, in the browser, or if the capability is unavailable. */
+export async function macSummonShortcutStatus(): Promise<boolean | null> {
+  if (!isDesktop()) return null;
+  try {
+    const status = await invoke("desktop_summon_shortcut", {});
+    return typeof status === "boolean" ? status : null;
+  } catch {
+    return null;
+  }
+}
+
 /** True inside the desktop app (Tauri injects its IPC bridge into every page it shows). */
 export function isDesktop(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;

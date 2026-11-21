@@ -24,7 +24,10 @@ test("holding Alt shows the keys, and Shift+? opens the sheet", async ({ page })
   await page.keyboard.press("Shift+Slash");
   const sheet = page.getByTestId("shortcuts-sheet");
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("heading", { name: "Two keys, max." })).toBeVisible();
+  const mac = await page.evaluate(() => /Mac/.test(navigator.platform));
+  await expect(
+    sheet.getByRole("heading", { name: mac ? "Your notebook shortcuts." : "Two keys, max." }),
+  ).toBeVisible();
   await expect(sheet).toContainText("Jump to any page or moment");
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();

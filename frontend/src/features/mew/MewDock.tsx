@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Keys } from "@/components/ui/Keycap";
 import { NebDot, nebDotLabel, type NebDotState } from "@/components/ui/NebDot";
 
+import { useMacKeyboard } from "../shortcuts/SummonShortcutHelp";
 import { Caption } from "../tutor/Caption";
 import { useTutor } from "../tutor/store";
 import { useVoice } from "../voice/store";
@@ -32,6 +33,7 @@ type Props = {
 
 /** Bottom-right controls: debug toggle, microphone toggle, and the neb dot (tap to ask neb). */
 export function MewDock({ onSummon, onStartListening, onStopListening, onShortcuts }: Props) {
+  const mac = useMacKeyboard();
   const state = useMascotState();
   const { status, error, level } = useVoice();
   const { debugOpen, toggleDebug } = useMew();
@@ -91,13 +93,19 @@ export function MewDock({ onSummon, onStartListening, onStopListening, onShortcu
           onClick={onSummon}
           aria-label={`Ask neb. ${nebDotLabel(DOT[state])}.`}
           title="Ask neb (or say “Hey Neb”)"
-          data-keytip="Ctrl+Alt"
+          data-keytip={mac ? undefined : "Ctrl+Alt"}
           data-mascot-state={state}
           className="flex h-10 items-center gap-2 rounded-full pr-2 pl-1 text-sm text-ink hover:bg-ink/5"
         >
           <NebDot state={DOT[state]} level={level} size={26} />
           <span className="hidden whitespace-nowrap sm:inline">
-            Hold <Keys keys={["Ctrl", "Alt"]} size="sm" /> and circle anything, or just ask
+            {mac ? (
+              "Ask about your notebook · tap the mic to speak"
+            ) : (
+              <>
+                Hold <Keys keys={["Ctrl", "Alt"]} size="sm" /> and circle anything, or just ask
+              </>
+            )}
           </span>
         </button>
         <button

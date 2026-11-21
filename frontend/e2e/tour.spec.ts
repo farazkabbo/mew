@@ -111,7 +111,8 @@ test("the tour is five steps over the real app: a notebook, asking, quizzes and 
 
   // A notebook without chapters opens on its first page: write, then hold Ctrl + Alt to ask.
   await onStep(page, "ask");
-  await expect(guide(page)).toContainText("Hold Ctrl + Alt");
+  const mac = await page.evaluate(() => /Mac/.test(navigator.platform));
+  await expect(guide(page)).toContainText(mac ? "Tap the neb dot" : "Hold Ctrl + Alt");
   await expect(guide(page)).toContainText("uses one of your free ones");
   await expect(page.getByTestId("tour-ring")).toBeVisible();
   await press(page, "Next");

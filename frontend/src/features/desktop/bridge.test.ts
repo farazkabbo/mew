@@ -119,3 +119,21 @@ describe("desktop bridge", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+describe("Mac summon capability", () => {
+  it("distinguishes registered, conflicted and older native builds", async () => {
+    const { macSummonShortcutStatus } = await import("./bridge");
+    const invoke = vi.fn();
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke } } });
+    invoke
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(new Error("Unknown command"))
+      .mockResolvedValueOnce({ registered: true });
+    expect(await macSummonShortcutStatus()).toBe(true);
+    expect(await macSummonShortcutStatus()).toBe(false);
+    expect(await macSummonShortcutStatus()).toBeNull();
+    expect(await macSummonShortcutStatus()).toBeNull();
+    expect(invoke).toHaveBeenCalledWith("desktop_summon_shortcut", {});
+  });
+});

@@ -268,6 +268,7 @@ test("just give me the answer: steps with reasons, folded, then a Your Turn chec
 test("holding Ctrl+Alt and circling a line asks about that line, writing nothing", async ({
   page,
 }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "platform", { value: "Win32" }));
   const { tutorCalls } = await fakeServices(page, [
     { text: "F = ma", latex: "F = ma" },
     { text: "a = F / m", latex: "a = \\frac{F}{m}" },

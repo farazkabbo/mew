@@ -11,6 +11,8 @@
 //! its overlay pages only (each window its own). Links the web page opens in a new window go to
 //! the default browser (https only), never into a window of ours.
 
+#[cfg(target_os = "macos")]
+mod mac_shortcut;
 mod origin;
 mod reminders;
 pub mod screen;
@@ -68,6 +70,8 @@ pub fn run() {
         .setup(move |app| {
             remote_capability(app.handle(), &app_url)?;
             let window = main_window(app.handle(), app_url.clone())?;
+            #[cfg(target_os = "macos")]
+            mac_shortcut::setup(app.handle(), app_url.clone());
             tray(app.handle())?;
             #[cfg(all(desktop, not(target_os = "macos")))]
             hotkeys(app.handle())?;
@@ -188,6 +192,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     };
 
     tauri::generate_handler![
+        mac_shortcut::desktop_summon_shortcut,
         desktop_sign_in_start,
         desktop_sign_in_cancel,
         desktop_sign_in_ticket,
@@ -223,6 +228,8 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
         .permission("allow-desktop-sign-in-cancel")
         .permission("allow-desktop-sign-in-ticket")
         .permission("allow-desktop-sign-out");
+    #[cfg(target_os = "macos")]
+    let capability = capability.permission("allow-desktop-summon-shortcut");
     #[cfg(windows)]
     let capability = capability
         .permission("allow-screen-coach-ask")
@@ -454,7 +461,12 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
 #[cfg(target_os = "macos")]
 fn tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open Neb", true, None::<&str>)?;
-    let ask = MenuItem::with_id(app, "summon", "Ask Neb", true, None::<&str>)?;
+    let label = if mac_shortcut::registered(app) {
+        "Ask Neb  (⌃⇧N)"
+    } else {
+        "Ask Neb  (shortcut unavailable)"
+    };
+    let ask = MenuItem::with_id(app, "summon", label, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Neb", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &ask, &quit])?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
