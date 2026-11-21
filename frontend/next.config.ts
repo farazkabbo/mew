@@ -41,12 +41,6 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@mew/shared", "@mew/ink"],
   turbopack: {
     root: repoRoot,
-    rules: {
-      "*.css": {
-        loaders: ["@tailwindcss/turbopack"],
-        as: "*.css",
-      },
-    },
   },
   async headers() {
     return [

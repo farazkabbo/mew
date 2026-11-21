@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 from typing import Any
@@ -159,3 +161,29 @@ def test_sandbox_kills_a_stuck_check_and_recovers() -> None:
         assert pool.run(check_steps, ["x=1", "x=1"], timeout=30)[1]["verdict"] == "correct"
     finally:
         pool.close()
+
+
+@pytest.mark.skipif(sys.platform not in {"darwin", "linux"}, reason="POSIX worker limits")
+@pytest.mark.parametrize("limit", [768 * 1024**2, 1024**3], ids=["math", "pdf"])
+def test_worker_memory_initializer_respects_platform(limit: int) -> None:
+    # Lowering the hard limit on Linux is irreversible in this process.
+    script = """
+import resource
+import sys
+
+from mew_api.checker.sandbox import limit_memory
+
+before = resource.getrlimit(resource.RLIMIT_AS)
+limit = int(sys.argv[1])
+limit_memory(limit)
+expected = (limit, limit) if sys.platform == "linux" else before
+assert resource.getrlimit(resource.RLIMIT_AS) == expected
+"""
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", script, str(limit)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr

@@ -4,9 +4,16 @@ import { useAuth } from "@clerk/nextjs";
 import { useEffect, useState } from "react";
 
 import { authPrimaryButton, authQuietButton, AuthScreen } from "./AuthScreen";
-import { SIGN_IN_FAILED_EVENT, signOutOfDesktop, startDesktopSignIn } from "./bridge";
+import {
+  SIGN_IN_FAILED_EVENT,
+  cancelDesktopSignIn,
+  signOutOfDesktop,
+  startDesktopSignIn,
+} from "./bridge";
 
-type Step = { kind: "ready"; error?: string } | { kind: "waiting"; url: string; copied: boolean };
+type Step =
+  | { kind: "ready"; error?: string }
+  | { kind: "waiting"; url: string; copied: boolean; error?: string };
 
 const TRY_AGAIN = "That didn't work. Please try again.";
 
@@ -14,6 +21,7 @@ const TRY_AGAIN = "That didn't work. Please try again.";
 export function DesktopSignIn() {
   const { isLoaded, isSignedIn } = useAuth();
   const [step, setStep] = useState<Step>({ kind: "ready" });
+  const [canceling, setCanceling] = useState(false);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -48,7 +56,25 @@ export function DesktopSignIn() {
 
   const copy = async (url: string) => {
     await navigator.clipboard.writeText(url);
-    setStep({ kind: "waiting", url, copied: true });
+    setStep((current) =>
+      current.kind === "waiting" && current.url === url ? { ...current, copied: true } : current,
+    );
+  };
+
+  const cancel = async () => {
+    setCanceling(true);
+    try {
+      await cancelDesktopSignIn();
+      setStep({ kind: "ready" });
+    } catch {
+      setStep((current) =>
+        current.kind === "waiting"
+          ? { ...current, error: "Couldn't cancel in Neb. Try again or cancel in your browser." }
+          : current,
+      );
+    } finally {
+      setCanceling(false);
+    }
   };
 
   if (!isLoaded || isSignedIn) return <AuthScreen title="neb" />;
@@ -63,11 +89,17 @@ export function DesktopSignIn() {
         </button>
         <button
           type="button"
-          onClick={() => setStep({ kind: "ready" })}
+          onClick={() => void cancel()}
+          disabled={canceling}
           className={authQuietButton}
         >
           Cancel
         </button>
+        {step.error && (
+          <p role="alert" className="text-sm text-muted">
+            {step.error}
+          </p>
+        )}
       </AuthScreen>
     );
   }

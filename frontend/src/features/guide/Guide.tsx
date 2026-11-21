@@ -170,30 +170,31 @@ const TOPICS: Topic[] = [
     intro: "In the Windows app only. It works over any app: a video, a slide, a website.",
     steps: [
       <>
-        Hold <CtrlAlt /> and ask your question out loud. Let go when you&apos;ve finished.
+        Tap <CtrlAlt /> twice to open the island. Press the mic button to ask out loud.
       </>,
       <>
-        To point at something, hold <CtrlAlt /> and circle it with the mouse while you ask.
+        To point at something, choose <B>Select</B>, circle the area and press the mic button.
       </>,
       <>
-        With a pen or touch screen, tap <CtrlAlt /> twice for draw mode, then circle.
+        Choose <B>Quiet</B>, <B>Hint</B>, <B>Coach</B> or <B>Answer</B> to control how much neb
+        gives away.
       </>,
       <>
-        neb explains beside what you circled, step by step, and saves it to your notebook. A
-        follow-up on the same circle doesn&apos;t use another question.
+        Press the eye to turn on <B>Watch</B> and hear feedback as you work. While Watch is on, you
+        can also hold <CtrlAlt /> to ask about your screen and let go to send.
       </>,
     ],
     note: (
       <>
-        Violet edges around a window mean neb is looking at it, only then, and only at that window.
-        Password boxes and private browser windows are never captured.
+        The violet frame marks screen capture. Watch can take repeated looks while it&apos;s on. A
+        follow-up on the same circle doesn&apos;t use another question.
       </>
     ),
   },
   {
     id: "say",
     short: "Things to say",
-    title: "Things to say while holding Ctrl + Alt",
+    title: "Things to say in Screen Coach",
     intro: "In the Windows app. Each one starts something different.",
     steps: [
       <>
@@ -208,6 +209,10 @@ const TOPICS: Topic[] = [
       <>
         <B>&ldquo;Check my notes&rdquo;</B>: compares the screen with your notebook and marks what
         you missed.
+      </>,
+      <>
+        <B>&ldquo;Rewrite this sentence&rdquo;</B>: select the text in your document before asking
+        Neb to replace it.
       </>,
       <>
         <B>&ldquo;Save this to Physics&rdquo;</B>: saves what&apos;s on screen to that notebook.

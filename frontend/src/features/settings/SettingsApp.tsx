@@ -7,6 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
 import { isDesktop, screenCoachForOnboarding } from "../desktop/bridge";
+import { useScreenCoachAvailability } from "../desktop/useScreenCoachAvailability";
 import { momentsApi } from "../moments/api";
 import { useMomentChecks } from "../moments/store";
 import { ShortcutsSection } from "../shortcuts/ShortcutsSection";
@@ -28,6 +29,7 @@ export function SettingsApp() {
   const { settings, loaded, localOnly, error, voices, update } = useSettings();
   // Known only in the browser (the server renders the web app's settings page).
   const desktop = useSyncExternalStore(noChange, isDesktop, () => false);
+  const screenCoachAvailable = useScreenCoachAvailability(true);
   /** "Quiz me on things I save" was just turned off: keep the checks, or clear them (K8). */
   const [askClear, setAskClear] = useState(false);
 
@@ -143,7 +145,7 @@ export function SettingsApp() {
           {desktop && (
             <Toggle
               label="Tell me when checks are due"
-              hint="A Windows notification, at most twice a day, when questions about things you saved are waiting. Off: they wait in Review and the Quick check."
+              hint="A desktop notification, at most twice a day, when questions about things you saved are waiting. Off: they wait in Review and the Quick check."
               checked={settings.notify_moment_checks}
               onChange={(notify_moment_checks) => void update({ notify_moment_checks })}
             />
@@ -219,7 +221,7 @@ export function SettingsApp() {
 
         <DevicesSection />
 
-        {desktop && (
+        {screenCoachAvailable && (
           <Section title="This computer">
             <p className="text-sm text-muted">
               Screen Coach, showing Neb in screen shares and recordings, and updates to the app are

@@ -2,9 +2,9 @@
 ink, read their text layer, and (optionally) use it as course material scoped to chapters.
 
 Every route acts for the signed-in student (Clerk token; local user in development) on their own
-files only. The file is untrusted: it's inspected, rendered and read only in the sandboxed ingest
-worker (time limit per call, 1 GB cap), with a pdfium build that has no JavaScript, never
-drawing forms. Logs carry ids, counts and timings, never file names or text.
+files only. The isolated ingest worker inspects, renders and reads untrusted PDFs with a time
+limit per call and a 1 GiB address-space cap on Linux. It uses a pdfium build without JavaScript
+and skips form rendering. Logs carry ids, counts and timings, never file names or text.
 """
 
 import logging

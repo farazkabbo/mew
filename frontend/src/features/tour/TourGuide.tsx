@@ -5,7 +5,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { buttonClass } from "@/components/ui/Button";
 import { NebDot } from "@/components/ui/NebDot";
 
-import { isDesktop, screenCoachForOnboarding } from "../desktop/bridge";
+import { screenCoachForOnboarding } from "../desktop/bridge";
+import { useScreenCoachAvailability } from "../desktop/useScreenCoachAvailability";
 import { SCREEN_EVENTS } from "../screen/events";
 import { TOUR_SIGNAL_EVENT, type TourSignal } from "./signals";
 import { hrefOf, placeOf, stepsFor, type TourPlace, type TourStep } from "./steps";
@@ -56,15 +57,34 @@ export function TourGuide() {
     () => true,
     () => false,
   );
-  const desktop = useSyncExternalStore(noChange, isDesktop, () => false);
   const stepId = useTour((s) => s.stepId);
-  if (!mounted || !stepId) return null;
-  const steps = stepsFor(desktop);
+  const hasScreenCoach = useScreenCoachAvailability(stepId !== null);
+  const alternateStep =
+    stepId === "island" && hasScreenCoach === false
+      ? "ask"
+      : stepId === "ask" && hasScreenCoach === true
+        ? "island"
+        : null;
+  useEffect(() => {
+    if (mounted && stepId && alternateStep) {
+      useTour.getState().skip(stepId, alternateStep);
+    }
+  }, [mounted, stepId, alternateStep]);
+
+  if (!mounted || !stepId || hasScreenCoach === undefined) return null;
+  const steps = stepsFor(hasScreenCoach);
   const index = steps.findIndex((s) => s.id === stepId);
   const step = steps[index];
-  // A step this app doesn't have (the tour was started in the Windows app): nothing to show.
   if (!step) return null;
-  return <Guide key={step.id} step={step} index={index} total={steps.length} desktop={desktop} />;
+  return (
+    <Guide
+      key={step.id}
+      step={step}
+      index={index}
+      total={steps.length}
+      hasScreenCoach={hasScreenCoach}
+    />
+  );
 }
 
 const boxOf = (rect: DOMRect): Box => ({
@@ -124,12 +144,12 @@ function Guide({
   step,
   index,
   total,
-  desktop,
+  hasScreenCoach,
 }: {
   step: TourStep;
   index: number;
   total: number;
-  desktop: boolean;
+  hasScreenCoach: boolean;
 }) {
   const layer = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
@@ -144,10 +164,11 @@ function Guide({
   /** A paced step's thing has been done: its button is free. */
   const [ready, setReady] = useState(false);
   const { advance, back, end } = useTour.getState();
-  const next = () => advance(step.id, desktop);
+  const next = () => advance(step.id, hasScreenCoach);
   const skip = () => {
     const to = step.skipTo;
-    if (to && stepsFor(desktop).some((s) => s.id === to)) useTour.getState().skip(step.id, to);
+    if (to && stepsFor(hasScreenCoach).some((s) => s.id === to))
+      useTour.getState().skip(step.id, to);
     else next();
   };
 
@@ -165,7 +186,7 @@ function Guide({
         (done.by === "place" && now.place !== null && done.places.includes(now.place)) ||
         (done.by === "present" && onScreen(done.selector))
       ) {
-        useTour.getState().advance(step.id, desktop);
+        useTour.getState().advance(step.id, hasScreenCoach);
         return;
       }
       // A paced step whose button waits for something to show (a quiz's feedback).
@@ -190,7 +211,7 @@ function Guide({
       window.clearInterval(timer);
       window.clearTimeout(first);
     };
-  }, [step, desktop]);
+  }, [step, hasScreenCoach]);
 
   // What the app reports: a line written, the keys let go, a PDF in, a question asked on screen.
   // It either finishes the step, or frees the button of a step the student paces.
@@ -207,7 +228,7 @@ function Guide({
     if (!awaited || awaited === "coach-on" || awaited === "sight") return;
     const happened = () => {
       if (paced) setReady(true);
-      else useTour.getState().advance(step.id, desktop);
+      else useTour.getState().advance(step.id, hasScreenCoach);
     };
     const onSignal = (event: Event) => {
       if ((event as CustomEvent<TourSignal>).detail === awaited) happened();
@@ -219,7 +240,7 @@ function Guide({
       window.removeEventListener(TOUR_SIGNAL_EVENT, onSignal);
       for (const name of screen) window.removeEventListener(name, happened);
     };
-  }, [step, desktop, awaited, paced]);
+  }, [step, hasScreenCoach, awaited, paced]);
 
   // Screen Coach is turned on in the Windows app's own settings: ask it, and keep asking.
   useEffect(() => {
@@ -331,7 +352,7 @@ function Guide({
             {index > 0 && (
               <button
                 type="button"
-                onClick={() => back(desktop)}
+                onClick={() => back(hasScreenCoach)}
                 className={buttonClass("quiet", { dense: true })}
               >
                 Back

@@ -292,7 +292,7 @@ mod tests {
                 .collect(),
         })
         .collect();
-        ScreenText::from_ocr(&lines, 1.0, (1000, 1000), BOUNDS, &[])
+        ScreenText::from_ocr(&lines, (1.0, 1.0), (1000, 1000), BOUNDS, &[])
             .blocks(&RedactionRules::default())
     }
 

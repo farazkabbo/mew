@@ -130,3 +130,15 @@ pub fn uuid_v4(mut bytes: [u8; 16]) -> String {
 fn is_uuid_text(text: &str) -> bool {
     crate::screen::protocol::is_uuid(text)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_device_id_is_a_version_4_uuid() {
+        let id = uuid_v4([0xff; 16]);
+        assert!(is_uuid_text(&id));
+        assert_eq!(id, "ffffffff-ffff-4fff-bfff-ffffffffffff");
+    }
+}
