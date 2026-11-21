@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Connect neb on this computer · Neb"
 /** The app's random value, echoed back in the neb:// link so the app knows it's its own. */
 const State = z.string().regex(/^[A-Za-z0-9_-]{22,64}$/);
 /** What the app says it is (a kind of computer, never its name). */
-const Device = z.enum(["windows"]);
+const Device = z.enum(["windows", "mac"]);
 
 type Search = {
   challenge?: string | string[];

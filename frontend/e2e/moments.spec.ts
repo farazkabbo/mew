@@ -294,8 +294,8 @@ test("K8: a moment waiting in Unsorted is filed with File these, and the server 
     `${notebook.title} · matched “projectile motion”`,
   );
   await tidy.getByRole("button", { name: "File", exact: true }).click();
-  await expect(tidy.getByTestId("file-these-row")).toContainText(`Filed in ${notebook.title}`);
-  expect(moves).toEqual([{ nodeId: notebook.id }]);
+  await expect.poll(() => moves).toEqual([{ nodeId: notebook.id }]);
+  await expect(tidy.getByTestId("file-these-row")).toHaveCount(0);
   await expect(row.getByTestId("tree-row-count")).toHaveCount(0);
 
   // It's in its new notebook's moments now.

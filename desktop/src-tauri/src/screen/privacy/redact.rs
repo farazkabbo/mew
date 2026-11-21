@@ -37,12 +37,12 @@ pub const BLACKED_OUT: [u8; 3] = [0, 0, 0];
 
 /// Rectangles (in captured-image pixels) covering every word that holds sensitive text.
 ///
-/// `scale` converts OCR-image pixels to captured-image pixels (OCR may run on a smaller copy).
+/// `scale` converts OCR-image pixels to captured-image pixels on each axis.
 /// Each rectangle is padded so anti-aliased edges of the text are covered too.
 pub fn rects_to_cover(
     lines: &[OcrLine],
     rules: &RedactionRules,
-    scale: f32,
+    scale: (f32, f32),
     image_width: u32,
     image_height: u32,
 ) -> Vec<PixelRect> {
@@ -70,14 +70,22 @@ pub fn rects_to_cover(
     rects
 }
 
-fn to_pixels(word: &OcrWord, scale: f32, image_width: u32, image_height: u32) -> PixelRect {
+fn to_pixels(
+    word: &OcrWord,
+    (scale_x, scale_y): (f32, f32),
+    image_width: u32,
+    image_height: u32,
+) -> PixelRect {
     let pad = (word.height * 0.25).max(2.0);
     let clamp = |v: f32, max: u32| (v.max(0.0) as u32).min(max);
     PixelRect {
-        left: clamp((word.x - pad) * scale, image_width),
-        top: clamp((word.y - pad) * scale, image_height),
-        right: clamp(((word.x + word.width + pad) * scale).ceil(), image_width),
-        bottom: clamp(((word.y + word.height + pad) * scale).ceil(), image_height),
+        left: clamp((word.x - pad) * scale_x, image_width),
+        top: clamp((word.y - pad) * scale_y, image_height),
+        right: clamp(((word.x + word.width + pad) * scale_x).ceil(), image_width),
+        bottom: clamp(
+            ((word.y + word.height + pad) * scale_y).ceil(),
+            image_height,
+        ),
     }
 }
 
@@ -162,7 +170,7 @@ mod tests {
                 word("exp", 250.0),
             ],
         };
-        let rects = rects_to_cover(&[line], &RedactionRules::default(), 1.0, 1000, 1000);
+        let rects = rects_to_cover(&[line], &RedactionRules::default(), (1.0, 1.0), 1000, 1000);
         assert_eq!(rects.len(), 4);
         assert!(
             rects.iter().all(|r| r.left >= 47 && r.right <= 243),
@@ -181,7 +189,7 @@ mod tests {
                 height: 8.0,
             }],
         };
-        let rects = rects_to_cover(&[line], &RedactionRules::default(), 2.0, 200, 100);
+        let rects = rects_to_cover(&[line], &RedactionRules::default(), (2.0, 2.0), 200, 100);
         assert_eq!(
             rects,
             vec![PixelRect {

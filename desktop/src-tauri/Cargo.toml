@@ -31,6 +31,21 @@ tauri-plugin-single-instance = { version = "=2.5.4", features = ["deep-link"] }
 # In-app updates: finds, verifies (minisign) and installs a signed new version.
 tauri-plugin-updater = "=2.14.0"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+getrandom = "=0.3.4"
+# The same WebKit bindings already used by Wry. Configure the view before loading the app.
+objc2 = "=0.6.5"
+objc2-web-kit = { version = "=0.3.2", default-features = false, features = [
+  "WKPreferences",
+  "WKWebViewConfiguration",
+] }
+# Match the versions already in the lockfile through Tauri and its updater.
+reqwest = { version = "=0.13.5", default-features = false, features = ["blocking", "rustls-no-provider"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring"] }
+security-framework = "=3.7.0"
+sha2 = "=0.10.9"
+uuid = "=1.28.0"
+
 # Screen Coach's native code (capture, encoding, the capture indicator). The same version Tauri
 # already depends on, so no new crate enters the tree.
 # WinRT async operations (Windows' media session); already in the tree through `windows`.

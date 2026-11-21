@@ -6,7 +6,7 @@ import { expect, type Page, test } from "./fixtures";
  * the thing.
  */
 
-const SHOTS = "../design/u/screenshots/tour";
+const SHOTS = "test-results/tour";
 
 test.beforeEach(({ page }) => {
   page.on("console", (message) => {
@@ -158,6 +158,38 @@ test("in the Windows app the tour shows the island, its modes and Watch instead"
   await press(page, "Next");
 
   await quizThenReview(page);
+});
+
+test("an installed app without Screen Coach resumes on the notebook ask step", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.assign(window, {
+      __TAURI_INTERNALS__: {},
+      __TAURI__: {
+        core: {
+          invoke: (command: string) =>
+            command === "screen_coach_onboarding"
+              ? Promise.reject("Command screen_coach_onboarding not allowed by ACL")
+              : Promise.resolve(null),
+        },
+      },
+    });
+    if (sessionStorage.getItem("tour-fixture-started")) return;
+    sessionStorage.setItem("tour-fixture-started", "1");
+    localStorage.setItem(
+      "neb.tour",
+      JSON.stringify({ stepId: "island", nodeId: null, pageId: null }),
+    );
+  });
+
+  await page.goto("/desk");
+  await onStep(page, "ask");
+  await expect(guide(page)).toContainText("Tap the neb dot");
+  await expect(guide(page).getByRole("button", { name: "Open its settings" })).toHaveCount(0);
+  await press(page, "Next");
+  await onStep(page, "quiz");
+
+  await page.goto("/guide");
+  await expect(page.getByTestId("guide")).toContainText("Turn a PDF into lessons and a quiz");
 });
 
 test("someone new is shown round once; the tour survives a reload and can be ended", async ({

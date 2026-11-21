@@ -15,6 +15,7 @@ fn main() {
         "screen_coach_link_finish",
         "screen_coach_disconnect",
         "desktop_sign_in_start",
+        "desktop_sign_in_cancel",
         "desktop_sign_in_ticket",
         "desktop_sign_out",
         "screen_coach_ask",

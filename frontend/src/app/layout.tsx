@@ -32,7 +32,8 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         {/* Appearance and text size before the first paint (NEB_APP_UI §3.1, §3.10). */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: DISPLAY_SCRIPT }} />
       </head>
-      <body className="flex min-h-full flex-col font-sans">
+      {/* Extensions can add body attributes before hydration; child content is still checked. */}
+      <body className="flex min-h-full flex-col font-sans" suppressHydrationWarning>
         {isClerkConfigured ? <ClerkProvider dynamic>{children}</ClerkProvider> : children}
       </body>
     </html>

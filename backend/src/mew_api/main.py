@@ -66,7 +66,7 @@ def create_app(
     settings = settings or Settings()
     logging.basicConfig(level=logging.DEBUG if settings.is_development else logging.INFO)
     pool = checker or CheckerPool()
-    # PDF parsing gets its own sandboxed worker (untrusted files; 1 GB address-space cap).
+    # PDF parsing uses a separate worker process with a 1 GiB address-space cap on Linux.
     ingest_pool = CheckerPool(workers=1, initializer=limit_memory, initargs=(1024**3,))
 
     @asynccontextmanager

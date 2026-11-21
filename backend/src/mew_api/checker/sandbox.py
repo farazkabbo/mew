@@ -25,8 +25,9 @@ class CheckTimeoutError(TimeoutError):
 
 
 def limit_memory(limit: int = MEMORY_LIMIT_BYTES) -> None:
-    """Caps the worker's address space (POSIX; Windows has no equivalent rlimit)."""
-    if sys.platform != "win32":
+    """Applies a worker address-space cap on supported POSIX platforms."""
+    # macOS rejects a finite RLIMIT_AS, which makes the pool repeatedly replace its workers.
+    if sys.platform not in {"darwin", "win32"}:
         import resource
 
         resource.setrlimit(resource.RLIMIT_AS, (limit, limit))

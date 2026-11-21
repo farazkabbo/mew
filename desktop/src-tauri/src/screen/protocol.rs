@@ -1075,9 +1075,11 @@ mod tests {
     }
 
     #[test]
-    fn a_device_id_is_a_version_4_uuid() {
-        let id = crate::screen::win::credential::uuid_v4([0xab; 16]);
-        assert!(is_uuid(&id));
-        assert_eq!(&id[14..15], "4");
+    fn uuid_validation_checks_the_wire_shape() {
+        assert!(is_uuid("abababab-abab-4bab-abab-abababababab"));
+        assert!(is_uuid("ABCDEF01-2345-1678-9123-456789ABCDEF"));
+        assert!(!is_uuid("abababab-abab-4bab-abab-abababababa"));
+        assert!(!is_uuid("abababab_abab-4bab-abab-abababababab"));
+        assert!(!is_uuid("gbababab-abab-4bab-abab-abababababab"));
     }
 }

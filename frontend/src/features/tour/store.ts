@@ -17,10 +17,10 @@ type Saved = {
 type TourState = Saved & {
   start(): void;
   /** On to the step after `fromId` (a late signal for an earlier step does nothing). */
-  advance(fromId: string, desktop: boolean): void;
+  advance(fromId: string, hasScreenCoach: boolean): void;
   /** "Skip this step" on a step the next ones depend on: straight to `toId`, from `fromId`. */
   skip(fromId: string, toId: string): void;
-  back(desktop: boolean): void;
+  back(hasScreenCoach: boolean): void;
   end(): void;
   visited(made: Partial<Pick<Saved, "nodeId" | "pageId">>): void;
 };
@@ -60,17 +60,17 @@ export const useTour = create<TourState>((set, get) => {
   return {
     ...read(),
     start: () => save({ stepId: TOUR_STEPS[0]?.id ?? null, nodeId: null, pageId: null }),
-    advance: (fromId, desktop) => {
+    advance: (fromId, hasScreenCoach) => {
       if (get().stepId !== fromId) return;
-      const steps = stepsFor(desktop);
+      const steps = stepsFor(hasScreenCoach);
       const next = steps[steps.findIndex((s) => s.id === fromId) + 1];
       save(next ? { stepId: next.id } : NONE);
     },
     skip: (fromId, toId) => {
       if (get().stepId === fromId) save({ stepId: toId });
     },
-    back: (desktop) => {
-      const steps = stepsFor(desktop);
+    back: (hasScreenCoach) => {
+      const steps = stepsFor(hasScreenCoach);
       const previous = steps[steps.findIndex((s) => s.id === get().stepId) - 1];
       if (previous) save({ stepId: previous.id });
     },
