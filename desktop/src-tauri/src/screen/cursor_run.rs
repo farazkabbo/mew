@@ -30,7 +30,7 @@ use super::cursor::lesson::{level_for, Effect, Lesson, Level};
 use super::cursor::path::{self, Anchor, PathCache};
 use super::cursor::plan::{parse_plan, plan_body, Mode, Plan};
 use super::cursor::replay::Replay;
-use super::cursor::scene::{Scene, Shape};
+use super::cursor::scene::{status_chip, Scene, Shape};
 use super::cursor::settings::CursorSettings;
 use super::cursor::target::{self, TargetSet};
 use super::cursor::telemetry::Counts;
@@ -525,12 +525,27 @@ fn run<R: Runtime>(app: &AppHandle<R>, commands: Receiver<Command>) {
         scene
             .shapes
             .extend(world.lesson_frame(&update, &set, generation, now, monitor, scale));
+        // Which mode is running (a silent lesson shows nothing at all).
+        if let Some(running) = world
+            .lesson
+            .as_ref()
+            .filter(|r| r.lesson.level != Level::Silent)
+        {
+            let l = &running.lesson;
+            let text = format!(
+                "SHOW ME · {} of {}",
+                (l.at + 1).min(l.steps.len()),
+                l.steps.len()
+            );
+            scene.shapes.push(status_chip(&text, monitor, scale));
+        }
         if let Some(replay) = &world.replay {
             if replay.is_over(now) {
                 world.replay = None;
             } else {
                 let (m, s) = monitor_at(replay.from, &monitors).unwrap_or((monitor, scale));
                 scene.shapes.extend(replay.frame(now, m, s).shapes);
+                scene.shapes.push(status_chip("DO IT", m, s));
             }
         }
         if catch_active(&world.live.settings) {
@@ -834,6 +849,7 @@ impl<R: Runtime> World<'_, R> {
     }
 
     fn begin(&mut self, lesson: Lesson) {
+        count(self.app, "show_me_started");
         if lesson.level == Level::Silent {
             // They know this one; it's watched (to count practice), never drawn or corrected.
             cue(self.app, "go_ahead");

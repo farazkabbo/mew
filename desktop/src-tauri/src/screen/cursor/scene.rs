@@ -215,6 +215,22 @@ pub fn caption_width(text: &str) -> i32 {
     (text.chars().count() as i32 * 15 / 2 + 24).min(CAPTION_MAX_W)
 }
 
+/// The small chip that says which mode is running ("SHOW ME · 2 of 3", "DO IT"), at the top
+/// of the monitor, centred, below where Neb's island appears.
+pub fn status_chip(text: &str, monitor: ScreenRect, scale: f32) -> Shape {
+    let w = f64::from(caption_width(text)) * f64::from(scale);
+    let centre = f64::from(monitor.left + monitor.right) / 2.0;
+    Shape::Caption {
+        at: (
+            centre - w / 2.0,
+            f64::from(monitor.top) + 64.0 * f64::from(scale),
+        ),
+        text: text.to_owned(),
+        warn: false,
+        scale,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

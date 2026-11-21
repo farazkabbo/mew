@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type * as Gemini from "@/server/gemini";
+
 /** The cursor modes' plan (docs/CURSOR_MODES.md), in local mode as in development. */
 const ORIGIN = "http://localhost:3000";
 const TOKEN = `mewdt_${"A".repeat(43)}`;
@@ -59,7 +61,7 @@ beforeEach(() => {
     action: { type: "open_setting", page: "colors" },
   };
   vi.doMock("@/server/gemini", async (original) => ({
-    ...(await original<typeof import("@/server/gemini")>()),
+    ...(await original<typeof Gemini>()),
     generateStructured: (req: { input: { text?: string }[] }) => {
       prompts.push(req.input.map((i) => i.text ?? "").join(""));
       return Promise.resolve(made);

@@ -113,9 +113,10 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
-        screen_coach_onboarding, screen_coach_open_mic_settings, screen_coach_set_circle,
-        screen_coach_set_enabled, screen_coach_set_paused, screen_coach_set_privacy,
-        screen_coach_shortcuts_seen, screen_coach_status,
+        screen_coach_forget_paths, screen_coach_onboarding, screen_coach_open_mic_settings,
+        screen_coach_set_circle, screen_coach_set_cursor, screen_coach_set_enabled,
+        screen_coach_set_paused, screen_coach_set_privacy, screen_coach_shortcuts_seen,
+        screen_coach_status,
     };
     use screen::coach_mode::screen_coach_pill;
     use screen::notes_check::screen_notes_panel;
@@ -149,6 +150,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_notes_panel,
         screen_coach_pill,
         screen_coach_set_circle,
+        screen_coach_set_cursor,
+        screen_coach_forget_paths,
         screen_coach_spoken,
         screen_draw_mark,
         screen_draw_erase,
