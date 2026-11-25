@@ -319,6 +319,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     refresh(app);
     circle::start_tracker(app);
     super::cursor_run::setup(app);
+    super::handoff_run::setup(app);
     if shortcuts_notice {
         notify(
             app,
@@ -343,6 +344,7 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-set-circle")
             .permission("allow-screen-coach-set-cursor")
             .permission("allow-screen-coach-forget-paths")
+            .permission("allow-screen-coach-handoff")
             .permission("allow-screen-coach-open-mic-settings")
             .permission("allow-screen-coach-link-start")
             .permission("allow-screen-coach-disconnect")
@@ -358,6 +360,21 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 /// progress pill its one (its buttons, S4).
 fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     use super::overlay::Surface;
+    // Handoff's preview (a bundled page): its own commands only.
+    let mut preview = CapabilityBuilder::new("handoff-preview")
+        .local(true)
+        .window(super::handoff_run::WINDOW);
+    for command in [
+        "allow-handoff-preview-state",
+        "allow-handoff-preview-update",
+        "allow-handoff-preview-blur",
+        "allow-handoff-preview-send",
+        "allow-handoff-preview-copy",
+        "allow-handoff-preview-cancel",
+    ] {
+        preview = preview.permission(command);
+    }
+    app.add_capability(preview)?;
     app.add_capability(
         CapabilityBuilder::new("screen-ink")
             .local(true)
@@ -798,6 +815,29 @@ pub fn set_help_level<R: Runtime>(app: &AppHandle<R>, help: config::HelpLevel) {
 pub fn is_usable<R: Runtime>(app: &AppHandle<R>) -> bool {
     app.try_state::<ScreenCoach>()
         .is_some_and(|coach| usable(&coach))
+}
+
+/// Handoff's settings right now (docs/HANDOFF_FEATURE.md).
+pub fn handoff_settings<R: Runtime>(
+    app: &AppHandle<R>,
+) -> super::handoff::settings::HandoffSettings {
+    app.try_state::<ScreenCoach>()
+        .map(|coach| coach.lock().config.handoff.clone())
+        .unwrap_or_default()
+}
+
+/// Changes Handoff's settings (saved first).
+pub fn update_handoff<R: Runtime>(
+    app: &AppHandle<R>,
+    change: impl FnOnce(&mut super::handoff::settings::HandoffSettings),
+) -> Result<(), String> {
+    let coach = app
+        .try_state::<ScreenCoach>()
+        .ok_or("Screen Coach isn't ready.")?;
+    coach.update(|config| {
+        change(&mut config.handoff);
+        config.handoff = config.handoff.clone().normalized();
+    })
 }
 
 /// The cursor modes' settings right now (docs/CURSOR_MODES.md).
@@ -1396,6 +1436,32 @@ pub fn screen_coach_forget_paths<R: Runtime>(
 fn with_counts<R: Runtime>(app: &AppHandle<R>, mut view: StatusView) -> StatusView {
     view.cursor_counts = super::cursor_run::counts(app);
     view
+}
+
+/// Handoff's settings and its timeline's debug view (the settings page only). `settings`: the
+/// new settings (None to just read); `forget`: wipe the timeline.
+#[tauri::command]
+pub fn screen_coach_handoff<R: Runtime>(
+    window: WebviewWindow<R>,
+    settings: Option<super::handoff::settings::HandoffSettings>,
+    forget: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle();
+    if let Some(next) = settings {
+        let was_on = handoff_settings(app).timeline;
+        update_handoff(app, |h| *h = next)?;
+        if was_on && !handoff_settings(app).timeline {
+            super::handoff_run::forget_timeline(app);
+        }
+    }
+    if forget == Some(true) {
+        super::handoff_run::forget_timeline(app);
+    }
+    Ok(serde_json::json!({
+        "settings": handoff_settings(app),
+        "timeline": super::handoff_run::debug_view(app),
+    }))
 }
 
 /// Saves Circle & Ask's settings (the pointer, saving, silent mode).

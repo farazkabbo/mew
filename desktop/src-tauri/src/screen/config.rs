@@ -166,6 +166,9 @@ pub struct ScreenConfig {
     /// The cursor modes: DO IT, SHOW ME, CATCH ME (docs/CURSOR_MODES.md).
     #[serde(default)]
     pub cursor: super::cursor::settings::CursorSettings,
+    /// Handoff (docs/HANDOFF_FEATURE.md, being built).
+    #[serde(default)]
+    pub handoff: super::handoff::settings::HandoffSettings,
 }
 
 impl ScreenConfig {
@@ -362,6 +365,7 @@ mod tests {
             },
             help: HelpLevel::Answer,
             cursor: super::super::cursor::settings::CursorSettings::default(),
+            handoff: super::super::handoff::settings::HandoffSettings::default(),
         };
         save(&path, &config).unwrap();
         assert_eq!(load(&path), Loaded::Read(config));

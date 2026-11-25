@@ -9,6 +9,9 @@ desktop 0.1.5 (typing is streamed and typed a key at a time,
 and Neb's hand: its own cursor clicks for the student when asked). Desktop releases and their history:
 [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md).
 
+**2026-11-24, Handoff** (being built, behind `HANDOFF_ENABLED`): see
+[HANDOFF_FEATURE.md](HANDOFF_FEATURE.md). New migration `20261124000000_handoffs.sql` (not applied).
+
 **2026-11-21, branch `feat/cursor-modes`:** the cursor modes (DO IT, SHOW ME, CATCH ME; M1–M6)
 are built. Spec, decisions, measured numbers and the manual checklist are in
 [CURSOR_MODES.md](CURSOR_MODES.md). New device routes: `/api/screen/plan`, `/api/screen/recipe`.

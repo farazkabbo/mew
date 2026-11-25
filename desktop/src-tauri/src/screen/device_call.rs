@@ -65,6 +65,41 @@ pub fn post_stream<R: Runtime>(
     path: &str,
     label: &str,
     body: &[u8],
+    on_chunk: impl FnMut(&[u8]),
+) -> Result<(), CallError> {
+    send(app, path, label, body, "application/json", on_chunk)
+}
+
+/// POSTs raw bytes (`content_type`, e.g. a handoff's ciphertext) and returns the reply's bytes.
+pub fn post_bytes<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &str,
+    label: &str,
+    body: &[u8],
+    content_type: &str,
+    max_reply: usize,
+) -> Result<Vec<u8>, CallError> {
+    let mut reply = Vec::new();
+    let mut too_large = false;
+    send(app, path, label, body, content_type, |chunk| {
+        if reply.len() + chunk.len() > max_reply {
+            too_large = true;
+        } else {
+            reply.extend_from_slice(chunk);
+        }
+    })?;
+    if too_large {
+        return Err(CallError::Failed);
+    }
+    Ok(reply)
+}
+
+fn send<R: Runtime>(
+    app: &AppHandle<R>,
+    path: &str,
+    label: &str,
+    body: &[u8],
+    content_type: &str,
     mut on_chunk: impl FnMut(&[u8]),
 ) -> Result<(), CallError> {
     let coach = app.try_state::<ScreenCoach>().ok_or(CallError::Failed)?;
@@ -73,8 +108,8 @@ pub fn post_stream<R: Runtime>(
         .map_err(|_| CallError::Account(NOT_CONNECTED.into()))?;
     let url = coach.app_url().join(path).map_err(|_| CallError::Failed)?;
     let mut headers = [
-        "Content-Type: application/json".to_owned(),
-        "Accept: application/json, application/x-ndjson".to_owned(),
+        format!("Content-Type: {content_type}"),
+        "Accept: application/json, application/x-ndjson, application/octet-stream".to_owned(),
         format!("Authorization: Bearer {token}"),
     ];
 

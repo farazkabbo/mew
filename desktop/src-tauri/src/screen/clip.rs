@@ -776,7 +776,8 @@ fn prepare<R: Runtime>(
     drop(raw);
     let (width, height) = (small.width, small.height);
     let jpeg = encode_jpeg_with(&small, FOR_CLIP).map_err(|_| ScreenError::Failed.message())?;
-    drop(small);
+    // Kept until the clip's head is built, for Handoff's timeline (only when it's on).
+    let for_handoff = super::handoff_run::wants_moments(app).then_some(small);
 
     // Clip image pixels per frame pixel, and per CSS pixel of the screen it came from.
     let scale = width as f32 / crop_rect[2];
@@ -835,6 +836,16 @@ fn prepare<R: Runtime>(
         destination: draft.destination.as_ref().map(DestinationOut::from),
     };
     wipe_string(&mut ocr_text);
+    if let Some(small) = for_handoff {
+        super::handoff_run::record_clip(
+            app,
+            &small,
+            &head,
+            on_screen,
+            &draft.detail.text,
+            meta.window,
+        );
+    }
     let body = clip_body(&head, jpeg.as_slice(), width, height);
     drop(head);
     drop(jpeg);

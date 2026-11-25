@@ -63,6 +63,7 @@ pub mod destination;
 pub mod drag;
 pub mod frame;
 pub mod glance;
+pub mod handoff;
 pub mod hold;
 pub mod image;
 pub mod ink;
@@ -105,6 +106,8 @@ pub mod cursor_do;
 pub mod cursor_run;
 #[cfg(windows)]
 pub mod device_call;
+#[cfg(windows)]
+pub mod handoff_run;
 #[cfg(windows)]
 pub mod keys;
 #[cfg(windows)]

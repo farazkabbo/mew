@@ -233,6 +233,52 @@ $("forget-paths").addEventListener("click", async () => {
   if (ok) showNotice("Forgotten. SHOW ME will plan each lesson again.");
 });
 
+// ─── Handoff (being built) ─────────────────────────────────────────────────────────────────────
+
+let handoff = null;
+
+function renderHandoff(view) {
+  handoff = view.settings;
+  $("handoff-timeline").checked = handoff.timeline;
+  $("handoff-window").value = String(handoff.windowMin);
+  $("handoff-names").checked = handoff.alwaysHideNames;
+  $("handoff-count").textContent = String(view.timeline.count);
+  $("handoff-recent").replaceChildren(
+    ...view.timeline.recent.map((row) => {
+      const item = document.createElement("li");
+      const extra =
+        row.kind === "snapshot" ? `${row.git ? " · git" : ""}${row.url ? " · page" : ""}` : "";
+      item.textContent = `${new Date(row.at).toLocaleTimeString()} · ${row.kind} · ${row.app}${extra}`;
+      return item;
+    }),
+  );
+}
+
+async function saveHandoff(changes, forget = false) {
+  try {
+    const args = forget ? { forget: true } : { settings: { ...handoff, ...changes } };
+    renderHandoff(await invoke("screen_coach_handoff", args));
+  } catch (error) {
+    showNotice(typeof error === "string" ? error : "Couldn't save that setting.");
+  }
+}
+
+$("handoff-timeline").addEventListener("change", (event) =>
+  saveHandoff({ timeline: event.target.checked }),
+);
+$("handoff-window").addEventListener("change", (event) =>
+  saveHandoff({ windowMin: Number(event.target.value) }),
+);
+$("handoff-names").addEventListener("change", (event) =>
+  saveHandoff({ alwaysHideNames: event.target.checked }),
+);
+$("handoff-forget").addEventListener("click", () => {
+  if (window.confirm("Delete everything in your handoff timeline?")) void saveHandoff({}, true);
+});
+void invoke("screen_coach_handoff", {})
+  .then(renderHandoff)
+  .catch(() => undefined);
+
 // ─── Privacy ─────────────────────────────────────────────────────────────────────────────────
 
 function renderPrivacy(view) {
