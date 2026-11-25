@@ -1,0 +1,451 @@
+//! Read-only Accessibility metadata, never a capture authorization by itself.
+//! No AX values, text, titles, descendants, actions, permission prompts or pixels are read.
+//! AppKit identity discovery and `snapshot` must run on the main thread. AX requests are
+//! limited to two focused-element reads and two attribute reads, with per-object timeouts.
+
+use crate::screen::privacy::Focus;
+
+/// LaunchServices identity. A PID alone is insufficient because macOS can reuse it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessIdentity {
+    pub pid: i32,
+    pub bundle_id: String,
+    /// Exact NSDate timeIntervalSinceReferenceDate bits; absent launch dates are rejected.
+    pub launch_time_bits: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnknownReason {
+    AccessibilityUnavailable,
+    IdentityUnavailable,
+    TargetChanged,
+    FocusUnavailable,
+    UnsupportedRole,
+    Deadline,
+}
+
+/// No public cross-app API used here establishes private browsing or call/share absence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivacyProof {
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusSnapshot {
+    pub focus: Focus,
+    pub unknown_reason: Option<UnknownReason>,
+    /// Standard AX constants only, never a field's entered text or accessible label.
+    pub role: Option<String>,
+    pub subrole: Option<String>,
+    pub private_browsing: PrivacyProof,
+    pub call_or_screen_share: PrivacyProof,
+}
+
+impl FocusSnapshot {
+    fn unknown(reason: UnknownReason) -> Self {
+        Self {
+            focus: Focus::Unknown,
+            unknown_reason: Some(reason),
+            role: None,
+            subrole: None,
+            private_browsing: PrivacyProof::Unknown,
+            call_or_screen_share: PrivacyProof::Unknown,
+        }
+    }
+}
+
+/// Only documented standard combinations establish ordinary focus. Missing/custom metadata
+/// remains unknown. In particular, absence of AXSecureTextField alone is NOT a safe result.
+fn classify(
+    expected_pid: i32,
+    actual_pid: i32,
+    role: Option<&str>,
+    subrole: Option<&str>,
+) -> Focus {
+    if expected_pid <= 0 || actual_pid != expected_pid {
+        return Focus::Unknown;
+    }
+    if role == Some("AXSecureTextField") || subrole == Some("AXSecureTextField") {
+        return Focus::Password;
+    }
+    match (role, subrole) {
+        (Some("AXTextField"), Some("AXSearchField"))
+        | (
+            Some("AXButton"),
+            Some(
+                "AXCloseButton" | "AXMinimizeButton" | "AXZoomButton" | "AXToolbarButton"
+                | "AXFullScreenButton",
+            ),
+        ) => Focus::Ordinary,
+        _ => Focus::Unknown,
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod native {
+    use super::*;
+    use objc2::{class, msg_send, runtime::AnyObject};
+    use std::{
+        ffi::c_void,
+        time::{Duration, Instant},
+    };
+
+    type Cf = *const c_void;
+    const CALL_TIMEOUT: f32 = 0.05;
+    const TOTAL_BUDGET: Duration = Duration::from_millis(350);
+    const MAX_METADATA_UNITS: usize = 128;
+    #[repr(C)]
+    struct CfRange {
+        location: isize,
+        length: isize,
+    }
+
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn AXIsProcessTrusted() -> u8;
+        fn AXUIElementCreateApplication(pid: i32) -> Cf;
+        fn AXUIElementGetTypeID() -> usize;
+        fn AXUIElementGetPid(element: Cf, pid: *mut i32) -> i32;
+        fn AXUIElementSetMessagingTimeout(element: Cf, seconds: f32) -> i32;
+        fn AXUIElementCopyAttributeValue(element: Cf, attribute: Cf, result: *mut Cf) -> i32;
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFRelease(value: Cf);
+        fn CFGetTypeID(value: Cf) -> usize;
+        fn CFEqual(first: Cf, second: Cf) -> u8;
+        fn CFStringGetTypeID() -> usize;
+        fn CFStringGetLength(string: Cf) -> isize;
+        fn CFStringGetCharacters(string: Cf, range: CfRange, buffer: *mut u16);
+        fn CFStringCreateWithBytes(
+            allocator: Cf,
+            bytes: *const u8,
+            length: isize,
+            encoding: u32,
+            external: u8,
+        ) -> Cf;
+    }
+    #[link(name = "AppKit", kind = "framework")]
+    unsafe extern "C" {}
+    unsafe extern "C" {
+        fn pthread_main_np() -> i32;
+    }
+
+    /// Owns exactly one Create/Copy reference; borrowed CF values never enter this type.
+    struct Owned(Cf);
+    impl Owned {
+        fn new(value: Cf) -> Option<Self> {
+            (!value.is_null()).then_some(Self(value))
+        }
+        fn attribute(name: &'static str) -> Option<Self> {
+            // UTF-8 constant attribute names only. kCFStringEncodingUTF8 = 0x08000100.
+            Self::new(unsafe {
+                CFStringCreateWithBytes(
+                    std::ptr::null(),
+                    name.as_ptr(),
+                    name.len() as isize,
+                    0x08000100,
+                    0,
+                )
+            })
+        }
+    }
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            unsafe { CFRelease(self.0) };
+        }
+    }
+
+    fn cf_string(value: Cf, maximum: usize) -> Option<String> {
+        if value.is_null() || unsafe { CFGetTypeID(value) != CFStringGetTypeID() } {
+            return None;
+        }
+        let length = usize::try_from(unsafe { CFStringGetLength(value) }).ok()?;
+        if length == 0 || length > maximum {
+            return None;
+        }
+        let mut units = vec![0u16; length];
+        // The CF type and range were checked; CFStringGetCharacters copies, not borrows.
+        unsafe {
+            CFStringGetCharacters(
+                value,
+                CfRange {
+                    location: 0,
+                    length: length as isize,
+                },
+                units.as_mut_ptr(),
+            )
+        };
+        String::from_utf16(&units).ok()
+    }
+
+    /// Does not prompt, open System Settings, or request trust.
+    pub fn accessibility_trusted() -> bool {
+        unsafe { AXIsProcessTrusted() != 0 }
+    }
+
+    fn identity(app: *mut AnyObject) -> Option<ProcessIdentity> {
+        if app.is_null() {
+            return None;
+        }
+        // Only NSRunningApplication objects obtained from AppKit enter this helper.
+        unsafe {
+            let terminated: bool = msg_send![app, isTerminated];
+            let pid: i32 = msg_send![app, processIdentifier];
+            if terminated || pid <= 0 {
+                return None;
+            }
+            let bundle: *mut AnyObject = msg_send![app, bundleIdentifier];
+            let bundle_id = cf_string(bundle.cast(), 255)?;
+            // A bundle identifier is an exact policy key, not a localized application name.
+            if !bundle_id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b".-_".contains(&b))
+            {
+                return None;
+            }
+            let date: *mut AnyObject = msg_send![app, launchDate];
+            if date.is_null() {
+                return None;
+            }
+            let launched: f64 = msg_send![date, timeIntervalSinceReferenceDate];
+            if !launched.is_finite() {
+                return None;
+            }
+            Some(ProcessIdentity {
+                pid,
+                bundle_id,
+                launch_time_bits: launched.to_bits(),
+            })
+        }
+    }
+
+    /// Main thread only. Missing LaunchServices metadata is explicitly unavailable.
+    pub fn process_identity(pid: i32) -> Option<ProcessIdentity> {
+        if pid <= 0 || unsafe { pthread_main_np() } == 0 {
+            return None;
+        }
+        objc2::rc::autoreleasepool(|_| unsafe {
+            let app: *mut AnyObject = msg_send![class!(NSRunningApplication),
+                runningApplicationWithProcessIdentifier: pid];
+            identity(app).filter(|app| app.pid == pid)
+        })
+    }
+
+    pub fn frontmost_process_identity() -> Option<ProcessIdentity> {
+        if unsafe { pthread_main_np() } == 0 {
+            return None;
+        }
+        objc2::rc::autoreleasepool(|_| unsafe {
+            let workspace: *mut AnyObject = msg_send![class!(NSWorkspace), sharedWorkspace];
+            if workspace.is_null() {
+                return None;
+            }
+            let app: *mut AnyObject = msg_send![workspace, frontmostApplication];
+            identity(app)
+        })
+    }
+
+    fn copy_attribute(
+        element: Cf,
+        name: &'static str,
+        started: Instant,
+    ) -> Result<Owned, UnknownReason> {
+        if started.elapsed() >= TOTAL_BUDGET {
+            return Err(UnknownReason::Deadline);
+        }
+        let key = Owned::attribute(name).ok_or(UnknownReason::FocusUnavailable)?;
+        let mut value = std::ptr::null();
+        let status = unsafe { AXUIElementCopyAttributeValue(element, key.0, &mut value) };
+        // Even an anomalous error accompanied by a Copy result releases that result.
+        let result = Owned::new(value);
+        if status != 0 {
+            return Err(UnknownReason::FocusUnavailable);
+        }
+        if started.elapsed() >= TOTAL_BUDGET {
+            return Err(UnknownReason::Deadline);
+        }
+        result.ok_or(UnknownReason::FocusUnavailable)
+    }
+
+    fn element_pid(element: Cf) -> Option<i32> {
+        if element.is_null() || unsafe { CFGetTypeID(element) != AXUIElementGetTypeID() } {
+            return None;
+        }
+        let mut pid = 0;
+        (unsafe { AXUIElementGetPid(element, &mut pid) } == 0 && pid > 0).then_some(pid)
+    }
+
+    /// Evidence for a single instant, to recheck at capture/use time. Requires expected full
+    /// launch identity and frontmost ownership before AND after reads. Never authorize pixels
+    /// from this alone: private browsing and call/share status remain Unknown.
+    pub fn snapshot(expected: &ProcessIdentity) -> FocusSnapshot {
+        match checked_snapshot(expected) {
+            Ok(snapshot) => snapshot,
+            Err(reason) => FocusSnapshot::unknown(reason),
+        }
+    }
+
+    fn checked_snapshot(expected: &ProcessIdentity) -> Result<FocusSnapshot, UnknownReason> {
+        let started = Instant::now();
+        if !accessibility_trusted() {
+            return Err(UnknownReason::AccessibilityUnavailable);
+        }
+        let before = frontmost_process_identity().ok_or(UnknownReason::IdentityUnavailable)?;
+        if &before != expected {
+            return Err(UnknownReason::TargetChanged);
+        }
+        let app = Owned::new(unsafe { AXUIElementCreateApplication(expected.pid) })
+            .ok_or(UnknownReason::FocusUnavailable)?;
+        if element_pid(app.0) != Some(expected.pid)
+            || unsafe { AXUIElementSetMessagingTimeout(app.0, CALL_TIMEOUT) } != 0
+        {
+            return Err(UnknownReason::FocusUnavailable);
+        }
+        let focused = copy_attribute(app.0, "AXFocusedUIElement", started)?;
+        let actual_pid = element_pid(focused.0).ok_or(UnknownReason::FocusUnavailable)?;
+        if actual_pid != expected.pid {
+            return Err(UnknownReason::TargetChanged);
+        }
+        if unsafe { AXUIElementSetMessagingTimeout(focused.0, CALL_TIMEOUT) } != 0 {
+            return Err(UnknownReason::FocusUnavailable);
+        }
+        let role_value = copy_attribute(focused.0, "AXRole", started)?;
+        let role =
+            cf_string(role_value.0, MAX_METADATA_UNITS).ok_or(UnknownReason::FocusUnavailable)?;
+        // Subrole absence is not evidence of nonsecure focus. Secure role is sufficient to
+        // refuse even when an application fails to supply its subrole.
+        let subrole = copy_attribute(focused.0, "AXSubrole", started)
+            .ok()
+            .and_then(|value| cf_string(value.0, MAX_METADATA_UNITS));
+        let again = copy_attribute(app.0, "AXFocusedUIElement", started)?;
+        if element_pid(again.0) != Some(expected.pid)
+            || unsafe { CFEqual(focused.0, again.0) } == 0
+            || frontmost_process_identity().as_ref() != Some(expected)
+            || !accessibility_trusted()
+        {
+            return Err(UnknownReason::TargetChanged);
+        }
+        if started.elapsed() >= TOTAL_BUDGET {
+            return Err(UnknownReason::Deadline);
+        }
+        let focus = classify(expected.pid, actual_pid, Some(&role), subrole.as_deref());
+        // Return only recognized constant metadata, so a custom role cannot smuggle text into
+        // retained results. Unsupported combinations intentionally discard both strings.
+        if focus == Focus::Unknown {
+            return Err(UnknownReason::UnsupportedRole);
+        }
+        let role = matches!(
+            role.as_str(),
+            "AXTextField" | "AXSecureTextField" | "AXButton"
+        )
+        .then_some(role);
+        let subrole = subrole.filter(|subrole| {
+            matches!(
+                subrole.as_str(),
+                "AXSecureTextField"
+                    | "AXSearchField"
+                    | "AXCloseButton"
+                    | "AXMinimizeButton"
+                    | "AXZoomButton"
+                    | "AXToolbarButton"
+                    | "AXFullScreenButton"
+            )
+        });
+        Ok(FocusSnapshot {
+            focus,
+            unknown_reason: None,
+            role,
+            subrole,
+            private_browsing: PrivacyProof::Unknown,
+            call_or_screen_share: PrivacyProof::Unknown,
+        })
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub use native::{accessibility_trusted, frontmost_process_identity, process_identity, snapshot};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secure_focus_is_protected_even_with_incomplete_other_metadata() {
+        assert_eq!(
+            classify(42, 42, Some("AXTextField"), Some("AXSecureTextField")),
+            Focus::Password
+        );
+        assert_eq!(
+            classify(42, 42, Some("AXSecureTextField"), None),
+            Focus::Password
+        );
+    }
+
+    #[test]
+    fn unreadable_custom_and_incomplete_roles_fail_closed() {
+        for (role, subrole) in [
+            (None, None),
+            (Some("AXTextField"), None),
+            (Some("AXTextField"), Some("AXUnknown")),
+            (Some("Custom"), Some("Custom")),
+            (Some("AXTextArea"), None),
+            (Some("AXWindow"), Some("AXStandardWindow")),
+            (Some("AXRow"), Some("AXTableRow")),
+            (Some("AXButton"), Some("AXSecureish")),
+        ] {
+            assert_eq!(classify(42, 42, role, subrole), Focus::Unknown);
+        }
+        let snapshot = FocusSnapshot::unknown(UnknownReason::FocusUnavailable);
+        assert_eq!(snapshot.focus, Focus::Unknown);
+        assert_eq!(snapshot.private_browsing, PrivacyProof::Unknown);
+        assert_eq!(snapshot.call_or_screen_share, PrivacyProof::Unknown);
+    }
+
+    #[test]
+    fn changed_pid_cannot_inherit_even_a_recognized_focus() {
+        assert_eq!(
+            classify(42, 43, Some("AXTextField"), Some("AXSearchField")),
+            Focus::Unknown
+        );
+        assert_eq!(
+            classify(42, 43, Some("AXTextField"), Some("AXSecureTextField")),
+            Focus::Unknown
+        );
+        assert_eq!(
+            classify(0, 0, Some("AXButton"), Some("AXCloseButton")),
+            Focus::Unknown
+        );
+    }
+
+    #[test]
+    fn only_standard_documented_role_pairs_are_ordinary() {
+        assert_eq!(
+            classify(42, 42, Some("AXTextField"), Some("AXSearchField")),
+            Focus::Ordinary
+        );
+        assert_eq!(
+            classify(42, 42, Some("AXButton"), Some("AXCloseButton")),
+            Focus::Ordinary
+        );
+        assert_eq!(
+            classify(42, 42, Some("AXTextField"), Some("AXCloseButton")),
+            Focus::Unknown
+        );
+    }
+
+    #[test]
+    fn identity_includes_exact_bundle_and_launch_generation() {
+        let app = ProcessIdentity {
+            pid: 42,
+            bundle_id: "org.example.Editor".into(),
+            launch_time_bits: 1000f64.to_bits(),
+        };
+        let mut changed = app.clone();
+        changed.launch_time_bits = 1001f64.to_bits();
+        assert_ne!(app, changed);
+        changed = app.clone();
+        changed.bundle_id = "org.example.Other".into();
+        assert_ne!(app, changed);
+    }
+}

@@ -125,6 +125,76 @@ pub struct UndoLog {
 
 pub const UNDO_FILE: &str = "cursor-rename-undo.json";
 
+#[cfg(target_os = "macos")]
+fn path_cstring(path: &Path) -> std::io::Result<std::ffi::CString> {
+    use std::os::unix::ffi::OsStrExt;
+    std::ffi::CString::new(path.as_os_str().as_bytes()).map_err(|_| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path contains a NUL byte")
+    })
+}
+
+/// The destination check must be part of the rename itself: another process can create a
+/// file (or a dangling symlink) after the caller's advisory `exists()` check.
+#[cfg(target_os = "macos")]
+fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::ffi::{c_char, c_int, c_uint};
+
+    // Public macOS SDK <sys/stdio.h>, available since macOS 10.12.
+    const RENAME_EXCL: c_uint = 0x00000004;
+    unsafe extern "C" {
+        fn renamex_np(from: *const c_char, to: *const c_char, flags: c_uint) -> c_int;
+    }
+    let from = path_cstring(from)?;
+    let to = path_cstring(to)?;
+    // SAFETY: both pointers refer to live NUL-terminated strings; the SDK flag atomically
+    // refuses an occupied destination. Preserve the native error, including unsupported FS.
+    if unsafe { renamex_np(from.as_ptr(), to.as_ptr(), RENAME_EXCL) } == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(windows)]
+fn rename_no_replace(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+
+    // Public Kernel32 API. Zero flags deliberately excludes MOVEFILE_REPLACE_EXISTING and
+    // COPY_ALLOWED, so an occupied destination or a cross-volume move fails without copying.
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn MoveFileExW(from: *const u16, to: *const u16, flags: u32) -> i32;
+    }
+    let path_string = |path: &Path| {
+        let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+        if wide.contains(&0) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "path contains a NUL byte",
+            ));
+        }
+        wide.push(0);
+        Ok(wide)
+    };
+    let from = path_string(from)?;
+    let to = path_string(to)?;
+    // SAFETY: both pointers refer to live NUL-terminated UTF-16 paths for the entire call.
+    if unsafe { MoveFileExW(from.as_ptr(), to.as_ptr(), 0) } != 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn rename_no_replace(_from: &Path, _to: &Path) -> std::io::Result<()> {
+    // Never fall back to POSIX rename, which replaces an existing destination.
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic no-replace rename is unavailable on this platform",
+    ))
+}
+
 fn write_log(path: &Path, log: &UndoLog) -> std::io::Result<()> {
     let temp = path.with_extension("json.tmp");
     std::fs::write(
@@ -161,7 +231,7 @@ pub fn apply(plan: &[(PathBuf, PathBuf)], log_path: &Path, now_s: u64) -> std::i
         if to.exists() || !from.exists() {
             continue;
         }
-        if std::fs::rename(from, to).is_ok() {
+        if rename_no_replace(from, to).is_ok() {
             log.entries[i].done = true;
             count += 1;
             write_log(log_path, &log)?;
@@ -183,7 +253,7 @@ pub fn undo(log_path: &Path) -> std::io::Result<usize> {
         }
         if entry.to.exists()
             && !entry.from.exists()
-            && std::fs::rename(&entry.to, &entry.from).is_ok()
+            && rename_no_replace(&entry.to, &entry.from).is_ok()
         {
             entry.done = false;
             restored += 1;
@@ -226,10 +296,96 @@ mod tests {
         dir
     }
 
+    #[cfg(any(target_os = "macos", windows))]
+    #[test]
+    fn a_destination_created_after_preflight_is_not_replaced() {
+        let dir = temp_dir("racing-destination");
+        let source = dir.join("source.jpg");
+        let target = dir.join("target.jpg");
+        let bytes = [0, 255, 17, 128, 0];
+        std::fs::write(&source, bytes).unwrap();
+        assert!(!target.exists());
+        // Deterministically model another process winning between preflight and rename.
+        let racing_target = target.clone();
+        std::thread::spawn(move || std::fs::write(racing_target, b"someone else's").unwrap())
+            .join()
+            .unwrap();
+        let error = rename_no_replace(&source, &target).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&source).unwrap(), bytes);
+        assert_eq!(std::fs::read(&target).unwrap(), b"someone else's");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_dangling_destination_symlink_is_not_replaced() {
+        let dir = temp_dir("dangling-destination");
+        let source = dir.join("source.jpg");
+        let target = dir.join("target.jpg");
+        std::fs::write(&source, b"photo").unwrap();
+        std::os::unix::fs::symlink("absent.jpg", &target).unwrap();
+        assert!(!target.exists());
+        assert_eq!(
+            rename_no_replace(&source, &target).unwrap_err().kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(std::fs::read(&source).unwrap(), b"photo");
+        assert_eq!(
+            std::fs::read_link(&target).unwrap(),
+            Path::new("absent.jpg")
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn native_path_encoding_preserves_non_utf8_bytes() {
+        use std::os::unix::ffi::OsStrExt;
+        let path = Path::new(std::ffi::OsStr::from_bytes(b"source-\xff.jpg"));
+        assert_eq!(path_cstring(path).unwrap().as_bytes(), b"source-\xff.jpg");
+    }
+
+    #[cfg(any(target_os = "macos", windows))]
+    #[test]
+    fn exclusive_rename_preserves_file_bytes_in_both_directions() {
+        let dir = temp_dir("path-bytes");
+        let source = dir.join("source-é.jpg");
+        let target = dir.join("target-猫.jpg");
+        let bytes = [0, 255, 17, 128, 0];
+        std::fs::write(&source, bytes).unwrap();
+        rename_no_replace(&source, &target).unwrap();
+        assert!(!source.exists());
+        assert_eq!(std::fs::read(&target).unwrap(), bytes);
+        rename_no_replace(&target, &source).unwrap();
+        assert!(!target.exists());
+        assert_eq!(std::fs::read(&source).unwrap(), bytes);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[cfg(any(target_os = "macos", windows))]
+    #[test]
+    fn exclusive_rename_rejects_nul_in_either_path() {
+        let dir = temp_dir("nul-path");
+        let source = dir.join("source.jpg");
+        let target = dir.join("target.jpg");
+        let invalid = dir.join("bad\0name");
+        std::fs::write(&source, b"photo").unwrap();
+        for (from, to) in [(&source, &invalid), (&invalid, &target)] {
+            assert_eq!(
+                rename_no_replace(from, to).unwrap_err().kind(),
+                std::io::ErrorKind::InvalidInput
+            );
+        }
+        assert_eq!(std::fs::read(&source).unwrap(), b"photo");
+        assert!(!target.exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn names_come_from_the_date_taken_and_never_collide() {
         let p = |name: &str, taken: Option<&str>| Photo {
-            path: PathBuf::from(format!("C:\\p\\{name}")),
+            path: PathBuf::from("photos").join(name),
             taken: taken.map(str::to_owned),
             modified: "2026-01-01T00:00:00".into(),
         };
@@ -261,7 +417,7 @@ mod tests {
     fn undo_restores_exactly() {
         let dir = temp_dir("undo");
         let files = [
-            ("IMG_1.jpg", b"one".as_slice()),
+            ("IMG_1.jpg", b"one\0\xff\x80".as_slice()),
             ("IMG_2.jpg", b"two"),
             ("IMG_3.heic", b"three"),
         ];
@@ -317,8 +473,8 @@ mod tests {
         let plan: Vec<(PathBuf, PathBuf)> = (0..12)
             .map(|i| {
                 (
-                    PathBuf::from(format!("C:\\a\\IMG_{i}.jpg")),
-                    PathBuf::from(format!("C:\\a\\2026-01-0{} x.jpg", i % 9)),
+                    PathBuf::from("photos").join(format!("IMG_{i}.jpg")),
+                    PathBuf::from("photos").join(format!("2026-01-0{} x.jpg", i % 9)),
                 )
             })
             .collect();

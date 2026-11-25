@@ -115,6 +115,7 @@ fn sign_in_links(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     app.deep_link().on_open_url(move |event| {
         for link in event.urls() {
             // neb://handoff/<uuid> (strictly): the handoff opens in the main window.
+            #[cfg(windows)]
             if let Some(id) = screen::handoff_run::parse_link(&link) {
                 screen::handoff_run::open_link(&handle, &id);
                 continue;

@@ -858,6 +858,7 @@ body.island {
   gap: 8px;
   margin: 0;
   min-width: 96px;
+  max-width: 144px;
   font-family: var(--font-neb);
   font-size: 13px;
   font-weight: 500;
@@ -865,6 +866,16 @@ body.island {
   text-transform: lowercase;
   color: #c9bcff;
   white-space: nowrap;
+}
+
+#island-activity {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.island-status > .island-dot {
+  flex-shrink: 0;
 }
 
 /* The neb dot (NEB_APP_UI §3.8): watching breathes, looking shows three pixel dots, listening

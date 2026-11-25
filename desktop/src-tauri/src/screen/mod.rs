@@ -69,6 +69,8 @@ pub mod image;
 pub mod ink;
 pub mod intent;
 pub mod island;
+#[cfg(target_os = "macos")]
+pub mod mac;
 pub mod marks;
 pub mod music;
 pub mod notes_marks;
@@ -80,6 +82,7 @@ pub mod raster;
 pub mod screen_text;
 pub mod secret;
 pub mod source;
+pub mod surfaces;
 pub mod tray_badge;
 pub mod walkthrough;
 pub mod watch;

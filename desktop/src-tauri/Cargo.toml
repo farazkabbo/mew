@@ -12,6 +12,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 # Pinned to releases at least 14 days old when added (the same rule as the JS workspace).
 [build-dependencies]
+serde_json = "=1.0.154"
 tauri-build = { version = "=2.7.1", features = [] }
 
 [dependencies]
@@ -35,6 +36,8 @@ tauri-plugin-updater = "=2.14.0"
 getrandom = "=0.3.4"
 # The same WebKit bindings already used by Wry. Configure the view before loading the app.
 objc2 = "=0.6.5"
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSApplication", "NSRunningApplication", "NSWorkspace", "NSScreen", "NSWindow", "NSColor", "NSPanel", "NSView", "NSGraphics"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSArray", "NSDictionary", "NSString", "NSGeometry", "NSValue"] }
 objc2-web-kit = { version = "=0.3.2", default-features = false, features = [
   "WKPreferences",
   "WKWebViewConfiguration",

@@ -792,3 +792,117 @@ test("the draw overlay draws the card's pointer line in neb's violet, and clears
   await expect.poll(() => violetAt(200, 100)).toBe(false);
   expect(shell.violations).toEqual([]);
 });
+
+test("the island requests a fresh view after loading and keeps native failures truthful", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 820, height: 58 });
+  const shell = await openShellPage(page, "island.html");
+  await expect
+    .poll(shell.calls)
+    .toEqual([{ cmd: "screen_island", args: { action: { type: "ready" } } }]);
+  await shell.dispatch("mew:island-show", {
+    tool: "none",
+    shape: "free",
+    mic: false,
+    silent: false,
+    activity: "ready",
+    clearable: false,
+    help: "hint",
+    watching: false,
+  });
+  const mic = page.getByRole("button", { name: "Microphone", exact: true });
+  await expect(mic).toHaveAttribute("aria-pressed", "false");
+  await mic.click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "mic" } } });
+  // A click requests the native action; it does not manufacture a successful listening state.
+  await expect(mic).toHaveAttribute("aria-pressed", "false");
+  await shell.dispatch("mew:island-notice", {
+    message: "That tool couldn't be used right now. Please try again.",
+  });
+  await expect(page.locator("#island-activity")).toHaveText(
+    "That tool couldn't be used right now. Please try again.",
+  );
+  // Failure notices must not push native controls beyond the compact panel's edge.
+  const close = (await page.getByRole("button", { name: "Close", exact: true }).boundingBox())!;
+  expect(close.x + close.width).toBeLessThanOrEqual(820);
+  await shell.dispatch("mew:island-show", {
+    tool: "none",
+    shape: "free",
+    mic: true,
+    silent: false,
+    activity: "listening",
+    clearable: false,
+    help: "hint",
+    watching: false,
+  });
+  await expect(mic).toHaveAttribute("aria-pressed", "true");
+  expect(shell.violations).toEqual([]);
+});
+
+test("the island expands music from a collapsed Mac viewport and bounds its requested height", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 820, height: 58 });
+  const shell = await openShellPage(page, "island.html");
+  await page.getByRole("button", { name: "Music", exact: true }).click();
+  const musicHeight = async () => {
+    const call = (await shell.calls()).findLast(
+      (entry) =>
+        entry.cmd === "screen_island" &&
+        (entry.args as { action: { type: string } }).action.type === "music_panel",
+    );
+    return (call?.args as { action: { height: number } } | undefined)?.action.height ?? 0;
+  };
+  await expect.poll(musicHeight).toBeGreaterThan(58);
+  const height = await musicHeight();
+  expect(height).toBeLessThanOrEqual(460);
+  // Simulate the native host honoring the request; content is now inside the visible panel.
+  await page.setViewportSize({ width: 820, height });
+  const music = page.getByRole("region", { name: "Music", exact: true });
+  await expect(music).toBeVisible();
+  const box = (await music.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(height);
+
+  // Even unusually tall content cannot request an unbounded native overlay.
+  await music.evaluate((element) => {
+    element.style.minHeight = "1000px";
+  });
+  await shell.dispatch("mew:island-music", {
+    now: null,
+    pins: [],
+    notice: null,
+    pinning: false,
+  });
+  await expect.poll(musicHeight).toBe(460);
+  expect(shell.violations).toEqual([]);
+});
+
+test("the compact Mac island shows inline tooltips and restores the latest native activity", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 820, height: 58 });
+  const shell = await openShellPage(page, "island.html");
+  await shell.dispatch("mew:island-host", { inlineTooltips: true });
+  const pen = page.getByRole("button", { name: "Pen", exact: true });
+  await pen.hover();
+  const activity = page.locator("#island-activity");
+  await expect(activity).toHaveText("Pen");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await shell.dispatch("mew:island-show", {
+    tool: "none",
+    shape: "free",
+    mic: true,
+    silent: false,
+    activity: "listening",
+    clearable: false,
+    help: "hint",
+    watching: false,
+  });
+  await expect(activity).toHaveText("Pen");
+  await page.mouse.move(1, 1);
+  await expect(activity).toHaveText("Listening…");
+  expect(shell.violations).toEqual([]);
+});
