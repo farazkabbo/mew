@@ -176,7 +176,8 @@ pub fn parse_plan(bytes: &[u8]) -> Option<Plan> {
     })
 }
 
-fn parse_action(value: &serde_json::Value) -> Option<DoAction> {
+/// One allowlisted action, checked (also what the intent route may answer with `do_it`).
+pub fn parse_action(value: &serde_json::Value) -> Option<DoAction> {
     let field = |k: &str| value.get(k).and_then(|v| v.as_str());
     match field("type")? {
         "find_file" => {

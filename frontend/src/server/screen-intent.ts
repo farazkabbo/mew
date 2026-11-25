@@ -38,19 +38,22 @@ export async function intentForScreen(
       input: [{ type: "text" as const, text: renderIntentInput(request) }],
       schema: ScreenIntentReply,
       thinkingLevel: "minimal" as const,
-      maxOutputTokens: 64,
+      // Room for a do_it's chore (a find_file with its query is the longest).
+      maxOutputTokens: 160,
       timeoutMs: SCREEN_INTENT_TIMEOUT_MS,
       ...(signal && { signal }),
     });
   } catch (error) {
     throw new HttpError(503, unavailableMessage(error));
   }
-  const { intent } = made;
+  const { intent, action } = made;
   // A walkthrough's replies only mean something during one; "show that again" needs ink.
   const stray =
     (intent.startsWith("coach_") &&
       !["coach_start", "coach_resume", "coach_recheck"].includes(intent) &&
       !request.coaching) ||
     (intent === "reannotate" && !request.hasInk);
-  return { intent: stray ? "ask" : intent };
+  if (stray) return { intent: "ask", action: null };
+  // A chore only goes with "do_it" (the desktop checks it against the allowlist again).
+  return { intent, action: intent === "do_it" ? (action ?? null) : null };
 }

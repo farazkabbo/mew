@@ -75,6 +75,13 @@ mouse and touchpad timing). Record real ones (below) before trusting them.
     not just opened at Colors. Asked again when it's already that way, nothing opens: Neb
     says so. Any plain wording is recognised on the device (`doit::theme_wanted`); asking how
     or where is still SHOW ME. Prompts `screen-intent.v5`, `screen-plan.v2`.
+12. **One model call for a DO IT, not two** (owner, 2026-11-25: "it takes so long to execute
+    tasks"; `fix/fewer-round-trips`). When the device's rules don't recognise the words, the
+    intent route (`screen-intent.v6`) answers the chore along with `do_it`, checked against the
+    allowlist on the desktop (`intent::parse_intent_action`), so DO IT starts at once. Only when
+    it sent none, or one that doesn't check out, does DO IT still plan (`/api/screen/plan`). A
+    chore chosen this way spends no question, like the ones recognised on the device (this
+    narrows decision 3). Older desktop apps ignore the extra field.
 
 ## Shared path library (designed, not built)
 

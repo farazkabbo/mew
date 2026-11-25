@@ -1,7 +1,8 @@
 //! DO IT at run time (docs/CURSOR_MODES.md, F): one allowlisted chore, then a replay.
 //!
 //! 1. What to do: the plain chores are recognised on the device (`doit::local_action`, no
-//!    question spent); anything else is one plan (`POST /api/screen/plan`, mode "do"), whose
+//!    question spent); then the chore the intent route chose along with `do_it`, if it chose
+//!    one (no second call); anything else is one plan (`POST /api/screen/plan`, mode "do"), whose
 //!    action is checked against the allowlist (`plan::parse_plan`). Off the list, Neb offers a
 //!    SHOW ME lesson instead: it never improvises.
 //! 2. The chore: find a file (and open it, asking which when unsure), open a Settings page, save
@@ -63,14 +64,20 @@ struct Done {
 }
 
 /// Starts DO IT for `goal` on its own thread (searching and fetching take a moment).
-pub fn start<R: Runtime>(app: &AppHandle<R>, goal: String, captured: Captured) {
+/// `chore`: what the intent route already chose (checked), so no plan is needed.
+pub fn start<R: Runtime>(
+    app: &AppHandle<R>,
+    goal: String,
+    chore: Option<DoAction>,
+    captured: Captured,
+) {
     let handle = app.clone();
     let spawned = std::thread::Builder::new()
         .name("mew-cursor-do".into())
         .spawn(move || {
             // SAFETY: COM for this thread (UI Automation, the dialogs); balanced below.
             let com = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_ok();
-            run(&handle, &goal, captured);
+            run(&handle, &goal, chore, captured);
             if com {
                 // SAFETY: balances the successful CoInitializeEx above.
                 unsafe { CoUninitialize() };
@@ -91,13 +98,15 @@ pub fn is_undo(goal: &str) -> bool {
     g.contains("undo") && g.contains("rename")
 }
 
-fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, captured: Captured) {
+fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, captured: Captured) {
     if is_undo(goal) {
         drop(captured);
         undo_rename(app);
         return;
     }
-    let (action, speech) = match local_action(goal) {
+    // The device's own reading first (free), then what the intent route chose (already paid
+    // for), and only then a plan.
+    let (action, speech) = match local_action(goal).or(chore) {
         Some(action) => (action, None),
         None => match plan(app, goal) {
             Ok((action, speech)) => (action, Some(speech)),

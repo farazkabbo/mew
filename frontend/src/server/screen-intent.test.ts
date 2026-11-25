@@ -12,13 +12,13 @@ const SAID: ScreenIntentRequest = {
   hasInk: false,
 };
 
-function deps(intent: string): ScreenIntentDeps & { inputs: unknown[] } {
+function deps(intent: string, action: unknown = null): ScreenIntentDeps & { inputs: unknown[] } {
   const inputs: unknown[] = [];
   return {
     inputs,
     generate: <T>(request: { input: unknown }) => {
       inputs.push(request.input);
-      return Promise.resolve({ intent } as T);
+      return Promise.resolve({ intent, action } as T);
     },
   } as ScreenIntentDeps & { inputs: unknown[] };
 }
@@ -26,7 +26,7 @@ function deps(intent: string): ScreenIntentDeps & { inputs: unknown[] } {
 describe("what the student meant", () => {
   it("passes on the model's reading, from the words alone", async () => {
     const made = deps("write");
-    expect(await intentForScreen(SAID, undefined, made)).toEqual({ intent: "write" });
+    expect(await intentForScreen(SAID, undefined, made)).toEqual({ intent: "write", action: null });
     // Words and three facts: no image goes with it.
     expect(made.inputs).toEqual([
       [
@@ -44,20 +44,39 @@ describe("what the student meant", () => {
   });
 
   it("turns a walkthrough's reply into a question when there's no walkthrough", async () => {
-    expect(await intentForScreen(SAID, undefined, deps("coach_done"))).toEqual({ intent: "ask" });
+    expect(await intentForScreen(SAID, undefined, deps("coach_done"))).toEqual({
+      intent: "ask",
+      action: null,
+    });
     expect(
       await intentForScreen({ ...SAID, coaching: true }, undefined, deps("coach_done")),
-    ).toEqual({ intent: "coach_done" });
+    ).toEqual({ intent: "coach_done", action: null });
     // Starting one needs no walkthrough in progress.
     expect(await intentForScreen(SAID, undefined, deps("coach_start"))).toEqual({
       intent: "coach_start",
+      action: null,
+    });
+  });
+
+  it("keeps a chore only with do_it, so DO IT needs no second call", async () => {
+    const dark = { type: "set_theme", theme: "dark" };
+    expect(await intentForScreen(SAID, undefined, deps("do_it", dark))).toEqual({
+      intent: "do_it",
+      action: dark,
+    });
+    expect(await intentForScreen(SAID, undefined, deps("ask", dark))).toEqual({
+      intent: "ask",
+      action: null,
     });
   });
 
   it("only shows ink again when there is some", async () => {
-    expect(await intentForScreen(SAID, undefined, deps("reannotate"))).toEqual({ intent: "ask" });
+    expect(await intentForScreen(SAID, undefined, deps("reannotate"))).toEqual({
+      intent: "ask",
+      action: null,
+    });
     expect(await intentForScreen({ ...SAID, hasInk: true }, undefined, deps("reannotate"))).toEqual(
-      { intent: "reannotate" },
+      { intent: "reannotate", action: null },
     );
   });
 

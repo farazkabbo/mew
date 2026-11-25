@@ -24,7 +24,7 @@ export class FakeModelFailure extends Error {
 }
 
 const ANSWERS: Record<string, unknown> = {
-  "screen-intent": { intent: "ask" },
+  "screen-intent": { intent: "ask", action: null },
   "screen-act": { speech: "That's done.", action: { type: "done" } },
   "screen-recipe": {
     found: true,

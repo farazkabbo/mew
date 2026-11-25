@@ -231,8 +231,13 @@ pub fn show_me<R: Runtime>(app: &AppHandle<R>, goal: &str) -> bool {
 }
 
 /// DO IT for `goal` (`cursor_do.rs`).
-pub fn do_it<R: Runtime>(app: &AppHandle<R>, goal: String, captured: Captured) {
-    super::cursor_do::start(app, goal, captured);
+pub fn do_it<R: Runtime>(
+    app: &AppHandle<R>,
+    goal: String,
+    chore: Option<super::cursor::plan::DoAction>,
+    captured: Captured,
+) {
+    super::cursor_do::start(app, goal, chore, captured);
 }
 
 /// DO IT's replay: about two seconds of Neb's ghost cursor and a caption of where things are.

@@ -24,10 +24,11 @@ use super::annotate::{self, ShowInk, TurnState};
 use super::clip;
 use super::coach::{self, ScreenCoach};
 use super::coach_mode;
+use super::cursor::plan::DoAction;
 use super::destination::save_to_phrase;
 use super::device_call;
 use super::frame::{CapturedFrame, FrameDetail, FrameMeta};
-use super::intent::{intent_body, intent_of, parse_intent_reply, Intent};
+use super::intent::{intent_body, intent_of, parse_intent_action, parse_intent_reply, Intent};
 use super::notes_check;
 use super::page::{self, require_app_page};
 use super::pipeline::Captured;
@@ -104,8 +105,8 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     // meanwhile). A quiz or Circle & Ask in progress takes the words itself, so only the fixed
     // rule for pausing applies there.
     let in_session = super::screen_quiz::takes_words(app) || super::circle::takes_words(app);
-    let intent = if in_session {
-        intent_of(transcript, coach_mode::is_coaching(app))
+    let (intent, chore) = if in_session {
+        (intent_of(transcript, coach_mode::is_coaching(app)), None)
     } else {
         resolve_intent(app, transcript)
     };
@@ -201,7 +202,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             Intent::Show => {
                 super::screen_hand::start(app, transcript.to_owned(), Mode::Show, captured)
             }
-            Intent::DoIt => super::cursor_run::do_it(app, transcript.to_owned(), captured),
+            Intent::DoIt => super::cursor_run::do_it(app, transcript.to_owned(), chore, captured),
             Intent::Coach(word) => coach_mode::on_word(app, word, captured),
             _ => annotate::reannotate(app, captured, false),
         }
@@ -280,15 +281,16 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
 /// nothing; whatever they don't recognise, the server's model reads (words only, never the
 /// screen), so the student can say it any way they like. If the server can't be reached in
 /// time, or answers something that doesn't fit, it's a question. "Neb, pause" never leaves the
-/// computer: pausing promises nothing is sent.
-fn resolve_intent<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Intent {
+/// computer: pausing promises nothing is sent. With a `do_it`, the model also names the chore
+/// (checked against the allowlist), so DO IT doesn't have to ask a second time.
+fn resolve_intent<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> (Intent, Option<DoAction>) {
     let coaching = coach_mode::is_coaching(app);
     let local = intent_of(transcript, coaching);
     // A phrase the fixed rules already know ("write an essay on cats", "save this") is acted on
     // at once: only what they can't place (they'd call it a question) is worth the second or so
     // the model takes to read it.
     if local != Intent::Ask || transcript.trim().is_empty() {
-        return local;
+        return (local, None);
     }
     let has_ink = annotate::turn_state(app) != TurnState::None;
     let body = intent_body(transcript, coaching, has_ink);
@@ -301,11 +303,15 @@ fn resolve_intent<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Intent {
             let _ = sender.send(reply);
         });
     if spawned.is_err() {
-        return local;
+        return (local, None);
     }
     match receiver.recv_timeout(INTENT_WAIT) {
-        Ok(Ok(bytes)) => parse_intent_reply(&bytes, coaching, has_ink).unwrap_or(local),
-        _ => local,
+        Ok(Ok(bytes)) => match parse_intent_reply(&bytes, coaching, has_ink) {
+            Some(Intent::DoIt) => (Intent::DoIt, parse_intent_action(&bytes)),
+            Some(intent) => (intent, None),
+            None => (local, None),
+        },
+        _ => (local, None),
     }
 }
 

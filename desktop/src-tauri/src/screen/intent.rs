@@ -21,6 +21,17 @@ pub fn intent_body(transcript: &str, coaching: bool, has_ink: bool) -> Vec<u8> {
     .into_bytes()
 }
 
+/// The chore the server chose with a `do_it` (`screen-intent.v6`), checked against DO IT's
+/// allowlist: with it, DO IT needs no second call to plan. None when it sent none, or one that
+/// doesn't check out (then DO IT plans as before).
+pub fn parse_intent_action(bytes: &[u8]) -> Option<super::cursor::plan::DoAction> {
+    let reply: serde_json::Value = serde_json::from_slice(bytes).ok()?;
+    if reply.get("intent")?.as_str()? != "do_it" {
+        return None;
+    }
+    super::cursor::plan::parse_action(reply.get("action")?)
+}
+
 /// The server's reading of the words, checked: one of the known intents, and one that fits what
 /// Neb is doing (a walkthrough's replies only during one, "show that again" only with ink).
 /// None for anything else: the fixed rules below decide instead.
@@ -829,6 +840,36 @@ mod cursor_mode_tests {
         assert_eq!(intent_of("save this", false), Intent::Clip);
         assert_eq!(intent_of("open Spotify", false), Intent::Act);
         assert_eq!(intent_of("find the download button", false), Intent::Ask);
+    }
+
+    #[test]
+    fn a_do_it_may_carry_its_chore() {
+        use super::super::cursor::plan::DoAction;
+        assert_eq!(
+            parse_intent_action(
+                br#"{"intent":"do_it","action":{"type":"set_theme","theme":"dark"}}"#
+            ),
+            Some(DoAction::SetTheme { dark: true })
+        );
+        // None sent, off the list, or not a do_it: DO IT plans as before.
+        assert_eq!(parse_intent_action(br#"{"intent":"do_it"}"#), None);
+        assert_eq!(
+            parse_intent_action(br#"{"intent":"do_it","action":null}"#),
+            None
+        );
+        assert_eq!(
+            parse_intent_action(br#"{"intent":"do_it","action":{"type":"delete_file"}}"#),
+            None
+        );
+        assert_eq!(
+            parse_intent_action(br#"{"intent":"ask","action":{"type":"save_recipe"}}"#),
+            None
+        );
+        // The intent itself still parses with the extra field.
+        assert_eq!(
+            parse_intent_reply(br#"{"intent":"do_it","action":null}"#, false, false),
+            Some(Intent::DoIt)
+        );
     }
 
     #[test]

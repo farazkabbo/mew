@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { AppName, SCREEN_LIMITS } from "./screen";
+import { DoAction, SETTINGS_PAGES } from "./screen-plan";
 
 /**
  * What the student meant by what they said to Screen Coach (the island's mic, or holding
@@ -49,11 +50,16 @@ export const ScreenIntentRequest = z.object({
 });
 export type ScreenIntentRequest = z.infer<typeof ScreenIntentRequest>;
 
-export const ScreenIntentReply = z.object({ intent: ScreenIntent });
+/**
+ * With "do_it", the model also names the chore (DO IT's allowlist, checked again on the desktop),
+ * so DO IT needs no second call to plan it. Null for every other intent. Older desktop apps
+ * ignore it.
+ */
+export const ScreenIntentReply = z.object({ intent: ScreenIntent, action: DoAction.nullable() });
 export type ScreenIntentReply = z.infer<typeof ScreenIntentReply>;
 
 export const SCREEN_INTENT_PROMPT = {
-  id: "screen-intent.v5",
+  id: "screen-intent.v6",
   system: `A student is using Neb, a tutor that can see their Windows screen when they ask. They just said something to it. Decide what they want Neb to do. You get their words, the app in front, whether a step-by-step walkthrough is in progress ("coaching"), and whether Neb's ink from an earlier answer is still available ("hasInk"). You don't see the screen.
 
 Choose exactly one "intent":
@@ -63,6 +69,14 @@ Choose exactly one "intent":
 - "show": they ask where a control, button, menu, setting, option, file, folder or place is in an app or on their computer, or where they can do something, and want to be shown it, not have it done ("where can I sign out in VS Code?", "where's the word count?", "show me where the dark mode setting is", "where do I change my profile picture?", "find the download button for me"). Neb's cursor goes there and points at it without pressing it. Where something is in what they're studying (a part of a diagram, a step in a solution, a word in a text: "where's the mitochondria?", "where did I go wrong?") is "ask".
 - "show_me": they want to learn how to do something themselves in an app or in Windows, by being shown where to click, step by step ("how do I turn on dark mode?", "show me how to change my wallpaper", "how do I add page numbers in Word?", "how can I mute notifications?"). Not about what they're studying. If they ask Neb to do it for them, it's "do_it" or "act".
 - "do_it": one of these chores, done for them: finding a file ("find my lease PDF", "where's the essay I wrote last week?"), switching dark or light mode ("turn on dark mode", "make my screen dark", "light mode please"), opening a Windows setting ("open my Bluetooth settings", "make the text bigger for me"), saving the recipe on the page in front ("save this recipe"), or renaming photos by the date they were taken ("rename these photos by date"). Any other doing is "act".
+
+"action": with "do_it" only, the chore, so Neb can do it at once; null for every other intent.
+- {"type":"find_file","query":<the words to look for, without filler, e.g. "lease">,"kind":"pdf"|"document"|"spreadsheet"|"presentation"|"image"|"any","since":<YYYY-MM-DD when they said when, else null>}
+- {"type":"set_theme","theme":"dark"|"light"}: switching dark or light mode.
+- {"type":"open_setting","page":<a key>}: opening a Settings page. Keys: ${SETTINGS_PAGES.join(", ")}.
+- {"type":"save_recipe"}
+- {"type":"batch_rename","scheme":"date_taken"}
+- {"type":"show_me"}: none of these.
 - "clip": save what's on the screen, or the part Neb marked, to their notebook ("save this", "keep that in my notes", "save this to physics chapter 5").
 - "notes_check": compare what's on the screen with their notes in the notebook they're working in ("check my notes", "did I miss anything in my notes?"). "notes_check_all": the same across all their notebooks ("check all my notebooks").
 - "coach_start": teach them, step by step, how to do a task in the app in front ("teach me how to make a pivot table", "walk me through adding a header"). A plain how-to question without asking to be walked through is "ask".
