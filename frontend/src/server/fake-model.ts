@@ -26,6 +26,23 @@ export class FakeModelFailure extends Error {
 const ANSWERS: Record<string, unknown> = {
   "screen-intent": { intent: "ask" },
   "screen-act": { speech: "That's done.", action: { type: "done" } },
+  "screen-recipe": {
+    found: true,
+    title: "Spiced rice and lentils",
+    originalTitle: null,
+    ingredients: ["1 cup rice", "1/2 cup lentils"],
+    steps: ["Wash the rice.", "Cook everything together."],
+    servings: "4",
+    time: "40 min",
+  },
+  "screen-plan": {
+    speech: "Click Personalization, then Colors.",
+    steps: [
+      { type: "ListItem", name: "Personalization" },
+      { type: "ListItem", name: "Colors" },
+    ],
+    action: { type: "open_setting", page: "colors" },
+  },
   "screen-write": {
     speech: "Here's a sentence to start with.",
     kind: "insert",

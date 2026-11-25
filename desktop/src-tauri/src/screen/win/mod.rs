@@ -3,16 +3,24 @@
 
 pub(super) mod auth;
 pub mod capture;
+pub mod catch_chip;
+pub mod catch_facts;
+pub mod chores;
 pub mod clipboard;
 pub mod credential;
 pub mod crypto;
+pub mod cursor_layer;
 pub mod encode;
+pub mod git;
+pub mod handoff_crypto;
+pub mod handoff_image;
 pub mod http;
 pub mod indicator;
 pub mod input;
 pub mod launch;
 pub mod media_session;
 pub mod mouse;
+pub mod mouse_stream;
 pub mod ocr;
 pub mod pen_input;
 pub mod system;
@@ -21,6 +29,7 @@ pub mod target;
 pub mod test_window;
 pub mod typing;
 pub mod uia;
+pub mod uia_targets;
 pub mod winevent;
 
 use windows::core::HSTRING;

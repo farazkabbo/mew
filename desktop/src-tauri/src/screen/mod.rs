@@ -58,10 +58,12 @@ pub mod base64;
 pub mod circle_protocol;
 pub mod circle_steps;
 pub mod config;
+pub mod cursor;
 pub mod destination;
 pub mod drag;
 pub mod frame;
 pub mod glance;
+pub mod handoff;
 pub mod hold;
 pub mod image;
 pub mod ink;
@@ -99,7 +101,13 @@ pub mod coach;
 #[cfg(windows)]
 pub mod coach_mode;
 #[cfg(windows)]
+pub mod cursor_do;
+#[cfg(windows)]
+pub mod cursor_run;
+#[cfg(windows)]
 pub mod device_call;
+#[cfg(windows)]
+pub mod handoff_run;
 #[cfg(windows)]
 pub mod keys;
 #[cfg(target_os = "macos")]

@@ -21,6 +21,8 @@ export const SCREEN_EVENTS = {
   say: "mew:screen-say",
   /** Circle & Ask: stop whatever is being said. */
   hush: "mew:screen-hush",
+  /** The cursor modes: a short correction word ("below", "left"), from clips made ahead. */
+  cue: "mew:screen-cue",
   /** Circle & Ask: an explanation was saved as an entry; add it to the notebook (and show it). */
   entrySaved: "mew:screen-entry-saved",
   /** A clip was saved from the screen (S3): build its notebook page. */
@@ -47,6 +49,9 @@ export const ScreenSayDetail = z.object({
   text: z.string().min(1).max(SCREEN_LIMITS.speechChars),
   token: z.number().int().nonnegative().optional(),
 });
+
+/** A cue word's key (CUE_KEYS); anything else is ignored. */
+export const ScreenCueDetail = z.object({ cue: z.string().max(32) });
 
 export const ScreenNotesOpenDetail = z.object({ findingId: z.uuid() });
 export type ScreenClipSavedDetail = z.infer<typeof ScreenClipSavedDetail>;

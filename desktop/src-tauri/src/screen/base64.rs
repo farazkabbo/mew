@@ -74,3 +74,50 @@ mod tests {
         assert_eq!(standard(&[0xfb, 0xff]), "+/8=");
     }
 }
+
+/// Standard base64 with padding, as a string.
+pub fn encode(input: &[u8]) -> String {
+    let mut out = Vec::with_capacity(encoded_len(input.len()));
+    encode_into(input, &mut out);
+    String::from_utf8(out).unwrap_or_default()
+}
+
+/// Decodes standard base64 (padding optional); None for anything else.
+pub fn decode(text: &str) -> Option<Vec<u8>> {
+    let value = |c: u8| STANDARD.iter().position(|&a| a == c).map(|p| p as u32);
+    let bytes: Vec<u8> = text.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+    let bytes = bytes
+        .strip_suffix(b"==")
+        .or_else(|| bytes.strip_suffix(b"="))
+        .unwrap_or(&bytes);
+    if bytes.len() % 4 == 1 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
+    for chunk in bytes.chunks(4) {
+        let mut n = 0u32;
+        for (i, &c) in chunk.iter().enumerate() {
+            n |= value(c)? << (18 - 6 * i as u32);
+        }
+        out.push((n >> 16) as u8);
+        if chunk.len() > 2 {
+            out.push((n >> 8) as u8);
+        }
+        if chunk.len() > 3 {
+            out.push(n as u8);
+        }
+    }
+    Some(out)
+}
+
+#[cfg(test)]
+mod round_trip {
+    #[test]
+    fn decodes_what_it_encodes() {
+        for n in 0..40u8 {
+            let data: Vec<u8> = (0..n).map(|i| i.wrapping_mul(37)).collect();
+            assert_eq!(super::decode(&super::encode(&data)).unwrap(), data);
+        }
+        assert!(super::decode("a$b=").is_none());
+    }
+}

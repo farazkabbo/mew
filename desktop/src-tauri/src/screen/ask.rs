@@ -109,13 +109,13 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     } else {
         resolve_intent(app, transcript)
     };
-    // "Where can I sign out?" is shown by Neb's hand when the student has turned it on;
-    // otherwise it's a question like any other, answered in words and ink.
-    let intent = if intent == Intent::Show && !coach::hand_allowed(app) {
-        Intent::Ask
-    } else {
-        intent
-    };
+    // Handoff (being built): "hand this off to Rahbir" opens the hand-off preview; the capture
+    // isn't needed (the timeline already holds the session).
+    if let Some(name) = super::handoff::hand_off_phrase(transcript) {
+        drop(wait_for_frame(&coach)); // wiped unsent
+        super::handoff_run::start(app, name);
+        return Ok(());
+    }
     // "Neb, pause" (K2: it was Ctrl+Alt+P): everything held is wiped by pausing.
     if intent == Intent::Pause {
         coach::pause(app);
@@ -139,6 +139,21 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         }
         return Err("I didn't catch your screen that time. Hold Ctrl+Alt and ask again.".into());
     };
+    // SHOW ME (docs/CURSOR_MODES.md): "how do I…" and "where's…" become a lesson whenever the
+    // window in front has controls UI Automation can name; the picture isn't needed for it.
+    if matches!(intent, Intent::ShowMe | Intent::Show)
+        && super::cursor_run::show_me(app, transcript)
+    {
+        drop(frame); // wiped unsent
+        return Ok(());
+    }
+    // Otherwise "where can I sign out?" is shown by Neb's hand when the student has turned it
+    // on, or it's a question like any other, answered in words and ink.
+    let intent = match intent {
+        Intent::ShowMe | Intent::Show if coach::hand_allowed(app) => Intent::Show,
+        Intent::ShowMe | Intent::Show => Intent::Ask,
+        other => other,
+    };
     let CapturedFrame {
         jpeg, meta, detail, ..
     } = frame;
@@ -159,6 +174,8 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             | Intent::Write
             | Intent::Act
             | Intent::Show
+            | Intent::ShowMe
+            | Intent::DoIt
             | Intent::Coach(_) => true,
             Intent::Reannotate => annotate::turn_state(app) != TurnState::None,
             Intent::Ask | Intent::Pause => false,
@@ -184,6 +201,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
             Intent::Show => {
                 super::screen_hand::start(app, transcript.to_owned(), Mode::Show, captured)
             }
+            Intent::DoIt => super::cursor_run::do_it(app, transcript.to_owned(), captured),
             Intent::Coach(word) => coach_mode::on_word(app, word, captured),
             _ => annotate::reannotate(app, captured, false),
         }

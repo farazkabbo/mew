@@ -776,7 +776,8 @@ fn prepare<R: Runtime>(
     drop(raw);
     let (width, height) = (small.width, small.height);
     let jpeg = encode_jpeg_with(&small, FOR_CLIP).map_err(|_| ScreenError::Failed.message())?;
-    drop(small);
+    // Kept until the clip's head is built, for Handoff's timeline (only when it's on).
+    let for_handoff = super::handoff_run::wants_moments(app).then_some(small);
 
     // Clip image pixels per frame pixel, and per CSS pixel of the screen it came from.
     let scale = width as f32 / crop_rect[2];
@@ -835,6 +836,16 @@ fn prepare<R: Runtime>(
         destination: draft.destination.as_ref().map(DestinationOut::from),
     };
     wipe_string(&mut ocr_text);
+    if let Some(small) = for_handoff {
+        super::handoff_run::record_clip(
+            app,
+            &small,
+            &head,
+            on_screen,
+            &draft.detail.text,
+            meta.window,
+        );
+    }
     let body = clip_body(&head, jpeg.as_slice(), width, height);
     drop(head);
     drop(jpeg);
@@ -980,6 +991,51 @@ pub fn rfc3339(time: SystemTime) -> String {
         rest % 3600 / 60,
         rest % 60
     )
+}
+
+/// Saves a whole capture as a clip with `text` as its words, to `destination` (DO IT's
+/// `save_recipe`: the page's picture with the recipe beside it). Quiet: the notebook adds it
+/// without coming to the front. Returns the new clip's id.
+pub fn save_capture_with_text<R: Runtime>(
+    app: &AppHandle<R>,
+    captured: Captured,
+    text: &str,
+    title: Option<String>,
+    url: Option<String>,
+    destination: Option<DestinationOut>,
+) -> Result<String, String> {
+    let Captured { meta, detail, .. } = captured;
+    if looks_blank(&detail.pixels) {
+        return Err(
+            "This page can't be captured (it's protected), so I didn't save it.".to_owned(),
+        );
+    }
+    let small = downscale_bgra_to_bgr(&detail.pixels, CLIP_LONG_SIDE);
+    drop(detail);
+    let (width, height) = (small.width, small.height);
+    let jpeg = encode_jpeg_with(&small, FOR_CLIP).map_err(|_| ScreenError::Failed.message())?;
+    drop(small);
+    let scale = width as f32 / meta.bounds.width().max(1) as f32;
+    let head = ClipHead {
+        pixel_ratio: scale * meta.dpi.max(96) as f32 / 96.0,
+        strokes: Vec::new(),
+        source: ClipSource {
+            app: meta.app.clone().unwrap_or_else(|| "unknown".to_owned()),
+            title: title.map(|t| t.chars().take(300).collect()),
+            url: url.and_then(|u| sanitize_url(&u)).map(|u| u.to_string()),
+            timestamp_sec: None,
+            captured_at: rfc3339(SystemTime::now()),
+        },
+        ocr_text: text.chars().take(OCR_TEXT_CHARS).collect(),
+        entry: None,
+        destination,
+    };
+    let body = clip_body(&head, jpeg.as_slice(), width, height);
+    drop(jpeg);
+    let clip_id = upload(app, &body)?;
+    // A plain clip: the page builds its notebook page (the window stays where it is).
+    page::dispatch(app, page::CLIP_SAVED, json!({ "clipId": clip_id }));
+    Ok(clip_id)
 }
 
 #[cfg(test)]

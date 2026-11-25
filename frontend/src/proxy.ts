@@ -16,6 +16,8 @@ const isPublicRoute = createRouteMatcher([
   "/desktop/authorize",
   // Installed desktop apps checking for a new version: a redirect to the release files.
   "/desktop/latest.json",
+  // A handoff's link: signed out, the page shows only whose it is ("A handoff from Faraz").
+  "/h/(.*)",
 ]);
 /**
  * Called by the desktop app, which has no browser session: these authenticate with a device
@@ -27,6 +29,10 @@ const isDeviceRoute = createRouteMatcher([
   "/api/devices/poll",
   "/api/devices/revoke-self",
   "/api/screen/(.*)",
+  // Handoff: the desktop app's routes (device token), the signed-out teaser and the daily purge
+  // (cron secret). Every route checks who's asking itself: member routes need a session.
+  "/api/handoff(.*)",
+  "/api/handoffs/purge",
   // Clerk's own webhooks: signed with Svix, checked inside the route.
   "/api/webhooks/clerk",
 ]);

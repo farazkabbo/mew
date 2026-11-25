@@ -18,3 +18,8 @@
 - **The U series** (the UI overhaul, "the desk": tokens, page anatomy, desk, checks, overlays;
   milestones U1–U7) is specified in [docs/NEB_APP_UI.md](docs/NEB_APP_UI.md), with the design
   boards in [design/u/](design/u/). Its 0.2 and **Decisions** sections are binding.
+- **Cursor modes** (DO IT, SHOW ME, CATCH ME; milestones M1–M6) are specified in
+  [docs/CURSOR_MODES.md](docs/CURSOR_MODES.md). Its **Decisions** section is binding.
+- **Handoff** (hand your work to a teammate from the exact moment; being built, behind
+  `HANDOFF_ENABLED`) is specified in [docs/HANDOFF_FEATURE.md](docs/HANDOFF_FEATURE.md). Its
+  **Decisions** section is binding.

@@ -136,7 +136,7 @@ impl Privacy {
 }
 
 /// The default is everything off: not enabled, no consent, not paused, default privacy settings.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct ScreenConfig {
     /// The user turned Screen Coach on (off until they do).
@@ -163,6 +163,12 @@ pub struct ScreenConfig {
     /// How much Neb gives away (the island's mode switch).
     #[serde(default)]
     pub help: HelpLevel,
+    /// The cursor modes: DO IT, SHOW ME, CATCH ME (docs/CURSOR_MODES.md).
+    #[serde(default)]
+    pub cursor: super::cursor::settings::CursorSettings,
+    /// Handoff (docs/HANDOFF_FEATURE.md, being built).
+    #[serde(default)]
+    pub handoff: super::handoff::settings::HandoffSettings,
 }
 
 impl ScreenConfig {
@@ -174,7 +180,7 @@ impl ScreenConfig {
 
 /// What loading found. A damaged file never turns anything on: it falls back to the defaults
 /// (Screen Coach off) and the settings page says so.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum Loaded {
     Fresh(ScreenConfig),
     Read(ScreenConfig),
@@ -358,6 +364,8 @@ mod tests {
                 ..CircleSettings::default()
             },
             help: HelpLevel::Answer,
+            cursor: super::super::cursor::settings::CursorSettings::default(),
+            handoff: super::super::handoff::settings::HandoffSettings::default(),
         };
         save(&path, &config).unwrap();
         assert_eq!(load(&path), Loaded::Read(config));

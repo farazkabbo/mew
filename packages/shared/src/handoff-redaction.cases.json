@@ -1,0 +1,176 @@
+{
+  "_": "Handoff redaction fixtures (docs/HANDOFF_FEATURE.md §7, §14), shared by packages/shared/src/handoff.test.ts and desktop/src-tauri/src/screen/handoff/redact.rs. Each string is stored in fragments (joined by the tests) so secret scanners never see a whole fake token. Every `hidden` must be gone from the redacted text; every `kept` must survive.",
+  "cases": [
+    {
+      "kind": "email",
+      "text": ["Ping f", "araz.k", "@examp", "le.com", " about", " it"],
+      "hidden": ["faraz.", "k@exam", "ple.co", "m"],
+      "kept": "Ping"
+    },
+    {
+      "kind": "phone",
+      "text": ["Call +", "1 (415", ") 555-", "0134 t", "omorro", "w"],
+      "hidden": ["555-01", "34"],
+      "kept": "tomorrow"
+    },
+    {
+      "kind": "phone",
+      "text": ["my num", "ber is", " 07911", " 12345", "6"],
+      "hidden": ["123456"],
+      "kept": "my number"
+    },
+    {
+      "kind": "secret",
+      "text": ["OPENAI", " key s", "k-proj", "-AbC12", "3dEf45", "6GhI78", "9jKl01", "2MnO34", "5"],
+      "hidden": ["sk-pro", "j-AbC1", "23dEf4", "56GhI7", "89jKl0", "12MnO3", "45"],
+      "kept": "OPENAI key"
+    },
+    {
+      "kind": "secret",
+      "text": ["token ", "ghp_16", "C7e42F", "292c69", "12E771", "0c8383", "47Ae17", "8B4a"],
+      "hidden": ["ghp_16", "C7e42F", "292c69", "12E771", "0c8383", "47Ae17", "8B4a"],
+      "kept": "token"
+    },
+    {
+      "kind": "secret",
+      "text": ["slack ", "xoxb-1", "234567", "890-09", "876543", "21-AbC", "dEfGhI", "jKl"],
+      "hidden": ["xoxb-1", "234567", "890-09", "876543", "21-AbC", "dEfGhI", "jKl"],
+      "kept": "slack"
+    },
+    {
+      "kind": "secret",
+      "text": ["aws AK", "IAIOSF", "ODNN7E", "XAMPLE", " in co", "nfig"],
+      "hidden": ["AKIAIO", "SFODNN", "7EXAMP", "LE"],
+      "kept": "in config"
+    },
+    {
+      "kind": "secret",
+      "text": [
+        "Author",
+        "izatio",
+        "n: Bea",
+        "rer ey",
+        "JhbGci",
+        "OiJIUz",
+        "I1NiJ9",
+        ".eyJzd",
+        "WIiOiI",
+        "xMjM0N",
+        "TY3ODk",
+        "wIn0.d",
+        "ozjgNr",
+        "yP4J3j",
+        "VmNHl0",
+        "w5N_Xg",
+        "L0n3I9",
+        "PlFUP0",
+        "THsR8U"
+      ],
+      "hidden": ["eyJhbG", "ciOiJI", "UzI1Ni", "J9"],
+      "kept": "Authorization"
+    },
+    {
+      "kind": "secret",
+      "text": [
+        "DATABA",
+        "SE_URL",
+        "=postg",
+        "res://",
+        "admin:",
+        "hunter",
+        "2@db.i",
+        "nterna",
+        "l:5432",
+        "/app"
+      ],
+      "hidden": ["hunter", "2"],
+      "kept": "DATABASE_URL"
+    },
+    {
+      "kind": "secret",
+      "text": ["STRIPE", "_SECRE", "T_KEY=", "whsec_", "9f8e7d", "6c5b4a"],
+      "hidden": ["whsec_", "9f8e7d", "6c5b4a"],
+      "kept": "STRIPE_SECRET_KEY"
+    },
+    {
+      "kind": "secret",
+      "text": [
+        "-----B",
+        "EGIN P",
+        "RIVATE",
+        " KEY--",
+        "---\nMI",
+        "IEvQIB",
+        "ADANBg",
+        "kqhkiG",
+        "9w0BAQ",
+        "EFAASC",
+        "\n-----",
+        "END PR",
+        "IVATE ",
+        "KEY---",
+        "--"
+      ],
+      "hidden": ["MIIEvQ", "IBADAN", "Bgkqhk", "iG9w0B", "AQEFAA", "SC"],
+      "kept": ""
+    },
+    {
+      "kind": "secret",
+      "text": ["passwo", "rd: Tr", "0ub4do", "r&3 fo", "r the ", "stagin", "g box"],
+      "hidden": ["Tr0ub4", "dor&3"],
+      "kept": "staging box"
+    },
+    {
+      "kind": "secret",
+      "text": [
+        "blob 8",
+        "f3a9c2",
+        "e71d04",
+        "b6a95e",
+        "13f7c8",
+        "d2b4a6",
+        "e0c9f1",
+        "e3d us",
+        "ed"
+      ],
+      "hidden": ["8f3a9c", "2e71d0", "4b6a95", "e13f7c", "8d2b4a", "6e0c9f", "1e3d"],
+      "kept": "used"
+    },
+    {
+      "kind": "card",
+      "text": ["Card 4", "242 42", "42 424", "2 4242", " exp 1", "2/29"],
+      "hidden": ["4242 4", "242 42", "42 424", "2"],
+      "kept": "Card"
+    },
+    {
+      "kind": "address",
+      "text": ["Ship t", "o 221B", " Baker", " Stree", "t, Lon", "don"],
+      "hidden": ["221B B", "aker S", "treet"],
+      "kept": "Ship to"
+    },
+    {
+      "kind": "url",
+      "text": [
+        "https:",
+        "//app.",
+        "exampl",
+        "e.com/",
+        "reset?",
+        "token=",
+        "abc123",
+        "XYZ&pa",
+        "ge=2"
+      ],
+      "hidden": ["abc123", "XYZ"],
+      "kept": "page=2"
+    }
+  ],
+  "clean": [
+    "Fix duplicate waitlist emails in signup.ts",
+    "git switch fix-dup-emails",
+    "Sheet1!B2:B40 has #REF! errors",
+    "The build failed with exit code 1 on line 42",
+    "Order 1234 shipped on 2026-11-20",
+    "Version 4242 of the slides"
+  ]
+}

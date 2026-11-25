@@ -53,6 +53,14 @@ uuid = "=1.28.0"
 version = "=0.3.2"
 default-features = false
 
+# Already in the tree through `windows`: the COM `#[implement]` macro needs `windows-core` by name
+# (UI Automation event handlers, the cursor modes), and Direct2D's points are `windows-numerics`.
+[target.'cfg(windows)'.dependencies.windows-core]
+version = "=0.62.2"
+
+[target.'cfg(windows)'.dependencies.windows-numerics]
+version = "=0.3.1"
+
 [target.'cfg(windows)'.dependencies.windows]
 version = "=0.62.2"
 features = [
@@ -71,8 +79,12 @@ features = [
   "Media_Ocr",
   "Storage_Streams",
   "Win32_Foundation",
+  "Win32_Graphics_Direct2D",
+  "Win32_Graphics_Direct2D_Common",
   "Win32_Graphics_Direct3D",
   "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_DirectComposition",
+  "Win32_Graphics_DirectWrite",
   "Win32_Graphics_Dwm",
   "Win32_Graphics_Dxgi",
   "Win32_Graphics_Dxgi_Common",
@@ -89,6 +101,7 @@ features = [
   "Win32_System_LibraryLoader",
   "Win32_System_Memory",
   "Win32_System_Ole",
+  "Win32_System_Performance",
   "Win32_System_Registry",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
@@ -97,6 +110,7 @@ features = [
   "Win32_System_WinRT_Direct3D11",
   "Win32_System_WinRT_Graphics_Capture",
   "Win32_UI_Accessibility",
+  "Win32_UI_Controls",
   "Win32_UI_HiDpi",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_Input_Pointer",

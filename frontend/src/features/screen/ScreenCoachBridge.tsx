@@ -1,6 +1,6 @@
 "use client";
 
-import { NotesCheckResult } from "@mew/shared";
+import { NotesCheckResult, TTS_SAMPLE_RATE } from "@mew/shared";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -12,13 +12,17 @@ import {
   SCREEN_EVENTS,
   ScreenAnswerDetail,
   ScreenClipSavedDetail,
+  ScreenCueDetail,
   ScreenEntrySavedDetail,
   ScreenNotesOpenDetail,
   ScreenSayDetail,
   ScreenSpeechDetail,
 } from "./events";
 import { momentsApi, saveMomentAudio } from "../moments/api";
-import { keepEntryVoice, SpokenLines } from "./entry-voice";
+import { useSettings } from "../settings/store";
+import { PcmStreamPlayer } from "../tutor/pcm-player";
+import { CueVoice, type CueDeps, isCueKey } from "./cues";
+import { collect, keepEntryVoice, SpokenLines } from "./entry-voice";
 import { defaultDeps, ScreenCoachVoice } from "./screen-coach";
 
 /**
@@ -35,6 +39,52 @@ const pendingEntries = new Set<string>();
 /** How long after an entry is saved its steps' voice is uploaded (K8). */
 const KEEP_VOICE_AFTER_MS = 2_000;
 
+/** The cursor modes' word clips are made a little after the page settles. */
+const PREPARE_CUES_AFTER_MS = 5_000;
+const CUE_CACHE = "neb-cues-v1";
+const SPEECH_LANG = { en: "en-US", fr: "fr-FR", bn: "bn-BD", zh: "zh-CN" } as const;
+
+/** The page's real dependencies for cue words: /api/tts, the browser's cache, its own voice. */
+function cueDeps(): CueDeps {
+  const player = new PcmStreamPlayer();
+  const cacheKey = (key: string) => `/__neb-cue/${encodeURIComponent(key)}`;
+  return {
+    voice: () => {
+      const { language, voice_id } = useSettings.getState().settings;
+      return { language, voiceId: voice_id ?? null };
+    },
+    synthesize: async (text, language, voiceId) => {
+      const response = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voiceId, language }),
+        cache: "no-store",
+      });
+      return response.ok && response.body ? collect(response.body) : null;
+    },
+    load: async (key) => {
+      if (typeof caches === "undefined") return null;
+      const hit = await (await caches.open(CUE_CACHE)).match(cacheKey(key));
+      return hit ? new Uint8Array(await hit.arrayBuffer()) : null;
+    },
+    store: async (key, pcm) => {
+      if (typeof caches === "undefined") return;
+      const body = new Uint8Array(pcm).buffer;
+      await (await caches.open(CUE_CACHE)).put(cacheKey(key), new Response(body));
+    },
+    play: async (pcm) => {
+      const body = new Response(new Uint8Array(pcm).buffer).body;
+      if (body) await player.play(body, { sampleRate: TTS_SAMPLE_RATE });
+    },
+    fallback: (text, language) => {
+      if (typeof speechSynthesis === "undefined") return;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = SPEECH_LANG[language];
+      speechSynthesis.speak(utterance);
+    },
+  };
+}
+
 export function takePendingEntries(): string[] {
   const ids = [...pendingEntries];
   pendingEntries.clear();
@@ -49,6 +99,11 @@ export function ScreenCoachBridge() {
     const spoken = new SpokenLines();
     const uploaded = new Set<string>();
     const coach = new ScreenCoachVoice(defaultDeps(spoken));
+    const cues = new CueVoice(cueDeps());
+    const preparing = setTimeout(
+      () => void cues.prepare().catch(() => undefined),
+      PREPARE_CUES_AFTER_MS,
+    );
     const detail = (event: Event): unknown => (event as CustomEvent<unknown>).detail;
 
     const handlers: [string, (event: Event) => void][] = [
@@ -70,6 +125,14 @@ export function ScreenCoachBridge() {
         },
       ],
       [SCREEN_EVENTS.hush, () => coach.onHush()],
+      [
+        SCREEN_EVENTS.cue,
+        (event) => {
+          const said = ScreenCueDetail.safeParse(detail(event));
+          if (said.success && isCueKey(said.data.cue))
+            void cues.say(said.data.cue).catch(() => undefined);
+        },
+      ],
       [
         SCREEN_EVENTS.entrySaved,
         (event) => {
@@ -133,6 +196,7 @@ export function ScreenCoachBridge() {
     ];
     for (const [name, handler] of handlers) window.addEventListener(name, handler);
     return () => {
+      clearTimeout(preparing);
       for (const [name, handler] of handlers) window.removeEventListener(name, handler);
       coach.onCancel();
     };

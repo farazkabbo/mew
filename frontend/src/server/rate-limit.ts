@@ -163,6 +163,19 @@ export const RATE_RULES = {
   /** Neb's hand: one model call with a screenshot for each action of its cursor. */
   screenAct: { limit: 30, windowMs: MINUTE },
   screenActDaily: { limit: 1000, windowMs: DAY },
+  /** Handoff: creating one (with its brief, one question), opening, asking, replying. */
+  handoffCreate: { limit: 6, windowMs: MINUTE },
+  handoffCreateDaily: { limit: 20, windowMs: DAY },
+  handoffOpen: { limit: 60, windowMs: MINUTE },
+  handoffAsk: { limit: 10, windowMs: MINUTE },
+  handoffAskDaily: { limit: 200, windowMs: DAY },
+  handoffReply: { limit: 20, windowMs: MINUTE },
+  /** The cursor modes' plans (SHOW ME, DO IT): words and control names only, one question each. */
+  screenPlan: { limit: 10, windowMs: MINUTE },
+  screenPlanDaily: { limit: 200, windowMs: DAY },
+  /** DO IT's recipe fallback: a page's text structured into a recipe (one question each). */
+  screenRecipe: { limit: 6, windowMs: MINUTE },
+  screenRecipeDaily: { limit: 60, windowMs: DAY },
   /** Reading what the student meant by what they said (words only, a small fast call). */
   screenIntent: { limit: 30, windowMs: MINUTE },
   screenIntentDaily: { limit: 1500, windowMs: DAY },

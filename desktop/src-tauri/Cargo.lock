@@ -2202,7 +2202,9 @@ dependencies = [
  "tauri-plugin-updater",
  "uuid",
  "windows",
+ "windows-core",
  "windows-future",
+ "windows-numerics",
 ]
 
 [[package]]

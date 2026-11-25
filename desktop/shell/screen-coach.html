@@ -269,6 +269,132 @@
         </label>
       </section>
 
+      <section aria-labelledby="cursor">
+        <h2 id="cursor">Cursor: DO IT, SHOW ME, CATCH ME</h2>
+
+        <div id="catch-intro">
+          <h3>CATCH ME <span id="catch-new" class="hint" hidden>New</span></h3>
+          <p>CATCH ME speaks up just before you click on a few costly slips:</p>
+          <ul class="facts">
+            <li>Reply All to five people or more</li>
+            <li>An email that says "attached" with nothing attached</li>
+            <li>Closing something with unsaved changes</li>
+            <li>Deleting a folder, or more than 20 files</li>
+            <li>A terminal command that deletes or overwrites for good</li>
+          </ul>
+          <p class="hint">
+            It works on this computer only. It reads the names of the buttons in the window in
+            front, the words of an email you're writing (only to look for "attached"), and the line
+            you're typing in a terminal. Nothing is sent or saved. The only record is which rule
+            spoke up, in which app, when, and what you chose. It never uses Neb's AI and never
+            spends questions. It never stops a click: you can always carry on. Pause it from the
+            tray menu any time.
+          </p>
+          <label class="check" id="catch-consent-row">
+            <input type="checkbox" id="catch-consent" /> I've read this
+          </label>
+          <div class="row buttons">
+            <button type="button" class="primary" id="catch-on">Turn on CATCH ME</button>
+            <button type="button" id="catch-not-now">Not now</button>
+            <button type="button" id="catch-off" hidden>Turn off CATCH ME</button>
+          </div>
+          <p id="catch-paused" class="hint" hidden>Paused from the tray menu.</p>
+        </div>
+
+        <fieldset id="catch-rules">
+          <legend>CATCH ME's rules</legend>
+          <label class="check"
+            ><input type="checkbox" data-catch="reply_all" /> Reply All to many people</label
+          >
+          <label class="check"
+            ><input type="checkbox" data-catch="attachment" /> "Attached" with no attachment</label
+          >
+          <label class="check"
+            ><input type="checkbox" data-catch="unsaved" /> Closing with unsaved changes</label
+          >
+          <label class="check"
+            ><input type="checkbox" data-catch="delete" /> Deleting a folder or many files</label
+          >
+          <label class="check"
+            ><input type="checkbox" data-catch="terminal" /> Destructive terminal commands</label
+          >
+          <p id="catch-snoozed" class="hint" hidden></p>
+          <button type="button" id="catch-reset">Make every rule as eager as at first</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>SHOW ME: how much to show</legend>
+          <label class="check"
+            ><input type="radio" name="guidance" value="auto" /> Less as I learn
+            (recommended)</label
+          >
+          <label class="check"
+            ><input type="radio" name="guidance" value="full" /> Always the whole path</label
+          >
+          <label class="check"
+            ><input type="radio" name="guidance" value="light" /> Just the next button</label
+          >
+          <label class="check"
+            ><input type="radio" name="guidance" value="corrections_only" /> Only when I'm heading
+            for the wrong one</label
+          >
+        </fieldset>
+        <label class="check">
+          <input type="checkbox" id="cursor-voice" /> Say a word when I'm heading for the wrong
+          button
+        </label>
+        <div class="row buttons">
+          <button type="button" id="forget-paths">Forget learned paths</button>
+        </div>
+
+        <details>
+          <summary>What the cursor modes have done</summary>
+          <ul id="cursor-counts" class="facts"></ul>
+        </details>
+        <details>
+          <summary>For developers</summary>
+          <label class="check"
+            ><input type="checkbox" id="cursor-debug" /> Show the predicted endpoint live</label
+          >
+          <label class="check">
+            <input type="checkbox" id="cursor-record" /> Record mouse traces on this computer
+            (positions and button rectangles only)
+          </label>
+        </details>
+      </section>
+
+      <section aria-labelledby="handoff">
+        <h2 id="handoff">Handoff <span class="hint">(being built)</span></h2>
+        <p class="hint">
+          Hand your work to a teammate from the exact moment you stopped: tray menu → Hand off…, or
+          say "hand this off to Rahbir". To do that, Neb keeps a timeline of the moments you save
+          and of the app in front (with its page and git branch), on this computer only, encrypted,
+          for 24 hours. Blocked apps and private windows are never kept. Nothing leaves this
+          computer unless you press Send in the preview.
+        </p>
+        <label class="check">
+          <input type="checkbox" id="handoff-timeline" /> Keep a 24-hour timeline for handoffs
+        </label>
+        <div class="row">
+          <label for="handoff-window">Hand off the last</label>
+          <select id="handoff-window">
+            <option value="30">30 minutes</option>
+            <option value="90">90 minutes</option>
+            <option value="180">3 hours</option>
+          </select>
+        </div>
+        <label class="check">
+          <input type="checkbox" id="handoff-names" /> Always hide people's names
+        </label>
+        <details>
+          <summary>What's in the timeline now (<span id="handoff-count">0</span> records)</summary>
+          <ul id="handoff-recent" class="facts"></ul>
+        </details>
+        <div class="row buttons">
+          <button type="button" id="handoff-forget">Delete my timeline</button>
+        </div>
+      </section>
+
       <section aria-labelledby="privacy">
         <h2 id="privacy">Privacy</h2>
         <div id="mic-off" class="warning" role="status" hidden>

@@ -66,6 +66,10 @@ pub fn run() {
     // A clip's preview image, served from memory to the preview window only (S3).
     #[cfg(windows)]
     let builder = builder.register_uri_scheme_protocol(screen::clip::SCHEME, screen::clip::serve);
+    // A handoff draft's crops, served from memory to the preview window only.
+    #[cfg(windows)]
+    let builder = builder
+        .register_uri_scheme_protocol(screen::handoff_run::SCHEME, screen::handoff_run::serve);
     let app = builder
         .setup(move |app| {
             remote_capability(app.handle(), &app_url)?;
@@ -110,6 +114,11 @@ fn sign_in_links(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.clone();
     app.deep_link().on_open_url(move |event| {
         for link in event.urls() {
+            // neb://handoff/<uuid> (strictly): the handoff opens in the main window.
+            if let Some(id) = screen::handoff_run::parse_link(&link) {
+                screen::handoff_run::open_link(&handle, &id);
+                continue;
+            }
             screen::sign_in::on_link(&handle, &link);
         }
     });
@@ -130,11 +139,16 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
-        screen_coach_onboarding, screen_coach_open_mic_settings, screen_coach_set_circle,
+        screen_coach_forget_paths, screen_coach_handoff, screen_coach_onboarding,
+        screen_coach_open_mic_settings, screen_coach_set_circle, screen_coach_set_cursor,
         screen_coach_set_enabled, screen_coach_set_paused, screen_coach_set_privacy,
         screen_coach_shortcuts_seen, screen_coach_status,
     };
     use screen::coach_mode::screen_coach_pill;
+    use screen::handoff_run::{
+        handoff_pick_up, handoff_preview_blur, handoff_preview_cancel, handoff_preview_copy,
+        handoff_preview_send, handoff_preview_state, handoff_preview_update,
+    };
     use screen::notes_check::screen_notes_panel;
     use screen::screen_island::screen_island;
     use screen::screen_quiz::screen_quiz_card;
@@ -169,7 +183,17 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_notes_panel,
         screen_coach_pill,
         screen_coach_set_circle,
+        screen_coach_set_cursor,
+        screen_coach_forget_paths,
         screen_coach_spoken,
+        screen_coach_handoff,
+        handoff_preview_state,
+        handoff_preview_update,
+        handoff_preview_blur,
+        handoff_preview_send,
+        handoff_preview_copy,
+        handoff_preview_cancel,
+        handoff_pick_up,
         screen_draw_mark,
         screen_draw_erase,
         screen_draw_island_press,
@@ -235,7 +259,8 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
         .permission("allow-screen-coach-ask")
         .permission("allow-screen-coach-onboarding")
         .permission("allow-screen-coach-spoken")
-        .permission("allow-screen-coach-link-finish");
+        .permission("allow-screen-coach-link-finish")
+        .permission("allow-handoff-pick-up");
     app.add_capability(capability)
 }
 
@@ -374,6 +399,29 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
+    // The cursor modes (docs/CURSOR_MODES.md): CATCH ME's one-click pause, and DO IT's undo.
+    let catch_pause = CheckMenuItem::with_id(
+        app,
+        "cursor-catch-pause",
+        "Pause CATCH ME",
+        false,
+        false,
+        None::<&str>,
+    )?;
+    let hand_off = MenuItem::with_id(
+        app,
+        "handoff-start",
+        "Hand off… (being built)",
+        cfg!(windows),
+        None::<&str>,
+    )?;
+    let undo_rename = MenuItem::with_id(
+        app,
+        "cursor-undo-rename",
+        "Undo rename",
+        cfg!(windows),
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(
         app,
         "screen-settings",
@@ -402,6 +450,9 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             &pause,
             &pause_hour,
             &stop_walkthrough,
+            &catch_pause,
+            &undo_rename,
+            &hand_off,
             &settings,
             &separator2,
             &update,
@@ -425,6 +476,12 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             "screen-pause-hour" => screen::coach::pause_for_an_hour(app),
             #[cfg(windows)]
             "screen-coach-stop" => screen::coach_mode::stop_from_tray(app),
+            #[cfg(windows)]
+            "cursor-catch-pause" => screen::cursor_run::toggle_catch_pause(app),
+            #[cfg(windows)]
+            "cursor-undo-rename" => screen::cursor_do::undo_rename(app),
+            #[cfg(windows)]
+            "handoff-start" => screen::handoff_run::start(app, None),
             #[cfg(windows)]
             "screen-settings" => screen::coach::open_settings(app),
             #[cfg(windows)]
@@ -452,6 +509,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         pause,
         pause_hour,
         stop_walkthrough,
+        catch_pause,
     });
     #[cfg(windows)]
     app.manage(updates::TrayItem(update));
