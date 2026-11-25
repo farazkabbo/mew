@@ -12,6 +12,8 @@
 //! its overlay pages only (each window its own). Links the web page opens in a new window go to
 //! the default browser (https only), never into a window of ours.
 
+#[cfg(windows)]
+mod log_file;
 mod origin;
 mod reminders;
 pub mod screen;
@@ -65,6 +67,11 @@ pub fn run() {
         .register_uri_scheme_protocol(screen::handoff_run::SCHEME, screen::handoff_run::serve);
     builder
         .setup(move |app| {
+            // First, so everything after is in the log (release builds: there's no console).
+            #[cfg(windows)]
+            if let Ok(dir) = app.path().app_log_dir() {
+                log_file::start(&dir);
+            }
             remote_capability(app.handle(), &app_url)?;
             let window = main_window(app.handle(), app_url.clone())?;
             tray(app.handle())?;

@@ -530,6 +530,7 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
             }
         }
         HoldEvent::Started if !mic_on(app) => {
+            eprintln!("[timing] keys held: microphone on");
             mic_start(app);
             if mic_on(app) {
                 HELD_MIC.store(true, Ordering::SeqCst);
@@ -540,6 +541,14 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
         }
         // Only a microphone the hold turned on: one clicked on stays on.
         HoldEvent::Ended | HoldEvent::Cancelled if HELD_MIC.swap(false, Ordering::SeqCst) => {
+            eprintln!(
+                "[timing] keys up: {}",
+                if event == HoldEvent::Cancelled {
+                    "cancelled (another key)"
+                } else {
+                    "waiting for the words"
+                }
+            );
             super::status::hide_keys(app);
             mic_off(app, event == HoldEvent::Cancelled);
             mic_changed(app);

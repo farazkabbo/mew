@@ -13,6 +13,14 @@ When something fails, report the step number, what you expected and what you saw
 screenshots, but **cover anything private** in them: emails, names and anything on screen that
 isn't yours to share.
 
+When something is slow or Neb didn't hear you, also attach **Neb's log**:
+`%LOCALAPPDATA%\app.mew.desktop\logs\neb.log` (paste that into File Explorer's address bar). Each
+line has the time, so it shows where a request spent its time: the keys going up, the words
+arriving (`heard N characters`; `0` means the words were lost), how the meaning was decided and
+how long it took, the screen picture, and the answer or chore. It never holds what you said,
+what was on screen or file names. Installed (release) builds only; the dev build prints to its
+console instead.
+
 ---
 
 ## 0. Setup

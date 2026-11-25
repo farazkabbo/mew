@@ -241,7 +241,14 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     let mut lines = LineSplitter::default();
     // The start of the body, for a refusal's own words (a limit's message).
     let mut head = Vec::new();
+    let mut first = true;
     let result = http::post(&url, &headers, body.as_slice(), |chunk| {
+        if std::mem::take(&mut first) {
+            eprintln!(
+                "[timing] answer started in {} ms",
+                started.elapsed().as_millis()
+            );
+        }
         if head.len() < 4096 {
             head.extend_from_slice(&chunk[..chunk.len().min(4096 - head.len())]);
         }
@@ -290,8 +297,10 @@ fn resolve_intent<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> (Intent, 
     // at once: only what they can't place (they'd call it a question) is worth the second or so
     // the model takes to read it.
     if local != Intent::Ask || transcript.trim().is_empty() {
+        eprintln!("[timing] meaning: {local:?}, by the device's rules");
         return (local, None);
     }
+    let asked = Instant::now();
     let has_ink = annotate::turn_state(app) != TurnState::None;
     let body = intent_body(transcript, coaching, has_ink);
     let (sender, receiver) = std::sync::mpsc::channel();
@@ -305,14 +314,28 @@ fn resolve_intent<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> (Intent, 
     if spawned.is_err() {
         return (local, None);
     }
-    match receiver.recv_timeout(INTENT_WAIT) {
+    let (intent, chore, how) = match receiver.recv_timeout(INTENT_WAIT) {
         Ok(Ok(bytes)) => match parse_intent_reply(&bytes, coaching, has_ink) {
-            Some(Intent::DoIt) => (Intent::DoIt, parse_intent_action(&bytes)),
-            Some(intent) => (intent, None),
-            None => (local, None),
+            Some(Intent::DoIt) => {
+                let chore = parse_intent_action(&bytes);
+                let how = if chore.is_some() {
+                    "by the model, with its chore"
+                } else {
+                    "by the model"
+                };
+                (Intent::DoIt, chore, how)
+            }
+            Some(intent) => (intent, None, "by the model"),
+            None => (local, None, "the model's answer didn't fit"),
         },
-        _ => (local, None),
-    }
+        Ok(Err(_)) => (local, None, "the model call failed"),
+        Err(_) => (local, None, "the model was too slow"),
+    };
+    eprintln!(
+        "[timing] meaning: {intent:?}, {how}, in {} ms",
+        asked.elapsed().as_millis()
+    );
+    (intent, chore)
 }
 
 /// Passes one checked event to the page (an error event becomes a notification), and the
@@ -355,14 +378,24 @@ fn deliver<R: Runtime>(
 
 /// The held frame, waiting briefly if the capture is still running.
 fn wait_for_frame(coach: &ScreenCoach) -> Option<CapturedFrame> {
-    let deadline = Instant::now() + FRAME_WAIT;
+    let started = Instant::now();
+    let deadline = started + FRAME_WAIT;
     loop {
         // Read the flag first: a capture stores its frame before it stops counting as running.
         let capturing = coach.is_capturing();
         if let Some(frame) = coach.take_frame() {
+            eprintln!(
+                "[timing] screen picture ready (waited {} ms)",
+                started.elapsed().as_millis()
+            );
             return Some(frame);
         }
         if !capturing || Instant::now() >= deadline {
+            eprintln!(
+                "[timing] no screen picture ({} after {} ms)",
+                if capturing { "timed out" } else { "none taken" },
+                started.elapsed().as_millis()
+            );
             return None;
         }
         std::thread::sleep(Duration::from_millis(25));

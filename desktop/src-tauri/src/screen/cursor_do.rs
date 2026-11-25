@@ -106,7 +106,16 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, capt
     }
     // The device's own reading first (free), then what the intent route chose (already paid
     // for), and only then a plan.
-    let (action, speech) = match local_action(goal).or(chore) {
+    let started = Instant::now();
+    let local = local_action(goal);
+    let from = if local.is_some() {
+        "the device's rules"
+    } else if chore.is_some() {
+        "the meaning call"
+    } else {
+        "a plan call"
+    };
+    let (action, speech) = match local.or(chore) {
         Some(action) => (action, None),
         None => match plan(app, goal) {
             Ok((action, speech)) => (action, Some(speech)),
@@ -134,6 +143,19 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, capt
         return;
     };
     let window = captured.meta.window;
+    // The action's kind only (a find's words, a page's name stay out of the log).
+    let kind = match &action {
+        DoAction::FindFile { .. } => "find_file",
+        DoAction::OpenSetting { .. } => "open_setting",
+        DoAction::SetTheme { .. } => "set_theme",
+        DoAction::SaveRecipe => "save_recipe",
+        DoAction::BatchRename => "batch_rename",
+        DoAction::ShowMe => "show_me",
+    };
+    eprintln!(
+        "[timing] do it: {kind}, chosen by {from} in {} ms",
+        started.elapsed().as_millis()
+    );
     let outcome = match action {
         DoAction::FindFile { query, kind, since } => {
             drop(captured);
@@ -154,6 +176,15 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, capt
         }
         DoAction::ShowMe => return,
     };
+    eprintln!(
+        "[timing] do it: {kind} {} in {} ms",
+        match &outcome {
+            Ok(_) => "done",
+            Err(m) if m.is_empty() => "cancelled",
+            Err(_) => "failed",
+        },
+        started.elapsed().as_millis()
+    );
     match outcome {
         Ok(done) => {
             remember(goal);
