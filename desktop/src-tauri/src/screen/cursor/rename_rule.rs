@@ -120,27 +120,62 @@ const OBJECT_WORDS: &[&str] = &[
     "pdfs",
 ];
 
-/// "rename this to Budget 2026", "Neb, rename these files as trip": a new name, said plainly.
-/// None for any other wording (the model reads those). The name keeps the case it was said in.
-pub fn from_words(said: &str) -> Option<RenameRule> {
+/// Words before the request that don't change it ("hey Neb, could you…", "I want to…").
+const LEAD_IN: &[&str] = &[
+    "hey", "neb", "mew", "ok", "okay", "please", "can", "could", "would", "will", "you", "i",
+    "want", "wanna", "to", "like", "id", "i'd", "lets", "let's", "go", "ahead", "and", "just",
+    "quickly", "need", "so",
+];
+/// How a rename is asked for; the file (if named) and " to " + the new name follow.
+const VERBS: &[&str] = &[
+    "rename ",
+    "change the name of ",
+    "change the name ",
+    "change its name ",
+    "change their names ",
+];
+/// After " to ", words that make it a purpose, not a name ("rename my thesis to make it
+/// shorter"): the model reads those.
+const PURPOSE: &[&str] = &[
+    "make ",
+    "be ",
+    "fit ",
+    "match ",
+    "reflect ",
+    "show ",
+    "something",
+    "anything",
+    "whatever",
+];
+
+/// What a plain "rename … to …" asked for: the rule, and the file it named, if it named one
+/// ("rename the file called notes to Final": `which` is "notes").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Said {
+    pub rule: RenameRule,
+    pub which: Option<String>,
+}
+
+/// "rename this to Budget 2026", "Neb, rename these files as trip", "rename the file called
+/// notes to Final", "change the name of my essay to Essay v2": a new name, said plainly. None
+/// for any other wording (the model reads those). The name keeps the case it was said in.
+pub fn from_words(said: &str) -> Option<Said> {
     let lower = said.to_lowercase();
     // Byte offsets only line up when lowercasing kept every length (true for nearly all text).
     if lower.len() != said.len() {
         return None;
     }
-    let start = lower.find("rename ")?;
-    // Only polite words before it ("hey Neb, can you rename…").
+    // The earliest, and of two at the same place the longest ("change the name of", not
+    // "change the name").
+    let (start, verb) = VERBS
+        .iter()
+        .filter_map(|v| lower.find(v).map(|i| (i, v.len())))
+        .min_by_key(|&(i, len)| (i, std::cmp::Reverse(len)))?;
     let before = lower[..start].replace([',', '.', '!', '?'], " ");
-    let polite = before.split_whitespace().all(|w| {
-        matches!(
-            w,
-            "hey" | "neb" | "mew" | "ok" | "okay" | "please" | "can" | "could" | "would" | "you"
-        )
-    });
-    if !polite {
+    if !before.split_whitespace().all(|w| LEAD_IN.contains(&w)) {
         return None;
     }
-    let after = start + "rename ".len();
+    let after = start + verb;
     let (to_at, to_len) = [" to ", " as "]
         .iter()
         .filter_map(|sep| {
@@ -149,13 +184,18 @@ pub fn from_words(said: &str) -> Option<RenameRule> {
                 .map(|i| (after - 1 + i, sep.len()))
         })
         .min()?;
-    let between = &lower[after..to_at.max(after)];
-    if !between
+    // What's between names the file: "this", "these photos", "the file called notes".
+    let which: Vec<&str> = said[after..to_at.max(after)]
         .split_whitespace()
-        .all(|w| OBJECT_WORDS.contains(&w))
-    {
-        return None;
-    }
+        .filter(|w| {
+            let w = w.to_lowercase();
+            !OBJECT_WORDS.contains(&w.as_str()) && !matches!(w.as_str(), "called" | "named" | "of")
+        })
+        .collect();
+    let which = which.join(" ");
+    let which = which
+        .trim_matches(['"', '\'', '“', '”', '‘', '’', ','])
+        .trim();
     let name = said[to_at + to_len..]
         .trim()
         .trim_end_matches(['.', '!', '?', ',']);
@@ -167,17 +207,50 @@ pub fn from_words(said: &str) -> Option<RenameRule> {
         .trim_end_matches(['.', '!', '?', ','])
         .trim_matches(['"', '\'', '“', '”', '‘', '’'])
         .trim();
-    if name.is_empty() || name.chars().count() > TEXT_MAX || name.chars().any(char::is_control) {
+    let purpose = PURPOSE.iter().any(|p| name.to_lowercase().starts_with(p));
+    if name.is_empty()
+        || purpose
+        || name.chars().count() > TEXT_MAX
+        || name.chars().any(char::is_control)
+    {
         return None;
     }
-    Some(RenameRule {
-        name: Some(name.to_owned()),
-        prefix: None,
-        suffix: None,
-        find: None,
-        replace: None,
-        case: Case::Keep,
+    Some(Said {
+        rule: RenameRule {
+            name: Some(name.to_owned()),
+            prefix: None,
+            suffix: None,
+            find: None,
+            replace: None,
+            case: Case::Keep,
+        },
+        which: (!which.is_empty() && which.chars().count() <= TEXT_MAX).then(|| which.to_owned()),
     })
+}
+
+/// The item a rename named ("the file called notes"), among a folder's: one whose name (without
+/// its extension) is that, else the only one whose name holds it. None when there's none, or
+/// more than one could be meant.
+pub fn named_item<'a>(items: &'a [PathBuf], which: &str) -> Option<&'a PathBuf> {
+    let which = which.to_lowercase();
+    let stem = |p: &PathBuf| {
+        let name = p.file_name()?.to_string_lossy().to_lowercase();
+        Some(match p.extension() {
+            Some(e) => name[..name.len() - e.len() - 1].to_owned(),
+            None => name,
+        })
+    };
+    let full = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().to_lowercase());
+    if let Some(exact) = items.iter().find(|p| {
+        stem(p).as_deref() == Some(which.as_str()) || full(p).as_deref() == Some(which.as_str())
+    }) {
+        return Some(exact);
+    }
+    let mut holding = items
+        .iter()
+        .filter(|p| stem(p).is_some_and(|s| s.contains(&which)));
+    let first = holding.next()?;
+    holding.next().is_none().then_some(first)
 }
 
 /// Characters Windows never allows in a name.
@@ -352,27 +425,72 @@ mod tests {
 
     #[test]
     fn plain_words_name_the_file() {
-        for (said, name) in [
-            ("rename this to Budget 2026", "Budget 2026"),
-            ("Neb, rename this file to budget final.", "budget final"),
+        let said = |s: &str| from_words(s).map(|s| (s.rule, s.which));
+        for (words, name, which) in [
+            ("rename this to Budget 2026", "Budget 2026", None),
+            (
+                "Neb, rename this file to budget final.",
+                "budget final",
+                None,
+            ),
             (
                 "can you rename these photos as Trip to Rome",
                 "Trip to Rome",
+                None,
             ),
-            ("rename it to \"Essay draft\" please", "Essay draft"),
-            ("rename the two files to notes", "notes"),
+            ("rename it to \"Essay draft\" please", "Essay draft", None),
+            ("rename the two files to notes", "notes", None),
+            (
+                "rename the file called notes to Final notes",
+                "Final notes",
+                Some("notes"),
+            ),
+            (
+                "I want to rename my essay to Essay v2",
+                "Essay v2",
+                Some("essay"),
+            ),
+            (
+                "change the name of the budget file to Budget 2026",
+                "Budget 2026",
+                Some("budget"),
+            ),
+            ("could you change its name to Lease", "Lease", None),
         ] {
-            assert_eq!(from_words(said), Some(named(name)), "{said}");
+            assert_eq!(
+                said(words),
+                Some((named(name), which.map(str::to_owned))),
+                "{words}"
+            );
         }
-        for said in [
+        for words in [
             "rename these photos by date",
             "how do I rename a file to something else",
             "rename",
             "rename this to",
-            "I want to rename my thesis to make it shorter", // not plain: the model reads it
+            "rename my thesis to make it shorter", // a purpose: the model reads it
+            "why did you rename it to that",
         ] {
-            assert_eq!(from_words(said), None, "{said}");
+            assert_eq!(said(words), None, "{words}");
         }
+    }
+
+    #[test]
+    fn a_named_file_is_found_only_when_its_clear() {
+        let items = [
+            PathBuf::from(r"C:\d\notes.txt"),
+            PathBuf::from(r"C:\d\notes old.txt"),
+            PathBuf::from(r"C:\d\Budget 2026.xlsx"),
+        ];
+        assert_eq!(named_item(&items, "notes"), Some(&items[0]));
+        assert_eq!(named_item(&items, "budget"), Some(&items[2]));
+        assert_eq!(named_item(&items, "Notes old.txt"), Some(&items[1]));
+        assert_eq!(named_item(&items, "essay"), None);
+        let two = [
+            PathBuf::from(r"C:\d\a notes.txt"),
+            PathBuf::from(r"C:\d\b notes.txt"),
+        ];
+        assert_eq!(named_item(&two, "notes"), None);
     }
 
     #[test]

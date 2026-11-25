@@ -671,7 +671,10 @@ fn is_do_it(words: &[String]) -> bool {
             .iter()
             .any(|w| text.contains(w))
         && text.contains("date")
-        // "rename this to Budget 2026": the selected files, the way it was said.
+        // Any rename asked for ("rename this to Budget 2026", "rename my files so they're
+        // shorter"): DO IT's, never Neb's hand (which can't type into File Explorer's name box).
+        || text.starts_with("rename ")
+        || text.starts_with("change the name of ")
         || super::cursor::rename_rule::from_words(text).is_some();
     let setting = (text.starts_with("open ") || text.starts_with("open up "))
         && (text.ends_with(" settings") || text.ends_with(" setting"));
@@ -828,6 +831,9 @@ mod cursor_mode_tests {
             "make my laptop dark mode",
             "rename this to budget 2026",
             "Neb, rename these files to trip",
+            "rename the file called notes to final notes",
+            "rename my files so they're shorter",
+            "change the name of my essay to essay v2",
             "switch to light mode",
             "dark mode please",
             "undo the rename",

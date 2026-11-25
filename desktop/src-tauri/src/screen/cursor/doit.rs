@@ -28,7 +28,7 @@ pub fn executor_for(action: &DoAction) -> Option<Executor> {
         DoAction::SetTheme { .. } => Some(Executor::SetTheme),
         DoAction::SaveRecipe => Some(Executor::SaveRecipe),
         DoAction::BatchRename => Some(Executor::BatchRename),
-        DoAction::RenameFiles(_) => Some(Executor::RenameFiles),
+        DoAction::RenameFiles { .. } => Some(Executor::RenameFiles),
         DoAction::ShowMe => None,
     }
 }
@@ -88,8 +88,11 @@ pub fn local_action(goal: &str) -> Option<DoAction> {
     {
         return Some(DoAction::BatchRename);
     }
-    if let Some(rule) = super::rename_rule::from_words(goal) {
-        return Some(DoAction::RenameFiles(rule));
+    if let Some(said) = super::rename_rule::from_words(goal) {
+        return Some(DoAction::RenameFiles {
+            rule: Box::new(said.rule),
+            which: said.which,
+        });
     }
     const PAGES: &[(&str, &str)] = &[
         ("dark mode", "colors"),

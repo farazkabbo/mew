@@ -94,6 +94,12 @@ mouse and touchpad timing). Record real ones (below) before trusting them.
     the rename shares `batch_rename`'s undo log ("undo the rename", tray → Undo rename). A
     change of case only ("notes" → "Notes") is allowed. Prompts `screen-intent.v7`,
     `screen-plan.v3`.
+    - **Every rename is DO IT's, decided on the device** (2026-11-25, after a test where the
+      server read "rename the file … to …" as `act` and Neb's hand clicked Rename, then
+      couldn't type into File Explorer's name box). Anything that starts "rename …" or "change
+      the name of …" goes to DO IT without a model call. A file named aloud ("rename the file
+      called notes to Final") is found among the folder's items by its name (exactly, or the
+      only one holding it), selected or not; otherwise the selection is renamed.
 
 ## Shared path library (designed, not built)
 

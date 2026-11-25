@@ -77,30 +77,32 @@ foreach ($i in $items) {
 }
 "#;
 
-/// The items selected in one Explorer window (files and folders), and nothing when none is:
-/// a rename asked for in words never takes a whole folder's contents by itself.
-const SELECTION_SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
+/// The items in one Explorer window's folder (files and folders, up to 2,000), each marked
+/// whether it's selected. Only names and paths: nothing is opened or read.
+const ITEMS_SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
 $h = [int64]$env:NEB_EXPLORER_WINDOW
 $w = (New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.HWND -eq $h } | Select-Object -First 1
 if (-not $w) { '[]'; exit }
+$sel = @{}
+foreach ($i in @($w.Document.SelectedItems())) { $sel[[string]$i.Path] = $true }
 $out = @()
-foreach ($i in @($w.Document.SelectedItems())) {
-  if ($out.Count -ge 500) { break }
+foreach ($i in @($w.Document.Folder.Items())) {
+  if ($out.Count -ge 2000) { break }
   $p = [string]$i.Path
-  if ([IO.Path]::IsPathRooted($p)) { $out += [pscustomobject]@{ path = $p } }
+  if ([IO.Path]::IsPathRooted($p)) { $out += [pscustomobject]@{ path = $p; selected = $sel.ContainsKey($p) } }
 }
 "#;
 
-/// The files and folders selected in the File Explorer window `window`.
-pub fn explorer_selection(window: isize) -> Vec<PathBuf> {
+/// The files and folders in the File Explorer window `window`'s folder, and whether each is
+/// selected.
+pub fn explorer_items(window: isize) -> Vec<(PathBuf, bool)> {
     #[derive(serde::Deserialize)]
     struct Row {
         path: String,
+        #[serde(default)]
+        selected: bool,
     }
-    let Some(out) = powershell(
-        SELECTION_SCRIPT,
-        ("NEB_EXPLORER_WINDOW", &window.to_string()),
-    ) else {
+    let Some(out) = powershell(ITEMS_SCRIPT, ("NEB_EXPLORER_WINDOW", &window.to_string())) else {
         return Vec::new();
     };
     let text = String::from_utf8_lossy(&out);
@@ -110,7 +112,7 @@ pub fn explorer_selection(window: isize) -> Vec<PathBuf> {
         .unwrap_or_default();
     rows.into_iter()
         .filter(|r| !r.path.chars().any(char::is_control) && Path::new(&r.path).is_absolute())
-        .map(|r| PathBuf::from(r.path))
+        .map(|r| (PathBuf::from(r.path), r.selected))
         .collect()
 }
 
@@ -269,19 +271,25 @@ pub fn set_dark_mode(dark: bool) -> bool {
             status == ERROR_SUCCESS
         });
     if written {
-        let area = w!("ImmersiveColorSet");
-        // SAFETY: a broadcast with a static string; hung windows are skipped after 1 s.
-        unsafe {
-            let _ = SendMessageTimeoutW(
-                HWND_BROADCAST,
-                WM_SETTINGCHANGE,
-                WPARAM(0),
-                LPARAM(area.as_ptr() as isize),
-                SMTO_ABORTIFHUNG,
-                1_000,
-                None,
-            );
-        }
+        // The broadcast waits on every window in turn (seconds, with many open): it runs on its
+        // own thread, so the switch is confirmed at once (Windows itself has already switched).
+        let _ = std::thread::Builder::new()
+            .name("mew-theme-broadcast".into())
+            .spawn(|| {
+                let area = w!("ImmersiveColorSet");
+                // SAFETY: a broadcast with a static string; hung windows are skipped after 1 s.
+                unsafe {
+                    let _ = SendMessageTimeoutW(
+                        HWND_BROADCAST,
+                        WM_SETTINGCHANGE,
+                        WPARAM(0),
+                        LPARAM(area.as_ptr() as isize),
+                        SMTO_ABORTIFHUNG,
+                        1_000,
+                        None,
+                    );
+                }
+            });
     }
     written
 }

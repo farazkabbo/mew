@@ -90,8 +90,13 @@ pub enum DoAction {
     },
     SaveRecipe,
     BatchRename,
-    /// The files selected in File Explorer, renamed by a rule (never a file name from the model).
-    RenameFiles(super::rename_rule::RenameRule),
+    /// The files selected in File Explorer (or the one named aloud, `which`: only ever from the
+    /// device's own reading of the words), renamed by a rule (never a file name from the model).
+    RenameFiles {
+        /// Boxed: a rule is several strings, and every other action is small.
+        rule: Box<super::rename_rule::RenameRule>,
+        which: Option<String>,
+    },
     /// Not on the list: offer SHOW ME instead.
     ShowMe,
 }
@@ -226,7 +231,10 @@ pub fn parse_action(value: &serde_json::Value) -> Option<DoAction> {
         },
         "save_recipe" => Some(DoAction::SaveRecipe),
         "batch_rename" => (field("scheme")? == "date_taken").then_some(DoAction::BatchRename),
-        "rename_files" => super::rename_rule::parse(value).map(DoAction::RenameFiles),
+        "rename_files" => super::rename_rule::parse(value).map(|rule| DoAction::RenameFiles {
+            rule: Box::new(rule),
+            which: None,
+        }),
         "show_me" => Some(DoAction::ShowMe),
         _ => None,
     }

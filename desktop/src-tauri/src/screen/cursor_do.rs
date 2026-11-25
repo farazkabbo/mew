@@ -13,6 +13,7 @@
 //!
 //! No chore sends a key or a click (the input check in `cursor/doit.rs`).
 
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -151,7 +152,7 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, capt
         DoAction::SetTheme { .. } => "set_theme",
         DoAction::SaveRecipe => "save_recipe",
         DoAction::BatchRename => "batch_rename",
-        DoAction::RenameFiles(_) => "rename_files",
+        DoAction::RenameFiles { .. } => "rename_files",
         DoAction::ShowMe => "show_me",
     };
     eprintln!(
@@ -176,9 +177,9 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, capt
             drop(captured);
             batch_rename(app, window)
         }
-        DoAction::RenameFiles(rule) => {
+        DoAction::RenameFiles { rule, which } => {
             drop(captured);
-            rename_files(app, window, &rule)
+            rename_files(app, window, &rule, which.as_deref())
         }
         DoAction::ShowMe => return,
     };
@@ -485,6 +486,7 @@ fn rename_files<R: Runtime>(
     app: &AppHandle<R>,
     window: Option<isize>,
     rule: &RenameRule,
+    which: Option<&str>,
 ) -> Result<Done, String> {
     let window =
         window.filter(|w| super::win::uia_targets::class_of(HWND(*w as *mut _)) == "CabinetWClass");
@@ -493,10 +495,31 @@ fn rename_files<R: Runtime>(
             "Select what to rename in File Explorer, then ask me again with it open.".into(),
         );
     };
-    let selected = chores::explorer_selection(window);
-    if selected.is_empty() {
-        return Err("Select the files to rename in File Explorer first, then ask me again.".into());
-    }
+    let items = chores::explorer_items(window);
+    let selected: Vec<PathBuf> = items
+        .iter()
+        .filter(|(_, s)| *s)
+        .map(|(p, _)| p.clone())
+        .collect();
+    // A file named aloud ("rename the file called notes to …") is the one renamed, selected or
+    // not; when the name doesn't single one out, the selection is (the table shows which).
+    let named = which.and_then(|which| {
+        let all: Vec<PathBuf> = items.iter().map(|(p, _)| p.clone()).collect();
+        rename_rule::named_item(&all, which).cloned()
+    });
+    let selected = match named {
+        Some(item) => vec![item],
+        None if !selected.is_empty() => selected,
+        None if which.is_some() => return Err(
+            "I couldn't tell which file you meant. Select it in File Explorer and ask me again."
+                .into(),
+        ),
+        None => {
+            return Err(
+                "Select the files to rename in File Explorer first, then ask me again.".into(),
+            )
+        }
+    };
     let renames = rename_rule::plan(&selected, rule, |p| p.exists())?;
     let n = renames.len();
     let picked = chores::dialog(
