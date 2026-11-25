@@ -294,7 +294,7 @@ fn send<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Coach
         .try_state::<ScreenCoach>()
         .ok_or("Screen Coach isn't ready.")?;
     let token = credential::load().ok_or(
-        "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
+        "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.",
     )?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
@@ -335,7 +335,7 @@ fn send<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Coach
         200 if !too_large => {}
         401 => {
             forget_revoked_token(app);
-            return Err("Screen Coach was signed out of your Neb account. Connect again in Screen Coach settings.".into());
+            return Err("Screen Coach was signed out of your Neb account. Connect again in Settings on this PC.".into());
         }
         404 | 409 => return Err(String::new()), // that walkthrough ended or moved on elsewhere
         429 => {

@@ -16,7 +16,7 @@
 //! document is ready it asks for the writing (`screen_write::start_for_hand`, with the notes as
 //! the material), and carries on when the typing ends (`after_write`), to name and save it.
 //!
-//! - **Off until the student turns it on** in Screen Coach settings ("Let Neb click for me"),
+//! - **Off until the student turns it on** in Settings on this PC ("Let Neb click for me"),
 //!   and only ever started by their own words.
 //! - **The student stops it at any time**: pressing Esc stops it at once, as does pausing
 //!   Screen Coach.
@@ -151,7 +151,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, transcript: String, mode: Mode, cap
     if !coach::hand_allowed(app) {
         coach::notify(
             app,
-            "I can do that for you once you turn on “Let Neb click for me” in Screen Coach settings. They're open now.",
+            "I can do that for you once you turn on “Let Neb click for me” in Settings on this PC. They're open now.",
         );
         coach::open_settings(app);
         return;

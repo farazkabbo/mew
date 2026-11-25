@@ -3,535 +3,647 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Screen Coach</title>
+    <title>Neb · Settings on this PC</title>
     <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="fonts.css" />
     <link rel="stylesheet" href="screen-coach.css" />
     <script src="screen-coach.js" defer></script>
   </head>
   <body>
-    <main>
-      <header>
-        <h1>Screen Coach</h1>
-        <p class="lede">
-          Ask Neb about anything on your screen. Neb guides you step by step, and you do the
-          clicking.
-        </p>
-      </header>
-
-      <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
-
-      <section aria-labelledby="how">
-        <h2 id="how">When Neb sees your screen</h2>
-        <ul class="facts">
-          <li>
-            <strong>Only when you ask.</strong> Double-tap <kbd>Ctrl+Alt</kbd> for the bar at the
-            top of the screen, then turn the mic on, ask, and turn it off (one picture is taken
-            then), or choose <em>Look at my screen</em> in the tray. Never in the background, except
-            while you have Watch on (below).
-          </li>
-          <li>
-            <strong>One picture of the window you're working in.</strong> Step-by-step coaching sees
-            the whole monitor, and Neb tells you before it starts.
-          </li>
-          <li>
-            <strong>You'll see it happen.</strong> The edges of the screen glow violet and Windows
-            shows a yellow border each time a picture is taken.
-          </li>
-          <li>
-            <strong>Not saved, unless you save it.</strong> The picture stays in memory, is sent
-            encrypted to Neb's server and Google's Gemini model to answer you, and is then
-            discarded. It is never written to disk.
-          </li>
-          <li>
-            <strong>Neb draws beside what it explains</strong> in violet ink. Screen shares and
-            recordings don't show it unless you turn that on under Privacy. While ink is on screen,
-            Neb notices scrolling, switching apps and key presses (never which keys) so the ink can
-            fade when the page moves.
-          </li>
-          <li>
-            <strong>Saving to your notebook is up to you.</strong> Say “save this”, or circle it and
-            press <kbd>Ctrl+S</kbd>: you see exactly what will be saved, with the page's title and
-            link, and nothing is kept unless you press Save. Saved clips are stored privately in
-            your account, like your notes, until you delete them.
-          </li>
-          <li>
-            <strong>Checking your notes is up to you too.</strong> Turn on the mic in the bar and
-            say “check my notes”: Neb reads the text on your screen (after hiding private details,
-            never the picture itself), compares it with your notes, and marks what matches, what
-            differs and what's missing. Only short quotes are kept, with what Neb found, in your
-            account; Neb never changes your notes.
-          </li>
-          <li>
-            <strong>Draw on your screen to ask about something.</strong> Neb's small pointer rides
-            beside your cursor (it only knows where the cursor or your tablet's pen is, nothing you
-            click or type, and that's never saved or sent). Pick Select in the bar (freehand, a
-            rectangle or an ellipse) and draw around what's confusing: Neb takes one picture of that
-            screen when you finish your first mark, and explains it step by step with ink.
-          </li>
-          <li>
-            <strong>Explanations go to your notebook after a few seconds</strong> (the picture, your
-            marks and Neb's ink), unless you press Undo. You can choose to be asked each time, or
-            never, below. Nothing is saved from blocked apps, and nothing hidden is ever saved.
-          </li>
-          <li>
-            <strong>The pen in the bar is yours.</strong> What you write with it stays on your
-            screen only: Neb never looks at it, and Clear or closing the bar rubs it out.
-          </li>
-          <li>
-            <strong>Watch is yours to turn on.</strong> Press the eye in the bar and Neb looks at
-            your whole monitor every few seconds while it's on, only when something has changed, to
-            spot a slip in your working and tell you. The edges glow violet the whole time. Press
-            the eye again, pause, or wait 45 minutes, and it stops. The pictures are handled like
-            every other: sent to answer you, then discarded. Holding <kbd>Ctrl+Alt</kbd> turns Watch
-            on for as long as you hold: ask out loud and let go, and Neb takes one picture, answers,
-            and Watch goes off again (unless you'd turned it on yourself).
-          </li>
-          <li>
-            <strong>Neb types only when you ask it to.</strong> Say “rewrite this sentence” or “type
-            a conclusion” and Neb types its suggestion into the document in front of you, at your
-            cursor (over the text you selected). It stops if you switch windows or press
-            <kbd>Esc</kbd>, and <kbd>Ctrl+Z</kbd> undoes it. It never types into terminals or
-            password fields, and never clicks anything unless you turn on “Let Neb click for me”
-            under Privacy.
-          </li>
-          <li>
-            <strong>You choose how much Neb gives away</strong> in the bar: Quiet, Hint, Coach, or
-            Answer for the full working, with why each step is done.
-          </li>
-          <li>
-            <strong>Pause any time</strong> from the tray, or turn on the mic and say “Neb, pause”.
-          </li>
-        </ul>
-      </section>
-
-      <section aria-labelledby="switch" id="switch-section">
-        <h2 id="switch">Screen Coach is <span id="state-word">off</span></h2>
-        <div id="consent-row" class="row">
-          <label class="check">
-            <input type="checkbox" id="consent" />
-            <span>I've read how Screen Coach sees my screen.</span>
-          </label>
-        </div>
-        <div class="row buttons">
-          <button type="button" id="turn-on" class="primary" disabled>Turn on Screen Coach</button>
-          <button type="button" id="turn-off" hidden>Turn off</button>
-          <button type="button" id="pause" hidden aria-pressed="false">Pause</button>
-        </div>
-      </section>
-
-      <section aria-labelledby="account">
-        <h2 id="account">Your Neb account</h2>
-        <p id="account-state">
-          Connect Screen Coach to your Neb account so it can answer your questions.
-        </p>
-        <div class="row buttons">
-          <button type="button" id="connect" class="primary">Connect</button>
-          <button type="button" id="disconnect" hidden>Disconnect</button>
-        </div>
-        <p class="hint">
-          Connecting opens Neb, where you confirm. This computer gets its own sign-in that only
-          works for Screen Coach, kept in Windows Credential Manager. You can sign it out from here,
-          or from Neb's Settings → Signed-in devices.
-        </p>
-      </section>
-
-      <section aria-labelledby="keys" id="keys-section">
-        <h2 id="keys">Shortcuts</h2>
-        <div id="shortcuts-notice" role="status" hidden>
-          <h3>Shortcuts got simpler</h3>
-          <p>Every Neb shortcut is two keys at most now. What changed:</p>
-          <ul>
-            <li>
-              Ask about your screen: hold <kbd>Ctrl+Alt</kbd> and talk (was
-              <kbd>Ctrl+Alt+Space</kbd>). Draw around something while you hold them to ask about it.
-            </li>
-            <li>
-              Draw mode for pen and touch: double-tap <kbd>Ctrl+Alt</kbd> (was
-              <kbd>Ctrl+Alt+D</kbd>).
-            </li>
-            <li>
-              Save to notebook: circle it, then <kbd>Ctrl+S</kbd> in the ask bar, or say “save this”
-              (was <kbd>Ctrl+Alt+C</kbd>).
-            </li>
-            <li>
-              Check my notes: hold <kbd>Ctrl+Alt</kbd> and say “check my notes” (was
-              <kbd>Ctrl+Alt+N</kbd>).
-            </li>
-            <li>
-              Pause: the tray, or hold <kbd>Ctrl+Alt</kbd> and say “Neb, pause” (was
-              <kbd>Ctrl+Alt+P</kbd>).
-            </li>
-            <li>
-              Next step and repeat: <kbd>→</kbd> and <kbd>←</kbd> in the caption card (were
-              <kbd>Ctrl+Alt+.</kbd> and <kbd>Ctrl+Alt+,</kbd>).
-            </li>
-            <li>
-              Summon Neb: hold <kbd>Ctrl+Alt</kbd> while Screen Coach is off (was
-              <kbd>Ctrl+Shift+M</kbd>).
-            </li>
-          </ul>
-          <div class="row buttons">
-            <button type="button" id="shortcuts-seen" class="primary">Got it</button>
-          </div>
-        </div>
-        <table class="keys">
-          <caption>
-            Anywhere on your PC
-          </caption>
-          <tbody>
-            <tr>
-              <th scope="row"><kbd>Ctrl+Alt</kbd> twice</th>
-              <td>
-                Show or hide Neb's bar at the top of the screen: the pen and eraser, Select (what
-                Neb looks at: freehand, rectangle or ellipse), the mic (click, speak, click again),
-                Clear and Close. In silent mode it also ends drawing with the keyboard.
-              </td>
-            </tr>
-            <tr>
-              <th scope="row"><kbd>Ctrl+Alt</kbd> held</th>
-              <td>Summons Neb while Screen Coach is off or paused.</td>
-            </tr>
-            <tr>
-              <th scope="row"><kbd>Esc</kbd></th>
-              <td>Stop, or clear what Neb drew (only while Neb is showing something).</td>
-            </tr>
-          </tbody>
-        </table>
-        <table class="keys">
-          <caption>
-            In the ask bar and caption card
-          </caption>
-          <tbody>
-            <tr>
-              <th scope="row"><kbd>Enter</kbd></th>
-              <td>Ask (or “explain this”, with nothing typed)</td>
-            </tr>
-            <tr>
-              <th scope="row"><kbd>Ctrl+S</kbd></th>
-              <td>Save to your notebook without an explanation</td>
-            </tr>
-            <tr>
-              <th scope="row"><kbd>→</kbd> <kbd>←</kbd></th>
-              <td>Next step, repeat this step</td>
-            </tr>
-            <tr>
-              <th scope="row"><kbd>Space</kbd></th>
-              <td>Pause or resume</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="hint">
-          Only left Ctrl and left Alt count, and only after a moment with no other key pressed, so
-          typing with AltGr (@, €, {) never starts Neb. Neb reads whether the two keys are down,
-          never what you type.
-        </p>
-      </section>
-
-      <section aria-labelledby="circle">
-        <h2 id="circle">Circle &amp; Ask</h2>
-        <fieldset>
-          <legend>Show the pointer beside the cursor</legend>
-          <label><input type="radio" name="pointer" value="always" /> Always</label>
-          <label
-            ><input type="radio" name="pointer" value="while_drawing" /> Only while drawing</label
-          >
-          <label><input type="radio" name="pointer" value="never" /> Never</label>
-        </fieldset>
-        <div class="row">
-          <label for="pointer-size">Size</label>
-          <select id="pointer-size">
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-          </select>
-          <label for="pointer-corner">Where</label>
-          <select id="pointer-corner">
-            <option value="bottom_right">Below right</option>
-            <option value="bottom_left">Below left</option>
-            <option value="top_right">Above right</option>
-            <option value="top_left">Above left</option>
-          </select>
-        </div>
-        <fieldset>
-          <legend>Save explanations to the notebook</legend>
-          <label><input type="radio" name="save" value="auto" /> Automatically (with Undo)</label>
-          <label><input type="radio" name="save" value="ask" /> Ask each time</label>
-          <label><input type="radio" name="save" value="never" /> Never</label>
-        </fieldset>
-        <label class="check">
-          <input type="checkbox" id="include-link" /> Keep the page's title and link (web pages and
-          videos)
-        </label>
-        <label class="check">
-          <input type="checkbox" id="silent" /> I'd rather not use my voice (type instead; captions,
-          no speech)
-        </label>
-      </section>
-
-      <section aria-labelledby="cursor">
-        <h2 id="cursor">Cursor: DO IT, SHOW ME, CATCH ME</h2>
-
-        <div id="catch-intro">
-          <h3>CATCH ME <span id="catch-new" class="hint" hidden>New</span></h3>
-          <p>CATCH ME speaks up just before you click on a few costly slips:</p>
-          <ul class="facts">
-            <li>Reply All to five people or more</li>
-            <li>An email that says "attached" with nothing attached</li>
-            <li>Closing something with unsaved changes</li>
-            <li>Deleting a folder, or more than 20 files</li>
-            <li>A terminal command that deletes or overwrites for good</li>
-          </ul>
-          <p class="hint">
-            It works on this computer only. It reads the names of the buttons in the window in
-            front, the words of an email you're writing (only to look for "attached"), and the line
-            you're typing in a terminal. Nothing is sent or saved. The only record is which rule
-            spoke up, in which app, when, and what you chose. It never uses Neb's AI and never
-            spends questions. It never stops a click: you can always carry on. Pause it from the
-            tray menu any time.
-          </p>
-          <label class="check" id="catch-consent-row">
-            <input type="checkbox" id="catch-consent" /> I've read this
-          </label>
-          <div class="row buttons">
-            <button type="button" class="primary" id="catch-on">Turn on CATCH ME</button>
-            <button type="button" id="catch-not-now">Not now</button>
-            <button type="button" id="catch-off" hidden>Turn off CATCH ME</button>
-          </div>
-          <p id="catch-paused" class="hint" hidden>Paused from the tray menu.</p>
-        </div>
-
-        <fieldset id="catch-rules">
-          <legend>CATCH ME's rules</legend>
-          <label class="check"
-            ><input type="checkbox" data-catch="reply_all" /> Reply All to many people</label
-          >
-          <label class="check"
-            ><input type="checkbox" data-catch="attachment" /> "Attached" with no attachment</label
-          >
-          <label class="check"
-            ><input type="checkbox" data-catch="unsaved" /> Closing with unsaved changes</label
-          >
-          <label class="check"
-            ><input type="checkbox" data-catch="delete" /> Deleting a folder or many files</label
-          >
-          <label class="check"
-            ><input type="checkbox" data-catch="terminal" /> Destructive terminal commands</label
-          >
-          <p id="catch-snoozed" class="hint" hidden></p>
-          <button type="button" id="catch-reset">Make every rule as eager as at first</button>
-        </fieldset>
-
-        <fieldset>
-          <legend>SHOW ME: how much to show</legend>
-          <label class="check"
-            ><input type="radio" name="guidance" value="auto" /> Less as I learn
-            (recommended)</label
-          >
-          <label class="check"
-            ><input type="radio" name="guidance" value="full" /> Always the whole path</label
-          >
-          <label class="check"
-            ><input type="radio" name="guidance" value="light" /> Just the next button</label
-          >
-          <label class="check"
-            ><input type="radio" name="guidance" value="corrections_only" /> Only when I'm heading
-            for the wrong one</label
-          >
-        </fieldset>
-        <label class="check">
-          <input type="checkbox" id="cursor-voice" /> Say a word when I'm heading for the wrong
-          button
-        </label>
-        <div class="row buttons">
-          <button type="button" id="forget-paths">Forget learned paths</button>
-        </div>
-
-        <details>
-          <summary>What the cursor modes have done</summary>
-          <ul id="cursor-counts" class="facts"></ul>
-        </details>
-        <details>
-          <summary>For developers</summary>
-          <label class="check"
-            ><input type="checkbox" id="cursor-debug" /> Show the predicted endpoint live</label
-          >
-          <label class="check">
-            <input type="checkbox" id="cursor-record" /> Record mouse traces on this computer
-            (positions and button rectangles only)
-          </label>
-        </details>
-      </section>
-
-      <section aria-labelledby="handoff">
-        <h2 id="handoff">Handoff <span class="hint">(being built)</span></h2>
-        <p class="hint">
-          Hand your work to a teammate from the exact moment you stopped: tray menu → Hand off…, or
-          say "hand this off to Rahbir". To do that, Neb keeps a timeline of the moments you save
-          and of the app in front (with its page and git branch), on this computer only, encrypted,
-          for 24 hours. Blocked apps and private windows are never kept. Nothing leaves this
-          computer unless you press Send in the preview.
-        </p>
-        <label class="check">
-          <input type="checkbox" id="handoff-timeline" /> Keep a 24-hour timeline for handoffs
-        </label>
-        <div class="row">
-          <label for="handoff-window">Hand off the last</label>
-          <select id="handoff-window">
-            <option value="30">30 minutes</option>
-            <option value="90">90 minutes</option>
-            <option value="180">3 hours</option>
-          </select>
-        </div>
-        <label class="check">
-          <input type="checkbox" id="handoff-names" /> Always hide people's names
-        </label>
-        <details>
-          <summary>What's in the timeline now (<span id="handoff-count">0</span> records)</summary>
-          <ul id="handoff-recent" class="facts"></ul>
-        </details>
-        <div class="row buttons">
-          <button type="button" id="handoff-forget">Delete my timeline</button>
-        </div>
-      </section>
-
-      <section aria-labelledby="privacy">
-        <h2 id="privacy">Privacy</h2>
-        <div id="mic-off" class="warning" role="status" hidden>
-          <p>
-            Microphone access is off for desktop apps, so Screen Coach is paused. Turn it on in
-            Windows Settings.
-          </p>
-          <button type="button" id="open-mic">Open microphone settings</button>
-        </div>
-
-        <fieldset>
-          <legend>When you ask about your screen, Neb sees</legend>
-          <label class="check">
-            <input type="radio" name="scope" value="window" />
-            <span>The window you're working in (recommended)</span>
-          </label>
-          <label class="check">
-            <input type="radio" name="scope" value="monitor" />
-            <span>The whole monitor under your mouse, with blocked apps blacked out</span>
-          </label>
-        </fieldset>
-
-        <label class="check">
-          <input type="checkbox" id="pause-during-calls" />
-          <span>Pause during calls and screen recordings</span>
-        </label>
-
-        <label class="check">
-          <input type="checkbox" id="show-in-captures" />
-          <span>
-            Show Neb in screen shares and recordings
-            <span class="hint">
-              Viewers will see Neb's bar, ink, cards and pointer, and anything written in them. The
-              violet frame stays visible only to you, and Neb's own pictures still leave all of this
-              out.
-            </span>
-          </span>
-        </label>
-        <label class="check">
-          <input type="checkbox" id="let-neb-click" />
-          <span>
-            Let Neb click for me
-            <span class="hint">
-              When you ask (“open the Insert tab”, “open my Downloads folder”, “scroll down”), Neb's
-              own violet cursor goes and does it, in any app, website or folder, one step at a time,
-              looking at your screen after each step. It clicks, scrolls, types a short line and
-              presses a few keys and shortcuts (such as Enter, the Windows key, Ctrl+L and Ctrl+S).
-              Ask where something is (“where can I sign out in VS Code?”) and it opens the menu it's
-              in and points at it, without pressing it. Give it a whole task (“research the water
-              cycle and save it in a doc”) and it works through it by itself, for up to 15 minutes:
-              it reads pages, keeps notes of what it finds (in memory only, forgotten when it
-              finishes), writes them up and saves the document. Your own mouse stays yours the whole
-              time; press <kbd>Esc</kbd> and Neb stops at once. It never presses anything that buys,
-              sends, deletes, signs in or out, or installs: those it points at and leaves to you. It
-              doesn't click or type in terminals, password fields or Windows settings.
-            </span>
-          </span>
-        </label>
-        <p id="show-in-captures-paused" class="hint" hidden>
-          Neb won't look or listen during a call or recording while “Pause during calls and screen
-          recordings” is on. Turn that off to use Neb while you share.
-        </p>
-
-        <fieldset>
-          <legend>Cover before anything is sent</legend>
-          <label class="check">
-            <input type="checkbox" data-rule="cards" />
-            <span>Card numbers</span>
-          </label>
-          <label class="check">
-            <input type="checkbox" data-rule="secrets" />
-            <span>Passwords, API keys and tokens</span>
-          </label>
-          <label class="check">
-            <input type="checkbox" data-rule="codes" />
-            <span>One-time codes and PINs</span>
-          </label>
-          <label class="check">
-            <input type="checkbox" data-rule="emails" />
-            <span>Email addresses</span>
-          </label>
-          <label class="check">
-            <input type="checkbox" data-rule="phones" />
-            <span>Phone numbers</span>
-          </label>
-        </fieldset>
-        <p class="hint">
-          Covered text is hidden with a grey box on this computer, using Windows' own text
-          recognition, before the picture leaves it. Text recognition can miss things, so blocked
-          apps, password fields and private browsing windows are never captured at all.
-        </p>
-      </section>
-
-      <section aria-labelledby="blocked">
-        <h2 id="blocked">Blocked apps</h2>
-        <p class="hint">
-          Neb never looks at these apps. They're matched by program file name (for example
-          <kbd>outlook.exe</kbd>). Mail and messaging apps start blocked; unblock any you want help
-          with.
-        </p>
-        <ul id="blocked-list" class="blocked-list"></ul>
-        <form id="block-form">
-          <label for="block-input">Block another app</label>
-          <div class="row">
-            <input
-              id="block-input"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="program.exe"
-            />
-            <button type="submit">Block</button>
-          </div>
-          <p class="problem" id="problem-blocked" role="alert" hidden></p>
-        </form>
-        <div class="row buttons">
-          <button type="button" id="restore-defaults">Restore the default list</button>
-        </div>
-      </section>
-
-      <section aria-labelledby="updates">
-        <h2 id="updates">Updates</h2>
-        <p id="update-state" role="status"></p>
-        <div class="row buttons">
-          <button type="button" id="update-check">Check for updates</button>
-          <button type="button" id="update-install" class="primary" hidden>
-            Restart and update
+    <div class="layout">
+      <nav class="tabs" aria-label="Settings">
+        <p class="brand">Neb on this PC</p>
+        <div role="tablist" aria-orientation="vertical">
+          <button type="button" role="tab" id="tab-start" aria-controls="page-start">Start</button>
+          <button type="button" role="tab" id="tab-talk" aria-controls="page-talk">
+            Talking &amp; keys
           </button>
+          <button type="button" role="tab" id="tab-helpers" aria-controls="page-helpers">
+            Helpers
+          </button>
+          <button type="button" role="tab" id="tab-privacy" aria-controls="page-privacy">
+            Privacy
+          </button>
+          <button type="button" role="tab" id="tab-more" aria-controls="page-more">More</button>
         </div>
-        <p class="hint">
-          Neb checks by itself and gets each new version ready in the background. It only restarts
-          when you say so, and only installs versions signed by the Neb team.
-        </p>
-      </section>
+        <button type="button" id="open-app-settings" class="link">
+          Account, voice &amp; display →
+        </button>
+      </nav>
 
-      <footer>
-        <p>These settings stay on this computer and can only be changed here.</p>
-      </footer>
-    </main>
+      <main>
+        <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+
+        <!-- ─── Start ───────────────────────────────────────────────────────────────── -->
+        <div class="page" id="page-start" role="tabpanel" aria-labelledby="tab-start">
+          <h1>Start</h1>
+
+          <section aria-labelledby="switch" id="switch-section">
+            <h2 id="switch">Screen Coach is <span id="state-word">off</span></h2>
+            <p class="hint" id="switch-lede">
+              Screen Coach lets Neb see your screen when you ask, and help right where you're
+              working.
+            </p>
+            <!-- "How Neb sees your screen" sits here while Screen Coach is off (it has to be read
+                 before turning it on), and under Privacy once it's on. -->
+            <div id="how-slot-start"></div>
+            <div id="consent-row" class="row">
+              <label class="check">
+                <input type="checkbox" id="consent" />
+                <span>I've read how Neb sees my screen.</span>
+              </label>
+            </div>
+            <div class="row buttons">
+              <button type="button" id="turn-on" class="primary" disabled>
+                Turn on Screen Coach
+              </button>
+              <button type="button" id="turn-off" hidden>Turn off</button>
+              <button type="button" id="pause" hidden aria-pressed="false">Pause</button>
+            </div>
+          </section>
+
+          <section aria-labelledby="account">
+            <h2 id="account">Your Neb account</h2>
+            <p id="account-state">
+              Connect this PC to your Neb account so Neb can answer your questions.
+            </p>
+            <div class="row buttons">
+              <button type="button" id="connect" class="primary">Connect</button>
+              <button type="button" id="disconnect" hidden>Disconnect</button>
+            </div>
+            <p class="hint">
+              Connecting opens Neb, where you confirm. This PC gets its own sign-in that only works
+              for Screen Coach, kept in Windows Credential Manager. You can sign it out here, or
+              from Neb's Settings → Signed-in devices.
+            </p>
+          </section>
+
+          <section aria-labelledby="quick">
+            <h2 id="quick">How to use it</h2>
+            <ul class="steps">
+              <li>
+                <strong>Hold <kbd>Ctrl+Alt</kbd>, say it, let go.</strong> Anything: “is this
+                right?”, “explain this”, “rewrite this sentence”.
+              </li>
+              <li>
+                <strong>Ask how, and Neb shows you</strong> where to click: “how do I add page
+                numbers?”
+              </li>
+              <li>
+                <strong>Ask Neb to do it, and it does:</strong> “turn on dark mode”, “find my lease
+                PDF”, “rename this to Budget 2026”.
+              </li>
+              <li>
+                <strong>Double-tap <kbd>Ctrl+Alt</kbd></strong> for Neb's bar: the pen, Select, the
+                mic and Watch.
+              </li>
+            </ul>
+          </section>
+        </div>
+
+        <!-- ─── Talking & keys ──────────────────────────────────────────────────────── -->
+        <div class="page" id="page-talk" role="tabpanel" aria-labelledby="tab-talk" hidden>
+          <h1>Talking &amp; keys</h1>
+
+          <section aria-labelledby="voice">
+            <h2 id="voice">Your voice</h2>
+            <label class="check">
+              <input type="checkbox" id="silent" />
+              <span>
+                I'd rather not use my voice
+                <span class="hint">Type your questions instead; Neb answers in captions.</span>
+              </span>
+            </label>
+          </section>
+
+          <section aria-labelledby="keys" id="keys-section">
+            <h2 id="keys">Shortcuts</h2>
+            <div id="shortcuts-notice" role="status" hidden>
+              <h3>Shortcuts got simpler</h3>
+              <p>Every Neb shortcut is two keys at most now. What changed:</p>
+              <ul>
+                <li>
+                  Ask about your screen: hold <kbd>Ctrl+Alt</kbd> and talk (was
+                  <kbd>Ctrl+Alt+Space</kbd>).
+                </li>
+                <li>
+                  Neb's bar, with the pen and Select: double-tap <kbd>Ctrl+Alt</kbd> (was
+                  <kbd>Ctrl+Alt+D</kbd>).
+                </li>
+                <li>
+                  Save to notebook: say “save this”, or circle it and press <kbd>Ctrl+S</kbd> (was
+                  <kbd>Ctrl+Alt+C</kbd>).
+                </li>
+                <li>
+                  Check my notes: hold <kbd>Ctrl+Alt</kbd> and say “check my notes” (was
+                  <kbd>Ctrl+Alt+N</kbd>).
+                </li>
+                <li>
+                  Pause: the tray, or hold <kbd>Ctrl+Alt</kbd> and say “Neb, pause” (was
+                  <kbd>Ctrl+Alt+P</kbd>).
+                </li>
+                <li>
+                  Next step and repeat: <kbd>→</kbd> and <kbd>←</kbd> in the caption card (were
+                  <kbd>Ctrl+Alt+.</kbd> and <kbd>Ctrl+Alt+,</kbd>).
+                </li>
+              </ul>
+              <div class="row buttons">
+                <button type="button" id="shortcuts-seen" class="primary">Got it</button>
+              </div>
+            </div>
+            <table class="keys">
+              <caption>
+                Anywhere on your PC
+              </caption>
+              <tbody>
+                <tr>
+                  <th scope="row"><kbd>Ctrl+Alt</kbd> held</th>
+                  <td>
+                    Talk to Neb: say what you want and let go. (While Screen Coach is off, it brings
+                    up Neb's window.)
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row"><kbd>Ctrl+Alt</kbd> twice</th>
+                  <td>
+                    Show or hide Neb's bar: the pen and eraser, Select (draw around what to ask
+                    about), the mic, Watch, Clear and Close.
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row"><kbd>Esc</kbd></th>
+                  <td>Stop, or clear what Neb drew.</td>
+                </tr>
+              </tbody>
+            </table>
+            <table class="keys">
+              <caption>
+                In the ask bar and caption card
+              </caption>
+              <tbody>
+                <tr>
+                  <th scope="row"><kbd>Enter</kbd></th>
+                  <td>Ask (or “explain this”, with nothing typed)</td>
+                </tr>
+                <tr>
+                  <th scope="row"><kbd>Ctrl+S</kbd></th>
+                  <td>Save to your notebook without an explanation</td>
+                </tr>
+                <tr>
+                  <th scope="row"><kbd>→</kbd> <kbd>←</kbd></th>
+                  <td>Next step, repeat this step</td>
+                </tr>
+                <tr>
+                  <th scope="row"><kbd>Space</kbd></th>
+                  <td>Pause or resume</td>
+                </tr>
+              </tbody>
+            </table>
+            <p class="hint">
+              Only left Ctrl and left Alt count, and only after a moment with no other key pressed,
+              so typing with AltGr (@, €, {) never starts Neb. Neb reads whether the two keys are
+              down, never what you type.
+            </p>
+          </section>
+        </div>
+
+        <!-- ─── Helpers ─────────────────────────────────────────────────────────────── -->
+        <div class="page" id="page-helpers" role="tabpanel" aria-labelledby="tab-helpers" hidden>
+          <h1>Helpers</h1>
+          <p class="hint">
+            You don't need special words: ask the way you'd ask a person, and Neb picks the right
+            helper.
+          </p>
+
+          <section aria-labelledby="circle">
+            <h2 id="circle">Circle &amp; Ask</h2>
+            <p class="hint">Draw around something with Select in Neb's bar, and ask about it.</p>
+            <fieldset>
+              <legend>Show the pointer beside the cursor</legend>
+              <label><input type="radio" name="pointer" value="always" /> Always</label>
+              <label
+                ><input type="radio" name="pointer" value="while_drawing" /> Only while
+                drawing</label
+              >
+              <label><input type="radio" name="pointer" value="never" /> Never</label>
+            </fieldset>
+            <div class="row">
+              <label for="pointer-size">Size</label>
+              <select id="pointer-size">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+              <label for="pointer-corner">Where</label>
+              <select id="pointer-corner">
+                <option value="bottom_right">Below right</option>
+                <option value="bottom_left">Below left</option>
+                <option value="top_right">Above right</option>
+                <option value="top_left">Above left</option>
+              </select>
+            </div>
+            <fieldset>
+              <legend>Save explanations to the notebook</legend>
+              <label
+                ><input type="radio" name="save" value="auto" /> Automatically (with Undo)</label
+              >
+              <label><input type="radio" name="save" value="ask" /> Ask each time</label>
+              <label><input type="radio" name="save" value="never" /> Never</label>
+            </fieldset>
+            <label class="check">
+              <input type="checkbox" id="include-link" /> Keep the page's title and link (web pages
+              and videos)
+            </label>
+          </section>
+
+          <section aria-labelledby="cursor">
+            <h2 id="cursor">Show me how</h2>
+            <p class="hint">
+              “How do I turn on dark mode?”: a dotted path leads you to each button, and you do the
+              clicking.
+            </p>
+            <fieldset>
+              <legend>How much to show</legend>
+              <label class="check"
+                ><input type="radio" name="guidance" value="auto" /> Less as I learn
+                (recommended)</label
+              >
+              <label class="check"
+                ><input type="radio" name="guidance" value="full" /> Always the whole path</label
+              >
+              <label class="check"
+                ><input type="radio" name="guidance" value="light" /> Just the next button</label
+              >
+              <label class="check"
+                ><input type="radio" name="guidance" value="corrections_only" /> Only when I'm
+                heading for the wrong one</label
+              >
+            </fieldset>
+            <label class="check">
+              <input type="checkbox" id="cursor-voice" /> Say a word when I'm heading for the wrong
+              button
+            </label>
+            <div class="row buttons">
+              <button type="button" id="forget-paths">Forget learned paths</button>
+            </div>
+          </section>
+
+          <section aria-labelledby="doit">
+            <h2 id="doit">Do it for me</h2>
+            <p class="hint">
+              Ask and it's done: “turn on dark mode”, “find my lease PDF”, “save this recipe”,
+              “rename this to Budget 2026” (select the files in File Explorer first), “rename these
+              photos by date”. Renaming shows you the new names before anything changes, and “undo
+              the rename” puts them back.
+            </p>
+            <label class="check">
+              <input type="checkbox" id="let-neb-click" />
+              <span>
+                Let Neb click for me in other apps
+                <span class="hint">
+                  For anything else (“open the Insert tab”, “open my Downloads folder”, “scroll
+                  down”), Neb's own violet cursor goes and does it, one step at a time, looking at
+                  your screen after each step. Give it a whole task (“research the water cycle and
+                  save it in a doc”) and it works through it by itself, for up to 15 minutes. Your
+                  own mouse stays yours; press <kbd>Esc</kbd> and Neb stops at once. It never
+                  presses anything that buys, sends, deletes, signs in or out, or installs, and
+                  never clicks or types in terminals, password fields or Windows settings.
+                </span>
+              </span>
+            </label>
+          </section>
+
+          <section aria-labelledby="catch">
+            <h2 id="catch">Catch my slips</h2>
+            <div id="catch-intro">
+              <p>
+                Neb speaks up just before you click on a costly slip
+                <span id="catch-new" class="hint" hidden>(new)</span>:
+              </p>
+              <ul class="facts">
+                <li>Reply All to five people or more</li>
+                <li>An email that says "attached" with nothing attached</li>
+                <li>Closing something with unsaved changes</li>
+                <li>Deleting a folder, or more than 20 files</li>
+                <li>A terminal command that deletes or overwrites for good</li>
+              </ul>
+              <p class="hint">
+                It works on this PC only. It reads the names of the buttons in the window in front,
+                the words of an email you're writing (only to look for "attached"), and the line
+                you're typing in a terminal. Nothing is sent or saved. The only record is which rule
+                spoke up, in which app, when, and what you chose. It never uses Neb's AI and never
+                spends questions. It never stops a click: you can always carry on. Pause it from the
+                tray menu any time.
+              </p>
+              <label class="check" id="catch-consent-row">
+                <input type="checkbox" id="catch-consent" /> I've read this
+              </label>
+              <div class="row buttons">
+                <button type="button" class="primary" id="catch-on">Turn on</button>
+                <button type="button" id="catch-not-now">Not now</button>
+                <button type="button" id="catch-off" hidden>Turn off</button>
+              </div>
+              <p id="catch-paused" class="hint" hidden>Paused from the tray menu.</p>
+            </div>
+
+            <fieldset id="catch-rules">
+              <legend>What to catch</legend>
+              <label class="check"
+                ><input type="checkbox" data-catch="reply_all" /> Reply All to many people</label
+              >
+              <label class="check"
+                ><input type="checkbox" data-catch="attachment" /> "Attached" with no
+                attachment</label
+              >
+              <label class="check"
+                ><input type="checkbox" data-catch="unsaved" /> Closing with unsaved changes</label
+              >
+              <label class="check"
+                ><input type="checkbox" data-catch="delete" /> Deleting a folder or many
+                files</label
+              >
+              <label class="check"
+                ><input type="checkbox" data-catch="terminal" /> Destructive terminal
+                commands</label
+              >
+              <p id="catch-snoozed" class="hint" hidden></p>
+              <button type="button" id="catch-reset">Make every rule as eager as at first</button>
+            </fieldset>
+          </section>
+        </div>
+
+        <!-- ─── Privacy ─────────────────────────────────────────────────────────────── -->
+        <div class="page" id="page-privacy" role="tabpanel" aria-labelledby="tab-privacy" hidden>
+          <h1>Privacy</h1>
+
+          <div id="how-slot-privacy"></div>
+          <details id="how-section" class="how">
+            <summary>How Neb sees your screen</summary>
+            <ul class="facts">
+              <li>
+                <strong>Only when you ask.</strong> Hold <kbd>Ctrl+Alt</kbd>, ask out loud and let
+                go: Neb takes one picture then. Or use the mic in Neb's bar, or
+                <em>Look at my screen</em> in the tray. Never in the background, except while you
+                have Watch on (below).
+              </li>
+              <li>
+                <strong>One picture of the window you're working in.</strong> Step-by-step coaching
+                sees the whole monitor, and Neb tells you before it starts.
+              </li>
+              <li>
+                <strong>You'll see it happen.</strong> The edges of the screen glow violet and
+                Windows shows a yellow border each time a picture is taken.
+              </li>
+              <li>
+                <strong>Not saved, unless you save it.</strong> The picture stays in memory, is sent
+                encrypted to Neb's server and Google's Gemini model to answer you, and is then
+                discarded. It is never written to disk.
+              </li>
+              <li>
+                <strong>Neb draws beside what it explains</strong> in violet ink. Screen shares and
+                recordings don't show it unless you turn that on below. While ink is on screen, Neb
+                notices scrolling, switching apps and key presses (never which keys) so the ink can
+                fade when the page moves.
+              </li>
+              <li>
+                <strong>Saving to your notebook is up to you.</strong> Say “save this”, or circle it
+                and press <kbd>Ctrl+S</kbd>: you see exactly what will be saved, with the page's
+                title and link, and nothing is kept unless you press Save. Saved clips are stored
+                privately in your account, like your notes, until you delete them.
+              </li>
+              <li>
+                <strong>Checking your notes is up to you too.</strong> Say “check my notes”: Neb
+                reads the text on your screen (after hiding private details, never the picture
+                itself), compares it with your notes, and marks what matches, what differs and
+                what's missing. Only short quotes are kept, with what Neb found, in your account;
+                Neb never changes your notes.
+              </li>
+              <li>
+                <strong>Draw on your screen to ask about something.</strong> Neb's small pointer
+                rides beside your cursor (it only knows where the cursor or your tablet's pen is,
+                nothing you click or type, and that's never saved or sent). Pick Select in the bar
+                and draw around what's confusing: Neb takes one picture of that screen when you
+                finish your first mark, and explains it step by step with ink.
+              </li>
+              <li>
+                <strong>Explanations go to your notebook after a few seconds</strong> (the picture,
+                your marks and Neb's ink), unless you press Undo. You can choose to be asked each
+                time, or never, under Helpers. Nothing is saved from blocked apps, and nothing
+                hidden is ever saved.
+              </li>
+              <li>
+                <strong>The pen in the bar is yours.</strong> What you write with it stays on your
+                screen only: Neb never looks at it, and Clear or closing the bar rubs it out.
+              </li>
+              <li>
+                <strong>Watch is yours to turn on.</strong> Press the eye in the bar and Neb looks
+                at your whole monitor every few seconds while it's on, only when something has
+                changed, to spot a slip in your working and tell you. The edges glow violet the
+                whole time. Press the eye again, pause, or wait 45 minutes, and it stops. The
+                pictures are handled like every other: sent to answer you, then discarded. Holding
+                <kbd>Ctrl+Alt</kbd> turns Watch on for as long as you hold: ask out loud and let go,
+                and Neb takes one picture, answers, and Watch goes off again (unless you'd turned it
+                on yourself).
+              </li>
+              <li>
+                <strong>Neb types only when you ask it to.</strong> Say “rewrite this sentence” or
+                “type a conclusion” and Neb types its suggestion into the document in front of you,
+                at your cursor (over the text you selected). It stops if you switch windows or press
+                <kbd>Esc</kbd>, and <kbd>Ctrl+Z</kbd> undoes it. It never types into terminals or
+                password fields, and never clicks anything unless you turn on “Let Neb click for me”
+                under Helpers.
+              </li>
+              <li>
+                <strong>You choose how much Neb gives away</strong> in the bar: Quiet, Hint, Coach,
+                or Answer for the full working, with why each step is done.
+              </li>
+              <li>
+                <strong>Pause any time</strong> from the tray, or hold <kbd>Ctrl+Alt</kbd> and say
+                “Neb, pause”.
+              </li>
+            </ul>
+          </details>
+
+          <section aria-labelledby="privacy">
+            <h2 id="privacy">What Neb sees</h2>
+            <div id="mic-off" class="warning" role="status" hidden>
+              <p>
+                Microphone access is off for desktop apps, so Screen Coach is paused. Turn it on in
+                Windows Settings.
+              </p>
+              <button type="button" id="open-mic">Open microphone settings</button>
+            </div>
+
+            <fieldset>
+              <legend>When you ask about your screen, Neb sees</legend>
+              <label class="check">
+                <input type="radio" name="scope" value="window" />
+                <span>The window you're working in (recommended)</span>
+              </label>
+              <label class="check">
+                <input type="radio" name="scope" value="monitor" />
+                <span>The whole monitor under your mouse, with blocked apps blacked out</span>
+              </label>
+            </fieldset>
+
+            <label class="check">
+              <input type="checkbox" id="pause-during-calls" />
+              <span>Pause during calls and screen recordings</span>
+            </label>
+
+            <label class="check">
+              <input type="checkbox" id="show-in-captures" />
+              <span>
+                Show Neb in screen shares and recordings
+                <span class="hint">
+                  Viewers will see Neb's bar, ink, cards and pointer, and anything written in them.
+                  The violet frame stays visible only to you, and Neb's own pictures still leave all
+                  of this out.
+                </span>
+              </span>
+            </label>
+            <p id="show-in-captures-paused" class="hint" hidden>
+              Neb won't look or listen during a call or recording while “Pause during calls and
+              screen recordings” is on. Turn that off to use Neb while you share.
+            </p>
+          </section>
+
+          <section aria-labelledby="cover">
+            <h2 id="cover">Cover before anything is sent</h2>
+            <fieldset>
+              <legend class="visually-hidden">Cover before anything is sent</legend>
+              <label class="check">
+                <input type="checkbox" data-rule="cards" />
+                <span>Card numbers</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" data-rule="secrets" />
+                <span>Passwords, API keys and tokens</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" data-rule="codes" />
+                <span>One-time codes and PINs</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" data-rule="emails" />
+                <span>Email addresses</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" data-rule="phones" />
+                <span>Phone numbers</span>
+              </label>
+            </fieldset>
+            <p class="hint">
+              Covered text is hidden with a grey box on this PC, using Windows' own text
+              recognition, before the picture leaves it. Text recognition can miss things, so
+              blocked apps, password fields and private browsing windows are never captured at all.
+            </p>
+          </section>
+
+          <section aria-labelledby="blocked">
+            <h2 id="blocked">Blocked apps</h2>
+            <p class="hint">
+              Neb never looks at these apps. They're matched by program file name (for example
+              <kbd>outlook.exe</kbd>). Mail and messaging apps start blocked; unblock any you want
+              help with.
+            </p>
+            <ul id="blocked-list" class="blocked-list"></ul>
+            <form id="block-form">
+              <label for="block-input">Block another app</label>
+              <div class="row">
+                <input
+                  id="block-input"
+                  autocomplete="off"
+                  spellcheck="false"
+                  placeholder="program.exe"
+                />
+                <button type="submit">Block</button>
+              </div>
+              <p class="problem" id="problem-blocked" role="alert" hidden></p>
+            </form>
+            <div class="row buttons">
+              <button type="button" id="restore-defaults">Restore the default list</button>
+            </div>
+          </section>
+        </div>
+
+        <!-- ─── More ────────────────────────────────────────────────────────────────── -->
+        <div class="page" id="page-more" role="tabpanel" aria-labelledby="tab-more" hidden>
+          <h1>More</h1>
+
+          <section aria-labelledby="updates">
+            <h2 id="updates">Updates</h2>
+            <p id="update-state" role="status"></p>
+            <div class="row buttons">
+              <button type="button" id="update-check">Check for updates</button>
+              <button type="button" id="update-install" class="primary" hidden>
+                Restart and update
+              </button>
+            </div>
+            <p class="hint">
+              Neb checks by itself and gets each new version ready in the background. It only
+              restarts when you say so, and only installs versions signed by the Neb team.
+            </p>
+          </section>
+
+          <section aria-labelledby="handoff">
+            <h2 id="handoff">Handoff <span class="hint">(being built)</span></h2>
+            <p class="hint">
+              Hand your work to a teammate from the exact moment you stopped: tray menu → Hand off…,
+              or say "hand this off to Sam". To do that, Neb keeps a timeline of the moments you
+              save and of the app in front (with its page and git branch), on this PC only,
+              encrypted, for 24 hours. Blocked apps and private windows are never kept. Nothing
+              leaves this PC unless you press Send in the preview.
+            </p>
+            <label class="check">
+              <input type="checkbox" id="handoff-timeline" /> Keep a 24-hour timeline for handoffs
+            </label>
+            <div class="row">
+              <label for="handoff-window">Hand off the last</label>
+              <select id="handoff-window">
+                <option value="30">30 minutes</option>
+                <option value="90">90 minutes</option>
+                <option value="180">3 hours</option>
+              </select>
+            </div>
+            <label class="check">
+              <input type="checkbox" id="handoff-names" /> Always hide people's names
+            </label>
+            <details>
+              <summary>
+                What's in the timeline now (<span id="handoff-count">0</span> records)
+              </summary>
+              <ul id="handoff-recent" class="facts"></ul>
+            </details>
+            <div class="row buttons">
+              <button type="button" id="handoff-forget">Delete my timeline</button>
+            </div>
+          </section>
+
+          <section aria-labelledby="activity">
+            <h2 id="activity">What the helpers have done</h2>
+            <ul id="cursor-counts" class="facts"></ul>
+          </section>
+
+          <details class="dev">
+            <summary>For developers</summary>
+            <label class="check"
+              ><input type="checkbox" id="cursor-debug" /> Show the predicted endpoint live</label
+            >
+            <label class="check">
+              <input type="checkbox" id="cursor-record" /> Record mouse traces on this PC (positions
+              and button rectangles only)
+            </label>
+          </details>
+
+          <footer>
+            <p>
+              These settings stay on this PC and can only be changed here. Your account, voice,
+              language and display are in Neb's own Settings.
+            </p>
+          </footer>
+        </div>
+      </main>
+    </div>
   </body>
 </html>

@@ -1,8 +1,72 @@
-// Screen Coach settings (a bundled page; only this window may call these commands).
+// Settings on this PC (a bundled page; only this window may call these commands).
 "use strict";
 
 const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
 const $ = (id) => document.getElementById(id);
+
+// ─── Pages: Start, Talking & keys, Helpers, Privacy, More ───────────────────────────────────
+const PAGES = ["start", "talk", "helpers", "privacy", "more"];
+const PAGE_KEY = "neb.settings.page";
+
+function showPage(page, focus = false) {
+  if (!PAGES.includes(page)) page = "start";
+  for (const name of PAGES) {
+    const selected = name === page;
+    const tab = $(`tab-${name}`);
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    $(`page-${name}`).hidden = !selected;
+  }
+  if (focus) $(`tab-${page}`).focus();
+  try {
+    localStorage.setItem(PAGE_KEY, page);
+  } catch {
+    // Storage off: the page still switches.
+  }
+  window.scrollTo(0, 0);
+}
+
+for (const name of PAGES) {
+  const tab = $(`tab-${name}`);
+  tab.addEventListener("click", () => showPage(name));
+  // Arrow keys move between tabs (a vertical tab list).
+  tab.addEventListener("keydown", (event) => {
+    const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const next = PAGES[(PAGES.indexOf(name) + step + PAGES.length) % PAGES.length];
+    showPage(next, true);
+  });
+}
+
+{
+  let saved = null;
+  try {
+    saved = localStorage.getItem(PAGE_KEY);
+  } catch {
+    saved = null;
+  }
+  showPage(location.hash.slice(1) || saved || "start");
+}
+
+// "How Neb sees your screen" has to be read before Screen Coach is turned on, so while it's off
+// it sits open on Start, above the checkbox; once it's on, it moves under Privacy, folded.
+let howOn = null;
+function placeHow(on) {
+  if (howOn === on) return;
+  // Opened while it's off (to turn it on, often sent here by Neb): Start, whatever was last open.
+  if (howOn === null && !on) showPage("start");
+  howOn = on;
+  const how = $("how-section");
+  $(on ? "how-slot-privacy" : "how-slot-start").append(how);
+  how.open = !on;
+}
+
+$("open-app-settings").addEventListener("click", () => {
+  invoke("screen_coach_open_app_settings").catch((error) =>
+    showNotice(typeof error === "string" ? error : "Couldn't open Neb's settings just now."),
+  );
+});
 
 let current = null;
 
@@ -26,6 +90,7 @@ function render(view) {
   $("consent").disabled = !usable;
 
   $("shortcuts-notice").hidden = !view.shortcutsNotice;
+  placeHow(view.on);
 
   renderPrivacy(view);
   renderCircle(view);
@@ -35,7 +100,7 @@ function render(view) {
   if (!usable) showNotice(view.unsupportedReason);
   else if (view.settingsReset)
     showNotice(
-      "Your Screen Coach settings couldn't be read, so they were reset. Screen Coach is off.",
+      "Your Settings on this PC couldn't be read, so they were reset. Screen Coach is off.",
     );
 }
 
@@ -82,7 +147,7 @@ $("shortcuts-seen").addEventListener("click", () =>
 function renderAccount(view) {
   $("account-state").textContent = view.connected
     ? "Connected to your Neb account."
-    : "Connect Screen Coach to your Neb account so it can answer your questions.";
+    : "Connect this PC to your Neb account so Neb can answer your questions.";
   $("connect").hidden = view.connected;
   $("disconnect").hidden = !view.connected;
 }
@@ -140,12 +205,12 @@ $("silent").addEventListener("change", (event) => saveCircle({ silent: event.tar
 // ─── Cursor modes ────────────────────────────────────────────────────────────────────────────
 
 const COUNT_WORDS = {
-  show_me_started: "SHOW ME lessons started",
-  show_me_completed: "SHOW ME lessons finished",
+  show_me_started: "“Show me how” lessons started",
+  show_me_completed: "“Show me how” lessons finished",
   show_me_correction: "Corrections before a wrong click",
-  do_it_done: "DO IT chores done",
+  do_it_done: "Things done for you",
   do_it_undone: "Renames undone",
-  catch_shown: "CATCH ME catches",
+  catch_shown: "Slips caught",
   catch_continued: "Carried on after a catch",
   catch_not_a_mistake: 'Marked "not a mistake"',
   catch_snoozed: "Rules snoozed",

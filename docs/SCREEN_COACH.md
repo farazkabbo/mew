@@ -872,3 +872,16 @@ don't ask them again. Where a decision changes the brief above, the decision win
     as it is, then Watch goes off again. A Watch the student turned on with the eye stays on.
     Watch's looks are skipped while the microphone is on, so the hold costs no extra pictures.
     The island's mic button still works the same way.
+20. **One settings window on this PC, in five pages** (owner, 2026-11-25: "The settings is so
+    confusing… why is everything so hard to find"; `feat/settings-pages`). The tray's "Settings
+    on this PC…" opens `screen-coach.html` as a sidebar of five pages: **Start** (on/off,
+    account, how to use it), **Talking & keys** (voice, shortcuts), **Helpers** (Circle & Ask,
+    Show me how, Do it for me with "Let Neb click for me", Catch my slips), **Privacy** (how Neb
+    sees your screen, what it sees, what's covered, blocked apps) and **More** (updates,
+    Handoff, counts, developer switches). "How Neb sees your screen" sits open on Start while
+    Screen Coach is off (it's read before the consent box) and folds into Privacy once it's on.
+    The sidebar's "Account, voice & display →" brings Neb's window forward at its own Settings
+    page (`screen_coach_open_app_settings`, granted to this window only), which already links
+    back with "Open desktop settings". Every control kept its id, so the script is unchanged
+    but for the tabs. User-facing text says "Settings on this PC" where it said "Screen Coach
+    settings".

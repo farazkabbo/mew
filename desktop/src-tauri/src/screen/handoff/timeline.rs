@@ -3,7 +3,7 @@
 //! state), kept for 24 hours in the app's local data folder, each record encrypted for this user
 //! on this computer (DPAPI, `win/dpapi.rs`). It never leaves the computer except as part of a
 //! package the sender approved. Blocked apps and private windows never get in (the caller checks
-//! the same exclusion list as Screen Coach). Turned on in Screen Coach settings (off by default).
+//! the same exclusion list as Screen Coach). Turned on in Settings on this PC (off by default).
 
 use serde::{Deserialize, Serialize};
 

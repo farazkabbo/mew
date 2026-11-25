@@ -56,7 +56,7 @@ export function LinkDevice() {
     } catch {
       setStep({
         kind: "failed",
-        message: "Connecting didn't work. Start again from Screen Coach settings in the tray.",
+        message: "Connecting didn't work. Start again from Settings on this PC in the tray.",
       });
     } finally {
       // The challenge has done its job (it works once): keep it out of the address and history.
@@ -69,11 +69,11 @@ export function LinkDevice() {
       <div className="max-w-prose space-y-4">
         {step.kind === "checking" && <p className="text-muted">One moment…</p>}
         {step.kind === "not-desktop" && (
-          <p>Open this page from the Neb desktop app: tray → Screen Coach settings → Connect.</p>
+          <p>Open this page from the Neb desktop app: tray → Settings on this PC → Connect.</p>
         )}
         {step.kind === "no-request" && (
           <p>
-            There&apos;s nothing to connect right now. Start from the tray: Screen Coach settings →
+            There&apos;s nothing to connect right now. Start from the tray: Settings on this PC →
             Connect.
           </p>
         )}

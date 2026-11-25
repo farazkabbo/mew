@@ -85,7 +85,7 @@ fn check<R: Runtime>(
         return Err("I couldn't read any text on your screen to compare with your notes.".into());
     }
     let token = credential::load().ok_or(
-        "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
+        "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.",
     )?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
@@ -124,7 +124,7 @@ fn check<R: Runtime>(
         200 if !too_large => {}
         401 => {
             forget_revoked_token(app);
-            return Err("Screen Coach was signed out of your Neb account. Connect again in Screen Coach settings.".into());
+            return Err("Screen Coach was signed out of your Neb account. Connect again in Settings on this PC.".into());
         }
         429 => return Err("You've checked your notes a lot today. Try again later.".into()),
         _ => return Err("I couldn't check your notes just now. Try again in a moment.".into()),

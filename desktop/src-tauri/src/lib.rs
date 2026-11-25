@@ -130,9 +130,9 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
         screen_coach_forget_paths, screen_coach_handoff, screen_coach_onboarding,
-        screen_coach_open_mic_settings, screen_coach_set_circle, screen_coach_set_cursor,
-        screen_coach_set_enabled, screen_coach_set_paused, screen_coach_set_privacy,
-        screen_coach_shortcuts_seen, screen_coach_status,
+        screen_coach_open_app_settings, screen_coach_open_mic_settings, screen_coach_set_circle,
+        screen_coach_set_cursor, screen_coach_set_enabled, screen_coach_set_paused,
+        screen_coach_set_privacy, screen_coach_shortcuts_seen, screen_coach_status,
     };
     use screen::coach_mode::screen_coach_pill;
     use screen::handoff_run::{
@@ -158,6 +158,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_coach_shortcuts_seen,
         screen_coach_set_privacy,
         screen_coach_open_mic_settings,
+        screen_coach_open_app_settings,
         screen_coach_link_start,
         screen_coach_link_finish,
         screen_coach_disconnect,
@@ -347,7 +348,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     let settings = MenuItem::with_id(
         app,
         "screen-settings",
-        "Screen Coach settings…",
+        "Settings on this PC…",
         true,
         None::<&str>,
     )?;

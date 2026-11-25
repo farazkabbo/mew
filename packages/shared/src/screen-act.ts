@@ -21,7 +21,7 @@ import { AppName, SCREEN_LIMITS, ScreenImage, ScreenPoint } from "./screen";
  * what it then writes, and the typing hands back to the hand when it ends, so the document
  * can be named and saved.
  *
- * It's off until the student turns it on in Screen Coach settings, and it never presses
+ * It's off until the student turns it on in Settings on this PC, and it never presses
  * anything that buys, sends, deletes, signs in or installs (`RISKY_LABEL`, checked here, on the
  * server and again in the desktop app): those it points at and leaves to the student.
  */

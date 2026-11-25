@@ -229,7 +229,7 @@ function render(next: IslandView): void {
     mic.setAttribute("aria-pressed", String(next.mic));
     mic.disabled = next.silent;
     mic.dataset.tip = next.silent
-      ? "Voice is off in Screen Coach settings"
+      ? "Voice is off in Settings on this PC"
       : next.mic
         ? "Microphone: click to stop and ask"
         : "Microphone: click, speak, click again";

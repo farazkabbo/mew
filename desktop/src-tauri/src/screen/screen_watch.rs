@@ -98,7 +98,7 @@ fn start<R: Runtime>(app: &AppHandle<R>, announce: bool) -> bool {
     if !coach::is_usable(app) {
         coach::notify(
             app,
-            "Turn Screen Coach on first: tray → Screen Coach settings.",
+            "Turn Screen Coach on first: tray → Settings on this PC.",
         );
         return false;
     }

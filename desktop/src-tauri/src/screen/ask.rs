@@ -210,7 +210,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     }
 
     let token = credential::load().ok_or(
-        "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
+        "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.",
     )?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
@@ -275,7 +275,7 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
         200 => Ok(()),
         401 => {
             forget_revoked_token(app);
-            Err("Screen Coach was signed out of your Neb account. Connect again in Screen Coach settings.".to_owned())
+            Err("Screen Coach was signed out of your Neb account. Connect again in Settings on this PC.".to_owned())
         }
         429 => {
             Err("You've asked Screen Coach a lot recently. Try again in a little while.".to_owned())

@@ -256,7 +256,7 @@ impl ScreenCoach {
 
     fn save(&self, config: &ScreenConfig) -> Result<(), String> {
         config::save(&self.config_path, config)
-            .map_err(|_| "Couldn't save Screen Coach settings.".to_owned())
+            .map_err(|_| "Couldn't save your settings.".to_owned())
     }
 
     /// Changes the settings: saved first, applied only if saving worked.
@@ -323,7 +323,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     if shortcuts_notice {
         notify(
             app,
-            "Shortcuts got simpler: double-tap Ctrl+Alt for Neb's bar at the top of the screen (pen, select and the mic). Screen Coach settings lists what changed.",
+            "Shortcuts got simpler: double-tap Ctrl+Alt for Neb's bar at the top of the screen (pen, select and the mic). Settings on this PC lists what changed.",
         );
     }
     Ok(())
@@ -346,6 +346,7 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-forget-paths")
             .permission("allow-screen-coach-handoff")
             .permission("allow-screen-coach-open-mic-settings")
+            .permission("allow-screen-coach-open-app-settings")
             .permission("allow-screen-coach-link-start")
             .permission("allow-screen-coach-disconnect")
             .permission("allow-desktop-update-status")
@@ -471,8 +472,8 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
     let dev_url = app.config().build.dev_url.clone();
     let built =
         WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App(SETTINGS_PAGE.into()))
-            .title("Neb · Screen Coach")
-            .inner_size(600.0, 760.0)
+            .title("Neb · Settings on this PC")
+            .inner_size(820.0, 760.0)
             .min_inner_size(420.0, 520.0)
             .additional_browser_args(crate::BROWSER_ARGS)
             // Bundled pages only: the page can't be navigated anywhere else.
@@ -629,7 +630,7 @@ fn mic_start<R: Runtime>(app: &AppHandle<R>) {
     if circle_settings(app).silent {
         notify(
             app,
-            "Voice is off in Screen Coach settings: type your question in the card.",
+            "Voice is off in Settings on this PC: type your question in the card.",
         );
         return;
     }
@@ -642,7 +643,7 @@ fn mic_start<R: Runtime>(app: &AppHandle<R>) {
         drop(state);
         notify(
             app,
-            "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.",
+            "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.",
         );
         return;
     }
@@ -708,7 +709,7 @@ pub fn toggle_pause<R: Runtime>(app: &AppHandle<R>) {
     let paused = coach.lock().config.paused;
     coach.pause_generation.fetch_add(1, Ordering::SeqCst);
     if set_paused(app, !paused).is_err() {
-        notify(app, "Couldn't save Screen Coach settings.");
+        notify(app, "Couldn't save your settings.");
     }
 }
 
@@ -723,7 +724,7 @@ pub fn pause_for_an_hour<R: Runtime>(app: &AppHandle<R>) {
     };
     let generation = coach.pause_generation.fetch_add(1, Ordering::SeqCst) + 1;
     if set_paused(app, true).is_err() {
-        notify(app, "Couldn't save Screen Coach settings.");
+        notify(app, "Couldn't save your settings.");
         return;
     }
     notify(app, "Screen Coach is paused for an hour.");
@@ -751,7 +752,7 @@ pub fn pause<R: Runtime>(app: &AppHandle<R>) {
     }
     match set_paused(app, true) {
         Ok(_) => notify(app, "Screen Coach is paused. Resume it from the tray icon."),
-        Err(_) => notify(app, "Couldn't save Screen Coach settings."),
+        Err(_) => notify(app, "Couldn't save your settings."),
     }
 }
 
@@ -824,7 +825,7 @@ pub fn set_help_level<R: Runtime>(app: &AppHandle<R>, help: config::HelpLevel) {
         return;
     };
     if coach.update(|config| config.help = help).is_err() {
-        notify(app, "Couldn't save Screen Coach settings.");
+        notify(app, "Couldn't save your settings.");
     }
 }
 
@@ -919,7 +920,7 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
         if !state.connected {
             drop(state);
             eprintln!("[screen] no capture: not connected to an account");
-            notify(app, "Connect Screen Coach to your Neb account first: tray → Screen Coach settings → Connect.");
+            notify(app, "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.");
             return false;
         }
         if coach.capturing.swap(true, Ordering::SeqCst) {
@@ -1378,6 +1379,21 @@ pub fn screen_coach_set_paused<R: Runtime>(
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     set_paused(window.app_handle(), paused)
+}
+
+/// "Account, voice and display settings" on this page: Neb's window comes forward at its own
+/// Settings page (the web app's, for what isn't kept on this computer).
+#[tauri::command]
+pub fn screen_coach_open_app_settings<R: Runtime>(window: WebviewWindow<R>) -> Result<(), String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle();
+    let url = coach_of(app)?
+        .app_url()
+        .join("settings")
+        .map_err(|_| "The Neb address is invalid.")?;
+    let main = crate::show(app).ok_or("Neb's window isn't open.")?;
+    main.navigate(url)
+        .map_err(|_| "Couldn't open Neb's settings just now.".to_owned())
 }
 
 /// "Got it" on the settings page's "Shortcuts got simpler" card (K2): it isn't shown again.
