@@ -56,7 +56,7 @@ export function LinkDevice() {
     } catch {
       setStep({
         kind: "failed",
-        message: "Connecting didn't work. Start again from Settings on this PC in the tray.",
+        message: "Connecting didn't work. Start again from Settings in the tray.",
       });
     } finally {
       // The challenge has done its job (it works once): keep it out of the address and history.
@@ -69,13 +69,10 @@ export function LinkDevice() {
       <div className="max-w-prose space-y-4">
         {step.kind === "checking" && <p className="text-muted">One moment…</p>}
         {step.kind === "not-desktop" && (
-          <p>Open this page from the Neb desktop app: tray → Settings on this PC → Connect.</p>
+          <p>Open this page from the Neb desktop app: tray → Settings → Connect.</p>
         )}
         {step.kind === "no-request" && (
-          <p>
-            There&apos;s nothing to connect right now. Start from the tray: Settings on this PC →
-            Connect.
-          </p>
+          <p>There&apos;s nothing to connect right now. Start from the tray: Settings → Connect.</p>
         )}
         {step.kind === "confirm" && (
           <>
@@ -86,7 +83,10 @@ export function LinkDevice() {
             <p className="text-sm text-muted">
               The app gets its own sign-in, which only works for Screen Coach. You can sign it out
               any time in{" "}
-              <Link href="/settings" className="text-ink underline-offset-2 hover:underline">
+              <Link
+                href="/settings?section=devices"
+                className="text-ink underline-offset-2 hover:underline"
+              >
                 Settings → Signed-in devices
               </Link>
               .

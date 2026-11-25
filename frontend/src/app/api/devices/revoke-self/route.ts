@@ -7,7 +7,7 @@ import { handle, HttpError } from "@/server/http";
 import { enforceRateLimit, RATE_RULES } from "@/server/rate-limit";
 
 /**
- * The desktop app signing out ("Disconnect" in Settings on this PC): its own token stops
+ * The desktop app signing out ("Disconnect" in Settings): its own token stops
  * working everywhere. Authenticated by that token; an already-revoked token is not an error.
  */
 export const POST = handle(async (request: Request) => {

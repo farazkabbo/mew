@@ -880,8 +880,30 @@ don't ask them again. Where a decision changes the brief above, the decision win
     sees your screen, what it sees, what's covered, blocked apps) and **More** (updates,
     Handoff, counts, developer switches). "How Neb sees your screen" sits open on Start while
     Screen Coach is off (it's read before the consent box) and folds into Privacy once it's on.
-    The sidebar's "Account, voice & display →" brings Neb's window forward at its own Settings
-    page (`screen_coach_open_app_settings`, granted to this window only), which already links
-    back with "Open desktop settings". Every control kept its id, so the script is unchanged
-    but for the tabs. User-facing text says "Settings on this PC" where it said "Screen Coach
-    settings".
+    Every control kept its id, so the script is unchanged but for the tabs. (Superseded in
+    part by decision 21: the tray item and the window are "Settings" now.)
+21. **One Settings for desktop users, the web's and this PC's together, kept safe** (owner,
+    2026-11-25: "if the user is using desktop it should automatically have the desktop and web
+    settings in a neat way where as web users only get web settings"; chosen over letting the
+    web page change this PC's settings, and over two linked windows; `feat/combined-settings`).
+    - **Web users:** `/settings` is a sidebar of eight pages (Tutor, Voice & language,
+      Appearance, Handwriting, Shortcuts, Help improve Neb, Signed-in devices, About), one at a
+      time, by `?section=` (`frontend/src/features/settings/sections.ts`).
+    - **Desktop users:** the tray's **Settings…** opens one window: **This PC** (Start, Talking
+      & keys, Helpers, Privacy, More) and **Your account** (the eight web pages). An account
+      page is the web app's `/settings?embed=1&section=…` in a second webview laid over the
+      content area (`screen_coach_account_view`; Tauri's `unstable` feature, for
+      `Window::add_child`). That webview is the web app, signed in like Neb's window, and it
+      **can call no command at all**: the settings capability is for the bundled page only
+      (`local`), the web app's is for Neb's window only (`window(MAIN)`), and
+      `require_settings_window` also checks the calling webview is the window's own. Its
+      navigation is held to the web app (`origin::may_navigate`); new windows go to the
+      browser. So the security rule stands: nothing on the web can change this PC's settings.
+    - Because the window then has two webviews, Tauri no longer treats it as a `WebviewWindow`:
+      the settings commands take the calling `Webview`, and the window is found with
+      `get_window` / `get_webview`.
+    - In the desktop app, the web app's own Settings page opens that window (Neb's window is
+      marked `__NEB_DESKTOP__.combinedSettings` by an initialization script; a mark, it grants
+      nothing). Older desktop apps aren't marked: their users keep the web page, with a "This
+      PC's settings →" link in its sidebar.
+    - User-facing text says "Settings" (tray → Settings → Connect).

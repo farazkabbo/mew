@@ -915,9 +915,8 @@ fn worth_retrying(status: &Result<u16, http::HttpError>) -> bool {
 
 fn upload<R: Runtime>(app: &AppHandle<R>, body: &SecretBytes) -> Result<String, String> {
     let coach = coach::coach_of(app)?;
-    let token = credential::load().ok_or(
-        "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.",
-    )?;
+    let token = credential::load()
+        .ok_or("Connect Screen Coach to your Neb account first: tray → Settings → Connect.")?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
     let url = coach
@@ -956,7 +955,10 @@ fn upload<R: Runtime>(app: &AppHandle<R>, body: &SecretBytes) -> Result<String, 
         }
         401 => {
             forget_revoked_token(app);
-            Err("Screen Coach was signed out of your Neb account. Connect again in Settings on this PC.".to_owned())
+            Err(
+                "Screen Coach was signed out of your Neb account. Connect again in Settings."
+                    .to_owned(),
+            )
         }
         413 => Err("That area is too big to save. Choose a smaller one.".to_owned()),
         429 => Err("You've saved a lot of clips recently. Try again in a little while.".to_owned()),

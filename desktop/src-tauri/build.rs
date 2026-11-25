@@ -11,7 +11,7 @@ fn main() {
         "screen_coach_shortcuts_seen",
         "screen_coach_set_privacy",
         "screen_coach_open_mic_settings",
-        "screen_coach_open_app_settings",
+        "screen_coach_account_view",
         "screen_coach_link_start",
         "screen_coach_link_finish",
         "screen_coach_disconnect",

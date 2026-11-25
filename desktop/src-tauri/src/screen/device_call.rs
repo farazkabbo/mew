@@ -17,9 +17,9 @@ const MAX_REPLY_BYTES: usize = 32 * 1024;
 const HEAD_BYTES: usize = 4096;
 
 pub const NOT_CONNECTED: &str =
-    "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.";
+    "Connect Screen Coach to your Neb account first: tray → Settings → Connect.";
 pub const SIGNED_OUT: &str =
-    "Screen Coach was signed out of your Neb account. Connect again in Settings on this PC.";
+    "Screen Coach was signed out of your Neb account. Connect again in Settings.";
 
 /// Why a request didn't give a reply.
 #[derive(Debug, Clone, PartialEq, Eq)]

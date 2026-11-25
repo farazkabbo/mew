@@ -9,8 +9,10 @@
 //! `desktop_sign_in_start`, `desktop_sign_in_ticket` and `desktop_sign_out`.
 //! Everything else (the hold gesture, tray, windows, screen capture) happens in Rust. Screen Coach's
 //! settings commands are granted to its bundled local page only, and its overlay commands to
-//! its overlay pages only (each window its own). Links the web page opens in a new window go to
-//! the default browser (https only), never into a window of ours.
+//! its overlay pages only (each window its own). The settings window also shows the account's
+//! pages of the web app beside that page, in a second webview that may call no command at all
+//! (docs/SCREEN_COACH.md, decision 21). Links the web page opens in a new window go to the
+//! default browser (https only), never into a window of ours.
 
 #[cfg(windows)]
 mod log_file;
@@ -129,8 +131,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
-        screen_coach_forget_paths, screen_coach_handoff, screen_coach_onboarding,
-        screen_coach_open_app_settings, screen_coach_open_mic_settings, screen_coach_set_circle,
+        screen_coach_account_view, screen_coach_forget_paths, screen_coach_handoff,
+        screen_coach_onboarding, screen_coach_open_mic_settings, screen_coach_set_circle,
         screen_coach_set_cursor, screen_coach_set_enabled, screen_coach_set_paused,
         screen_coach_set_privacy, screen_coach_shortcuts_seen, screen_coach_status,
     };
@@ -158,7 +160,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_coach_shortcuts_seen,
         screen_coach_set_privacy,
         screen_coach_open_mic_settings,
-        screen_coach_open_app_settings,
+        screen_coach_account_view,
         screen_coach_link_start,
         screen_coach_link_finish,
         screen_coach_disconnect,
@@ -237,6 +239,12 @@ fn main_window(app: &AppHandle, app_url: Url) -> tauri::Result<WebviewWindow> {
         .inner_size(1280.0, 840.0)
         .min_inner_size(900.0, 600.0)
         .additional_browser_args(BROWSER_ARGS)
+        // This app's settings window holds the account's settings pages too, so the web app's
+        // Settings page opens that window here instead of showing its own (hasCombinedSettings
+        // in frontend/src/features/desktop/bridge.ts). A mark, not a command: it grants nothing.
+        .initialization_script(
+            "window.__NEB_DESKTOP__ = Object.freeze({ combinedSettings: true });",
+        )
         .on_navigation(move |target| origin::may_navigate(&allowed, target))
         // A link opened in a new window (a saved clip's source, say) goes to the default
         // browser, https only; no window of ours ever shows another site.
@@ -345,13 +353,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         cfg!(windows),
         None::<&str>,
     )?;
-    let settings = MenuItem::with_id(
-        app,
-        "screen-settings",
-        "Settings on this PC…",
-        true,
-        None::<&str>,
-    )?;
+    let settings = MenuItem::with_id(app, "screen-settings", "Settings…", true, None::<&str>)?;
     // Says "Restart to update to …" once a new version is ready (`updates.rs`).
     let update = MenuItem::with_id(
         app,

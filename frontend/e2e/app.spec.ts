@@ -65,8 +65,8 @@ test("the introduction shows once, can be skipped, and can be shown again", asyn
   await expect(page.getByTestId("notebook-canvas")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
-  // Settings → "Show the introduction again"; Escape skips it.
-  await page.goto("/settings");
+  // Settings → About → "Show the introduction again"; Escape skips it.
+  await page.goto("/settings?section=about");
   await page.getByRole("button", { name: "Show the introduction again" }).click();
   await page.goto("/notebook");
   await expect(page.getByTestId("onboarding")).toBeVisible();
@@ -78,18 +78,23 @@ test("settings are saved to the account and used by the notebook", async ({ page
   await page.goto("/settings");
   await expect(page.getByText("Saved to your account.")).toBeVisible();
 
+  // The Tutor page comes first.
   await page.getByRole("radio", { name: /Direct answers/ }).check();
   await page.getByRole("checkbox", { name: /Captions/ }).uncheck();
-  await page.getByRole("checkbox", { name: /Keep Neb's decisions/ }).check();
   await page.getByRole("slider", { name: "Neb sensitivity threshold" }).fill("0.85");
+  const pages = page.getByRole("navigation", { name: "Settings pages" });
+  await pages.getByRole("link", { name: "Help improve Neb" }).click();
+  await page.getByRole("checkbox", { name: /Keep Neb's decisions/ }).check();
   // No ElevenLabs key in this test server.
+  await pages.getByRole("link", { name: "Voice & language" }).click();
   await expect(page.getByText(/voice isn.t set up on this server/)).toBeVisible();
 
-  await page.reload();
+  await page.goto("/settings?section=tutor");
   await expect(page.getByRole("radio", { name: /Direct answers/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /Captions/ })).not.toBeChecked();
-  await expect(page.getByRole("checkbox", { name: /Keep Neb's decisions/ })).toBeChecked();
   await expect(page.getByRole("slider", { name: "Neb sensitivity threshold" })).toHaveValue("0.85");
+  await page.goto("/settings?section=improve");
+  await expect(page.getByRole("checkbox", { name: /Keep Neb's decisions/ })).toBeChecked();
 
   // The notebook's tutor and gate use them.
   await page.goto("/notebook");
@@ -99,7 +104,7 @@ test("settings are saved to the account and used by the notebook", async ({ page
 });
 
 test("the language picker offers four languages and saves the choice", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?section=voice");
   const picker = page.getByTestId("language-picker");
   await expect(picker.getByRole("radio")).toHaveCount(4);
   await expect(picker.getByRole("radio", { name: "English" })).toBeChecked();
@@ -132,7 +137,7 @@ test("the voice picker saves a voice and plays the one asked for", async ({ page
     return route.fulfill({ status: 402, json: { error: "This voice needs a paid plan." } });
   });
 
-  await page.goto("/settings");
+  await page.goto("/settings?section=voice");
   const picker = page.getByTestId("voice-picker");
   // Nothing chosen yet: the first voice, the server's default.
   await expect(picker.getByRole("radio", { name: "George" })).toBeChecked();
@@ -184,7 +189,10 @@ test("a busy tutor model says so, and a refused voice is explained", async ({ pa
   await expect(page.getByTestId("tutor-caption")).toHaveText(speech);
   const issue = page.getByTestId("voice-issue");
   await expect(issue).toContainText("paid ElevenLabs plan");
-  await expect(issue.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
+  await expect(issue.getByRole("link", { name: "Settings" })).toHaveAttribute(
+    "href",
+    "/settings?section=voice",
+  );
   // (The developer debug panel covers that corner; close it first.)
   await page.getByRole("button", { name: "Close debug panel" }).click();
   await issue.getByRole("button", { name: "Dismiss" }).click();
@@ -226,6 +234,8 @@ test("tutor turn latencies are reported and shown in Settings", async ({ page })
   await expect(page).toHaveURL(/\/settings$/);
   await expect.poll(() => sent.length).toBeGreaterThan(0);
   expect(JSON.stringify(sent)).not.toContain("force");
+  // The numbers are on Settings → About.
+  await page.goto("/settings?section=about");
   await expect
     .poll(
       async () => {

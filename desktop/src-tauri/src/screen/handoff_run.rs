@@ -1,6 +1,6 @@
 //! Handoff on the desktop at run time (docs/HANDOFF_FEATURE.md; being built).
 //!
-//! - **The session timeline** (on only when the student turns it on in Settings on this PC):
+//! - **The session timeline** (on only when the student turns it on in Settings):
 //!   each saved moment (`record_moment`, from `clip.rs`, already redacted on screen) and a context
 //!   snapshot of the app in front when it changes (at most one every 20 s), each record encrypted
 //!   with DPAPI in the app's local data folder, kept 24 hours. Blocked apps and private windows are
@@ -428,7 +428,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>, hint: Option<String>) {
         return;
     }
     if !settings(app).timeline {
-        coach::notify(app, "Handoff (being built) needs its timeline: Settings on this PC → Handoff → keep a 24-hour timeline.");
+        coach::notify(app, "Handoff (being built) needs its timeline: Settings → Handoff → keep a 24-hour timeline.");
         coach::open_settings(app);
         return;
     }

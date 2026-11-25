@@ -7,16 +7,19 @@ export function CourseShell({
   back,
   title,
   subtitle,
+  wide = false,
   children,
 }: {
   back: { href: string; label: string };
   title: ReactNode;
   subtitle?: ReactNode;
+  /** Room for a sidebar beside the content (Settings). */
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="min-h-dvh bg-paper text-ink">
-      <main className="mx-auto max-w-3xl px-6 py-10 sm:py-14">
+      <main className={`mx-auto px-6 py-10 sm:py-14 ${wide ? "max-w-5xl" : "max-w-3xl"}`}>
         <Link
           href={back.href}
           className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"

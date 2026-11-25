@@ -88,14 +88,14 @@ export function TeachApp() {
 
   return (
     <CourseShell
-      back={{ href: "/settings", label: "Settings" }}
+      back={{ href: "/settings?section=improve", label: "Settings" }}
       title="Teach Neb"
       subtitle="Mark what Neb should have done. Your labels train a faster Neb that runs on your device."
     >
       {loaded && !optedIn && (
         <p role="status" className="mb-6 rounded-2xl border border-line bg-paper-hi p-4 text-sm">
           Neb isn&apos;t keeping new decisions. Turn on <em>Keep Neb&apos;s decisions</em> in{" "}
-          <Link href="/settings" className="underline hover:text-ink">
+          <Link href="/settings?section=improve" className="underline hover:text-ink">
             Settings
           </Link>{" "}
           to collect some.

@@ -27,6 +27,18 @@ export function isDesktop(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+/**
+ * True in a desktop app whose settings window holds the account's settings pages too (it marks
+ * its main window with `__NEB_DESKTOP__.combinedSettings` before the page loads). Older desktop
+ * apps don't: their users keep this page's own settings.
+ */
+export function hasCombinedSettings(): boolean {
+  if (!isDesktop()) return false;
+  const marks = (window as unknown as { __NEB_DESKTOP__?: { combinedSettings?: unknown } })
+    .__NEB_DESKTOP__;
+  return marks?.combinedSettings === true;
+}
+
 function invoke(command: string, args: object): Promise<unknown> | null {
   const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
   return tauri?.core?.invoke?.(command, args) ?? null;

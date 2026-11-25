@@ -199,7 +199,7 @@ test("Appearance and Text size are kept on this device and applied before the fi
   page,
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
-  await page.goto("/settings");
+  await page.goto("/settings?section=appearance");
   const appearance = page.getByTestId("appearance");
   await appearance.getByLabel("Night desk").check();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "night");
@@ -223,7 +223,7 @@ test("Appearance and Text size are kept on this device and applied before the fi
   );
 
   // Back to the device's own setting.
-  await page.goto("/settings");
+  await page.goto("/settings?section=appearance");
   // The saved choice shows once the page has read this device's storage.
   await expect(page.getByTestId("appearance").getByLabel("Night desk")).toBeChecked();
   await page.getByTestId("appearance").getByLabel("Same as this device").check();

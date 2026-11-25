@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 use tauri::menu::MenuItem;
-use tauri::{AppHandle, Manager, Url, WebviewWindow, Wry};
+use tauri::{AppHandle, Manager, Url, Wry};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -180,8 +180,8 @@ fn show_phase(app: &AppHandle<Wry>) {
         let _ = item.0.set_text(words);
         let _ = item.0.set_enabled(enabled);
     }
-    if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
-        let _ = window.eval(CHANGED_SCRIPT);
+    if let Some(page) = app.get_webview(SETTINGS_WINDOW) {
+        let _ = page.eval(CHANGED_SCRIPT);
     }
 }
 
@@ -330,13 +330,13 @@ fn view(app: &AppHandle<Wry>) -> Result<UpdateView, String> {
 }
 
 #[tauri::command]
-pub fn desktop_update_status(window: WebviewWindow<Wry>) -> Result<UpdateView, String> {
+pub fn desktop_update_status(window: tauri::Webview<Wry>) -> Result<UpdateView, String> {
     require_settings_window(&window)?;
     view(window.app_handle())
 }
 
 #[tauri::command]
-pub fn desktop_update_check(window: WebviewWindow<Wry>) -> Result<UpdateView, String> {
+pub fn desktop_update_check(window: tauri::Webview<Wry>) -> Result<UpdateView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
     in_background(app, |app| check(app, Asked::Page));
@@ -344,7 +344,7 @@ pub fn desktop_update_check(window: WebviewWindow<Wry>) -> Result<UpdateView, St
 }
 
 #[tauri::command]
-pub fn desktop_update_install(window: WebviewWindow<Wry>) -> Result<UpdateView, String> {
+pub fn desktop_update_install(window: tauri::Webview<Wry>) -> Result<UpdateView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
     in_background(app, install);

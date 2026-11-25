@@ -323,7 +323,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     if shortcuts_notice {
         notify(
             app,
-            "Shortcuts got simpler: double-tap Ctrl+Alt for Neb's bar at the top of the screen (pen, select and the mic). Settings on this PC lists what changed.",
+            "Shortcuts got simpler: double-tap Ctrl+Alt for Neb's bar at the top of the screen (pen, select and the mic). Settings lists what changed.",
         );
     }
     Ok(())
@@ -346,7 +346,7 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-forget-paths")
             .permission("allow-screen-coach-handoff")
             .permission("allow-screen-coach-open-mic-settings")
-            .permission("allow-screen-coach-open-app-settings")
+            .permission("allow-screen-coach-account-view")
             .permission("allow-screen-coach-link-start")
             .permission("allow-screen-coach-disconnect")
             .permission("allow-desktop-update-status")
@@ -463,7 +463,8 @@ pub fn screen_coach_onboarding<R: Runtime>(
 
 /// Opens (or brings forward) the local settings page.
 pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
+    // A window, not a WebviewWindow: once the account view is beside the page, it has two.
+    if let Some(window) = app.get_window(SETTINGS_WINDOW) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
@@ -472,9 +473,9 @@ pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
     let dev_url = app.config().build.dev_url.clone();
     let built =
         WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App(SETTINGS_PAGE.into()))
-            .title("Neb · Settings on this PC")
-            .inner_size(820.0, 760.0)
-            .min_inner_size(420.0, 520.0)
+            .title("Neb · Settings")
+            .inner_size(1040.0, 780.0)
+            .min_inner_size(480.0, 520.0)
             .additional_browser_args(crate::BROWSER_ARGS)
             // Bundled pages only: the page can't be navigated anywhere else.
             .on_navigation(move |url| super::is_local_page(url, dev_url.as_ref()))
@@ -630,7 +631,7 @@ fn mic_start<R: Runtime>(app: &AppHandle<R>) {
     if circle_settings(app).silent {
         notify(
             app,
-            "Voice is off in Settings on this PC: type your question in the card.",
+            "Voice is off in Settings: type your question in the card.",
         );
         return;
     }
@@ -643,7 +644,7 @@ fn mic_start<R: Runtime>(app: &AppHandle<R>) {
         drop(state);
         notify(
             app,
-            "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.",
+            "Connect Screen Coach to your Neb account first: tray → Settings → Connect.",
         );
         return;
     }
@@ -920,7 +921,10 @@ fn capture<R: Runtime>(app: &AppHandle<R>, origin: Origin, scope: Option<Capture
         if !state.connected {
             drop(state);
             eprintln!("[screen] no capture: not connected to an account");
-            notify(app, "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.");
+            notify(
+                app,
+                "Connect Screen Coach to your Neb account first: tray → Settings → Connect.",
+            );
             return false;
         }
         if coach.capturing.swap(true, Ordering::SeqCst) {
@@ -1265,8 +1269,8 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
             .catch_pause
             .set_checked(super::cursor_run::catch_paused());
     }
-    if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
-        let _ = window.eval(CHANGED_SCRIPT);
+    if let Some(page) = app.get_webview(SETTINGS_WINDOW) {
+        let _ = page.eval(CHANGED_SCRIPT);
     }
     screen_island::refresh(app);
     super::cursor_run::refresh(app);
@@ -1305,12 +1309,13 @@ fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView
 
 /// Only the bundled settings page may change settings; this re-checks the window on top of
 /// the capability (defence in depth).
-pub fn require_settings_window<R: Runtime>(window: &WebviewWindow<R>) -> Result<(), String> {
-    let dev_url = window.app_handle().config().build.dev_url.clone();
-    let local = window
+pub fn require_settings_window<R: Runtime>(webview: &tauri::Webview<R>) -> Result<(), String> {
+    let dev_url = webview.app_handle().config().build.dev_url.clone();
+    let local = webview
         .url()
         .is_ok_and(|url| super::is_local_page(&url, dev_url.as_ref()));
-    if window.label() == SETTINGS_WINDOW && local {
+    // The window's own webview (its label is the window's), not the account view beside it.
+    if webview.label() == SETTINGS_WINDOW && webview.window().label() == SETTINGS_WINDOW && local {
         Ok(())
     } else {
         Err("Not allowed.".to_owned())
@@ -1323,7 +1328,7 @@ pub fn coach_of<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::State<'_, Scree
 }
 
 #[tauri::command]
-pub fn screen_coach_status<R: Runtime>(window: WebviewWindow<R>) -> Result<StatusView, String> {
+pub fn screen_coach_status<R: Runtime>(window: tauri::Webview<R>) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
     Ok(with_counts(app, coach_of(app)?.view()))
@@ -1332,7 +1337,7 @@ pub fn screen_coach_status<R: Runtime>(window: WebviewWindow<R>) -> Result<Statu
 /// Turns Screen Coach on (only with consent to the current explanation) or off.
 #[tauri::command]
 pub fn screen_coach_set_enabled<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
     enabled: bool,
     consent_version: u32,
 ) -> Result<StatusView, String> {
@@ -1374,32 +1379,112 @@ pub fn screen_coach_set_enabled<R: Runtime>(
 
 #[tauri::command]
 pub fn screen_coach_set_paused<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
     paused: bool,
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     set_paused(window.app_handle(), paused)
 }
 
-/// "Account, voice and display settings" on this page: Neb's window comes forward at its own
-/// Settings page (the web app's, for what isn't kept on this computer).
+/// The settings window's "Your account" pages: the web app's own Settings, one page at a time
+/// (`/settings?embed=1&section=…`), in a second webview laid over the page's content area. That
+/// webview is the web app (signed in like Neb's window), so it gets no command at all: the
+/// settings capability is for the bundled page only, and the web app's is for Neb's window only.
+/// Its links stay on the web app; a new window goes to the browser.
+pub const ACCOUNT_VIEW: &str = "settings-account";
+/// The account pages (SETTINGS_SECTIONS in frontend/src/features/settings/sections.ts).
+pub const ACCOUNT_SECTIONS: &[&str] = &[
+    "tutor",
+    "voice",
+    "appearance",
+    "handwriting",
+    "shortcuts",
+    "improve",
+    "devices",
+    "about",
+];
+
+/// Where the account view goes: the content area, in the page's CSS pixels.
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct ViewFrame {
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+impl ViewFrame {
+    fn plausible(&self) -> bool {
+        [self.x, self.y, self.width, self.height]
+            .iter()
+            .all(|v| v.is_finite() && (0.0..=20_000.0).contains(v))
+            && self.width >= 1.0
+            && self.height >= 1.0
+    }
+}
+
+/// Shows one account page over the content area (`section`), moves it (a resize), or hides it
+/// (`section` None: a page of this PC's is showing).
 #[tauri::command]
-pub fn screen_coach_open_app_settings<R: Runtime>(window: WebviewWindow<R>) -> Result<(), String> {
-    require_settings_window(&window)?;
-    let app = window.app_handle();
-    let url = coach_of(app)?
-        .app_url()
+pub fn screen_coach_account_view<R: Runtime>(
+    webview: tauri::Webview<R>,
+    section: Option<String>,
+    frame: Option<ViewFrame>,
+) -> Result<(), String> {
+    require_settings_window(&webview)?;
+    let app = webview.app_handle();
+    let existing = app.get_webview(ACCOUNT_VIEW);
+    let Some(section) = section else {
+        if let Some(view) = existing {
+            let _ = view.hide();
+        }
+        return Ok(());
+    };
+    if !ACCOUNT_SECTIONS.contains(&section.as_str()) {
+        return Err("Unknown settings page.".into());
+    }
+    let frame = frame
+        .filter(ViewFrame::plausible)
+        .ok_or("Unknown settings page.")?;
+    let app_url = coach_of(app)?.app_url().clone();
+    let mut url = app_url
         .join("settings")
         .map_err(|_| "The Neb address is invalid.")?;
-    let main = crate::show(app).ok_or("Neb's window isn't open.")?;
-    main.navigate(url)
-        .map_err(|_| "Couldn't open Neb's settings just now.".to_owned())
+    url.query_pairs_mut()
+        .append_pair("embed", "1")
+        .append_pair("section", &section);
+    let position = tauri::LogicalPosition::new(frame.x, frame.y);
+    let size = tauri::LogicalSize::new(frame.width, frame.height);
+    let failed = |_| "Couldn't open your account settings just now.".to_owned();
+    if let Some(view) = existing {
+        // Somewhere else (a link was followed, or another page was asked for): back to the page.
+        if view.url().ok().as_ref() != Some(&url) {
+            view.navigate(url).map_err(failed)?;
+        }
+        view.set_position(position).map_err(failed)?;
+        view.set_size(size).map_err(failed)?;
+        view.show().map_err(failed)?;
+        return Ok(());
+    }
+    let allowed = app_url;
+    let builder = tauri::webview::WebviewBuilder::new(ACCOUNT_VIEW, WebviewUrl::External(url))
+        .additional_browser_args(crate::BROWSER_ARGS)
+        .on_navigation(move |target| crate::origin::may_navigate(&allowed, target))
+        .on_new_window(|url, _features| {
+            super::win::system::open_in_browser(&url);
+            tauri::webview::NewWindowResponse::Deny
+        });
+    webview
+        .window()
+        .add_child(builder, position, size)
+        .map(|_| ())
+        .map_err(failed)
 }
 
 /// "Got it" on the settings page's "Shortcuts got simpler" card (K2): it isn't shown again.
 #[tauri::command]
 pub fn screen_coach_shortcuts_seen<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
@@ -1413,7 +1498,7 @@ pub fn screen_coach_shortcuts_seen<R: Runtime>(
 /// sent each time and checked before it's saved.
 #[tauri::command]
 pub fn screen_coach_set_privacy<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
     privacy: Privacy,
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;
@@ -1429,7 +1514,7 @@ pub fn screen_coach_set_privacy<R: Runtime>(
 
 /// Opens Windows Settings at the microphone privacy page.
 #[tauri::command]
-pub fn screen_coach_open_mic_settings<R: Runtime>(window: WebviewWindow<R>) -> Result<(), String> {
+pub fn screen_coach_open_mic_settings<R: Runtime>(window: tauri::Webview<R>) -> Result<(), String> {
     require_settings_window(&window)?;
     system::open_microphone_settings();
     Ok(())
@@ -1439,7 +1524,7 @@ pub fn screen_coach_open_mic_settings<R: Runtime>(window: WebviewWindow<R>) -> R
 /// current explanation's version: the page sends it after the student has read it.
 #[tauri::command]
 pub fn screen_coach_set_cursor<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
     cursor: super::cursor::settings::CursorSettings,
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;
@@ -1457,7 +1542,7 @@ pub fn screen_coach_set_cursor<R: Runtime>(
 /// "Forget learned paths": SHOW ME plans every lesson again.
 #[tauri::command]
 pub fn screen_coach_forget_paths<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
@@ -1475,7 +1560,7 @@ fn with_counts<R: Runtime>(app: &AppHandle<R>, mut view: StatusView) -> StatusVi
 /// new settings (None to just read); `forget`: wipe the timeline.
 #[tauri::command]
 pub fn screen_coach_handoff<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
     settings: Option<super::handoff::settings::HandoffSettings>,
     forget: Option<bool>,
 ) -> Result<serde_json::Value, String> {
@@ -1500,7 +1585,7 @@ pub fn screen_coach_handoff<R: Runtime>(
 /// Saves Circle & Ask's settings (the pointer, saving, silent mode).
 #[tauri::command]
 pub fn screen_coach_set_circle<R: Runtime>(
-    window: WebviewWindow<R>,
+    window: tauri::Webview<R>,
     circle: config::CircleSettings,
 ) -> Result<StatusView, String> {
     require_settings_window(&window)?;

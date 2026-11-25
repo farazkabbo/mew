@@ -54,7 +54,7 @@ test("'Shortcuts got simpler' shows once to a student who knew the old shortcuts
 test("the recorder refuses three keys and clashes, and a new binding works in the notebook", async ({
   page,
 }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?section=shortcuts");
   const record = page.getByTestId("record-new_notebook");
   await record.click();
   await expect(record).toHaveText("Press keys…");
@@ -85,7 +85,7 @@ test("the recorder refuses three keys and clashes, and a new binding works in th
   await expect(dialog).toBeHidden();
 
   // Reset to defaults.
-  await page.goto("/settings");
+  await page.goto("/settings?section=shortcuts");
   await page.getByRole("button", { name: "Reset to defaults" }).click();
   await expect.poll(() => savedShortcuts(page)).toEqual({});
   await expect(page.getByRole("row", { name: /New notebook/ }).locator("kbd")).toHaveText("Alt+B");

@@ -294,9 +294,8 @@ fn post<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Vec<u
     let coach = app
         .try_state::<ScreenCoach>()
         .ok_or("Screen Coach isn't ready.")?;
-    let token = credential::load().ok_or(
-        "Connect Screen Coach to your Neb account first: tray → Settings on this PC → Connect.",
-    )?;
+    let token = credential::load()
+        .ok_or("Connect Screen Coach to your Neb account first: tray → Settings → Connect.")?;
     let token = std::str::from_utf8(token.as_slice())
         .map_err(|_| "Connect Screen Coach again in its settings.")?;
     let url = coach
@@ -331,7 +330,10 @@ fn post<R: Runtime>(app: &AppHandle<R>, path: &str, body: &[u8]) -> Result<Vec<u
         200 if !too_large => Ok(reply),
         401 => {
             forget_revoked_token(app);
-            Err("Screen Coach was signed out of your Neb account. Connect again in Settings on this PC.".into())
+            Err(
+                "Screen Coach was signed out of your Neb account. Connect again in Settings."
+                    .into(),
+            )
         }
         404 => Err("That question isn't there any more.".into()),
         429 => Err("You've had a lot of quizzes for now. Try again in a little while.".into()),

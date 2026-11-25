@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Neb · Settings on this PC</title>
+    <title>Neb · Settings</title>
     <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="fonts.css" />
     <link rel="stylesheet" href="screen-coach.css" />
@@ -12,8 +12,9 @@
   <body>
     <div class="layout">
       <nav class="tabs" aria-label="Settings">
-        <p class="brand">Neb on this PC</p>
-        <div role="tablist" aria-orientation="vertical">
+        <p class="brand">Settings</p>
+        <p class="group" id="group-pc">This PC</p>
+        <div role="tablist" aria-orientation="vertical" aria-labelledby="group-pc">
           <button type="button" role="tab" id="tab-start" aria-controls="page-start">Start</button>
           <button type="button" role="tab" id="tab-talk" aria-controls="page-talk">
             Talking &amp; keys
@@ -26,13 +27,44 @@
           </button>
           <button type="button" role="tab" id="tab-more" aria-controls="page-more">More</button>
         </div>
-        <button type="button" id="open-app-settings" class="link">
-          Account, voice &amp; display →
-        </button>
+        <!-- The account's own settings (the web app's Settings), shown beside this page in a part
+             of the window that can't reach this PC's settings (screen_coach_account_view). -->
+        <p class="group" id="group-account">Your account</p>
+        <div role="tablist" aria-orientation="vertical" aria-labelledby="group-account">
+          <button type="button" role="tab" id="tab-acc-tutor" aria-controls="page-account">
+            Tutor
+          </button>
+          <button type="button" role="tab" id="tab-acc-voice" aria-controls="page-account">
+            Voice &amp; language
+          </button>
+          <button type="button" role="tab" id="tab-acc-appearance" aria-controls="page-account">
+            Appearance
+          </button>
+          <button type="button" role="tab" id="tab-acc-handwriting" aria-controls="page-account">
+            Handwriting
+          </button>
+          <button type="button" role="tab" id="tab-acc-shortcuts" aria-controls="page-account">
+            Notebook shortcuts
+          </button>
+          <button type="button" role="tab" id="tab-acc-improve" aria-controls="page-account">
+            Help improve Neb
+          </button>
+          <button type="button" role="tab" id="tab-acc-devices" aria-controls="page-account">
+            Signed-in devices
+          </button>
+          <button type="button" role="tab" id="tab-acc-about" aria-controls="page-account">
+            About
+          </button>
+        </div>
       </nav>
 
       <main>
         <p id="notice" class="notice" role="status" aria-live="polite" hidden></p>
+
+        <!-- ─── Your account: the web app's page is laid over this one ──────────────────── -->
+        <div class="page" id="page-account" role="tabpanel" hidden>
+          <p class="hint" id="account-loading">Opening your account settings…</p>
+        </div>
 
         <!-- ─── Start ───────────────────────────────────────────────────────────────── -->
         <div class="page" id="page-start" role="tabpanel" aria-labelledby="tab-start">
@@ -638,8 +670,8 @@
 
           <footer>
             <p>
-              These settings stay on this PC and can only be changed here. Your account, voice,
-              language and display are in Neb's own Settings.
+              These settings stay on this PC and can only be changed here. Your account&apos;s
+              settings are under Your account, in the sidebar.
             </p>
           </footer>
         </div>

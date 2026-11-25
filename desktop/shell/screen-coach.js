@@ -1,22 +1,64 @@
-// Settings on this PC (a bundled page; only this window may call these commands).
+// Settings (a bundled page; only this window may call these commands).
 "use strict";
 
 const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
 const $ = (id) => document.getElementById(id);
 
-// ─── Pages: Start, Talking & keys, Helpers, Privacy, More ───────────────────────────────────
-const PAGES = ["start", "talk", "helpers", "privacy", "more"];
+// ─── Pages: this PC's (Start, Talking & keys, Helpers, Privacy, More) and the account's ──────
+const PC_PAGES = ["start", "talk", "helpers", "privacy", "more"];
+// The account's pages are the web app's Settings, laid over this page by the desktop app.
+const ACCOUNT_PAGES = [
+  "tutor",
+  "voice",
+  "appearance",
+  "handwriting",
+  "shortcuts",
+  "improve",
+  "devices",
+  "about",
+].map((id) => `acc-${id}`);
+const PAGES = [...PC_PAGES, ...ACCOUNT_PAGES];
 const PAGE_KEY = "neb.settings.page";
+let currentPage = "start";
+
+/** Where the account view goes: the content area, below any tab strip, to the window's edge. */
+function contentFrame() {
+  const box = document.querySelector("main").getBoundingClientRect();
+  return {
+    x: box.left,
+    y: box.top,
+    width: box.width,
+    height: Math.max(1, window.innerHeight - box.top),
+  };
+}
+
+function placeAccountView() {
+  const account = currentPage.startsWith("acc-");
+  const section = account ? currentPage.slice(4) : null;
+  invoke("screen_coach_account_view", { section, frame: account ? contentFrame() : null }).catch(
+    (error) => {
+      if (!account) return;
+      $("account-loading").textContent =
+        typeof error === "string" ? error : "Couldn't open your account settings just now.";
+    },
+  );
+}
 
 function showPage(page, focus = false) {
   if (!PAGES.includes(page)) page = "start";
+  currentPage = page;
+  const account = page.startsWith("acc-");
+  document.body.classList.toggle("account-mode", account);
   for (const name of PAGES) {
     const selected = name === page;
     const tab = $(`tab-${name}`);
     tab.setAttribute("aria-selected", String(selected));
     tab.tabIndex = selected ? 0 : -1;
-    $(`page-${name}`).hidden = !selected;
+    if (PC_PAGES.includes(name)) $(`page-${name}`).hidden = !selected;
   }
+  $("page-account").hidden = !account;
+  if (account) $("account-loading").textContent = "Opening your account settings…";
+  placeAccountView();
   if (focus) $(`tab-${page}`).focus();
   try {
     localStorage.setItem(PAGE_KEY, page);
@@ -62,10 +104,12 @@ function placeHow(on) {
   how.open = !on;
 }
 
-$("open-app-settings").addEventListener("click", () => {
-  invoke("screen_coach_open_app_settings").catch((error) =>
-    showNotice(typeof error === "string" ? error : "Couldn't open Neb's settings just now."),
-  );
+// The window was resized (or the tab strip wrapped): the account view follows the content area.
+let placing = 0;
+window.addEventListener("resize", () => {
+  if (!currentPage.startsWith("acc-")) return;
+  cancelAnimationFrame(placing);
+  placing = requestAnimationFrame(placeAccountView);
 });
 
 let current = null;
@@ -99,9 +143,7 @@ function render(view) {
 
   if (!usable) showNotice(view.unsupportedReason);
   else if (view.settingsReset)
-    showNotice(
-      "Your Settings on this PC couldn't be read, so they were reset. Screen Coach is off.",
-    );
+    showNotice("Your Settings couldn't be read, so they were reset. Screen Coach is off.");
 }
 
 async function run(action) {

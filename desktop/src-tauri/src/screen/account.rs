@@ -1,6 +1,6 @@
 //! Connecting the desktop app to the user's Mew account for Screen Coach (decision 8).
 //!
-//! 1. Settings on this PC → Connect (`screen_coach_link_start`): make a PKCE pair, keep the
+//! 1. Settings → Connect (`screen_coach_link_start`): make a PKCE pair, keep the
 //!    verifier here, and open the web app's /desktop/link page with only the challenge.
 //! 2. The signed-in page gets a one-time code for the challenge and hands it back
 //!    (`screen_coach_link_finish`).
@@ -27,7 +27,9 @@ pub struct PendingLink {
 
 /// Starts connecting: opens the web app's link page in the main window.
 #[tauri::command]
-pub fn screen_coach_link_start<R: Runtime>(window: WebviewWindow<R>) -> Result<StatusView, String> {
+pub fn screen_coach_link_start<R: Runtime>(
+    window: tauri::Webview<R>,
+) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
     let coach = coach::coach_of(app)?;
@@ -71,7 +73,7 @@ pub fn screen_coach_link_finish<R: Runtime>(
         .pending_link()
         .take()
         .filter(|link| link.started.elapsed() < LINK_WINDOW)
-        .ok_or("Start connecting again from Settings on this PC.")?;
+        .ok_or("Start connecting again from Settings.")?;
     let verifier = std::str::from_utf8(pending.verifier.as_slice())
         .map_err(|_| "Couldn't connect.".to_owned())?;
 
@@ -98,7 +100,7 @@ pub fn screen_coach_link_finish<R: Runtime>(
     .map_err(|_| "Couldn't reach Neb. Check your connection and try again.".to_owned())?;
     let reply = SecretBytes::from_vec(reply);
     if status != 200 {
-        return Err("Connecting didn't work. Start again from Settings on this PC.".to_owned());
+        return Err("Connecting didn't work. Start again from Settings.".to_owned());
     }
     let issued: IssuedToken = serde_json::from_slice(reply.as_slice())
         .map_err(|_| "Neb sent an unexpected reply.".to_owned())?;
@@ -117,7 +119,9 @@ pub fn screen_coach_link_finish<R: Runtime>(
 
 /// Disconnects: the token is revoked on the server (best effort) and forgotten here.
 #[tauri::command(async)]
-pub fn screen_coach_disconnect<R: Runtime>(window: WebviewWindow<R>) -> Result<StatusView, String> {
+pub fn screen_coach_disconnect<R: Runtime>(
+    window: tauri::Webview<R>,
+) -> Result<StatusView, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
     let coach = coach::coach_of(app)?;

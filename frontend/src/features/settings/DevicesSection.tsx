@@ -37,7 +37,7 @@ export function DevicesSection() {
     <Section title="Signed-in devices">
       <p className="text-sm text-muted">
         Computers where the Neb desktop app is connected to your account for Screen Coach. To
-        connect one, open Neb&apos;s tray menu → Settings on this PC → Connect.
+        connect one, open Neb&apos;s tray menu → Settings → Connect.
       </p>
       {state.status === "loading" && <p className="text-sm text-muted">Loading…</p>}
       {state.status === "error" && (

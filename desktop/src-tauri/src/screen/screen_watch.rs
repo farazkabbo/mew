@@ -96,10 +96,7 @@ pub fn start_for_hold<R: Runtime>(app: &AppHandle<R>) -> bool {
 /// Watch on (`announce`: say so); false if it couldn't start (and the student was told why).
 fn start<R: Runtime>(app: &AppHandle<R>, announce: bool) -> bool {
     if !coach::is_usable(app) {
-        coach::notify(
-            app,
-            "Turn Screen Coach on first: tray → Settings on this PC.",
-        );
+        coach::notify(app, "Turn Screen Coach on first: tray → Settings.");
         return false;
     }
     if !coach::is_connected(app) {

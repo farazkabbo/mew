@@ -15,7 +15,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "=2.7.1", features = [] }
 
 [dependencies]
-tauri = { version = "=2.12.1", features = ["tray-icon", "dynamic-acl"] }
+tauri = { version = "=2.12.1", features = ["tray-icon", "dynamic-acl", "unstable"] }
 tauri-plugin-notification = "=2.5.1"
 serde = { version = "1.0.228", features = ["derive"] }
 # Already in the tree through Tauri; used directly by Screen Coach (its local settings file, and

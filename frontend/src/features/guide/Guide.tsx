@@ -254,8 +254,9 @@ const TOPICS: Topic[] = [
     title: "Change or redo something",
     steps: [
       <>
-        <B>Handwriting didn&apos;t come out right?</B> <Link href="/settings">Settings</Link> →
-        Handwriting → <B>Calibrate again</B>, or <B>Reset</B> to make neb forget it.
+        <B>Handwriting didn&apos;t come out right?</B>{" "}
+        <Link href="/settings?section=handwriting">Settings</Link> → Handwriting →{" "}
+        <B>Calibrate again</B>, or <B>Reset</B> to make neb forget it.
       </>,
       <>
         <B>Voice, language, shortcuts, what neb may see:</B> all in{" "}

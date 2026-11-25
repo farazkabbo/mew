@@ -67,7 +67,10 @@ export function MewDock({ onSummon, onStartListening, onStopListening, onShortcu
           <VolumeX className="mt-0.5 size-3.5 shrink-0 text-muted" aria-hidden />
           <p className="min-w-0 flex-1">
             {voiceIssue}{" "}
-            <Link href="/settings" className="text-ink underline-offset-2 hover:underline">
+            <Link
+              href="/settings?section=voice"
+              className="text-ink underline-offset-2 hover:underline"
+            >
               Settings
             </Link>
           </p>
