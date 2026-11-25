@@ -41,6 +41,24 @@ describe("screen plan schema", () => {
     expect(
       DoAction.safeParse({ type: "find_file", query: "lease", kind: "pdf", since: null }).success,
     ).toBe(true);
+    expect(DoAction.safeParse({ type: "set_theme", theme: "dark" }).success).toBe(true);
+    expect(DoAction.safeParse({ type: "set_theme", theme: "purple" }).success).toBe(false);
+  });
+
+  it("renames by a rule, never by a path", () => {
+    const rule = {
+      type: "rename_files",
+      name: null,
+      prefix: "2026 ",
+      suffix: null,
+      find: "draft",
+      replace: "final",
+      case: "keep",
+    };
+    expect(DoAction.safeParse(rule).success).toBe(true);
+    expect(DoAction.safeParse({ ...rule, case: "sideways" }).success).toBe(false);
+    expect(DoAction.safeParse({ ...rule, name: "a\u0007b" }).success).toBe(false);
+    expect(DoAction.safeParse({ ...rule, name: "x".repeat(101) }).success).toBe(false);
   });
 
   it("keeps only what fits the mode", () => {

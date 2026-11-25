@@ -82,6 +82,18 @@ mouse and touchpad timing). Record real ones (below) before trusting them.
     it sent none, or one that doesn't check out, does DO IT still plan (`/api/screen/plan`). A
     chore chosen this way spends no question, like the ones recognised on the device (this
     narrows decision 3). Older desktop apps ignore the extra field.
+13. **Neb renames what the student selected, when they ask it to** (owner, 2026-11-25: "Neb
+    should be able to rename things if the user asks it to specifically";
+    `feat/rename-on-request`). `rename_files` takes the items selected in the File Explorer
+    window in front (never a whole folder by itself) and a rule: a new name (numbered " 1",
+    " 2"… for several), a prefix, a suffix, a find-and-replace, a case. **The model never sees
+    a file name**: it reads only the words and answers the rule, which `cursor/rename_rule.rs`
+    applies on the computer. "Rename this to …" needs no model at all. Extensions are always
+    kept, names are checked against Windows' rules, nothing lands on another file's name
+    (" (2)" instead), the before → after table comes first with Cancel as the default, and
+    the rename shares `batch_rename`'s undo log ("undo the rename", tray → Undo rename). A
+    change of case only ("notes" → "Notes") is allowed. Prompts `screen-intent.v7`,
+    `screen-plan.v3`.
 
 ## Shared path library (designed, not built)
 
@@ -128,6 +140,9 @@ Before: Screen Coach on and connected; in its settings, Cursor → read CATCH ME
    video with no markup, it costs one question.
 7. **DO IT rename**: in Explorer, select 5 photos, "rename these photos by date": a table of
    before → after; Cancel changes nothing; Rename renames; tray → Undo rename puts every name back.
+   7b. **DO IT rename on request**: select 3 **test** files in Explorer and say "rename these to
+   trip": a table shows "Trip 1", "Trip 2", "Trip 3" with the extensions kept; Rename renames,
+   "undo the rename" puts them back. Then select one and say "put 2026 in front of this name".
 8. **CATCH ME**: Outlook or Gmail, a thread with 6+ people, head for Reply all: amber glow, a line,
    the chip (Continue / Not a mistake / Snooze). Write "attached" with no file and head for Send.
    Edit Notepad without saving and head for ×. Select a folder in Explorer and head for Delete.

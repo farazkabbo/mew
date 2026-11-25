@@ -26,6 +26,7 @@ pub mod posterior;
 pub mod predict;
 pub mod recipe;
 pub mod rename;
+pub mod rename_rule;
 pub mod replay;
 pub mod scene;
 pub mod settings;

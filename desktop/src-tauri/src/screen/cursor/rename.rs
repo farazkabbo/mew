@@ -1,5 +1,6 @@
 //! DO IT's `batch_rename` (F): photos renamed by the date each was taken, shown first as a
-//! before → after table, done only after the student confirms, and undoable in one step.
+//! before → after table, done only after the student confirms, and undoable in one step. The
+//! renaming, its log and the undo here also do `rename_files` (`rename_rule.rs`).
 //!
 //! The undo log is written before anything is renamed (and updated as each rename lands), so an
 //! interruption can always be undone. Undo puts back exactly the names that were changed, and
@@ -158,7 +159,9 @@ pub fn apply(plan: &[(PathBuf, PathBuf)], log_path: &Path, now_s: u64) -> std::i
     let mut count = 0;
     for i in 0..log.entries.len() {
         let (from, to) = (&log.entries[i].from, &log.entries[i].to);
-        if to.exists() || !from.exists() {
+        // A case-only change ("notes" → "Notes") is the same name to Windows: not taken.
+        let taken = to.exists() && !super::rename_rule::same_name(from, to);
+        if taken || !from.exists() {
             continue;
         }
         if std::fs::rename(from, to).is_ok() {
@@ -181,8 +184,9 @@ pub fn undo(log_path: &Path) -> std::io::Result<usize> {
         if !entry.done {
             continue;
         }
+        let case_only = super::rename_rule::same_name(&entry.from, &entry.to);
         if entry.to.exists()
-            && !entry.from.exists()
+            && (case_only || !entry.from.exists())
             && std::fs::rename(&entry.to, &entry.from).is_ok()
         {
             entry.done = false;
@@ -309,6 +313,27 @@ mod tests {
         std::fs::write(dir.join("IMG_1.jpg"), b"new").unwrap();
         assert_eq!(undo(&log).unwrap(), 0);
         assert_eq!(std::fs::read(dir.join("IMG_1.jpg")).unwrap(), b"new");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_case_only_rename_lands_and_undoes() {
+        let dir = temp_dir("case");
+        std::fs::write(dir.join("notes.txt"), b"mine").unwrap();
+        let renames = vec![(dir.join("notes.txt"), dir.join("Notes.txt"))];
+        let log = dir.join(UNDO_FILE);
+        assert_eq!(apply(&renames, &log, 1).unwrap(), 1);
+        let name = |dir: &Path| {
+            std::fs::read_dir(dir)
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .find(|n| n.ends_with(".txt"))
+                .unwrap()
+        };
+        assert_eq!(name(&dir), "Notes.txt");
+        assert_eq!(undo(&log).unwrap(), 1);
+        assert_eq!(name(&dir), "notes.txt");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

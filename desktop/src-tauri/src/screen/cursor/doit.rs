@@ -2,7 +2,7 @@
 //!
 //! Only these executors exist: find a file (and open it, or show it in its folder if it would
 //! run something), open a Settings page, switch dark or light mode, save the recipe on the page,
-//! rename photos by date. Anything else is offered as a SHOW ME lesson: Neb never improvises an
+//! rename photos by date, rename the selected files the way the student said. Anything else is offered as a SHOW ME lesson: Neb never improvises an
 //! action. Renaming is confirmed first and undoable; the theme is switched back the same way it
 //! was switched; nothing deletes, sends, buys, overwrites or submits. None of them sends input:
 //! they use Windows Search, a Settings address, the theme's two registry values, the clips route
@@ -17,6 +17,7 @@ pub enum Executor {
     SetTheme,
     SaveRecipe,
     BatchRename,
+    RenameFiles,
 }
 
 /// The executor for an action, or None (offer SHOW ME).
@@ -27,13 +28,14 @@ pub fn executor_for(action: &DoAction) -> Option<Executor> {
         DoAction::SetTheme { .. } => Some(Executor::SetTheme),
         DoAction::SaveRecipe => Some(Executor::SaveRecipe),
         DoAction::BatchRename => Some(Executor::BatchRename),
+        DoAction::RenameFiles(_) => Some(Executor::RenameFiles),
         DoAction::ShowMe => None,
     }
 }
 
 /// Whether an executor changes files (then it needs a confirmation and an undo log).
 pub fn changes_files(executor: Executor) -> bool {
-    matches!(executor, Executor::BatchRename)
+    matches!(executor, Executor::BatchRename | Executor::RenameFiles)
 }
 
 /// Dark or light mode, asked for in any plain wording: "turn on dark mode", "switch to light
@@ -85,6 +87,9 @@ pub fn local_action(goal: &str) -> Option<DoAction> {
         && has("date")
     {
         return Some(DoAction::BatchRename);
+    }
+    if let Some(rule) = super::rename_rule::from_words(goal) {
+        return Some(DoAction::RenameFiles(rule));
     }
     const PAGES: &[(&str, &str)] = &[
         ("dark mode", "colors"),
@@ -138,6 +143,7 @@ mod tests {
         );
         assert_eq!(executor_for(&DoAction::ShowMe), None);
         assert!(changes_files(Executor::BatchRename));
+        assert!(changes_files(Executor::RenameFiles));
         assert!(!changes_files(Executor::FindFile));
         assert!(!changes_files(Executor::OpenSetting));
         assert!(!changes_files(Executor::SaveRecipe));

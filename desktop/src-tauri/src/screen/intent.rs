@@ -670,7 +670,9 @@ fn is_do_it(words: &[String]) -> bool {
         && ["photo", "picture", "image", "pic"]
             .iter()
             .any(|w| text.contains(w))
-        && text.contains("date");
+        && text.contains("date")
+        // "rename this to Budget 2026": the selected files, the way it was said.
+        || super::cursor::rename_rule::from_words(text).is_some();
     let setting = (text.starts_with("open ") || text.starts_with("open up "))
         && (text.ends_with(" settings") || text.ends_with(" setting"));
     let undo = matches!(
@@ -824,6 +826,8 @@ mod cursor_mode_tests {
             "open my bluetooth settings",
             "turn on dark mode for me",
             "make my laptop dark mode",
+            "rename this to budget 2026",
+            "Neb, rename these files to trip",
             "switch to light mode",
             "dark mode please",
             "undo the rename",

@@ -28,6 +28,7 @@ use super::cursor::find::{self, breadcrumb, choose, Choice};
 use super::cursor::plan::{parse_plan, plan_body, DoAction, FileKind, Mode};
 use super::cursor::recipe::{self, Recipe};
 use super::cursor::rename::{self, UNDO_FILE};
+use super::cursor::rename_rule::{self, RenameRule};
 use super::cursor::settings_uri;
 use super::cursor_run;
 use super::destination::{parse_places, DestinationOut, Page, Place};
@@ -150,6 +151,7 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, capt
         DoAction::SetTheme { .. } => "set_theme",
         DoAction::SaveRecipe => "save_recipe",
         DoAction::BatchRename => "batch_rename",
+        DoAction::RenameFiles(_) => "rename_files",
         DoAction::ShowMe => "show_me",
     };
     eprintln!(
@@ -173,6 +175,10 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, chore: Option<DoAction>, capt
         DoAction::BatchRename => {
             drop(captured);
             batch_rename(app, window)
+        }
+        DoAction::RenameFiles(rule) => {
+            drop(captured);
+            rename_files(app, window, &rule)
         }
         DoAction::ShowMe => return,
     };
@@ -467,6 +473,77 @@ fn batch_rename<R: Runtime>(app: &AppHandle<R>, window: Option<isize>) -> Result
     coach::notify(app, &format!(
         "Renamed {count} photos. To put the names back, say \"undo the rename\" or use Undo rename in the tray menu."
     ));
+    Ok(Done {
+        verb: format!("Renamed {count} in"),
+        crumbs: vec![folder],
+    })
+}
+
+/// The files selected in File Explorer, renamed the way the student said (`rename_rule`): a
+/// before → after table first (Cancel is the default), then the renames, logged for undo.
+fn rename_files<R: Runtime>(
+    app: &AppHandle<R>,
+    window: Option<isize>,
+    rule: &RenameRule,
+) -> Result<Done, String> {
+    let window =
+        window.filter(|w| super::win::uia_targets::class_of(HWND(*w as *mut _)) == "CabinetWClass");
+    let Some(window) = window else {
+        return Err(
+            "Select what to rename in File Explorer, then ask me again with it open.".into(),
+        );
+    };
+    let selected = chores::explorer_selection(window);
+    if selected.is_empty() {
+        return Err("Select the files to rename in File Explorer first, then ask me again.".into());
+    }
+    let renames = rename_rule::plan(&selected, rule, |p| p.exists())?;
+    let n = renames.len();
+    let picked = chores::dialog(
+        &format!("Rename {n} item{}?", if n == 1 { "" } else { "s" }),
+        &rename::preview(&renames, 8),
+        (n > 8)
+            .then(|| rename::preview(&renames, rename::MAX_FILES))
+            .as_deref(),
+        &[],
+        "Rename",
+    );
+    if picked.is_none() {
+        return Err(String::new());
+    }
+    let log = undo_path(app).ok_or("I couldn't keep an undo note, so I didn't rename anything.")?;
+    if let Some(dir) = log.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|_| "I couldn't keep an undo note, so I didn't rename anything.")?;
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    let count = rename::apply(&renames, &log, now)
+        .map_err(|_| "I couldn't keep an undo note, so I didn't rename anything.")?;
+    if count == 0 {
+        return Err("Windows wouldn't rename those (they may be open in another app).".into());
+    }
+    let folder = renames[0]
+        .0
+        .parent()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    // Counts only: a notification is logged, and file names never go in the log.
+    let skipped = n - count;
+    coach::notify(
+        app,
+        &format!(
+            "Renamed {count} item{}{}. To put the names back, say \"undo the rename\" or use Undo rename in the tray menu.",
+            if count == 1 { "" } else { "s" },
+            if skipped > 0 {
+                format!(" ({skipped} couldn't be: open in another app, or the name was taken)")
+            } else {
+                String::new()
+            }
+        ),
+    );
     Ok(Done {
         verb: format!("Renamed {count} in"),
         crumbs: vec![folder],

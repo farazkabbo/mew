@@ -136,6 +136,12 @@ export type PlanStep = z.infer<typeof PlanStep>;
 
 export const FileKind = z.enum(["any", "pdf", "document", "spreadsheet", "presentation", "image"]);
 
+/** A rename rule's text: what the student said, never a file name (the model sees none). */
+const RuleText = z
+  .string()
+  .max(100)
+  .refine((text) => !/[\u0000-\u001f\u007f]/.test(text), "control characters aren't allowed");
+
 /** DO IT's v1 allowlist. Anything else is offered as a SHOW ME lesson. */
 export const DoAction = z.discriminatedUnion("type", [
   z.object({
@@ -151,6 +157,20 @@ export const DoAction = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set_theme"), theme: z.enum(["dark", "light"]) }),
   z.object({ type: z.literal("save_recipe") }),
   z.object({ type: z.literal("batch_rename"), scheme: z.literal("date_taken") }),
+  /**
+   * The files selected in File Explorer, renamed by a rule the desktop applies to their names
+   * (`rename_rule.rs`): a new name (numbered when there are several), a find-and-replace, a
+   * prefix, a suffix, a case. Extensions are always kept. Only when the student asked to rename.
+   */
+  z.object({
+    type: z.literal("rename_files"),
+    name: RuleText.nullable(),
+    prefix: RuleText.nullable(),
+    suffix: RuleText.nullable(),
+    find: RuleText.nullable(),
+    replace: RuleText.nullable(),
+    case: z.enum(["keep", "lower", "upper", "title"]),
+  }),
   /** Not on the list: Neb offers to show them how instead. */
   z.object({ type: z.literal("show_me") }),
 ]);
@@ -175,7 +195,7 @@ export const ScreenPlanReply = z.object({
 export type ScreenPlanReply = z.infer<typeof ScreenPlanReply>;
 
 export const SCREEN_PLAN_PROMPT = {
-  id: "screen-plan.v2",
+  id: "screen-plan.v3",
   system: `You plan for Neb's cursor modes on a student's Windows computer. You never see the screen: you get the student's words, the app in front, and a list of the controls in that window that can be clicked, each as its UI Automation control type and its name. The list holds only interface words, never the student's content.
 
 "mode" is "show" or "do".
@@ -188,7 +208,8 @@ export const SCREEN_PLAN_PROMPT = {
 - "open_setting": open a Windows Settings page ("dark mode settings" is "colors", "change my wallpaper" is "background", "make text bigger" is "text_size", "bluetooth" is "bluetooth"). "page" is one of the listed keys.
 - "save_recipe": save the recipe on the page in front to their Recipe Book.
 - "batch_rename": rename the photos they selected (or the photos in the open folder) by the date each was taken. "scheme" is "date_taken".
-- "show_me": anything else (sending, deleting, buying, installing, changing a file's content, anything not on this list). Neb never improvises: it offers to show them how. "steps" is [] in "do" mode.
+- "rename_files": they asked to rename the files they selected in File Explorer, and said how ("rename this to budget 2026", "call these trip photos", "put 2026 in front of these", "replace draft with final in these names", "make these lowercase"). You never see the file names: answer a rule. "name": the new name, without an extension, when they gave one (several files get " 1", " 2"… added); "prefix" / "suffix": text to add before / after the name, with any space it needs ("2026 "); "find" and "replace": text to change in each name ("replace" "" removes it); "case": "lower", "upper", "title" or "keep". Fields not used are null. Extensions are always kept.
+- "show_me": anything else (sending, deleting, moving, buying, installing, changing a file's content, anything not on this list). Neb never improvises: it offers to show them how. "steps" is [] in "do" mode.
 
 "speech": one short sentence for Neb to say, in the student's language, keeping every on-screen name exactly as it reads (in English if the app is in English, inside a sentence in their language), e.g. "Click Personalization, then Colors." No markdown.
 

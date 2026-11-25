@@ -90,6 +90,8 @@ pub enum DoAction {
     },
     SaveRecipe,
     BatchRename,
+    /// The files selected in File Explorer, renamed by a rule (never a file name from the model).
+    RenameFiles(super::rename_rule::RenameRule),
     /// Not on the list: offer SHOW ME instead.
     ShowMe,
 }
@@ -224,6 +226,7 @@ pub fn parse_action(value: &serde_json::Value) -> Option<DoAction> {
         },
         "save_recipe" => Some(DoAction::SaveRecipe),
         "batch_rename" => (field("scheme")? == "date_taken").then_some(DoAction::BatchRename),
+        "rename_files" => super::rename_rule::parse(value).map(DoAction::RenameFiles),
         "show_me" => Some(DoAction::ShowMe),
         _ => None,
     }
@@ -259,6 +262,7 @@ mod tests {
             with(r#"{"type":"find_file","query":"lease","kind":"pdf","since":"last week"}"#),
             with(r#"{"type":"batch_rename","scheme":"random"}"#),
             with(r#"{"type":"set_theme","theme":"purple"}"#),
+            with(r#"{"type":"rename_files","name":null,"case":"keep"}"#),
             r#"{"planId":"nope","speech":"ok","steps":[],"action":null}"#.to_string(),
             format!(
                 r#"{{"planId":"{ID}","speech":"ok","steps":[{{"type":"Edit","name":"x"}}],"action":null}}"#
