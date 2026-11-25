@@ -32,14 +32,22 @@ for (const colorScheme of ["light", "dark"] as const) {
   test(`every U1 component renders in the ${colorScheme === "light" ? "light" : "night"} theme`, async ({
     page,
   }) => {
+    // Pixel baselines exist for Windows only (*-win32.png); fonts render differently elsewhere,
+    // so on CI's Linux runner the comparison has nothing to compare with.
+    test.skip(process.platform !== "win32", "pixel baselines are recorded on Windows");
     await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
     await page.goto("/dev/ui");
     await expect(page.getByTestId("ui-preview")).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
+    // Dates follow the OS's locale ("2026-11-13", "Thu 5" in Canada; "11/13/2026", "5 Thu" in
+    // the US): mask them, so the pixels don't depend on where the machine is set.
+    const dates = page.locator(
+      'input[type="date"], [data-testid="plan-day"] > span:first-child, [data-testid="plan-exam"] > span:first-child',
+    );
     for (const section of SECTIONS) {
       await expect(page.getByTestId(`ui-${section}`)).toHaveScreenshot(
         `${section}-${colorScheme === "light" ? "light" : "night"}.png`,
-        { animations: "disabled", maxDiffPixels: 30 },
+        { animations: "disabled", maxDiffPixels: 30, mask: [dates] },
       );
     }
   });

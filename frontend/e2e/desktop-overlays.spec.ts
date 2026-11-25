@@ -484,7 +484,13 @@ test("the pointer shows its look", async ({ page }) => {
 test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard mark", async ({
   page,
 }) => {
-  const shell = await openShellPage(page, "draw-overlay.html");
+  const opened = await openShellPage(page, "draw-overlay.html");
+  // A pen's position also goes to Rust as it moves ("screen_draw_pen", so the pointer follows a
+  // Windows Ink pen): that's not a mark, so it's counted on its own.
+  const shell = {
+    ...opened,
+    calls: async () => (await opened.calls()).filter((c) => c.cmd !== "screen_draw_pen"),
+  };
   await shell.dispatch("mew:draw-show", { marks: [], grey: false, drawing: true, mode: "draw" });
   // While drawing, the page isn't fully transparent: Windows would pass the mouse through.
   const tint = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -505,6 +511,9 @@ test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard
     pen("pointerup", 300, 100);
   });
   await expect.poll(async () => (await shell.calls()).length).toBe(1);
+  const pens = (await opened.calls()).filter((c) => c.cmd === "screen_draw_pen");
+  expect(pens.length).toBeGreaterThan(0);
+  expect(pens[0]?.args).toEqual({ at: [120, 130] });
   const [mark] = await shell.calls();
   expect(mark?.cmd).toBe("screen_draw_mark");
   const points = (mark?.args as { stroke: { points: number[][] } }).stroke.points;
