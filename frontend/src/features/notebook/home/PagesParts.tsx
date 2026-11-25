@@ -144,7 +144,9 @@ export function PageTile({
             onDragStart={(event) => {
               event.dataTransfer.setData(PAGE_DRAG, id);
               event.dataTransfer.effectAllowed = "move";
-              onDragStart();
+              // A tick later: swapping the dragged button for its placeholder inside dragstart
+              // removes the drag's source, and Chromium then drops the drag (no drop, no dragend).
+              setTimeout(onDragStart, 0);
             }}
             onDragEnd={onDragEnd}
             onClick={onOpen}

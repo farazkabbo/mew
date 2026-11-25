@@ -18,6 +18,14 @@ test.beforeEach(({ page }) => {
   });
 });
 
+/** A date `days` from today, as the date input takes it (yyyy-mm-dd, local time). */
+function dateIn(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** A chapter PDF as course material: its notebook opens on the Study tab (decision U26). */
 async function uploadChapter(page: Page): Promise<string> {
   const id = await createCourse(page, makePdf(CHAPTER), "Forces and motion");
@@ -42,7 +50,9 @@ test("a chapter PDF becomes an ordered plan, reviewed by the student", async ({ 
   await rows.nth(1).getByRole("button", { name: "Merge into the one above" }).click();
   await expect(rows.nth(1)).toContainText("Merged into “Forces”");
   await rows.nth(0).getByRole("textbox").fill("Forces and Newton's laws");
-  await page.getByLabel("Exam date (optional)").fill("2026-12-04");
+  // Far off and relative to today: the API service's course store is shared by the run, and an
+  // exam coming up soon would show on the desk's Tonight in the tests after this one.
+  await page.getByLabel("Exam date (optional)").fill(dateIn(60));
   await page.getByRole("button", { name: "Start studying (2 concepts)" }).click();
 
   const plan = page.getByTestId("plan-concept");
