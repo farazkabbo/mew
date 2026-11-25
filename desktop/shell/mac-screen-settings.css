@@ -1,0 +1,67 @@
+:root {
+  color-scheme: dark;
+  font-family: var(--font-ui, system-ui, sans-serif);
+  background: #22282c;
+  color: #eee8d8;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 620px;
+  margin: 32px auto;
+  padding: 0 24px 40px;
+}
+h1,
+h2 {
+  font-weight: 500;
+}
+h2 {
+  font-size: 1.2rem;
+}
+p {
+  line-height: 1.55;
+  color: #c8c4b9;
+}
+section {
+  border-top: 1px solid #50545a;
+  margin-top: 24px;
+  padding-top: 12px;
+}
+label {
+  display: block;
+  margin: 14px 0;
+}
+fieldset {
+  border: 0;
+  padding: 0;
+}
+legend {
+  margin-top: 20px;
+}
+input {
+  accent-color: #b59cf8;
+}
+button,
+select {
+  font: inherit;
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid #8c867a;
+  background: #eee8d8;
+  color: #22282c;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+kbd {
+  font: inherit;
+}
+#message {
+  min-height: 1.6em;
+}
+[hidden] {
+  display: none !important;
+}

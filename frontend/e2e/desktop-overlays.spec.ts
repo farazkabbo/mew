@@ -906,3 +906,113 @@ test("the compact Mac island shows inline tooltips and restores the latest nativ
   await expect(activity).toHaveText("Listening…");
   expect(shell.violations).toEqual([]);
 });
+
+test("Mac drawing accepts local mouse strokes, erases them and clears without reading the screen", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(window, "__NEB_MAC_DRAW_HOST__", { value: true }),
+  );
+  const shell = await openShellPage(page, "draw-overlay.html");
+  await expect.poll(shell.calls).toContainEqual({ cmd: "screen_draw_ready", args: undefined });
+  await shell.dispatch("mew:draw-show", {
+    marks: [],
+    grey: true,
+    drawing: true,
+    mode: "draw",
+    blocks: [],
+    pointer: null,
+  });
+  await shell.dispatch("mew:draw-tool", { tool: "pen", shape: "free" });
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(200, 100, { steps: 10 });
+  await page.mouse.up();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_draw_note", args: { at: [100, 100] } });
+  const blue = () =>
+    page.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
+      const ratio = window.devicePixelRatio;
+      const p = canvas.getContext("2d")!.getImageData(150 * ratio, 100 * ratio, 1, 1).data;
+      return (p[3] ?? 0) > 0 && (p[2] ?? 0) > (p[0] ?? 0);
+    });
+  await expect.poll(blue).toBe(true);
+  await shell.dispatch("mew:draw-tool", { tool: "eraser", shape: "free" });
+  await page.mouse.move(140, 90);
+  await page.mouse.down();
+  await page.mouse.move(150, 100, { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(blue).toBe(false);
+  await shell.dispatch("mew:draw-tool", { tool: "pen", shape: "free" });
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(200, 100, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(blue).toBe(true);
+  await shell.dispatch("mew:draw-clear-notes", {});
+  await expect.poll(blue).toBe(false);
+  expect(shell.violations).toEqual([]);
+});
+
+test("the Windows drawing host continues to leave mouse collection to native polling", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "draw-overlay.html");
+  await shell.dispatch("mew:draw-show", { marks: [], grey: false, drawing: true, mode: "draw" });
+  await shell.dispatch("mew:draw-tool", { tool: "pen", shape: "free" });
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(200, 100, { steps: 5 });
+  await page.mouse.up();
+  expect(await shell.calls()).toEqual([]);
+});
+
+test("Mac settings retain privacy preferences and keep unavailable capture and updates truthful", async ({
+  page,
+}) => {
+  const config = {
+    paused: false,
+    help: "hint",
+    privacy: {
+      showInCaptures: false,
+      letNebClick: false,
+      blockedApps: ["example.exe"],
+      pauseDuringCalls: true,
+    },
+    circle: { silent: false, pointer: "always" },
+  };
+  const status = {
+    config,
+    settingsReset: false,
+    islandVisible: false,
+    captureAvailable: false,
+    captureBlocker: "Screen capture privacy checks are not connected. No screen is read.",
+  };
+  const shell = await openShellPage(page, "mac-screen-settings.html", {
+    mac_settings_status: status,
+    mac_settings_update: status,
+    desktop_update_status: { current: "0.1.7", phase: { state: "off" } },
+  });
+  await expect(page.locator("#capture")).toHaveText(status.captureBlocker);
+  await expect(page.getByRole("button", { name: "Check for updates", exact: true })).toBeDisabled();
+  await expect(page.locator("#install-update")).toBeHidden();
+  await expect(page.locator("#visible")).not.toBeChecked();
+  expect((await shell.calls()).some((c) => c.cmd === "mac_settings_update")).toBe(false);
+  await page.locator("#visible").check();
+  await page.locator("#help").selectOption("coach");
+  await page.getByRole("button", { name: "Save preferences" }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "mac_settings_update",
+    args: {
+      patch: {
+        paused: false,
+        privacy: { ...config.privacy, showInCaptures: true },
+        circle: config.circle,
+        help: "coach",
+      },
+    },
+  });
+  await expect(page.getByRole("status")).toHaveText("Preferences saved on this Mac.");
+  expect(shell.violations).toEqual([]);
+});

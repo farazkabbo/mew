@@ -19,7 +19,10 @@ use tauri::{AppHandle, Manager, Url, WebviewWindow, Wry};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
+#[cfg(target_os = "windows")]
 use crate::screen::coach::{require_settings_window, SETTINGS_WINDOW};
+#[cfg(target_os = "macos")]
+use crate::screen::mac::settings::{require_settings_window, SETTINGS_WINDOW};
 
 const FIRST_CHECK_AFTER: Duration = Duration::from_secs(30);
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
@@ -96,7 +99,7 @@ impl Phase {
 /// How much of a download has arrived, in whole percent, if its size is known.
 fn percent(received: u64, total: Option<u64>) -> Option<u8> {
     let total = total.filter(|total| *total > 0)?;
-    Some((received.min(total) * 100 / total) as u8)
+    Some((u128::from(received.min(total)) * 100 / u128::from(total)) as u8)
 }
 
 #[derive(Serialize)]
@@ -281,7 +284,8 @@ async fn fetch(
     Ok(Some((update, installer)))
 }
 
-/// Runs the installer, which closes the app and reopens it. Only the student's click gets here.
+/// Installs only after the student clicks. Windows delegates restart to its installer; macOS
+/// replaces the bundle in place and needs an explicit restart after a successful installation.
 fn install(app: &AppHandle<Wry>) {
     let Some(updates) = app.try_state::<Updates>() else {
         return;
@@ -290,9 +294,15 @@ fn install(app: &AppHandle<Wry>) {
     let Some((update, installer)) = ready else {
         return;
     };
-    if let Err(error) = update.install(installer) {
-        eprintln!("[updates] couldn't start the installer ({error})");
-        set_phase(app, Phase::Failed);
+    match update.install(installer) {
+        Ok(()) => {
+            #[cfg(target_os = "macos")]
+            app.restart();
+        }
+        Err(error) => {
+            eprintln!("[updates] couldn't start the installer ({error})");
+            set_phase(app, Phase::Failed);
+        }
     }
 }
 
@@ -409,5 +419,6 @@ mod tests {
         assert_eq!(percent(300, Some(200)), Some(100));
         assert_eq!(percent(50, None), None);
         assert_eq!(percent(50, Some(0)), None);
+        assert_eq!(percent(u64::MAX, Some(u64::MAX)), Some(100));
     }
 }

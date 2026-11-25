@@ -63,6 +63,9 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> tauri::Result
             .shadow(preview)
             .always_on_top(!preview)
             .resizable(preview)
+            .initialization_script(if surface == Surface::Draw {
+                "Object.defineProperty(window, '__NEB_MAC_DRAW_HOST__', { value: true });"
+            } else { "" })
             .inner_size(size.0, size.1)
             .build()?;
     if !preview {

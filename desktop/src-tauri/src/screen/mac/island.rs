@@ -140,6 +140,14 @@ pub fn shown(app: &AppHandle) -> bool {
     })
 }
 
+pub fn hide(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(Surface::Island.label()) {
+        overlay::hide(&window).map_err(|_| "Couldn't hide Neb tools.")?;
+    }
+    host(app)?.layout.lock().unwrap_or_else(|p| p.into_inner()).visible = false;
+    Ok(())
+}
+
 pub fn refresh(app: &AppHandle) -> Result<(), String> {
     let state = host(app)?;
     overlay::dispatch(

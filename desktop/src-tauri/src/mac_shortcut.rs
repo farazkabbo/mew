@@ -35,6 +35,11 @@ pub fn setup(app: &AppHandle, app_url: Url) {
             if key == &shortcut() && latch.update(event.state()) {
                 crate::summon(app);
             }
+            if key == &Shortcut::new(None, Code::Escape) && event.state() == ShortcutState::Pressed
+            {
+                let _ = crate::screen::mac::drawing::close(app);
+                let _ = crate::screen::mac::island::hide(app);
+            }
         })
         .build();
     // A conflict must leave Neb usable through its Dock and menu-bar item.

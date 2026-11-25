@@ -16,7 +16,7 @@ mod mac_shortcut;
 mod origin;
 mod reminders;
 pub mod screen;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod updates;
 
 use tauri::{
@@ -75,7 +75,10 @@ pub fn run() {
             remote_capability(app.handle(), &app_url)?;
             let window = main_window(app.handle(), app_url.clone())?;
             #[cfg(target_os = "macos")]
-            mac_shortcut::setup(app.handle(), app_url.clone());
+            {
+                screen::mac::runtime::setup(app.handle()).map_err(std::io::Error::other)?;
+                mac_shortcut::setup(app.handle(), app_url.clone());
+            }
             tray(app.handle())?;
             #[cfg(all(desktop, not(target_os = "macos")))]
             hotkeys(app.handle())?;
@@ -84,7 +87,7 @@ pub fn run() {
             // The hold gesture summons Neb (or, with Screen Coach on, circles and talks): K2.
             #[cfg(windows)]
             screen::keys::start(app.handle());
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             updates::start(app.handle());
             #[cfg(any(windows, target_os = "macos"))]
             sign_in_links(app.handle())?;
@@ -216,7 +219,30 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         desktop_sign_in_cancel, desktop_sign_in_start, desktop_sign_in_ticket, desktop_sign_out,
     };
 
+    use screen::mac::{
+        drawing::{
+            screen_draw_erase, screen_draw_island_press, screen_draw_mark, screen_draw_note,
+            screen_draw_pen, screen_draw_ready, screen_draw_select,
+        },
+        island::screen_island,
+        settings::{mac_settings_status, mac_settings_update, mac_tools_toggle},
+    };
+    use updates::{desktop_update_check, desktop_update_install, desktop_update_status};
     tauri::generate_handler![
+        mac_settings_status,
+        mac_settings_update,
+        mac_tools_toggle,
+        screen_draw_ready,
+        screen_draw_note,
+        screen_draw_pen,
+        screen_draw_erase,
+        screen_draw_mark,
+        screen_draw_select,
+        screen_draw_island_press,
+        screen_island,
+        desktop_update_status,
+        desktop_update_check,
+        desktop_update_install,
         mac_shortcut::desktop_summon_shortcut,
         desktop_sign_in_start,
         desktop_sign_in_cancel,
@@ -526,8 +552,23 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         "Ask Neb  (shortcut unavailable)"
     };
     let ask = MenuItem::with_id(app, "summon", label, true, None::<&str>)?;
+    let tools = MenuItem::with_id(
+        app,
+        "mac-tools",
+        "Show or hide Neb tools",
+        true,
+        None::<&str>,
+    )?;
+    let settings = MenuItem::with_id(
+        app,
+        "mac-settings",
+        "Screen Coach settings…",
+        true,
+        None::<&str>,
+    )?;
+    let update = MenuItem::with_id(app, "update", "Check for updates", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Neb", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &ask, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &ask, &tools, &settings, &update, &quit])?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Neb")
         .menu(&menu)
@@ -536,6 +577,13 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
                 show(app);
             }
             "summon" => summon(app),
+            "mac-tools" => {
+                let _ = screen::mac::runtime::toggle_island(app);
+            }
+            "mac-settings" => {
+                let _ = screen::mac::settings::open(app);
+            }
+            "update" => updates::from_tray(app),
             "quit" => app.exit(0),
             _ => {}
         });
@@ -543,6 +591,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         builder = builder.icon(icon.clone());
     }
     builder.build(app)?;
+    app.manage(updates::TrayItem(update));
     Ok(())
 }
 

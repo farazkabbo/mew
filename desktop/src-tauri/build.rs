@@ -6,6 +6,10 @@ fn main() {
     // capability grants it (see `remote_capability` and `screen::settings_capability`).
     let commands = tauri_build::AppManifest::new().commands(&[
         "desktop_summon_shortcut",
+        "mac_settings_status",
+        "mac_settings_update",
+        "mac_tools_toggle",
+        "screen_draw_ready",
         "notify_due",
         "notify_checks",
         "notify_skills",

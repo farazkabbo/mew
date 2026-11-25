@@ -11,11 +11,15 @@ fn main() {
         music::Control,
         surfaces::Surface,
     };
-    use std::sync::{Arc, Mutex};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
+    };
     use tauri::{ipc::CapabilityBuilder, Manager};
 
     struct Fixture {
         state: Mutex<IslandView>,
+        observations: Arc<AtomicUsize>,
     }
     impl Fixture {
         fn update(&self, action: impl FnOnce(&mut IslandView)) {
@@ -24,6 +28,7 @@ fn main() {
     }
     impl Actions for Fixture {
         fn view(&self) -> IslandView {
+            self.observations.fetch_add(1, Ordering::AcqRel);
             self.state.lock().unwrap().clone()
         }
         fn set_tool(&self, tool: Tool) -> Result<(), String> {
@@ -81,9 +86,11 @@ fn main() {
                     .window(Surface::Island.label())
                     .permission("allow-screen-island"),
             )?;
+            let observations = Arc::new(AtomicUsize::new(0));
             island::setup(
                 app.handle(),
                 Arc::new(Fixture {
+                    observations: observations.clone(),
                     state: Mutex::new(IslandView {
                         tool: Tool::None,
                         shape: Shape::Free,
@@ -100,8 +107,22 @@ fn main() {
             island::show(app.handle()).map_err(std::io::Error::other)?;
             let shutdown = app.handle().clone();
             std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(180));
-                shutdown.exit(0);
+                if std::env::var_os("NEB_MAC_FIXTURE_AUTOMATED").is_some() {
+                    // First view is native show(); the second requires the page's real Ready IPC.
+                    for _ in 0..200 {
+                        if observations.load(Ordering::Acquire) >= 2 {
+                            println!("MAC_OVERLAY_FIXTURE_READY_IPC_PASSED");
+                            shutdown.exit(0);
+                            return;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                    eprintln!("MAC_OVERLAY_FIXTURE_READY_IPC_TIMED_OUT");
+                    shutdown.exit(1);
+                } else {
+                    std::thread::sleep(std::time::Duration::from_secs(180));
+                    shutdown.exit(0);
+                }
             });
             Ok(())
         })

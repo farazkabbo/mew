@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Neb settings</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="mac-screen-settings.css" />
+    <script src="mac-screen-settings.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>Neb on your Mac</h1>
+      <p>
+        Open your notebook with <kbd>Control + Shift + N</kbd>. Use Neb tools to draw local notes
+        over your screen.
+      </p>
+      <p id="message" role="status">Loading your local settings…</p>
+      <section>
+        <h2>Neb tools</h2>
+        <button id="tools" disabled>Show or hide Neb tools</button>
+        <form id="preferences">
+          <fieldset disabled id="fields">
+            <legend>Local preferences</legend>
+            <label><input id="visible" type="checkbox" /> Allow visible Mac annotations</label>
+            <p>
+              Drawings stay in memory until you clear or close them. Mac annotations may appear in
+              screen recordings and screen shares. Enable this only if that is okay with you. This
+              does not allow screen capture.
+            </p>
+            <label><input id="paused" type="checkbox" /> Pause Neb tools</label>
+            <label><input id="silent" type="checkbox" /> Prefer silent interaction</label>
+            <label
+              >Help level
+              <select id="help">
+                <option value="quiet">Quiet</option>
+                <option value="hint">Hint</option>
+                <option value="coach">Coach</option>
+                <option value="answer">Answer</option>
+              </select></label
+            >
+            <button type="submit">Save preferences</button>
+          </fieldset>
+        </form>
+      </section>
+      <section>
+        <h2>Screen Coach availability</h2>
+        <p id="capture"></p>
+        <p>
+          Screen questions, selection, Watch, microphone, music controls, SHOW ME, DO IT, CATCH ME
+          and Handoff are still being connected on Mac. These controls do not activate those
+          services.
+        </p>
+      </section>
+      <section>
+        <h2>App updates</h2>
+        <p id="update-status">Checking build configuration…</p>
+        <button id="check-update" disabled>Check for updates</button
+        ><button id="install-update" hidden>Restart to update</button>
+      </section>
+    </main>
+  </body>
+</html>

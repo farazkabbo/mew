@@ -13,7 +13,7 @@
     "build:shell": "node scripts/build-shell.mjs",
     "lint": "eslint --max-warnings 0 overlay-src",
     "typecheck": "tsc --noEmit -p overlay-src",
-    "test": "vitest run --root overlay-src"
+    "test": "vitest run --root overlay-src && node --test scripts/update-manifest.test.mjs"
   },
   "dependencies": {
     "@mew/ink": "workspace:*",
