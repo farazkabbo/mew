@@ -93,8 +93,9 @@ instead.
 
    **Status, 2026-11-14:** production has all of these. 20261112–20261114 were applied that day,
    after the database was restored from a pause. The test database
-   (`qnhfzevygmlgfrbavswq`) still needs 20261114. Both still need 20261124 (Handoff, being built:
-   it only matters once `HANDOFF_ENABLED=1`).
+   (`qnhfzevygmlgfrbavswq`) still needs 20261114 and 20261124. **2026-11-25:** production has
+   20261124 (Handoff) too: its four tables with RLS and no grants, the private `handoffs` bucket and
+   `purge_handoffs` (service only), checked through the connector.
 
    Production also has three tables from Rahbir's unmerged
    `feature/stripe-payment-integration` branch (`subscriptions`, `usage_sessions`,
