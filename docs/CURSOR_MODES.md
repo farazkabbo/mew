@@ -100,6 +100,13 @@ mouse and touchpad timing). Record real ones (below) before trusting them.
       the name of …" goes to DO IT without a model call. A file named aloud ("rename the file
       called notes to Final") is found among the folder's items by its name (exactly, or the
       only one holding it), selected or not; otherwise the selection is renamed.
+    - **"Start with" and "end with" keep the name** (owner, 2026-11-25; `fix/rename-start-end`):
+      "rename these to start with 2026" adds "2026 " in front of each name, "… to end with
+      final" adds " final" after it (no space when the text already ends or starts with `-`,
+      `_` or `.`), and so do "… to have v2 at the end", "add 2026 to the start of these names"
+      and "put 2026 in front of these files". The add/put form counts only when what it's
+      added to is plainly file names ("names", "files", "these", "them"), so "add a title to
+      the start of this document" stays typing. All on the device, no model call.
 
 ## Shared path library (designed, not built)
 

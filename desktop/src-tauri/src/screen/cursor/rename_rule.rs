@@ -207,6 +207,14 @@ pub fn from_words(said: &str) -> Option<Said> {
         .trim_end_matches(['.', '!', '?', ','])
         .trim_matches(['"', '\'', '“', '”', '‘', '’'])
         .trim();
+    let which = (!which.is_empty() && which.chars().count() <= TEXT_MAX).then(|| which.to_owned());
+    // "rename these to start with 2026": the names stay, with 2026 in front.
+    if let Some((front, text)) = affix(name) {
+        return Some(Said {
+            rule: affix_rule(front, &text)?,
+            which,
+        });
+    }
     let purpose = PURPOSE.iter().any(|p| name.to_lowercase().starts_with(p));
     if name.is_empty()
         || purpose
@@ -224,7 +232,130 @@ pub fn from_words(said: &str) -> Option<Said> {
             replace: None,
             case: Case::Keep,
         },
-        which: (!which.is_empty() && which.chars().count() <= TEXT_MAX).then(|| which.to_owned()),
+        which,
+    })
+}
+
+/// What follows "rename these to" when it isn't a new name but where to add something: "start
+/// with 2026" (true: in front), "end with final", "have 2026 at the start", "have v2 at the end".
+fn affix(said: &str) -> Option<(bool, String)> {
+    let lower = said.to_lowercase();
+    if lower.len() != said.len() {
+        return None;
+    }
+    const FRONT: &[&str] = &["start with ", "starts with ", "begin with ", "begins with "];
+    const BACK: &[&str] = &["end with ", "ends with ", "finish with ", "finishes with "];
+    for (markers, front) in [(FRONT, true), (BACK, false)] {
+        if let Some(m) = markers.iter().find(|m| lower.starts_with(**m)) {
+            return Some((front, said[m.len()..].to_owned()));
+        }
+    }
+    // "have 2026 at the start", "have final at the end".
+    let rest = lower.strip_prefix("have ")?;
+    const AT_FRONT: &[&str] = &[
+        " at the start",
+        " at the front",
+        " at the beginning",
+        " in front",
+    ];
+    const AT_BACK: &[&str] = &[" at the end"];
+    for (markers, front) in [(AT_FRONT, true), (AT_BACK, false)] {
+        if let Some(m) = markers.iter().find(|m| rest.ends_with(**m)) {
+            let text = &said["have ".len()..said.len() - m.len()];
+            return Some((front, text.to_owned()));
+        }
+    }
+    None
+}
+
+/// A prefix or suffix rule for `text`, with a space between it and the name unless it already
+/// ends (or starts) with a separator ("2026-", "_v2").
+fn affix_rule(front: bool, text: &str) -> Option<RenameRule> {
+    let text = text
+        .trim()
+        .trim_end_matches(['.', '!', '?', ','])
+        .trim_matches(['"', '\'', '“', '”', '‘', '’'])
+        .trim();
+    if text.is_empty() || text.chars().count() > TEXT_MAX || text.chars().any(char::is_control) {
+        return None;
+    }
+    let joined = |c: Option<char>| c.is_some_and(|c| matches!(c, '-' | '_' | '.' | ' '));
+    let (prefix, suffix) = if front {
+        let space = if joined(text.chars().last()) { "" } else { " " };
+        (Some(format!("{text}{space}")), None)
+    } else {
+        let space = if joined(text.chars().next()) { "" } else { " " };
+        (None, Some(format!("{space}{text}")))
+    };
+    Some(RenameRule {
+        name: None,
+        prefix,
+        suffix,
+        find: None,
+        replace: None,
+        case: Case::Keep,
+    })
+}
+
+/// "add 2026 to the start of these names", "put final at the end of the file names", "put 2026
+/// in front of these files": a prefix or suffix, said without "rename". Only when what it's added
+/// to is plainly file names (so "add a title to the start of this document" stays typing).
+pub fn affix_request(said: &str) -> Option<Said> {
+    let lower = said.to_lowercase().replace([',', '!', '?'], " ");
+    if lower.len() != said.len() {
+        return None;
+    }
+    let (start, verb) = ["add ", "put "]
+        .iter()
+        .filter_map(|v| lower.find(v).map(|i| (i, v.len())))
+        .min()?;
+    if !lower[..start]
+        .split_whitespace()
+        .all(|w| LEAD_IN.contains(&w))
+    {
+        return None;
+    }
+    const MARKERS: &[(&str, bool)] = &[
+        (" to the start of ", true),
+        (" at the start of ", true),
+        (" to the front of ", true),
+        (" at the front of ", true),
+        (" to the beginning of ", true),
+        (" at the beginning of ", true),
+        (" in front of ", true),
+        (" to the end of ", false),
+        (" at the end of ", false),
+    ];
+    let after = start + verb;
+    let (at, len, front) = MARKERS
+        .iter()
+        .filter_map(|(m, front)| {
+            lower[after - 1..]
+                .find(m)
+                .map(|i| (after - 1 + i, m.len(), *front))
+        })
+        .min_by_key(|&(at, ..)| at)?;
+    let text = &said[after..at.max(after)];
+    let target: Vec<&str> = lower[at + len..]
+        .trim_end_matches(['.', ' '])
+        .split_whitespace()
+        .collect();
+    // What it's added to: names or files, and nothing else.
+    let names = target.iter().any(|w| {
+        matches!(
+            *w,
+            "name" | "names" | "filename" | "filenames" | "files" | "these" | "them" | "those"
+        )
+    });
+    let plain = target.iter().all(|w| {
+        OBJECT_WORDS.contains(w) || matches!(*w, "name" | "names" | "filename" | "filenames")
+    });
+    if !(names && plain) {
+        return None;
+    }
+    Some(Said {
+        rule: affix_rule(front, text)?,
+        which: None,
     })
 }
 
@@ -473,6 +604,77 @@ mod tests {
         ] {
             assert_eq!(said(words), None, "{words}");
         }
+    }
+
+    #[test]
+    fn start_with_and_end_with_keep_the_name() {
+        let rule = |prefix: Option<&str>, suffix: Option<&str>| RenameRule {
+            name: None,
+            prefix: prefix.map(str::to_owned),
+            suffix: suffix.map(str::to_owned),
+            find: None,
+            replace: None,
+            case: Case::Keep,
+        };
+        for (words, want) in [
+            ("rename these to start with 2026", rule(Some("2026 "), None)),
+            (
+                "rename this file to end with final",
+                rule(None, Some(" final")),
+            ),
+            (
+                "rename these photos to begin with Trip-",
+                rule(Some("Trip-"), None),
+            ),
+            (
+                "rename these to have v2 at the end",
+                rule(None, Some(" v2")),
+            ),
+            (
+                "rename them to have 2026 at the start.",
+                rule(Some("2026 "), None),
+            ),
+        ] {
+            assert_eq!(from_words(words).map(|s| s.rule), Some(want), "{words}");
+        }
+        for (words, want) in [
+            (
+                "add 2026 to the start of these names",
+                rule(Some("2026 "), None),
+            ),
+            (
+                "put final at the end of the file names",
+                rule(None, Some(" final")),
+            ),
+            (
+                "Neb, put 2026 in front of these files",
+                rule(Some("2026 "), None),
+            ),
+            (
+                "can you add _old to the end of them",
+                rule(None, Some("_old")),
+            ),
+        ] {
+            assert_eq!(affix_request(words).map(|s| s.rule), Some(want), "{words}");
+        }
+        for words in [
+            "add a title to the start of this document",
+            "put a heading at the start of the page",
+            "add this to my notebook",
+            "add milk to the end of my shopping list",
+        ] {
+            assert_eq!(affix_request(words), None, "{words}");
+        }
+        // The names stay: only the prefix is added.
+        let files = [
+            PathBuf::from(r"C:\d\beach.jpg"),
+            PathBuf::from(r"C:\d\city.jpg"),
+        ];
+        let said = from_words("rename these to start with 2026").unwrap();
+        assert_eq!(
+            names(&plan(&files, &said.rule, |_| false).unwrap()),
+            vec!["2026 beach.jpg", "2026 city.jpg"]
+        );
     }
 
     #[test]

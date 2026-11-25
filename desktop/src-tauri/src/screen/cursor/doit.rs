@@ -88,7 +88,9 @@ pub fn local_action(goal: &str) -> Option<DoAction> {
     {
         return Some(DoAction::BatchRename);
     }
-    if let Some(said) = super::rename_rule::from_words(goal) {
+    let said =
+        super::rename_rule::from_words(goal).or_else(|| super::rename_rule::affix_request(goal));
+    if let Some(said) = said {
         return Some(DoAction::RenameFiles {
             rule: Box::new(said.rule),
             which: said.which,

@@ -154,6 +154,10 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     if super::cursor::doit::theme_wanted(&words.join(" ")).is_some() {
         return Intent::DoIt;
     }
+    // Before typing too: "put 2026 in front of these names" renames files, it doesn't type.
+    if super::cursor::rename_rule::affix_request(&words.join(" ")).is_some() {
+        return Intent::DoIt;
+    }
     if is_write(&words) {
         return Intent::Write;
     }
@@ -834,6 +838,9 @@ mod cursor_mode_tests {
             "rename the file called notes to final notes",
             "rename my files so they're shorter",
             "change the name of my essay to essay v2",
+            "rename these to start with 2026",
+            "put 2026 in front of these names",
+            "add final to the end of these files",
             "switch to light mode",
             "dark mode please",
             "undo the rename",
