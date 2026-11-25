@@ -864,3 +864,11 @@ don't ask them again. Where a decision changes the brief above, the decision win
     - **Still the owner's to decide:** whether an explicit request ("sign me out", "delete this
       file", "send it") may be pressed after Neb asks "shall I?" and the student says yes, in
       place of never.
+19. **Holding Ctrl+Alt always talks, and turns Watch on while held** (decided 2026-11-25 by the
+    owner: "holding ctrl + alt should automatically put it on watch and then turn off
+    accordingly"; `fix/hold-to-talk`). This replaces "holding Ctrl+Alt asks while Watch is on"
+    in decision 16. With Screen Coach on, holding the keys turns the microphone on and, if Watch
+    was off, Watch too (quietly: the frame shows, no notice); letting go asks about the screen
+    as it is, then Watch goes off again. A Watch the student turned on with the eye stays on.
+    Watch's looks are skipped while the microphone is on, so the hold costs no extra pictures.
+    The island's mic button still works the same way.

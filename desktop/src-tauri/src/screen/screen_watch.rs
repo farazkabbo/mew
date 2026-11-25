@@ -83,21 +83,28 @@ pub fn toggle<R: Runtime>(app: &AppHandle<R>) {
     if watching() {
         stop(app, Some("Watch is off."));
     } else {
-        start(app);
+        start(app, true);
     }
 }
 
-fn start<R: Runtime>(app: &AppHandle<R>) {
+/// Holding Ctrl+Alt: Watch comes on for the hold, without the "Watch is on" notice (the held
+/// keys already say what's happening). False if it couldn't (it says why) or was already on.
+pub fn start_for_hold<R: Runtime>(app: &AppHandle<R>) -> bool {
+    !watching() && start(app, false)
+}
+
+/// Watch on (`announce`: say so); false if it couldn't start (and the student was told why).
+fn start<R: Runtime>(app: &AppHandle<R>, announce: bool) -> bool {
     if !coach::is_usable(app) {
         coach::notify(
             app,
             "Turn Screen Coach on first: tray → Screen Coach settings.",
         );
-        return;
+        return false;
     }
     if !coach::is_connected(app) {
         coach::notify(app, device_call::NOT_CONNECTED);
-        return;
+        return false;
     }
     let generation = {
         let mut s = state();
@@ -111,10 +118,12 @@ fn start<R: Runtime>(app: &AppHandle<R>) {
         s.failures = 0;
         s.generation
     };
-    coach::notify(
-        app,
-        "Watch is on: I'll look at your screen every few seconds and tell you if I see a slip.",
-    );
+    if announce {
+        coach::notify(
+            app,
+            "Watch is on: I'll look at your screen every few seconds and tell you if I see a slip.",
+        );
+    }
     screen_island::refresh(app);
     let handle = app.clone();
     let spawned = std::thread::Builder::new()
@@ -122,7 +131,9 @@ fn start<R: Runtime>(app: &AppHandle<R>) {
         .spawn(move || run(&handle, generation));
     if spawned.is_err() {
         stop(app, Some("Couldn't start Watch just now."));
+        return false;
     }
+    true
 }
 
 /// Turns Watch off (`notice`: said why). Anything still on its way is dropped.

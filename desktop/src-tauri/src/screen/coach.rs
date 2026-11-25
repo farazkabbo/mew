@@ -515,10 +515,11 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
         }
         return;
     }
-    // The island has the tools and the microphone now: a double tap shows or hides it (or, while
+    // The island has the tools and the microphone: a double tap shows or hides it (or, while
     // silent mode draws with the keyboard, ends that drawing, as it always has). Holding the keys
-    // does nothing with Screen Coach on, except while Watch is on (decision 16): then it's the
-    // microphone, held to talk, and letting go asks about the screen as it is.
+    // is the microphone, held to talk, and letting go asks about the screen as it is. The hold
+    // turns Watch on while it lasts (so the frame shows Neb can see the screen) and off again
+    // when the keys come up; a Watch the student turned on stays on (owner, 2026-11-25).
     match event {
         HoldEvent::DoubleTap => {
             if circle::keyboard_drawing(app) {
@@ -528,10 +529,11 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
                 screen_island::toggle(app);
             }
         }
-        HoldEvent::Started if super::screen_watch::watching() && !mic_on(app) => {
+        HoldEvent::Started if !mic_on(app) => {
             mic_start(app);
             if mic_on(app) {
                 HELD_MIC.store(true, Ordering::SeqCst);
+                HELD_WATCH.store(super::screen_watch::start_for_hold(app), Ordering::SeqCst);
                 super::status::show_keys(app);
             }
             mic_changed(app);
@@ -541,13 +543,19 @@ pub fn on_hold<R: Runtime>(app: &AppHandle<R>, event: HoldEvent) {
             super::status::hide_keys(app);
             mic_off(app, event == HoldEvent::Cancelled);
             mic_changed(app);
+            // The question has its capture already: Watch goes off with the keys.
+            if HELD_WATCH.swap(false, Ordering::SeqCst) {
+                super::screen_watch::stop(app, None);
+            }
         }
         _ => {}
     }
 }
 
-/// The hold of Ctrl+Alt turned the microphone on (Watch is on): letting go turns it off.
+/// The hold of Ctrl+Alt turned the microphone on: letting go turns it off.
 static HELD_MIC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The hold turned Watch on: letting go turns it off (a Watch already on is left alone).
+static HELD_WATCH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The card's mic button and the island show whether the microphone is on.
 fn mic_changed<R: Runtime>(app: &AppHandle<R>) {

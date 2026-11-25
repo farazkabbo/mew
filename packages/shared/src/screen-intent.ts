@@ -4,8 +4,9 @@ import { AppName, SCREEN_LIMITS } from "./screen";
 
 /**
  * What the student meant by what they said to Screen Coach (the island's mic, or holding
- * Ctrl+Alt while Watch is on). A model reads the words, so any phrasing works ("rewrite",
- * "could you jot down a conclusion for me", "is this right?"); the desktop app's own fixed rules
+ * Ctrl+Alt, which turns Watch on while held). A model reads the words, so any phrasing works
+ * ("rewrite", "could you jot down a conclusion for me", "is this right?"); the desktop app's own
+ * fixed rules
  * (`intent.rs`) are only the fallback when this can't be reached.
  *
  * Only the words go, with the app's name and two facts about what Neb is doing: never the
