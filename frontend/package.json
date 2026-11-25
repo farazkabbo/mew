@@ -34,7 +34,7 @@
     "@upstash/redis": "1.40.0",
     "dexie": "^4.4.6",
     "lucide-react": "^1.50.0",
-    "next": "16.4.2",
+    "next": "16.4.6",
     "pdf-lib": "1.17.1",
     "perfect-freehand": "^1.2.3",
     "pyodide": "314.0.7",
@@ -42,7 +42,7 @@
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
     "ts-fsrs": "5.4.2",
-    "zod": "^4",
+    "zod": "^4.6.7",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -52,7 +52,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.2",
+    "eslint-config-next": "16.4.6",
     "fake-indexeddb": "^6.2.5",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
