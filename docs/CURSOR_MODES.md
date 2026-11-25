@@ -107,6 +107,12 @@ mouse and touchpad timing). Record real ones (below) before trusting them.
       and "put 2026 in front of these files". The add/put form counts only when what it's
       added to is plainly file names ("names", "files", "these", "them"), so "add a title to
       the start of this document" stays typing. All on the device, no model call.
+    - **Any wording, and asked as a question** (owner, 2026-11-25: three renames came back as
+      answers to something else while the model was busy; `fix/rename-any-wording`).
+      `rename_rule::is_request` decides on the device, before typing and before the model:
+      "rename … (to) …", "change / update / set the file name to …", "name this …", "call this
+      file …", "would you mind renaming…", with casual openings ("can u", "pls", "could you").
+      A question about renaming ("how do I rename a file?") is still a lesson.
 
 ## Shared path library (designed, not built)
 

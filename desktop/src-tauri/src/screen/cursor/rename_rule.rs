@@ -122,17 +122,9 @@ const OBJECT_WORDS: &[&str] = &[
 
 /// Words before the request that don't change it ("hey Neb, could you…", "I want to…").
 const LEAD_IN: &[&str] = &[
-    "hey", "neb", "mew", "ok", "okay", "please", "can", "could", "would", "will", "you", "i",
-    "want", "wanna", "to", "like", "id", "i'd", "lets", "let's", "go", "ahead", "and", "just",
-    "quickly", "need", "so",
-];
-/// How a rename is asked for; the file (if named) and " to " + the new name follow.
-const VERBS: &[&str] = &[
-    "rename ",
-    "change the name of ",
-    "change the name ",
-    "change its name ",
-    "change their names ",
+    "hey", "neb", "mew", "ok", "okay", "please", "pls", "plz", "can", "could", "would", "will",
+    "you", "u", "ya", "i", "want", "wanna", "to", "like", "id", "i'd", "lets", "let's", "go",
+    "ahead", "and", "just", "quickly", "need", "so", "mind", "maybe", "also", "now", "then",
 ];
 /// After " to ", words that make it a purpose, not a name ("rename my thesis to make it
 /// shorter"): the model reads those.
@@ -147,56 +139,140 @@ const PURPOSE: &[&str] = &[
     "anything",
     "whatever",
 ];
+/// Words that say it's the name being changed ("change the file name to …").
+const NAME_WORDS: &[&str] = &["name", "names", "filename", "filenames", "name's", "names'"];
+/// Verbs that rename when the name is what they change ("update the name to …").
+const CHANGE_VERBS: &[&str] = &["change", "update", "edit", "set", "fix", "switch", "make"];
+/// Words between the verb and " to " that only point at the file ("the file's name of it").
+const POINTERS: &[&str] = &[
+    "of", "called", "named", "its", "their", "file's", "files'", "for",
+];
+/// Words that mean a file ("call this file …"), as opposed to "this" or "my".
+const FILE_WORDS: &[&str] = &[
+    "file",
+    "files",
+    "folder",
+    "folders",
+    "document",
+    "documents",
+    "doc",
+    "docs",
+    "photo",
+    "photos",
+    "picture",
+    "pictures",
+    "image",
+    "images",
+    "pic",
+    "pics",
+    "video",
+    "videos",
+    "pdf",
+    "pdfs",
+];
+/// Questions about renaming are lessons (SHOW ME), not renames.
+const QUESTION_WORDS: &[&str] = &[
+    "how", "what", "why", "where", "when", "which", "who", "is", "does", "do", "did", "should",
+    "was", "whats", "what's",
+];
 
-/// What a plain "rename … to …" asked for: the rule, and the file it named, if it named one
-/// ("rename the file called notes to Final": `which` is "notes").
+/// What a plain rename asked for: the rule, and the file it named, if it named one ("rename the
+/// file called notes to Final": `which` is "notes").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Said {
     pub rule: RenameRule,
     pub which: Option<String>,
 }
 
-/// "rename this to Budget 2026", "Neb, rename these files as trip", "rename the file called
-/// notes to Final", "change the name of my essay to Essay v2": a new name, said plainly. None
-/// for any other wording (the model reads those). The name keeps the case it was said in.
+/// The words of `lower`, each with where it is (punctuation is a space; positions are bytes).
+fn tokens(lower: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut start = None;
+    for (i, c) in lower.char_indices() {
+        let part = c.is_alphanumeric() || matches!(c, '\'' | '-' | '_' | '’');
+        match (part, start) {
+            (true, None) => start = Some(i),
+            (false, Some(s)) => {
+                out.push((s, i));
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(s) = start {
+        out.push((s, lower.len()));
+    }
+    out
+}
+
+/// A rename, said plainly, in any of the usual ways. None for anything else (the model reads
+/// those). The new name keeps the case it was said in.
+/// - "rename this to Budget 2026", "Neb, rename these files as trip", "rename the file called
+///   notes to Final", "I want to rename my essay to Essay v2", "rename this file budget"
+/// - "change the name of my essay to Essay v2", "change the file name to Lease", "update this
+///   file's name to v2", "set the filename to draft"
+/// - "name this budget", "call this file Budget 2026"
+/// - and "… to start with 2026" / "… to end with final", which keep the names (`affix`).
 pub fn from_words(said: &str) -> Option<Said> {
     let lower = said.to_lowercase();
     // Byte offsets only line up when lowercasing kept every length (true for nearly all text).
     if lower.len() != said.len() {
         return None;
     }
-    // The earliest, and of two at the same place the longest ("change the name of", not
-    // "change the name").
-    let (start, verb) = VERBS
-        .iter()
-        .filter_map(|v| lower.find(v).map(|i| (i, v.len())))
-        .min_by_key(|&(i, len)| (i, std::cmp::Reverse(len)))?;
-    let before = lower[..start].replace([',', '.', '!', '?'], " ");
-    if !before.split_whitespace().all(|w| LEAD_IN.contains(&w)) {
-        return None;
-    }
-    let after = start + verb;
-    let (to_at, to_len) = [" to ", " as "]
-        .iter()
-        .filter_map(|sep| {
-            lower[after - 1..]
-                .find(sep)
-                .map(|i| (after - 1 + i, sep.len()))
+    let words = tokens(&lower);
+    let word = |i: usize| &lower[words[i].0..words[i].1];
+    let first = (0..words.len()).find(|&i| !LEAD_IN.contains(&word(i)))?;
+    let verb = word(first);
+    let sep = (first + 1..words.len()).find(|&i| matches!(word(i), "to" | "as"));
+    // (the words naming the file, where the new name starts)
+    // "would you mind renaming this to …"
+    let verb = if verb == "renaming" { "rename" } else { verb };
+    let (which_words, name_from): (Vec<usize>, usize) = match (verb, sep) {
+        ("rename", Some(sep)) => ((first + 1..sep).collect(), words.get(sep + 1)?.0),
+        (v, Some(sep))
+            if CHANGE_VERBS.contains(&v)
+                && (first + 1..sep).any(|i| NAME_WORDS.contains(&word(i))) =>
+        {
+            ((first + 1..sep).collect(), words.get(sep + 1)?.0)
+        }
+        // No "to": "rename this file budget", "name this budget", "call this file budget". The
+        // words right after the verb point at the file; what follows is the name.
+        ("rename" | "name" | "call", None) => {
+            let pointing = (first + 1..words.len())
+                .take_while(|&i| OBJECT_WORDS.contains(&word(i)))
+                .count();
+            let file_word =
+                (first + 1..first + 1 + pointing).any(|i| FILE_WORDS.contains(&word(i)));
+            // "call" is a rename only with a file word ("call this file …", not "call it a day").
+            // "this", "these", "it"… or a file word must point at the file: "name the capital of
+            // France" isn't a rename.
+            let points = (first + 1..first + 1 + pointing)
+                .any(|i| matches!(word(i), "this" | "that" | "it" | "these" | "those" | "them"));
+            if pointing == 0 || !(points || file_word) || (verb == "call" && !file_word) {
+                return None;
+            }
+            let at = first + 1 + pointing;
+            if at >= words.len() || word(at) == "by" {
+                return None; // "rename these photos by date" is batch_rename's
+            }
+            (Vec::new(), words[at].0)
+        }
+        _ => return None,
+    };
+    let which: Vec<&str> = which_words
+        .into_iter()
+        .filter(|&i| {
+            let w = word(i);
+            !OBJECT_WORDS.contains(&w) && !NAME_WORDS.contains(&w) && !POINTERS.contains(&w)
         })
-        .min()?;
-    // What's between names the file: "this", "these photos", "the file called notes".
-    let which: Vec<&str> = said[after..to_at.max(after)]
-        .split_whitespace()
-        .filter(|w| {
-            let w = w.to_lowercase();
-            !OBJECT_WORDS.contains(&w.as_str()) && !matches!(w.as_str(), "called" | "named" | "of")
-        })
+        .map(|i| &said[words[i].0..words[i].1])
         .collect();
     let which = which.join(" ");
     let which = which
         .trim_matches(['"', '\'', '“', '”', '‘', '’', ','])
         .trim();
-    let name = said[to_at + to_len..]
+    let which = (!which.is_empty() && which.chars().count() <= TEXT_MAX).then(|| which.to_owned());
+    let name = said[name_from..]
         .trim()
         .trim_end_matches(['.', '!', '?', ',']);
     let name = name
@@ -207,7 +283,6 @@ pub fn from_words(said: &str) -> Option<Said> {
         .trim_end_matches(['.', '!', '?', ','])
         .trim_matches(['"', '\'', '“', '”', '‘', '’'])
         .trim();
-    let which = (!which.is_empty() && which.chars().count() <= TEXT_MAX).then(|| which.to_owned());
     // "rename these to start with 2026": the names stay, with 2026 in front.
     if let Some((front, text)) = affix(name) {
         return Some(Said {
@@ -234,6 +309,26 @@ pub fn from_words(said: &str) -> Option<Said> {
         },
         which,
     })
+}
+
+/// A request to rename something, however it's put, as opposed to a question about renaming
+/// ("how do I rename a file?" is a lesson). It goes to DO IT, never to Neb's hand (which can't
+/// type into File Explorer's name box), even when the model is busy.
+pub fn is_request(said: &str) -> bool {
+    if from_words(said).is_some() || affix_request(said).is_some() {
+        return true;
+    }
+    let lower = said.to_lowercase();
+    let words: Vec<&str> = tokens(&lower)
+        .into_iter()
+        .map(|(a, b)| &lower[a..b])
+        .collect();
+    let Some(first) = words.iter().find(|w| !LEAD_IN.contains(w)) else {
+        return false;
+    };
+    words.len() <= 30
+        && !QUESTION_WORDS.contains(first)
+        && words.iter().any(|w| matches!(*w, "rename" | "renaming"))
 }
 
 /// What follows "rename these to" when it isn't a new name but where to add something: "start
@@ -675,6 +770,83 @@ mod tests {
             names(&plan(&files, &said.rule, |_| false).unwrap()),
             vec!["2026 beach.jpg", "2026 city.jpg"]
         );
+    }
+
+    #[test]
+    fn renames_said_every_usual_way() {
+        let said = |s: &str| from_words(s).map(|s| (s.rule.name, s.which));
+        let n = |name: &str, which: Option<&str>| {
+            Some((Some(name.to_owned()), which.map(str::to_owned)))
+        };
+        for (words, want) in [
+            ("rename this file Budget 2026", n("Budget 2026", None)),
+            ("Rename it Lease.", n("Lease", None)),
+            ("change the file name to Lease", n("Lease", None)),
+            ("change this file's name to Essay v2", n("Essay v2", None)),
+            ("update the name to final", n("final", None)),
+            ("set the filename to draft 3", n("draft 3", None)),
+            (
+                "can you change the name of the budget file to Budget 2026",
+                n("Budget 2026", Some("budget")),
+            ),
+            ("name this Trip", n("Trip", None)),
+            ("call this file Budget 2026", n("Budget 2026", None)),
+            (
+                "Neb, could you please rename this one to Notes",
+                n("Notes", None),
+            ),
+        ] {
+            assert_eq!(said(words), want, "{words}");
+        }
+        for words in [
+            "call it a day",
+            "call my mom",
+            "name the capital of France",
+            "change the font to Arial",
+            "update the title to Chapter 2",
+            "rename these photos by date",
+        ] {
+            assert_eq!(said(words), None, "{words}");
+        }
+        // Any request to rename goes to DO IT; questions about it don't.
+        for words in [
+            "rename my files so they're shorter",
+            "can you rename this",
+            "I need to rename these photos",
+            "change the file name to Lease",
+            "add 2026 to the start of these names",
+        ] {
+            assert!(is_request(words), "{words}");
+        }
+        for words in [
+            "how do I rename a file?",
+            "what should I rename this to",
+            "why can't I rename it",
+            "explain this paragraph",
+        ] {
+            assert!(!is_request(words), "{words}");
+        }
+    }
+
+    #[test]
+    fn asked_as_a_question_or_casually() {
+        for (words, name) in [
+            ("can u rename this to Budget", "Budget"),
+            ("Can you rename this file to test one?", "test one"),
+            ("pls rename these to trip", "trip"),
+            ("would you mind renaming this to Lease", "Lease"),
+            ("could u change the file name to notes", "notes"),
+            ("can you please rename it to Final?", "Final"),
+        ] {
+            assert_eq!(
+                from_words(words).and_then(|s| s.rule.name).as_deref(),
+                Some(name),
+                "{words}"
+            );
+        }
+        for words in ["can u rename these for me?", "could you rename my files"] {
+            assert!(is_request(words), "{words}");
+        }
     }
 
     #[test]

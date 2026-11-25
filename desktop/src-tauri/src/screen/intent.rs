@@ -154,8 +154,10 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     if super::cursor::doit::theme_wanted(&words.join(" ")).is_some() {
         return Intent::DoIt;
     }
-    // Before typing too: "put 2026 in front of these names" renames files, it doesn't type.
-    if super::cursor::rename_rule::affix_request(&words.join(" ")).is_some() {
+    // Before typing too: any request to rename ("change the file name to Lease", "put 2026 in
+    // front of these names") is DO IT's, decided here so a busy model can't turn it into a
+    // question or hand it to Neb's cursor.
+    if super::cursor::rename_rule::is_request(&words.join(" ")) {
         return Intent::DoIt;
     }
     if is_write(&words) {
@@ -677,9 +679,7 @@ fn is_do_it(words: &[String]) -> bool {
         && text.contains("date")
         // Any rename asked for ("rename this to Budget 2026", "rename my files so they're
         // shorter"): DO IT's, never Neb's hand (which can't type into File Explorer's name box).
-        || text.starts_with("rename ")
-        || text.starts_with("change the name of ")
-        || super::cursor::rename_rule::from_words(text).is_some();
+        || super::cursor::rename_rule::is_request(text);
     let setting = (text.starts_with("open ") || text.starts_with("open up "))
         && (text.ends_with(" settings") || text.ends_with(" setting"));
     let undo = matches!(
@@ -841,6 +841,10 @@ mod cursor_mode_tests {
             "rename these to start with 2026",
             "put 2026 in front of these names",
             "add final to the end of these files",
+            "change the file name to lease",
+            "name this trip",
+            "call this file budget 2026",
+            "can you rename this",
             "switch to light mode",
             "dark mode please",
             "undo the rename",
