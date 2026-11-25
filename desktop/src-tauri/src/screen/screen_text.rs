@@ -96,6 +96,59 @@ impl ScreenText {
         Self { words }
     }
 
+    /// Handoff (docs/HANDOFF_FEATURE.md §7): the words in `area` to cover in a handoff's crop:
+    /// every Screen Coach rule on (emails and phones too) plus Handoff's own detectors (tokens,
+    /// keys, addresses, `.env` lines).
+    pub fn handoff_covers(&self, area: ScreenRect) -> Vec<ScreenRect> {
+        let all = RedactionRules {
+            cards: true,
+            secrets: true,
+            codes: true,
+            emails: true,
+            phones: true,
+        };
+        let inside = |r: ScreenRect| {
+            r.left < area.right && area.left < r.right && r.top < area.bottom && area.top < r.bottom
+        };
+        let mut lines: std::collections::BTreeMap<u32, Vec<&ScreenWord>> = Default::default();
+        for w in self.words.iter().filter(|w| inside(w.rect)) {
+            lines.entry(w.line).or_default().push(w);
+        }
+        let mut out = Vec::new();
+        for words in lines.values() {
+            let mut text = String::new();
+            let mut spans = Vec::with_capacity(words.len());
+            for w in words {
+                if !text.is_empty() {
+                    text.push(' ');
+                }
+                let start = text.len();
+                text.push_str(&w.text);
+                spans.push(start..text.len());
+            }
+            let (cleaned, _) = super::handoff::redact::redact(&text);
+            let mut hit: Vec<bool> = words
+                .iter()
+                .map(|w| !cleaned.contains(w.text.as_str()))
+                .collect();
+            for (range, _) in find_sensitive(&text, &all) {
+                for (i, span) in spans.iter().enumerate() {
+                    if span.start < range.end && range.start < span.end {
+                        hit[i] = true;
+                    }
+                }
+            }
+            out.extend(
+                words
+                    .iter()
+                    .zip(hit)
+                    .filter(|(_, h)| *h)
+                    .map(|(w, _)| w.rect),
+            );
+        }
+        out
+    }
+
     pub fn is_empty(&self) -> bool {
         self.words.is_empty()
     }

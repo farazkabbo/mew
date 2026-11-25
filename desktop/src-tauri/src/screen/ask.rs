@@ -109,6 +109,13 @@ fn ask<R: Runtime>(app: &AppHandle<R>, transcript: &str) -> Result<(), String> {
     } else {
         resolve_intent(app, transcript)
     };
+    // Handoff (being built): "hand this off to Rahbir" opens the hand-off preview; the capture
+    // isn't needed (the timeline already holds the session).
+    if let Some(name) = super::handoff::hand_off_phrase(transcript) {
+        drop(wait_for_frame(&coach)); // wiped unsent
+        super::handoff_run::start(app, name);
+        return Ok(());
+    }
     // "Neb, pause" (K2: it was Ctrl+Alt+P): everything held is wiped by pausing.
     if intent == Intent::Pause {
         coach::pause(app);

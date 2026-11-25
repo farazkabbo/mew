@@ -137,3 +137,12 @@ export async function finishDeviceLink(code: string): Promise<void> {
   if (!result) throw new Error("Not running in the Neb desktop app");
   await result;
 }
+
+/**
+ * Handoff's "Pick up from here" (desktop only): the desktop app reads the handoff itself, lists
+ * what it would reopen, and asks before each step. It never runs commands or discards work.
+ */
+export async function pickUpHandoff(id: string): Promise<void> {
+  if (!isDesktop()) throw new Error("Pick up from here works in the neb desktop app.");
+  await invoke("handoff_pick_up", { id });
+}

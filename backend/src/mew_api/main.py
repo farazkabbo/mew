@@ -18,6 +18,7 @@ from .courses.store import MemoryCourseStore
 from .deps import require_internal_caller
 from .devices.store import MemoryDeviceStore
 from .devices.tokens import LinkCodes
+from .handoffs.store import MemoryHandoffStore
 from .handwriting.store import MemoryHandwritingStore
 from .mew_events.store import MemoryMewEventStore
 from .moments.audio import MemoryAudioStore
@@ -34,6 +35,7 @@ from .routes import (
     clips,
     courses,
     devices,
+    handoffs,
     handwriting,
     health,
     learner,
@@ -99,6 +101,7 @@ def create_app(
     app.state.link_codes = LinkCodes()
     app.state.local_devices = MemoryDeviceStore()
     app.state.local_clips = MemoryClipStore()
+    app.state.local_handoffs = MemoryHandoffStore()
     app.state.local_notes = MemoryNoteLineStore()
     app.state.local_checks = MemoryCheckStore(app.state.local_notes.pages_of)
     app.state.local_walkthroughs = MemoryWalkthroughStore()
@@ -137,6 +140,7 @@ def create_app(
     v1.include_router(devices.router)
     v1.include_router(quota.router)
     v1.include_router(clips.router)
+    v1.include_router(handoffs.router)
     v1.include_router(notebooks.router)
     v1.include_router(notes.router)
     v1.include_router(walkthroughs.router)
