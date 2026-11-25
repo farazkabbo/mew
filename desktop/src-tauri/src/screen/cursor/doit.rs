@@ -1,11 +1,12 @@
 //! DO IT's allowlist (F) and the rules every chore follows.
 //!
 //! Only these executors exist: find a file (and open it, or show it in its folder if it would
-//! run something), open a Settings page, save the recipe on the page, rename photos by date.
-//! Anything else is offered as a SHOW ME lesson: Neb never improvises an action. Of the four,
-//! only renaming changes anything, and it's confirmed first and undoable; nothing deletes,
-//! sends, buys, overwrites or submits. None of them sends input: they use Windows Search, a
-//! Settings address, the clips route and file renames (the input check below keeps it so).
+//! run something), open a Settings page, switch dark or light mode, save the recipe on the page,
+//! rename photos by date. Anything else is offered as a SHOW ME lesson: Neb never improvises an
+//! action. Renaming is confirmed first and undoable; the theme is switched back the same way it
+//! was switched; nothing deletes, sends, buys, overwrites or submits. None of them sends input:
+//! they use Windows Search, a Settings address, the theme's two registry values, the clips route
+//! and file renames (the input check below keeps it so).
 
 use super::plan::DoAction;
 
@@ -13,6 +14,7 @@ use super::plan::DoAction;
 pub enum Executor {
     FindFile,
     OpenSetting,
+    SetTheme,
     SaveRecipe,
     BatchRename,
 }
@@ -22,6 +24,7 @@ pub fn executor_for(action: &DoAction) -> Option<Executor> {
     match action {
         DoAction::FindFile { .. } => Some(Executor::FindFile),
         DoAction::OpenSetting { .. } => Some(Executor::OpenSetting),
+        DoAction::SetTheme { .. } => Some(Executor::SetTheme),
         DoAction::SaveRecipe => Some(Executor::SaveRecipe),
         DoAction::BatchRename => Some(Executor::BatchRename),
         DoAction::ShowMe => None,
@@ -33,12 +36,47 @@ pub fn changes_files(executor: Executor) -> bool {
     matches!(executor, Executor::BatchRename)
 }
 
+/// Dark or light mode, asked for in any plain wording: "turn on dark mode", "switch to light
+/// mode", "make it dark mode", "turn off dark mode" (light), "dark theme please". Some(true) for
+/// dark. None when it isn't about the theme, when it asks how or where (that's SHOW ME), or when
+/// it asks for the Settings page itself ("open dark mode settings": that page opens instead).
+pub fn theme_wanted(said: &str) -> Option<bool> {
+    let g = said.to_lowercase().replace(['?', '!', '.', ','], " ");
+    let g = format!(" {} ", g.split_whitespace().collect::<Vec<_>>().join(" "));
+    let has = |w: &str| g.contains(w);
+    let dark = has(" dark mode") || has(" dark theme");
+    let light = has(" light mode") || has(" light theme");
+    if dark == light {
+        return None; // neither, or both ("from dark mode to light mode" is planned)
+    }
+    let learning = [" how ", " where ", " show me ", " teach ", " what "]
+        .iter()
+        .any(|w| has(w));
+    if learning || (has(" open ") && has(" setting")) {
+        return None;
+    }
+    let off = [
+        " turn off ",
+        " switch off ",
+        " disable ",
+        " stop ",
+        " get rid of ",
+        " no more ",
+    ]
+    .iter()
+    .any(|w| has(w));
+    Some(dark != off)
+}
+
 /// The chores recognised without a plan (no question spent): "save this recipe", "rename these
-/// photos by date", and Settings pages named outright ("turn on dark mode", "open Bluetooth
-/// settings"). Anything else is planned.
+/// photos by date", dark or light mode ("turn on dark mode": switched, not just opened), and
+/// Settings pages named outright ("open Bluetooth settings"). Anything else is planned.
 pub fn local_action(goal: &str) -> Option<DoAction> {
     let g = goal.to_lowercase();
     let has = |w: &str| g.contains(w);
+    if let Some(dark) = theme_wanted(goal) {
+        return Some(DoAction::SetTheme { dark });
+    }
     if has("recipe") && (has("save") || has("keep") || has("add")) {
         return Some(DoAction::SaveRecipe);
     }
@@ -114,6 +152,10 @@ mod tests {
         );
         assert_eq!(
             local_action("turn on dark mode for me"),
+            Some(DoAction::SetTheme { dark: true })
+        );
+        assert_eq!(
+            local_action("open dark mode settings"),
             Some(DoAction::OpenSetting {
                 page: "colors".into()
             })
@@ -141,6 +183,42 @@ mod tests {
                 }
                 other => panic!("{goal}: {other:?}"),
             }
+        }
+    }
+
+    #[test]
+    fn dark_and_light_mode_in_plain_words() {
+        for said in [
+            "turn on dark mode",
+            "Neb, turn on dark mode for me please",
+            "switch to dark mode",
+            "make my computer dark mode",
+            "dark mode",
+            "dark theme please",
+            "turn off light mode",
+            "can you put it in dark mode?",
+        ] {
+            assert_eq!(theme_wanted(said), Some(true), "{said}");
+        }
+        for said in [
+            "turn off dark mode",
+            "switch to light mode",
+            "light mode please",
+            "disable dark mode",
+            "go back to light theme",
+        ] {
+            assert_eq!(theme_wanted(said), Some(false), "{said}");
+        }
+        for said in [
+            "how do I turn on dark mode?",
+            "where is dark mode",
+            "show me how to turn on dark mode",
+            "open dark mode settings",
+            "switch from dark mode to light mode",
+            "turn on bluetooth",
+            "it's dark in here",
+        ] {
+            assert_eq!(theme_wanted(said), None, "{said}");
         }
     }
 

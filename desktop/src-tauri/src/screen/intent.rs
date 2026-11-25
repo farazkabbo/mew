@@ -139,6 +139,10 @@ pub fn intent_of(transcript: &str, coaching: bool) -> Intent {
     if is_quiz(&words) {
         return Intent::Quiz;
     }
+    // Before typing: "make my laptop dark mode" is a switch, not a rewrite.
+    if super::cursor::doit::theme_wanted(&words.join(" ")).is_some() {
+        return Intent::DoIt;
+    }
     if is_write(&words) {
         return Intent::Write;
     }
@@ -658,18 +662,11 @@ fn is_do_it(words: &[String]) -> bool {
         && text.contains("date");
     let setting = (text.starts_with("open ") || text.starts_with("open up "))
         && (text.ends_with(" settings") || text.ends_with(" setting"));
-    let dark = matches!(
-        text,
-        "turn on dark mode"
-            | "turn on dark mode for me"
-            | "switch to dark mode"
-            | "turn off dark mode"
-    );
     let undo = matches!(
         text,
         "undo the rename" | "undo that rename" | "undo rename" | "undo the renaming"
     );
-    recipe || find || rename || setting || dark || undo
+    recipe || find || rename || setting || undo
 }
 
 /// "Continue where we left off", "resume", "keep going".
@@ -815,10 +812,18 @@ mod cursor_mode_tests {
             "can you rename the pictures by the date they were taken",
             "open my bluetooth settings",
             "turn on dark mode for me",
+            "make my laptop dark mode",
+            "switch to light mode",
+            "dark mode please",
             "undo the rename",
         ] {
             assert_eq!(intent_of(said, false), Intent::DoIt, "{said}");
         }
+        // Asking how is a lesson, read by the model (never switched).
+        assert_ne!(
+            intent_of("how do I turn on dark mode?", false),
+            Intent::DoIt
+        );
         // Unchanged: these are still what they were.
         assert_eq!(intent_of("how do I save this file?", false), Intent::Ask);
         assert_eq!(intent_of("save this", false), Intent::Clip);

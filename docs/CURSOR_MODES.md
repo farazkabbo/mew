@@ -68,6 +68,13 @@ mouse and touchpad timing). Record real ones (below) before trusting them.
    hand (which already handles screenshots) instead of sending a crop to the plan route.
 10. **Confirmations are native task dialogs** (Cancel is the default); CATCH ME's chip is a
     native non-activating window placed clear of the guarded control, or not shown at all.
+11. **DO IT finishes the job when it can** (owner, 2026-11-25: "DO IT is such an awkward phrase
+    to use if it stops at the last step"; `fix/do-it-finishes`). Dark and light mode are
+    switched (`set_theme`: `AppsUseLightTheme` and `SystemUsesLightTheme` under the current
+    user, as Settings writes them, then a `WM_SETTINGCHANGE` "ImmersiveColorSet" broadcast),
+    not just opened at Colors. Asked again when it's already that way, nothing opens: Neb
+    says so. Any plain wording is recognised on the device (`doit::theme_wanted`); asking how
+    or where is still SHOW ME. Prompts `screen-intent.v5`, `screen-plan.v2`.
 
 ## Shared path library (designed, not built)
 
@@ -107,8 +114,8 @@ Before: Screen Coach on and connected; in its settings, Cursor → read CATCH ME
    more times: full path → next button only → corrections only → silent ("You've got this one").
 4. **DO IT find**: "find my lease PDF" (with such a file in Documents). It opens, and a 2-second
    caption shows "Found lease.pdf in Documents → …". With two similar files, a dialog asks which.
-5. **DO IT setting**: "turn on dark mode for me": Settings opens at Colors with the replay, and no
-   question is spent. Then "show me how": a lesson starts.
+5. **DO IT setting**: "turn on dark mode for me": dark mode comes on (apps and taskbar), and no
+   question is spent; ask again and Neb says it's already on. Then "show me how": a lesson starts.
 6. **DO IT recipe**: on a recipe site with JSON-LD, "save this recipe": a clip appears in a
    Recipe Book notebook with ingredients and steps in its text, and no question is spent. On a
    video with no markup, it costs one question.

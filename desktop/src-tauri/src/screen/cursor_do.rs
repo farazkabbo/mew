@@ -134,6 +134,10 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, captured: Captured) {
             drop(captured);
             open_setting(&page)
         }
+        DoAction::SetTheme { dark } => {
+            drop(captured);
+            set_theme(app, dark)
+        }
         DoAction::SaveRecipe => save_recipe(app, captured),
         DoAction::BatchRename => {
             drop(captured);
@@ -144,8 +148,12 @@ fn run<R: Runtime>(app: &AppHandle<R>, goal: &str, captured: Captured) {
     match outcome {
         Ok(done) => {
             remember(goal);
-            let from = input::cursor().map_or((0.0, 0.0), |(x, y)| (f64::from(x), f64::from(y)));
-            cursor_run::replay(app, done.crumbs, done.verb, from);
+            // Nothing opened (a switch flipped): there's no path to replay.
+            if !done.crumbs.is_empty() {
+                let from =
+                    input::cursor().map_or((0.0, 0.0), |(x, y)| (f64::from(x), f64::from(y)));
+                cursor_run::replay(app, done.crumbs, done.verb, from);
+            }
             cursor_run::count(app, "do_it_done");
         }
         Err(message) if message.is_empty() => {} // cancelled by the student
@@ -227,6 +235,28 @@ fn open_setting(page: &str) -> Result<Done, String> {
     Ok(Done {
         verb: "Opened".into(),
         crumbs,
+    })
+}
+
+/// Dark or light mode, switched (not just its page opened). Asked again when it's already that
+/// way, nothing opens: Neb just says so.
+fn set_theme<R: Runtime>(app: &AppHandle<R>, dark: bool) -> Result<Done, String> {
+    let name = if dark { "Dark mode" } else { "Light mode" };
+    let said = if chores::dark_mode() == dark {
+        format!("{name} is already on.")
+    } else if chores::set_dark_mode(dark) {
+        format!("{name} is on.")
+    } else {
+        return Err(format!(
+            "Windows wouldn't switch to {} just now.",
+            name.to_lowercase()
+        ));
+    };
+    say(app, &said);
+    coach::notify(app, &said);
+    Ok(Done {
+        verb: String::new(),
+        crumbs: Vec::new(),
     })
 }
 

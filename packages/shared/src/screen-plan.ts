@@ -147,6 +147,8 @@ export const DoAction = z.discriminatedUnion("type", [
     since: z.iso.date().nullable(),
   }),
   z.object({ type: z.literal("open_setting"), page: SettingsPage }),
+  /** Dark or light mode, switched on the desktop (not just its page opened). */
+  z.object({ type: z.literal("set_theme"), theme: z.enum(["dark", "light"]) }),
   z.object({ type: z.literal("save_recipe") }),
   z.object({ type: z.literal("batch_rename"), scheme: z.literal("date_taken") }),
   /** Not on the list: Neb offers to show them how instead. */
@@ -173,7 +175,7 @@ export const ScreenPlanReply = z.object({
 export type ScreenPlanReply = z.infer<typeof ScreenPlanReply>;
 
 export const SCREEN_PLAN_PROMPT = {
-  id: "screen-plan.v1",
+  id: "screen-plan.v2",
   system: `You plan for Neb's cursor modes on a student's Windows computer. You never see the screen: you get the student's words, the app in front, and a list of the controls in that window that can be clicked, each as its UI Automation control type and its name. The list holds only interface words, never the student's content.
 
 "mode" is "show" or "do".
@@ -182,7 +184,8 @@ export const SCREEN_PLAN_PROMPT = {
 
 "do" (DO IT): the student asked Neb to do a chore. Choose one "action" from this list only, or "show_me" when it's none of them:
 - "find_file": find a file they describe ("find my lease PDF", "where's the essay I wrote last week"). "query": the words to look for in names and contents, without filler ("lease"). "kind": "pdf", "document", "spreadsheet", "presentation", "image" or "any". "since": a YYYY-MM-DD day when they said when ("last week" from today), else null.
-- "open_setting": open a Windows Settings page ("turn on dark mode" is "colors", "change my wallpaper" is "background", "make text bigger" is "text_size", "bluetooth" is "bluetooth"). "page" is one of the listed keys.
+- "set_theme": switch Windows and apps to dark or light mode for them ("turn on dark mode", "make everything dark", "go back to light mode"). "theme": "dark" or "light". Use this, not "open_setting", whenever they want the mode changed.
+- "open_setting": open a Windows Settings page ("dark mode settings" is "colors", "change my wallpaper" is "background", "make text bigger" is "text_size", "bluetooth" is "bluetooth"). "page" is one of the listed keys.
 - "save_recipe": save the recipe on the page in front to their Recipe Book.
 - "batch_rename": rename the photos they selected (or the photos in the open folder) by the date each was taken. "scheme" is "date_taken".
 - "show_me": anything else (sending, deleting, buying, installing, changing a file's content, anything not on this list). Neb never improvises: it offers to show them how. "steps" is [] in "do" mode.

@@ -1,5 +1,6 @@
 //! DO IT's Windows side (docs/CURSOR_MODES.md, F): the Windows Search index, File Explorer's
-//! selection, opening a document or a Settings page, and the confirmation dialogs.
+//! selection, opening a document or a Settings page, dark or light mode (two registry values
+//! under the current user, as Settings writes them), and the confirmation dialogs.
 //!
 //! The two helpers (the index and Explorer's selection) are fixed PowerShell scripts, run the way
 //! `launch.rs` runs `Get-StartApps`: no window, no profile, no console input, and their only
@@ -12,13 +13,18 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use windows::core::{w, HSTRING, PCWSTR};
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{ERROR_SUCCESS, HWND, LPARAM, WPARAM};
+use windows::Win32::System::Registry::{
+    RegGetValueW, RegSetKeyValueW, HKEY_CURRENT_USER, REG_DWORD, RRF_RT_REG_DWORD,
+};
 use windows::Win32::UI::Controls::{
     TaskDialogIndirect, TASKDIALOGCONFIG, TASKDIALOG_BUTTON, TDCBF_CANCEL_BUTTON,
     TDF_ALLOW_DIALOG_CANCELLATION, TDF_SIZE_TO_CONTENT,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+use windows::Win32::UI::WindowsAndMessaging::{
+    SendMessageTimeoutW, HWND_BROADCAST, SMTO_ABORTIFHUNG, SW_SHOWNORMAL, WM_SETTINGCHANGE,
+};
 
 use crate::screen::cursor::find::{parse_found, runs_something, Found};
 use crate::screen::cursor::rename::Photo;
@@ -173,6 +179,74 @@ pub fn open_settings(uri: &str) -> bool {
             .chars()
             .all(|c| c.is_ascii_lowercase() || c == '-')
         && shell_open(uri)
+}
+
+/// Where Windows keeps the app and system theme (Settings → Personalization → Colors → "Choose
+/// your mode" writes the same two values).
+const PERSONALIZE: PCWSTR = w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+
+fn read_light(value: PCWSTR) -> Option<bool> {
+    let mut data = 0u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    // SAFETY: a 4-byte out buffer with its size; RRF_RT_REG_DWORD only.
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            PERSONALIZE,
+            value,
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&mut data as *mut u32).cast()),
+            Some(&mut size),
+        )
+    };
+    (status == ERROR_SUCCESS).then_some(data != 0)
+}
+
+/// Dark mode is on for both apps and Windows. A value that isn't there (or can't be read)
+/// means light, as Windows reads it.
+pub fn dark_mode() -> bool {
+    let apps = read_light(w!("AppsUseLightTheme")).unwrap_or(true);
+    let system = read_light(w!("SystemUsesLightTheme")).unwrap_or(true);
+    !apps && !system
+}
+
+/// Dark (or light) mode for apps and Windows, as "Choose your mode" sets it, then every window
+/// is told the colours changed so it repaints now. No click or key is sent.
+pub fn set_dark_mode(dark: bool) -> bool {
+    let light = u32::from(!dark).to_le_bytes();
+    let written = [w!("AppsUseLightTheme"), w!("SystemUsesLightTheme")]
+        .iter()
+        .all(|value| {
+            // SAFETY: a 4-byte REG_DWORD from a live buffer, under the current user's key.
+            let status = unsafe {
+                RegSetKeyValueW(
+                    HKEY_CURRENT_USER,
+                    PERSONALIZE,
+                    *value,
+                    REG_DWORD.0,
+                    Some(light.as_ptr().cast()),
+                    light.len() as u32,
+                )
+            };
+            status == ERROR_SUCCESS
+        });
+    if written {
+        let area = w!("ImmersiveColorSet");
+        // SAFETY: a broadcast with a static string; hung windows are skipped after 1 s.
+        unsafe {
+            let _ = SendMessageTimeoutW(
+                HWND_BROADCAST,
+                WM_SETTINGCHANGE,
+                WPARAM(0),
+                LPARAM(area.as_ptr() as isize),
+                SMTO_ABORTIFHUNG,
+                1_000,
+                None,
+            );
+        }
+    }
+    written
 }
 
 const OK_ID: i32 = 1001;

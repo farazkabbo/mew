@@ -84,6 +84,10 @@ pub enum DoAction {
     OpenSetting {
         page: String,
     },
+    /// Dark (true) or light mode, switched for them: apps and Windows both.
+    SetTheme {
+        dark: bool,
+    },
     SaveRecipe,
     BatchRename,
     /// Not on the list: offer SHOW ME instead.
@@ -212,6 +216,11 @@ fn parse_action(value: &serde_json::Value) -> Option<DoAction> {
                 page: page.to_owned(),
             })
         }
+        "set_theme" => match field("theme")? {
+            "dark" => Some(DoAction::SetTheme { dark: true }),
+            "light" => Some(DoAction::SetTheme { dark: false }),
+            _ => None,
+        },
         "save_recipe" => Some(DoAction::SaveRecipe),
         "batch_rename" => (field("scheme")? == "date_taken").then_some(DoAction::BatchRename),
         "show_me" => Some(DoAction::ShowMe),
@@ -248,6 +257,7 @@ mod tests {
             with(r#"{"type":"find_file","query":"lease","kind":"exe","since":null}"#),
             with(r#"{"type":"find_file","query":"lease","kind":"pdf","since":"last week"}"#),
             with(r#"{"type":"batch_rename","scheme":"random"}"#),
+            with(r#"{"type":"set_theme","theme":"purple"}"#),
             r#"{"planId":"nope","speech":"ok","steps":[],"action":null}"#.to_string(),
             format!(
                 r#"{{"planId":"{ID}","speech":"ok","steps":[{{"type":"Edit","name":"x"}}],"action":null}}"#
@@ -256,6 +266,11 @@ mod tests {
         ] {
             assert!(parse_plan(bad.as_bytes()).is_none(), "{bad}");
         }
+        let dark = with(r#"{"type":"set_theme","theme":"dark"}"#);
+        assert_eq!(
+            parse_plan(dark.as_bytes()).unwrap().action,
+            Some(DoAction::SetTheme { dark: true })
+        );
         let ok = with(r#"{"type":"find_file","query":"lease","kind":"pdf","since":"2026-11-01"}"#);
         assert!(matches!(
             parse_plan(ok.as_bytes()).unwrap().action,
