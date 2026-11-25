@@ -48,6 +48,8 @@ export * from "./saved-solution";
 export * from "./screen";
 export * from "./screen-act";
 export * from "./screen-intent";
+export * from "./screen-plan";
+export * from "./screen-recipe";
 export * from "./screen-watch";
 export * from "./screen-write";
 export * from "./screen-quiz";

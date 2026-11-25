@@ -113,9 +113,10 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     use screen::circle_answer::screen_coach_spoken;
     use screen::clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save};
     use screen::coach::{
-        screen_coach_onboarding, screen_coach_open_mic_settings, screen_coach_set_circle,
-        screen_coach_set_enabled, screen_coach_set_paused, screen_coach_set_privacy,
-        screen_coach_shortcuts_seen, screen_coach_status,
+        screen_coach_forget_paths, screen_coach_onboarding, screen_coach_open_mic_settings,
+        screen_coach_set_circle, screen_coach_set_cursor, screen_coach_set_enabled,
+        screen_coach_set_paused, screen_coach_set_privacy, screen_coach_shortcuts_seen,
+        screen_coach_status,
     };
     use screen::coach_mode::screen_coach_pill;
     use screen::notes_check::screen_notes_panel;
@@ -149,6 +150,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         screen_notes_panel,
         screen_coach_pill,
         screen_coach_set_circle,
+        screen_coach_set_cursor,
+        screen_coach_forget_paths,
         screen_coach_spoken,
         screen_draw_mark,
         screen_draw_erase,
@@ -288,6 +291,22 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         false,
         None::<&str>,
     )?;
+    // The cursor modes (docs/CURSOR_MODES.md): CATCH ME's one-click pause, and DO IT's undo.
+    let catch_pause = CheckMenuItem::with_id(
+        app,
+        "cursor-catch-pause",
+        "Pause CATCH ME",
+        false,
+        false,
+        None::<&str>,
+    )?;
+    let undo_rename = MenuItem::with_id(
+        app,
+        "cursor-undo-rename",
+        "Undo rename",
+        cfg!(windows),
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(
         app,
         "screen-settings",
@@ -316,6 +335,8 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             &pause,
             &pause_hour,
             &stop_walkthrough,
+            &catch_pause,
+            &undo_rename,
             &settings,
             &separator2,
             &update,
@@ -339,6 +360,10 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
             "screen-pause-hour" => screen::coach::pause_for_an_hour(app),
             #[cfg(windows)]
             "screen-coach-stop" => screen::coach_mode::stop_from_tray(app),
+            #[cfg(windows)]
+            "cursor-catch-pause" => screen::cursor_run::toggle_catch_pause(app),
+            #[cfg(windows)]
+            "cursor-undo-rename" => screen::cursor_do::undo_rename(app),
             #[cfg(windows)]
             "screen-settings" => screen::coach::open_settings(app),
             #[cfg(windows)]
@@ -366,6 +391,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         pause,
         pause_hour,
         stop_walkthrough,
+        catch_pause,
     });
     #[cfg(windows)]
     app.manage(updates::TrayItem(update));

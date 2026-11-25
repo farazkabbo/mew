@@ -27,6 +27,8 @@ fn main() {
         "screen_notes_panel",
         "screen_coach_pill",
         "screen_coach_set_circle",
+        "screen_coach_set_cursor",
+        "screen_coach_forget_paths",
         "screen_coach_spoken",
         "screen_draw_mark",
         "screen_draw_erase",

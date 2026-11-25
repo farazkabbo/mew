@@ -51,6 +51,8 @@ pub struct TrayItems<R: Runtime> {
     pub pause_hour: MenuItem<R>,
     /// "Stop the walkthrough": enabled while one is in progress (S4).
     pub stop_walkthrough: MenuItem<R>,
+    /// "Pause CATCH ME": enabled while CATCH ME is on, checked while it's paused.
+    pub catch_pause: CheckMenuItem<R>,
 }
 
 pub struct ScreenCoach {
@@ -115,6 +117,12 @@ pub struct StatusView {
     pub microphone: MicAccess,
     /// Connected to the user's Mew account (a device token is saved).
     pub connected: bool,
+    /// The cursor modes (docs/CURSOR_MODES.md): their settings, CATCH ME's explanation
+    /// version, whether it's paused from the tray, and the counts so far.
+    pub cursor: super::cursor::settings::CursorSettings,
+    pub catch_me_consent_version: u32,
+    pub catch_me_paused: bool,
+    pub cursor_counts: super::cursor::telemetry::Counts,
 }
 
 /// Who asked for a capture: the hold gesture without marks (the page listened; it asks with the
@@ -169,6 +177,10 @@ impl ScreenCoach {
             default_blocked_apps: DEFAULT_BLOCKED_APPS,
             microphone: system::mic_access(),
             connected: state.connected,
+            cursor: state.config.cursor.clone(),
+            catch_me_consent_version: super::cursor::settings::CATCH_ME_CONSENT,
+            catch_me_paused: super::cursor_run::catch_paused(),
+            cursor_counts: super::cursor::telemetry::Counts::default(),
         }
     }
 
@@ -306,6 +318,7 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>, app_url: Url) -> tauri::Result<()> 
     overlay_capabilities(app)?;
     refresh(app);
     circle::start_tracker(app);
+    super::cursor_run::setup(app);
     if shortcuts_notice {
         notify(
             app,
@@ -328,6 +341,8 @@ fn settings_capability<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             .permission("allow-screen-coach-shortcuts-seen")
             .permission("allow-screen-coach-set-privacy")
             .permission("allow-screen-coach-set-circle")
+            .permission("allow-screen-coach-set-cursor")
+            .permission("allow-screen-coach-forget-paths")
             .permission("allow-screen-coach-open-mic-settings")
             .permission("allow-screen-coach-link-start")
             .permission("allow-screen-coach-disconnect")
@@ -785,6 +800,26 @@ pub fn is_usable<R: Runtime>(app: &AppHandle<R>) -> bool {
         .is_some_and(|coach| usable(&coach))
 }
 
+/// The cursor modes' settings right now (docs/CURSOR_MODES.md).
+pub fn cursor_settings<R: Runtime>(app: &AppHandle<R>) -> super::cursor::settings::CursorSettings {
+    app.try_state::<ScreenCoach>()
+        .map(|coach| coach.lock().config.cursor.clone())
+        .unwrap_or_default()
+}
+
+/// Changes the cursor modes' settings (saved first), then lets the cursor runtime re-read them.
+pub fn update_cursor<R: Runtime>(
+    app: &AppHandle<R>,
+    change: impl FnOnce(&mut super::cursor::settings::CursorSettings),
+) -> Result<(), String> {
+    let coach = app
+        .try_state::<ScreenCoach>()
+        .ok_or("Screen Coach isn't ready.")?;
+    coach.update(|config| change(&mut config.cursor))?;
+    super::cursor_run::refresh(app);
+    Ok(())
+}
+
 /// Circle & Ask's settings right now.
 pub fn circle_settings<R: Runtime>(app: &AppHandle<R>) -> config::CircleSettings {
     app.try_state::<ScreenCoach>()
@@ -1166,11 +1201,17 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
         let _ = items
             .stop_walkthrough
             .set_enabled(coach_mode::is_coaching(app));
+        let cursor = cursor_settings(app);
+        let _ = items.catch_pause.set_enabled(on && cursor.catch_me_on());
+        let _ = items
+            .catch_pause
+            .set_checked(super::cursor_run::catch_paused());
     }
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
         let _ = window.eval(CHANGED_SCRIPT);
     }
     screen_island::refresh(app);
+    super::cursor_run::refresh(app);
 }
 
 fn set_paused<R: Runtime>(app: &AppHandle<R>, paused: bool) -> Result<StatusView, String> {
@@ -1226,7 +1267,8 @@ pub fn coach_of<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::State<'_, Scree
 #[tauri::command]
 pub fn screen_coach_status<R: Runtime>(window: WebviewWindow<R>) -> Result<StatusView, String> {
     require_settings_window(&window)?;
-    Ok(coach_of(window.app_handle())?.view())
+    let app = window.app_handle();
+    Ok(with_counts(app, coach_of(app)?.view()))
 }
 
 /// Turns Screen Coach on (only with consent to the current explanation) or off.
@@ -1318,6 +1360,42 @@ pub fn screen_coach_open_mic_settings<R: Runtime>(window: WebviewWindow<R>) -> R
     require_settings_window(&window)?;
     system::open_microphone_settings();
     Ok(())
+}
+
+/// Saves the cursor modes' settings (docs/CURSOR_MODES.md). CATCH ME turns on only with the
+/// current explanation's version: the page sends it after the student has read it.
+#[tauri::command]
+pub fn screen_coach_set_cursor<R: Runtime>(
+    window: WebviewWindow<R>,
+    cursor: super::cursor::settings::CursorSettings,
+) -> Result<StatusView, String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle();
+    let coach = coach_of(app)?;
+    let cursor = cursor.normalized()?;
+    if cursor.catch_me && cursor.catch_me_consent != super::cursor::settings::CATCH_ME_CONSENT {
+        return Err("Read what CATCH ME does first, then turn it on.".to_owned());
+    }
+    coach.update(|config| config.cursor = cursor)?;
+    refresh(app);
+    Ok(with_counts(app, coach.view()))
+}
+
+/// "Forget learned paths": SHOW ME plans every lesson again.
+#[tauri::command]
+pub fn screen_coach_forget_paths<R: Runtime>(
+    window: WebviewWindow<R>,
+) -> Result<StatusView, String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle();
+    super::cursor_run::forget_paths(app);
+    Ok(with_counts(app, coach_of(app)?.view()))
+}
+
+/// The status with the cursor modes' counts (read from their file).
+fn with_counts<R: Runtime>(app: &AppHandle<R>, mut view: StatusView) -> StatusView {
+    view.cursor_counts = super::cursor_run::counts(app);
+    view
 }
 
 /// Saves Circle & Ask's settings (the pointer, saving, silent mode).

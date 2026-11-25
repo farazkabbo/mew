@@ -58,6 +58,7 @@ pub mod base64;
 pub mod circle_protocol;
 pub mod circle_steps;
 pub mod config;
+pub mod cursor;
 pub mod destination;
 pub mod drag;
 pub mod frame;
@@ -98,6 +99,10 @@ pub mod clip;
 pub mod coach;
 #[cfg(windows)]
 pub mod coach_mode;
+#[cfg(windows)]
+pub mod cursor_do;
+#[cfg(windows)]
+pub mod cursor_run;
 #[cfg(windows)]
 pub mod device_call;
 #[cfg(windows)]

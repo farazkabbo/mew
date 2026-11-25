@@ -18,7 +18,7 @@ pub const FRAME_TTL: Duration = Duration::from_secs(60);
 
 /// A rectangle in physical screen pixels (virtual-screen coordinates: can be negative for
 /// monitors left of or above the primary one).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct ScreenRect {
     pub left: i32,
     pub top: i32,

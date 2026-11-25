@@ -29,6 +29,7 @@ function render(view) {
 
   renderPrivacy(view);
   renderCircle(view);
+  renderCursor(view);
   renderAccount(view);
 
   if (!usable) showNotice(view.unsupportedReason);
@@ -135,6 +136,102 @@ $("include-link").addEventListener("change", (event) =>
   saveCircle({ includeSourceLink: event.target.checked }),
 );
 $("silent").addEventListener("change", (event) => saveCircle({ silent: event.target.checked }));
+
+// ─── Cursor modes ────────────────────────────────────────────────────────────────────────────
+
+const COUNT_WORDS = {
+  show_me_started: "SHOW ME lessons started",
+  show_me_completed: "SHOW ME lessons finished",
+  show_me_correction: "Corrections before a wrong click",
+  do_it_done: "DO IT chores done",
+  do_it_undone: "Renames undone",
+  catch_shown: "CATCH ME catches",
+  catch_continued: "Carried on after a catch",
+  catch_not_a_mistake: 'Marked "not a mistake"',
+  catch_snoozed: "Rules snoozed",
+};
+
+function renderCursor(view) {
+  const { cursor } = view;
+  const decided = cursor.catchMeConsent >= view.catchMeConsentVersion;
+  const on = cursor.catchMe && decided;
+  $("catch-new").hidden = decided;
+  $("catch-consent-row").hidden = on;
+  $("catch-on").hidden = on;
+  $("catch-on").disabled = !$("catch-consent").checked;
+  $("catch-not-now").hidden = on || decided;
+  $("catch-off").hidden = !on;
+  $("catch-paused").hidden = !(on && view.catchMePaused);
+  $("catch-rules").disabled = !on;
+  const now = Date.now() / 1000;
+  const snoozed = [];
+  for (const box of document.querySelectorAll("input[data-catch]")) {
+    const rule = box.dataset.catch;
+    box.checked = !cursor.rulesOff.includes(rule);
+    if ((cursor.snoozed[rule] ?? 0) > now) snoozed.push(box.parentElement.textContent.trim());
+  }
+  $("catch-snoozed").hidden = snoozed.length === 0;
+  $("catch-snoozed").textContent = snoozed.length ? `Snoozed for now: ${snoozed.join(", ")}.` : "";
+  for (const radio of document.querySelectorAll('input[name="guidance"]')) {
+    radio.checked = radio.value === cursor.guidance;
+  }
+  $("cursor-voice").checked = cursor.voice;
+  $("cursor-debug").checked = cursor.debug;
+  $("cursor-record").checked = cursor.recordTraces;
+  $("cursor-counts").replaceChildren(
+    ...Object.entries(COUNT_WORDS).map(([key, words]) => {
+      const item = document.createElement("li");
+      item.textContent = `${words}: ${view.cursorCounts[key] ?? 0}`;
+      return item;
+    }),
+  );
+}
+
+/** Sends the cursor modes' settings with `changes` applied; Rust checks and saves them. */
+function saveCursor(changes) {
+  return run(() =>
+    invoke("screen_coach_set_cursor", { cursor: { ...current.cursor, ...changes } }),
+  );
+}
+
+$("catch-consent").addEventListener("change", () => current && render(current));
+$("catch-on").addEventListener("click", async () => {
+  const ok = await saveCursor({ catchMe: true, catchMeConsent: current.catchMeConsentVersion });
+  if (ok) showNotice("CATCH ME is on. It speaks up only before a costly slip.");
+});
+$("catch-not-now").addEventListener("click", () =>
+  saveCursor({ catchMe: false, catchMeConsent: current.catchMeConsentVersion }),
+);
+$("catch-off").addEventListener("click", () => {
+  $("catch-consent").checked = false;
+  return saveCursor({ catchMe: false });
+});
+for (const box of document.querySelectorAll("input[data-catch]")) {
+  box.addEventListener("change", () => {
+    const rule = box.dataset.catch;
+    const others = current.cursor.rulesOff.filter((other) => other !== rule);
+    const snoozed = { ...current.cursor.snoozed };
+    delete snoozed[rule];
+    return saveCursor({ rulesOff: box.checked ? others : [...others, rule], snoozed });
+  });
+}
+$("catch-reset").addEventListener("click", () => saveCursor({ notMistakes: {}, snoozed: {} }));
+for (const radio of document.querySelectorAll('input[name="guidance"]')) {
+  radio.addEventListener("change", () => saveCursor({ guidance: radio.value }));
+}
+$("cursor-voice").addEventListener("change", (event) =>
+  saveCursor({ voice: event.target.checked }),
+);
+$("cursor-debug").addEventListener("change", (event) =>
+  saveCursor({ debug: event.target.checked }),
+);
+$("cursor-record").addEventListener("change", (event) =>
+  saveCursor({ recordTraces: event.target.checked }),
+);
+$("forget-paths").addEventListener("click", async () => {
+  const ok = await run(() => invoke("screen_coach_forget_paths"));
+  if (ok) showNotice("Forgotten. SHOW ME will plan each lesson again.");
+});
 
 // ─── Privacy ─────────────────────────────────────────────────────────────────────────────────
 

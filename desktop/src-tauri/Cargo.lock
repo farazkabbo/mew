@@ -2193,7 +2193,9 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "windows",
+ "windows-core",
  "windows-future",
+ "windows-numerics",
 ]
 
 [[package]]
