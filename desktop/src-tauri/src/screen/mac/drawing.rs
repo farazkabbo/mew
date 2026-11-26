@@ -9,13 +9,41 @@ use crate::screen::{
     surfaces::Surface,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use tauri::{ipc::CapabilityBuilder, AppHandle, Manager, WebviewWindow};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut};
 
+#[derive(Clone, PartialEq)]
+struct Binding {
+    process: super::privacy::ProcessIdentity,
+    window: target::WindowSnapshot,
+    display: target::Display,
+}
+fn binding() -> Option<Binding> {
+    let process = super::privacy::frontmost_process_identity()?;
+    let front = target::frontmost_app()?;
+    if process.pid != front.pid || front.bundle_id.as_deref() != Some(process.bundle_id.as_str()) {
+        return None;
+    }
+    let window = target::frontmost_window_candidate(&front)?;
+    let display = input::cursor().and_then(target::display_at)?;
+    Some(Binding {
+        process,
+        window,
+        display,
+    })
+}
+fn same_target(expected: Option<&Binding>, actual: Option<&Binding>) -> bool {
+    expected
+        .zip(actual)
+        .is_some_and(|(expected, actual)| expected == actual)
+}
 #[derive(Default)]
 struct Session {
     frame: Option<Rect>,
+    binding: Option<Binding>,
     tool: Tool,
     shape: Shape,
     notes: bool,
@@ -38,7 +66,41 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
             .permission("allow-screen-draw-select")
             .permission("allow-screen-draw-island-press"),
     )
-    .map_err(|_| "Couldn't configure the drawing window.".to_owned())
+    .map_err(|_| "Couldn't configure the drawing window.".to_owned())?;
+    let handle = app.clone();
+    let in_flight = std::sync::Arc::new(AtomicBool::new(false));
+    std::thread::Builder::new()
+        .name("neb-annotation-target".into())
+        .spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            let active = view(&handle);
+            if active.0 == Tool::None && !active.1 {
+                continue;
+            }
+            if in_flight.swap(true, Ordering::AcqRel) {
+                continue;
+            }
+            let app = handle.clone();
+            let busy = in_flight.clone();
+            if handle
+                .run_on_main_thread(move || {
+                    // No AX values, titles, screen pixels or input events are read.
+                    let expected = state(&app)
+                        .ok()
+                        .and_then(|s| s.0.lock().ok().and_then(|s| s.binding.clone()));
+                    if !same_target(expected.as_ref(), binding().as_ref()) {
+                        let _ = close(&app);
+                        let _ = island::refresh(&app);
+                    }
+                    busy.store(false, Ordering::Release);
+                })
+                .is_err()
+            {
+                in_flight.store(false, Ordering::Release);
+            }
+        })
+        .map_err(|_| "Couldn't monitor the annotation target.")?;
+    Ok(())
 }
 fn state(app: &AppHandle) -> Result<tauri::State<'_, Drawing>, String> {
     app.try_state().ok_or_else(|| "Drawing isn't ready.".into())
@@ -60,16 +122,7 @@ pub fn set_tool(app: &AppHandle, tool: Tool, shape: Shape) -> Result<(), String>
         if config.paused || !config.privacy.show_in_captures {
             return Err("Visible Mac annotations are not enabled.".into());
         }
-        let escape = Shortcut::new(None, Code::Escape);
-        if !app.global_shortcut().is_registered(escape) {
-            app.global_shortcut()
-                .register(escape)
-                .map_err(|_| "Couldn't register Escape; drawing stays off.")?;
-        }
-    } else {
-        let _ = app
-            .global_shortcut()
-            .unregister(Shortcut::new(None, Code::Escape));
+        crate::mac_shortcut::reserve_escape(app)?;
     }
     let window = overlay::ensure(app, Surface::Draw).map_err(|_| "Couldn't open drawing tools.")?;
     let frame = {
@@ -77,9 +130,12 @@ pub fn set_tool(app: &AppHandle, tool: Tool, shape: Shape) -> Result<(), String>
         let mut s = state.0.lock().unwrap_or_else(|p| p.into_inner());
         // Never move existing notes onto a different display or page.
         if s.frame.is_none() {
-            s.frame = input::cursor()
-                .and_then(target::display_at)
-                .map(|d| d.points);
+            let target = binding().ok_or("Couldn't identify the drawing window.")?;
+            if target.process.pid == std::process::id() as i32 {
+                return Err("Switch to the app you want to annotate first.".into());
+            }
+            s.frame = Some(target.display.points);
+            s.binding = Some(target);
         }
         let frame = s.frame.ok_or("Couldn't locate the drawing display.")?;
         s.tool = tool;
@@ -95,6 +151,7 @@ pub fn set_tool(app: &AppHandle, tool: Tool, shape: Shape) -> Result<(), String>
     if let Some(island) = app.get_webview_window(Surface::Island.label()) {
         overlay::show_quietly(&island).map_err(|_| "Couldn't show Neb tools.")?;
     }
+    crate::mac_shortcut::release_escape(app);
     Ok(())
 }
 fn sync(app: &AppHandle) -> Result<(), String> {
@@ -132,9 +189,6 @@ pub fn clear(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 pub fn close(app: &AppHandle) -> Result<(), String> {
-    let _ = app
-        .global_shortcut()
-        .unregister(Shortcut::new(None, Code::Escape));
     // Always release/hide native input even if clearing the JS content fails.
     let mut failure = None;
     if let Some(window) = app.get_webview_window(Surface::Draw.label()) {
@@ -150,7 +204,9 @@ pub fn close(app: &AppHandle) -> Result<(), String> {
         let mut s = state.0.lock().unwrap_or_else(|p| p.into_inner());
         s.tool = Tool::None;
         s.frame = None;
+        s.binding = None;
     }
+    crate::mac_shortcut::release_escape(app);
     sync(app)?;
     clear(app)?;
     failure.map_or(Ok(()), |message| Err(message.into()))
@@ -243,6 +299,40 @@ pub fn screen_draw_island_press(window: WebviewWindow, at: [f32; 2]) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn annotations_cancel_on_unknown_launch_window_geometry_or_display_changes() {
+        let frame = Rect::new(-1512., 0., 1512., 982.).unwrap();
+        let initial = Binding {
+            process: super::super::privacy::ProcessIdentity {
+                pid: 42,
+                bundle_id: "example.editor".into(),
+                launch_time_bits: 1.0_f64.to_bits(),
+            },
+            window: target::WindowSnapshot {
+                id: 7,
+                pid: 42,
+                bounds: frame,
+                layer: 0,
+                alpha: Some(1.),
+            },
+            display: target::Display::new(1, frame, 3024, 1964).unwrap(),
+        };
+        assert!(same_target(Some(&initial), Some(&initial)));
+        assert!(!same_target(Some(&initial), None));
+        assert!(!same_target(None, None));
+        let mut relaunch = initial.clone();
+        relaunch.process.launch_time_bits = 2.0_f64.to_bits();
+        let mut window = initial.clone();
+        window.window.id += 1;
+        let mut moved = initial.clone();
+        moved.window.bounds.x += 1.;
+        let mut display = initial.clone();
+        display.display.id += 1;
+        for changed in [relaunch, window, moved, display] {
+            assert!(!same_target(Some(&initial), Some(&changed)));
+        }
+    }
+
     #[test]
     fn local_points_use_points_not_retina_pixels_or_global_origins() {
         let f = Rect::new(-1512., -200., 1512., 982.).unwrap();

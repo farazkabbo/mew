@@ -102,10 +102,18 @@ fn safe_top(display: Rect) -> Option<f64> {
 
 /// Main-thread native tray/gesture action. Shows no page content or screen pixels.
 pub fn show(app: &AppHandle) -> Result<(), String> {
+    let result = show_inner(app);
+    if result.is_err() {
+        crate::mac_shortcut::release_escape(app);
+    }
+    result
+}
+fn show_inner(app: &AppHandle) -> Result<(), String> {
     let state = host(app)?;
     if objc2::MainThreadMarker::new().is_none() {
         return Err("Neb tools need the main thread.".into());
     }
+    crate::mac_shortcut::reserve_escape(app)?;
     let display = input::cursor()
         .and_then(target::display_at)
         .ok_or("Couldn't locate the display.")?;
@@ -141,10 +149,19 @@ pub fn shown(app: &AppHandle) -> bool {
 }
 
 pub fn hide(app: &AppHandle) -> Result<(), String> {
+    // The isolated panel fixture has no media service. Production always initializes it.
+    if app.try_state::<super::media::Service>().is_some() {
+        super::media::close(app)?;
+    }
     if let Some(window) = app.get_webview_window(Surface::Island.label()) {
         overlay::hide(&window).map_err(|_| "Couldn't hide Neb tools.")?;
     }
-    host(app)?.layout.lock().unwrap_or_else(|p| p.into_inner()).visible = false;
+    host(app)?
+        .layout
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .visible = false;
+    crate::mac_shortcut::release_escape(app);
     Ok(())
 }
 
@@ -208,9 +225,13 @@ fn dispatch_action(app: &AppHandle, action: IslandAction) -> Result<(), String> 
         IslandAction::Ready => {
             // Mac panels fit their content; keep tooltip labels inside the bar so an
             // invisible footer never intercepts clicks intended for the student's app.
-            overlay::dispatch(app, Surface::Island, "mew:island-host",
-                &serde_json::json!({"inlineTooltips": true}))
-                .map_err(|_| "Couldn't configure Neb tools.")?;
+            overlay::dispatch(
+                app,
+                Surface::Island,
+                "mew:island-host",
+                &serde_json::json!({"inlineTooltips": true, "nativePlayersOnly": true}),
+            )
+            .map_err(|_| "Couldn't configure Neb tools.")?;
         }
         IslandAction::Tool { tool } => backend.set_tool(backend.view().tool.toggled(tool))?,
         IslandAction::Shape { shape } => backend.set_shape(shape)?,
@@ -228,11 +249,7 @@ fn dispatch_action(app: &AppHandle, action: IslandAction) -> Result<(), String> 
         IslandAction::Clear => backend.clear()?,
         IslandAction::Close => {
             backend.close()?;
-            let mut layout = state.layout.lock().unwrap_or_else(|p| p.into_inner());
-            layout.visible = false;
-            if let Some(window) = app.get_webview_window(Surface::Island.label()) {
-                overlay::hide(&window).map_err(|_| "Couldn't close Neb tools.")?;
-            }
+            hide(app)?;
             return Ok(());
         }
         IslandAction::MusicPanel { open, height } => {

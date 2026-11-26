@@ -7,6 +7,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 struct Status {
     app_url: Url,
     registered: bool,
+    plugin_ready: bool,
 }
 
 fn shortcut() -> Shortcut {
@@ -43,11 +44,12 @@ pub fn setup(app: &AppHandle, app_url: Url) {
         })
         .build();
     // A conflict must leave Neb usable through its Dock and menu-bar item.
-    let registered =
-        app.plugin(plugin).is_ok() && app.global_shortcut().register(shortcut()).is_ok();
+    let plugin_ready = app.plugin(plugin).is_ok();
+    let registered = plugin_ready && app.global_shortcut().register(shortcut()).is_ok();
     app.manage(Status {
         app_url,
         registered,
+        plugin_ready,
     });
 }
 
@@ -60,6 +62,37 @@ pub fn desktop_summon_shortcut(window: WebviewWindow) -> Result<bool, String> {
     let status = window.state::<Status>();
     crate::screen::page::require_app_page(&window, &status.app_url)?;
     Ok(status.registered)
+}
+
+/// Shared Escape ownership: drawing cleanup cannot remove the island's cancellation key.
+pub(crate) fn reserve_escape(app: &AppHandle) -> Result<(), String> {
+    let Some(status) = app.try_state::<Status>() else {
+        return Ok(());
+    }; // owned panel fixture
+    if !status.plugin_ready {
+        return Err("Global keyboard cancellation is unavailable.".into());
+    }
+    let key = Shortcut::new(None, Code::Escape);
+    if !app.global_shortcut().is_registered(key) {
+        app.global_shortcut()
+            .register(key)
+            .map_err(|_| "Couldn't register Escape for Neb tools.")?;
+    }
+    Ok(())
+}
+pub(crate) fn release_escape(app: &AppHandle) {
+    if !app
+        .try_state::<Status>()
+        .is_some_and(|status| status.plugin_ready)
+    {
+        return;
+    }
+    if crate::screen::mac::island::shown(app) || crate::screen::mac::drawing::view(app).0.draws() {
+        return;
+    }
+    let _ = app
+        .global_shortcut()
+        .unregister(Shortcut::new(None, Code::Escape));
 }
 
 #[cfg(test)]

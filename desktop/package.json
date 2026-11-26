@@ -13,7 +13,7 @@
     "build:shell": "node scripts/build-shell.mjs",
     "lint": "eslint --max-warnings 0 overlay-src",
     "typecheck": "tsc --noEmit -p overlay-src",
-    "test": "vitest run --root overlay-src && node --test scripts/update-manifest.test.mjs"
+    "test": "vitest run --root overlay-src && node --test scripts/update-manifest.test.mjs src-tauri/src/screen/mac/media.test.cjs src-tauri/src/screen/mac/browser_mode.test.cjs"
   },
   "dependencies": {
     "@mew/ink": "workspace:*",

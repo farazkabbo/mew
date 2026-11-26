@@ -3,6 +3,7 @@
 //! AppKit identity discovery and `snapshot` must run on the main thread. AX requests are
 //! limited to two focused-element reads and two attribute reads, with per-object timeouts.
 
+use super::app_policy::{self, AppClass, PrivateState};
 use crate::screen::privacy::Focus;
 
 /// LaunchServices identity. A PID alone is insufficient because macOS can reuse it.
@@ -37,7 +38,7 @@ pub struct FocusSnapshot {
     /// Standard AX constants only, never a field's entered text or accessible label.
     pub role: Option<String>,
     pub subrole: Option<String>,
-    pub private_browsing: PrivacyProof,
+    pub private_browsing: PrivateState,
     pub call_or_screen_share: PrivacyProof,
 }
 
@@ -48,31 +49,46 @@ impl FocusSnapshot {
             unknown_reason: Some(reason),
             role: None,
             subrole: None,
-            private_browsing: PrivacyProof::Unknown,
+            private_browsing: PrivateState::Unknown,
             call_or_screen_share: PrivacyProof::Unknown,
         }
     }
 }
 
-/// Only documented standard combinations establish ordinary focus. Missing/custom metadata
-/// remains unknown. In particular, absence of AXSecureTextField alone is NOT a safe result.
+/// Optional metadata absence is not an AX transport error. Only the SDK's explicit
+/// kAXErrorAttributeUnsupported establishes absence; timeout, no-value and malformed reads fail.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Subrole<'a> {
+    Value(&'a str),
+    Unsupported,
+    Failed(UnknownReason),
+}
+
+/// The SDK defines AXTextArea as ordinary multi-line text and AXSecureTextField as a
+/// protected subrole. AXSubroleAttribute is optional when the role fully describes an element
+/// (AXAttributeConstants.h). Limit that contract to positively identified native producers.
 fn classify(
+    bundle_id: &str,
     expected_pid: i32,
     actual_pid: i32,
     role: Option<&str>,
-    subrole: Option<&str>,
+    subrole: Subrole<'_>,
 ) -> Focus {
     if expected_pid <= 0 || actual_pid != expected_pid {
         return Focus::Unknown;
     }
-    if role == Some("AXSecureTextField") || subrole == Some("AXSecureTextField") {
+    if role == Some("AXSecureTextField") || subrole == Subrole::Value("AXSecureTextField") {
         return Focus::Password;
     }
+    if app_policy::classify_app(bundle_id) != AppClass::SupportedNative {
+        return Focus::Unknown;
+    }
     match (role, subrole) {
-        (Some("AXTextField"), Some("AXSearchField"))
+        (Some("AXTextArea"), Subrole::Unsupported)
+        | (Some("AXTextField"), Subrole::Value("AXSearchField"))
         | (
             Some("AXButton"),
-            Some(
+            Subrole::Value(
                 "AXCloseButton" | "AXMinimizeButton" | "AXZoomButton" | "AXToolbarButton"
                 | "AXFullScreenButton",
             ),
@@ -246,11 +262,11 @@ mod native {
         })
     }
 
-    fn copy_attribute(
+    fn copy_optional_attribute(
         element: Cf,
         name: &'static str,
         started: Instant,
-    ) -> Result<Owned, UnknownReason> {
+    ) -> Result<Option<Owned>, UnknownReason> {
         if started.elapsed() >= TOTAL_BUDGET {
             return Err(UnknownReason::Deadline);
         }
@@ -259,13 +275,24 @@ mod native {
         let status = unsafe { AXUIElementCopyAttributeValue(element, key.0, &mut value) };
         // Even an anomalous error accompanied by a Copy result releases that result.
         let result = Owned::new(value);
-        if status != 0 {
-            return Err(UnknownReason::FocusUnavailable);
-        }
         if started.elapsed() >= TOTAL_BUDGET {
             return Err(UnknownReason::Deadline);
         }
-        result.ok_or(UnknownReason::FocusUnavailable)
+        match status {
+            0 => result.map(Some).ok_or(UnknownReason::FocusUnavailable),
+            // kAXErrorAttributeUnsupported only. kAXErrorCannotComplete and kAXErrorNoValue
+            // are not absence and must never make an ordinary AXTextArea authorization.
+            -25205 if result.is_none() => Ok(None),
+            _ => Err(UnknownReason::FocusUnavailable),
+        }
+    }
+
+    fn copy_attribute(
+        element: Cf,
+        name: &'static str,
+        started: Instant,
+    ) -> Result<Owned, UnknownReason> {
+        copy_optional_attribute(element, name, started)?.ok_or(UnknownReason::FocusUnavailable)
     }
 
     fn element_pid(element: Cf) -> Option<i32> {
@@ -313,11 +340,21 @@ mod native {
         let role_value = copy_attribute(focused.0, "AXRole", started)?;
         let role =
             cf_string(role_value.0, MAX_METADATA_UNITS).ok_or(UnknownReason::FocusUnavailable)?;
-        // Subrole absence is not evidence of nonsecure focus. Secure role is sufficient to
-        // refuse even when an application fails to supply its subrole.
-        let subrole = copy_attribute(focused.0, "AXSubrole", started)
-            .ok()
-            .and_then(|value| cf_string(value.0, MAX_METADATA_UNITS));
+        // Preserve explicit optional-attribute absence separately from malformed data,
+        // timeout and AX messaging errors. A secure role still refuses on subrole failure.
+        let subrole_read = copy_optional_attribute(focused.0, "AXSubrole", started);
+        let subrole_text = match &subrole_read {
+            Ok(Some(value)) => cf_string(value.0, MAX_METADATA_UNITS),
+            _ => None,
+        };
+        let subrole_status = match &subrole_read {
+            Ok(None) => Subrole::Unsupported,
+            Ok(Some(_)) => subrole_text
+                .as_deref()
+                .map(Subrole::Value)
+                .unwrap_or(Subrole::Failed(UnknownReason::FocusUnavailable)),
+            Err(reason) => Subrole::Failed(*reason),
+        };
         let again = copy_attribute(app.0, "AXFocusedUIElement", started)?;
         if element_pid(again.0) != Some(expected.pid)
             || unsafe { CFEqual(focused.0, again.0) } == 0
@@ -329,7 +366,18 @@ mod native {
         if started.elapsed() >= TOTAL_BUDGET {
             return Err(UnknownReason::Deadline);
         }
-        let focus = classify(expected.pid, actual_pid, Some(&role), subrole.as_deref());
+        let focus = classify(
+            &expected.bundle_id,
+            expected.pid,
+            actual_pid,
+            Some(&role),
+            subrole_status,
+        );
+        if focus != Focus::Password {
+            if let Subrole::Failed(reason) = subrole_status {
+                return Err(reason);
+            }
+        }
         // Return only recognized constant metadata, so a custom role cannot smuggle text into
         // retained results. Unsupported combinations intentionally discard both strings.
         if focus == Focus::Unknown {
@@ -337,10 +385,10 @@ mod native {
         }
         let role = matches!(
             role.as_str(),
-            "AXTextField" | "AXSecureTextField" | "AXButton"
+            "AXTextField" | "AXTextArea" | "AXSecureTextField" | "AXButton"
         )
         .then_some(role);
-        let subrole = subrole.filter(|subrole| {
+        let subrole = subrole_text.filter(|subrole| {
             matches!(
                 subrole.as_str(),
                 "AXSecureTextField"
@@ -357,7 +405,7 @@ mod native {
             unknown_reason: None,
             role,
             subrole,
-            private_browsing: PrivacyProof::Unknown,
+            private_browsing: app_policy::private_state(&expected.bundle_id),
             call_or_screen_share: PrivacyProof::Unknown,
         })
     }
@@ -369,51 +417,122 @@ pub use native::{accessibility_trusted, frontmost_process_identity, process_iden
 #[cfg(test)]
 mod tests {
     use super::*;
+    const TEXTEDIT: &str = "com.apple.TextEdit";
 
     #[test]
-    fn secure_focus_is_protected_even_with_incomplete_other_metadata() {
+    fn ordinary_textedit_text_area_uses_explicit_optional_absence() {
         assert_eq!(
-            classify(42, 42, Some("AXTextField"), Some("AXSecureTextField")),
-            Focus::Password
+            classify(TEXTEDIT, 42, 42, Some("AXTextArea"), Subrole::Unsupported),
+            Focus::Ordinary
         );
-        assert_eq!(
-            classify(42, 42, Some("AXSecureTextField"), None),
-            Focus::Password
-        );
+        for subrole in [
+            Subrole::Failed(UnknownReason::FocusUnavailable),
+            Subrole::Failed(UnknownReason::Deadline),
+            Subrole::Value("AXUnknown"),
+            Subrole::Value("Custom"),
+        ] {
+            assert_eq!(
+                classify(TEXTEDIT, 42, 42, Some("AXTextArea"), subrole),
+                Focus::Unknown
+            );
+        }
     }
 
     #[test]
-    fn unreadable_custom_and_incomplete_roles_fail_closed() {
-        for (role, subrole) in [
-            (None, None),
-            (Some("AXTextField"), None),
-            (Some("AXTextField"), Some("AXUnknown")),
-            (Some("Custom"), Some("Custom")),
-            (Some("AXTextArea"), None),
-            (Some("AXWindow"), Some("AXStandardWindow")),
-            (Some("AXRow"), Some("AXTableRow")),
-            (Some("AXButton"), Some("AXSecureish")),
+    fn secure_focus_outranks_producer_support_and_subrole_failure() {
+        for bundle in [TEXTEDIT, "com.apple.Safari", "org.example.Unknown"] {
+            assert_eq!(
+                classify(
+                    bundle,
+                    42,
+                    42,
+                    Some("AXTextField"),
+                    Subrole::Value("AXSecureTextField")
+                ),
+                Focus::Password
+            );
+            assert_eq!(
+                classify(
+                    bundle,
+                    42,
+                    42,
+                    Some("AXSecureTextField"),
+                    Subrole::Failed(UnknownReason::FocusUnavailable)
+                ),
+                Focus::Password
+            );
+            assert_eq!(
+                classify(bundle, 42, 42, None, Subrole::Value("AXSecureTextField")),
+                Focus::Password
+            );
+        }
+    }
+
+    #[test]
+    fn unreadable_custom_container_and_unproven_producer_roles_fail_closed() {
+        for role in [
+            None,
+            Some("AXTextField"),
+            Some("Custom"),
+            Some("AXWindow"),
+            Some("AXRow"),
+            Some("AXGroup"),
         ] {
-            assert_eq!(classify(42, 42, role, subrole), Focus::Unknown);
+            assert_eq!(
+                classify(TEXTEDIT, 42, 42, role, Subrole::Unsupported),
+                Focus::Unknown
+            );
+        }
+        for bundle in [
+            "org.example.Editor",
+            "com.apple.Safari",
+            "com.google.Chrome",
+        ] {
+            assert_eq!(
+                classify(bundle, 42, 42, Some("AXTextArea"), Subrole::Unsupported),
+                Focus::Unknown
+            );
+            assert_eq!(
+                classify(
+                    bundle,
+                    42,
+                    42,
+                    Some("AXButton"),
+                    Subrole::Value("AXCloseButton")
+                ),
+                Focus::Unknown
+            );
         }
         let snapshot = FocusSnapshot::unknown(UnknownReason::FocusUnavailable);
         assert_eq!(snapshot.focus, Focus::Unknown);
-        assert_eq!(snapshot.private_browsing, PrivacyProof::Unknown);
+        assert_eq!(snapshot.private_browsing, PrivateState::Unknown);
         assert_eq!(snapshot.call_or_screen_share, PrivacyProof::Unknown);
     }
 
     #[test]
     fn changed_pid_cannot_inherit_even_a_recognized_focus() {
         assert_eq!(
-            classify(42, 43, Some("AXTextField"), Some("AXSearchField")),
+            classify(TEXTEDIT, 42, 43, Some("AXTextArea"), Subrole::Unsupported),
             Focus::Unknown
         );
         assert_eq!(
-            classify(42, 43, Some("AXTextField"), Some("AXSecureTextField")),
+            classify(
+                TEXTEDIT,
+                42,
+                43,
+                Some("AXTextField"),
+                Subrole::Value("AXSecureTextField")
+            ),
             Focus::Unknown
         );
         assert_eq!(
-            classify(0, 0, Some("AXButton"), Some("AXCloseButton")),
+            classify(
+                TEXTEDIT,
+                0,
+                0,
+                Some("AXButton"),
+                Subrole::Value("AXCloseButton")
+            ),
             Focus::Unknown
         );
     }
@@ -421,15 +540,33 @@ mod tests {
     #[test]
     fn only_standard_documented_role_pairs_are_ordinary() {
         assert_eq!(
-            classify(42, 42, Some("AXTextField"), Some("AXSearchField")),
+            classify(
+                TEXTEDIT,
+                42,
+                42,
+                Some("AXTextField"),
+                Subrole::Value("AXSearchField")
+            ),
             Focus::Ordinary
         );
         assert_eq!(
-            classify(42, 42, Some("AXButton"), Some("AXCloseButton")),
+            classify(
+                TEXTEDIT,
+                42,
+                42,
+                Some("AXButton"),
+                Subrole::Value("AXCloseButton")
+            ),
             Focus::Ordinary
         );
         assert_eq!(
-            classify(42, 42, Some("AXTextField"), Some("AXCloseButton")),
+            classify(
+                TEXTEDIT,
+                42,
+                42,
+                Some("AXTextField"),
+                Subrole::Value("AXCloseButton")
+            ),
             Focus::Unknown
         );
     }
@@ -438,7 +575,7 @@ mod tests {
     fn identity_includes_exact_bundle_and_launch_generation() {
         let app = ProcessIdentity {
             pid: 42,
-            bundle_id: "org.example.Editor".into(),
+            bundle_id: TEXTEDIT.into(),
             launch_time_bits: 1000f64.to_bits(),
         };
         let mut changed = app.clone();

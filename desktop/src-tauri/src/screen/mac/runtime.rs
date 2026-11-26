@@ -1,5 +1,5 @@
 //! Installed Mac services. Preferences are real; unavailable capture/voice services fail closed.
-use super::{drawing, island};
+use super::{drawing, island, media};
 use crate::screen::{
     config::{self, HelpLevel, ScreenConfig},
     island::{Activity, IslandView, Shape, Tool},
@@ -15,7 +15,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 
-pub const CAPTURE_BLOCKER: &str = "Screen capture is unavailable: private-window, call and screen-share safety checks are not implemented on this Mac. No screen content is read.";
+pub const CAPTURE_BLOCKER: &str = "Screen reading is not ready on this Mac. The privacy checks and capture flow are still being connected, so Neb will not read your screen.";
 pub const DRAW_BLOCKER: &str =
     "Drawing and selection are unavailable until the Mac drawing session is connected.";
 
@@ -87,6 +87,13 @@ impl Runtime {
         state.reset = false;
         Ok(())
     }
+    fn media_app(&self) -> Result<&AppHandle, String> {
+        let (config, _) = self.snapshot();
+        if config.paused || !config.privacy.show_in_captures {
+            return Err("Mac overlays are paused or disabled.".into());
+        }
+        self.app.as_ref().ok_or_else(|| DRAW_BLOCKER.into())
+    }
     fn preference(&self, edit: impl FnOnce(&mut Preferences)) -> Result<(), String> {
         let mut state = self.state.lock().unwrap_or_else(|p| p.into_inner());
         let mut next = state.preferences.clone();
@@ -112,6 +119,8 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     runtime.app = Some(app.clone());
     let runtime = Arc::new(runtime);
     drawing::setup(app)?;
+    super::media_pins::setup(app)?;
+    media::setup(app)?;
     super::settings::capability(app)?;
     app.add_capability(
         tauri::ipc::CapabilityBuilder::new("mac-island")
@@ -133,6 +142,7 @@ pub fn of(app: &AppHandle) -> Result<tauri::State<'_, Arc<Runtime>>, String> {
 pub fn apply(app: &AppHandle) -> Result<(), String> {
     let (config, _) = of(app)?.snapshot();
     if config.paused || !config.privacy.show_in_captures {
+        media::close(app)?;
         drawing::close(app)?;
     }
     if island::shown(app) {
@@ -213,23 +223,36 @@ impl island::Actions for Runtime {
     }
     fn close(&self) -> Result<(), String> {
         self.generation.fetch_add(1, Ordering::AcqRel);
-        drawing::close(self.app.as_ref().ok_or(DRAW_BLOCKER)?)?;
+        let app = self.app.as_ref().ok_or(DRAW_BLOCKER)?;
+        media::close(app)?;
+        drawing::close(app)?;
         self.preference(|preferences| preferences.tool = Tool::None)
     }
-    fn music_panel(&self, _: bool) -> Result<(), String> {
-        Err("Media sessions are unavailable on this Mac.".into())
+    fn music_panel(&self, open: bool) -> Result<(), String> {
+        let (config, _) = self.snapshot();
+        if open && (config.paused || !config.privacy.show_in_captures) {
+            return Err(
+                "Enable visible Mac overlays in local settings before showing music details."
+                    .into(),
+            );
+        }
+        media::panel(self.app.as_ref().ok_or(DRAW_BLOCKER)?, open)
     }
-    fn music_control(&self, _: Control) -> Result<(), String> {
-        Err("Media sessions are unavailable on this Mac.".into())
+    fn music_control(&self, control: Control) -> Result<(), String> {
+        let (config, _) = self.snapshot();
+        if config.paused || !config.privacy.show_in_captures {
+            return Err("Mac overlays are paused or disabled.".into());
+        }
+        media::control(self.app.as_ref().ok_or(DRAW_BLOCKER)?, control)
     }
     fn music_pin(&self) -> Result<(), String> {
-        Err("Media sessions are unavailable on this Mac.".into())
+        media::pin(self.media_app()?)
     }
-    fn music_open(&self, _: &str) -> Result<(), String> {
-        Err("Media sessions are unavailable on this Mac.".into())
+    fn music_open(&self, id: &str) -> Result<(), String> {
+        media::open_pin(self.media_app()?, id)
     }
-    fn music_unpin(&self, _: &str) -> Result<(), String> {
-        Err("Media sessions are unavailable on this Mac.".into())
+    fn music_unpin(&self, id: &str) -> Result<(), String> {
+        media::unpin(self.media_app()?, id)
     }
 }
 

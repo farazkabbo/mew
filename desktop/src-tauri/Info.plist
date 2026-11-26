@@ -4,5 +4,7 @@
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Neb uses your microphone when you ask a question or give an instruction by voice.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Neb controls Spotify or Apple Music only when you open music controls or choose a playback action.</string>
 </dict>
 </plist>

@@ -106,10 +106,51 @@ fn build_mac_capture() {
         .status()
         .expect("Apple Swift compiler is required for Mac capture");
     assert!(status.success(), "Mac SDK capture bridge failed to compile");
+    println!("cargo:rerun-if-changed=native/macos/Indicator.swift");
+    println!("cargo:rerun-if-changed=native/macos/include/neb_indicator.h");
+    println!("cargo:rerun-if-changed=src/screen/mac/call_signals.m");
+    let indicator = out.join("neb_indicator.o");
+    let status = Command::new("xcrun")
+        .args([
+            "swiftc",
+            "-parse-as-library",
+            "-O",
+            "-target",
+            &target,
+            "-emit-object",
+            "native/macos/Indicator.swift",
+            "-o",
+        ])
+        .arg(&indicator)
+        .arg("-module-cache-path")
+        .arg(&modules)
+        .status()
+        .expect("Apple Swift compiler");
+    assert!(status.success(), "Mac capture indicator failed to compile");
+    let signals = out.join("neb_call_signals.o");
+    let status = Command::new("xcrun")
+        .args([
+            "clang",
+            "-fobjc-arc",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-target",
+            &target,
+            "-c",
+            "src/screen/mac/call_signals.m",
+            "-o",
+        ])
+        .arg(&signals)
+        .status()
+        .expect("Apple Objective-C compiler");
+    assert!(status.success(), "Mac call inventory failed to compile");
     let status = Command::new("xcrun")
         .args(["libtool", "-static", "-o"])
         .arg(&archive)
         .arg(&object)
+        .arg(&indicator)
+        .arg(&signals)
         .status()
         .expect("Apple libtool is required");
     assert!(status.success(), "Mac capture archive failed");
@@ -134,6 +175,10 @@ fn build_mac_capture() {
     println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
     for framework in [
         "Foundation",
+        "AppKit",
+        "Metal",
+        "QuartzCore",
+        "CoreAudio",
         "CoreGraphics",
         "CoreVideo",
         "ScreenCaptureKit",

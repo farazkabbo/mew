@@ -1016,3 +1016,59 @@ test("Mac settings retain privacy preferences and keep unavailable capture and u
   await expect(page.getByRole("status")).toHaveText("Preferences saved on this Mac.");
   expect(shell.violations).toEqual([]);
 });
+
+test("Mac music shows native player state and sends explicit playback and pin actions", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.setViewportSize({ width: 820, height: 460 });
+  const shell = await openShellPage(page, "island.html");
+  await shell.dispatch("mew:island-host", { inlineTooltips: true, nativePlayersOnly: true });
+  await page.getByRole("button", { name: "Music", exact: true }).click();
+  await expect(page.locator("#music-artist")).toHaveText(
+    "Play something in Spotify or Apple Music",
+  );
+  const id = "37i9dQZF1DXcBWIGoYBM5M";
+  await shell.dispatch("mew:island-music", {
+    now: {
+      title: "<script>untrusted track</script>",
+      artist: "Synthetic artist",
+      player: "Apple Music",
+      playing: true,
+      can_next: true,
+      can_previous: true,
+      art: null,
+    },
+    pins: [{ id, kind: "playlist", name: "Study music" }],
+    notice: null,
+    pinning: false,
+  });
+  await expect(page.locator("#music-title")).toHaveText("<script>untrusted track</script>");
+  await expect(page.locator("#music-title script")).toHaveCount(0);
+  await expect(page.locator("#music-artist")).toHaveText("Synthetic artist · Apple Music");
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "screen_island",
+    args: { action: { type: "music_control", control: "play_pause" } },
+  });
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Open Study music in Spotify", exact: true }).click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "music_open", id } } });
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Unpin Study music", exact: true }).click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "music_unpin", id } } });
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Pin copied Spotify link", exact: true }).click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "music_pin" } } });
+  await shell.dispatch("mew:island-music", { now: null, pins: [], notice: null, pinning: false });
+  await expect(page.locator("#music-title")).toHaveText("Nothing playing");
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
+  expect(shell.violations).toEqual([]);
+});

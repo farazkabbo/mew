@@ -153,6 +153,8 @@ function drawShape(): void {
 const tip = document.getElementById("island-tip");
 let tipTimer = 0;
 let inlineTooltips = false;
+let musicEmptyHint = "Play something in Spotify or your browser";
+let musicHasTrack = false;
 let inlineTipShown = false;
 let activityText = activity?.textContent ?? "Neb";
 function hideTip(): void {
@@ -376,12 +378,13 @@ function pinItem(pin: PinView): HTMLLIElement {
 
 function renderMusic(view: MusicView): void {
   const now = view.now;
+  musicHasTrack = now !== null;
   if (musicButton) musicButton.dataset.playing = String(now?.playing === true);
   if (title) title.textContent = now ? now.title : "Nothing playing";
   if (artist) {
     artist.textContent = now
       ? [now.artist, now.player].filter(Boolean).join(" · ")
-      : "Play something in Spotify or your browser";
+      : musicEmptyHint;
   }
   if (art && artEmpty) {
     if (now?.art) {
@@ -458,6 +461,12 @@ on("mew:island-notice", (detail) => {
 on("mew:island-host", (detail) => {
   hideTip();
   inlineTooltips = (detail as { inlineTooltips?: unknown } | null)?.inlineTooltips === true;
+  const nativePlayersOnly =
+    (detail as { nativePlayersOnly?: unknown } | null)?.nativePlayersOnly === true;
+  musicEmptyHint = nativePlayersOnly
+    ? "Play something in Spotify or Apple Music"
+    : "Play something in Spotify or your browser";
+  if (!musicHasTrack && artist) artist.textContent = musicEmptyHint;
 });
 
 // Ask only after the event listeners above are installed (including slow WKWebView loads).
