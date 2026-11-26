@@ -443,7 +443,9 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
 /// Onboarding's "Try it" step (NEB_APP_UI §5.10, U9), from the web app's own window only: whether
 /// Screen Coach is on (yes or no, nothing else), and, when asked, the local settings page opened
-/// so the student can turn it on there. It changes no setting itself (decision 1).
+/// so the student can turn it on there. It changes no setting itself (decision 1). The web app's
+/// Settings links open that window this way too, at their page (`page`, one of the window's own
+/// pages: anything else opens it where it was).
 ///
 /// `async`: it may create the settings window, and on Windows a window created from a command
 /// on the main thread comes up blank and dead (WebView2 waits on the thread that's creating it).
@@ -451,35 +453,76 @@ fn overlay_capabilities<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 pub fn screen_coach_onboarding<R: Runtime>(
     window: WebviewWindow<R>,
     open_settings: bool,
+    page: Option<String>,
 ) -> Result<bool, String> {
     let app = window.app_handle();
     let coach = coach_of(app)?;
     super::page::require_app_page(&window, coach.app_url())?;
     if open_settings {
-        self::open_settings(app);
+        open_settings_at(app, page.as_deref());
     }
     Ok(usable(&coach))
 }
 
+/// The settings window's pages (`PAGES` in desktop/shell/screen-coach.js): this PC's, then the
+/// account's (`acc-` and one of `ACCOUNT_SECTIONS`).
+const SETTINGS_PAGES: &[&str] = &[
+    "start",
+    "talk",
+    "helpers",
+    "privacy",
+    "more",
+    "acc-tutor",
+    "acc-voice",
+    "acc-appearance",
+    "acc-handwriting",
+    "acc-shortcuts",
+    "acc-improve",
+    "acc-devices",
+    "acc-about",
+];
+
+/// One of the settings window's pages, or None.
+fn settings_page(page: Option<&str>) -> Option<&'static str> {
+    let page = page?;
+    SETTINGS_PAGES.iter().copied().find(|p| *p == page)
+}
+
 /// Opens (or brings forward) the local settings page.
 pub fn open_settings<R: Runtime>(app: &AppHandle<R>) {
+    open_settings_at(app, None);
+}
+
+/// Opens (or brings forward) the local settings page, at `page` when it's one of its pages.
+pub fn open_settings_at<R: Runtime>(app: &AppHandle<R>, page: Option<&str>) {
+    let page = settings_page(page);
     // A window, not a WebviewWindow: once the account view is beside the page, it has two.
     if let Some(window) = app.get_window(SETTINGS_WINDOW) {
+        if let (Some(page), Some(view)) = (page, app.get_webview(SETTINGS_WINDOW)) {
+            // A fixed page id (checked above), never words from the web page.
+            let _ = view.eval(format!(
+                "window.dispatchEvent(new CustomEvent('screen-coach:page', {{ detail: '{page}' }}))"
+            ));
+        }
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
         return;
     }
     let dev_url = app.config().build.dev_url.clone();
-    let built =
-        WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App(SETTINGS_PAGE.into()))
-            .title("Neb · Settings")
-            .inner_size(1040.0, 780.0)
-            .min_inner_size(480.0, 520.0)
-            .additional_browser_args(crate::BROWSER_ARGS)
-            // Bundled pages only: the page can't be navigated anywhere else.
-            .on_navigation(move |url| super::is_local_page(url, dev_url.as_ref()))
-            .build();
+    let mut builder =
+        WebviewWindowBuilder::new(app, SETTINGS_WINDOW, WebviewUrl::App(SETTINGS_PAGE.into()));
+    if let Some(page) = page {
+        builder = builder.initialization_script(format!("window.__NEB_OPEN_PAGE__ = '{page}';"));
+    }
+    let built = builder
+        .title("Neb · Settings")
+        .inner_size(1040.0, 780.0)
+        .min_inner_size(480.0, 520.0)
+        .additional_browser_args(crate::BROWSER_ARGS)
+        // Bundled pages only: the page can't be navigated anywhere else.
+        .on_navigation(move |url| super::is_local_page(url, dev_url.as_ref()))
+        .build();
     if let Err(error) = built {
         eprintln!("[screen] couldn't open the settings window ({error})");
     }
@@ -1423,15 +1466,24 @@ impl ViewFrame {
     }
 }
 
+/// Made one at a time: two quick clicks mustn't both make the view.
+static ACCOUNT_VIEW_LOCK: Mutex<()> = Mutex::new(());
+
 /// Shows one account page over the content area (`section`), moves it (a resize), or hides it
 /// (`section` None: a page of this PC's is showing).
-#[tauri::command]
+///
+/// `async`: on Windows, a webview added from a command on the main thread never finishes
+/// (Tauri's note on `Window::add_child`), and the page stayed at "Opening…".
+#[tauri::command(async)]
 pub fn screen_coach_account_view<R: Runtime>(
     webview: tauri::Webview<R>,
     section: Option<String>,
     frame: Option<ViewFrame>,
 ) -> Result<(), String> {
     require_settings_window(&webview)?;
+    let _one_at_a_time = ACCOUNT_VIEW_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let app = webview.app_handle();
     let existing = app.get_webview(ACCOUNT_VIEW);
     let Some(section) = section else {
@@ -1628,6 +1680,23 @@ mod frame_tests {
                 ..reach
             }
             .wants_frame());
+        }
+    }
+}
+
+#[cfg(test)]
+mod settings_page_tests {
+    use super::{settings_page, ACCOUNT_SECTIONS, SETTINGS_PAGES};
+
+    #[test]
+    fn settings_links_open_only_the_windows_own_pages() {
+        assert_eq!(settings_page(Some("acc-voice")), Some("acc-voice"));
+        assert_eq!(settings_page(Some("privacy")), Some("privacy"));
+        assert_eq!(settings_page(Some("acc-")), None);
+        assert_eq!(settings_page(Some("x'); alert(1); ('")), None);
+        assert_eq!(settings_page(None), None);
+        for section in ACCOUNT_SECTIONS {
+            assert!(SETTINGS_PAGES.contains(&format!("acc-{section}").as_str()));
         }
     }
 }

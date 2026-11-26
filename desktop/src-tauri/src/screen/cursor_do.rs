@@ -488,11 +488,18 @@ fn rename_files<R: Runtime>(
     rule: &RenameRule,
     which: Option<&str>,
 ) -> Result<Done, String> {
-    let window =
-        window.filter(|w| super::win::uia_targets::class_of(HWND(*w as *mut _)) == "CabinetWClass");
+    // A File Explorer window, or the desktop (its files are renamed the same way).
+    let window = window.and_then(|w| {
+        let class = super::win::uia_targets::class_of(HWND(w as *mut _));
+        if class == "CabinetWClass" {
+            Some(w)
+        } else {
+            chores::is_desktop_class(&class).then_some(chores::DESKTOP)
+        }
+    });
     let Some(window) = window else {
         return Err(
-            "Select what to rename in File Explorer, then ask me again with it open.".into(),
+            "Select what to rename in File Explorer or on the desktop, then ask me again.".into(),
         );
     };
     let items = chores::explorer_items(window);
@@ -511,12 +518,12 @@ fn rename_files<R: Runtime>(
         Some(item) => vec![item],
         None if !selected.is_empty() => selected,
         None if which.is_some() => return Err(
-            "I couldn't tell which file you meant. Select it in File Explorer and ask me again."
+            "I couldn't tell which file you meant. Select it and ask me again."
                 .into(),
         ),
         None => {
             return Err(
-                "Select the files to rename in File Explorer first, then ask me again.".into(),
+                "Select the files to rename first (in File Explorer or on the desktop), then ask me again.".into(),
             )
         }
     };

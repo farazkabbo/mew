@@ -3,10 +3,16 @@
 import { NEB_LANGUAGES, type NebLanguage, TTS_SAMPLE_RATE } from "@mew/shared";
 import { Loader2, Volume2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
-import { hasCombinedSettings, isDesktop, screenCoachForOnboarding } from "../desktop/bridge";
+import {
+  hasCombinedSettings,
+  isDesktop,
+  openSettingsOnThisPc,
+  screenCoachForOnboarding,
+} from "../desktop/bridge";
 import { momentsApi } from "../moments/api";
 import { useMomentChecks } from "../moments/store";
 import { ShortcutsSection } from "../shortcuts/ShortcutsSection";
@@ -63,7 +69,7 @@ export function SettingsApp({
     );
   }
 
-  if (combined) return <OpenOnThisPc />;
+  if (combined) return <OpenOnThisPc section={section} />;
 
   return (
     <CourseShell
@@ -130,13 +136,17 @@ function SectionBody({ id }: { id: SettingsSectionId }) {
 }
 
 /**
- * The desktop app, on a version whose settings window holds these pages too: it opens at once,
- * with a way to open it again.
+ * The desktop app, on a version whose settings window holds these pages too (most links there
+ * open it without coming here: `SettingsLink`). It opens at the page, and Neb's window goes back
+ * to the notebook; if it couldn't be opened, a button to try again.
  */
-function OpenOnThisPc() {
+function OpenOnThisPc({ section }: { section: SettingsSectionId }) {
+  const router = useRouter();
   useEffect(() => {
-    void screenCoachForOnboarding(true);
-  }, []);
+    void openSettingsOnThisPc(section).then((opened) => {
+      if (opened) router.replace("/notebook");
+    });
+  }, [router, section]);
   return (
     <CourseShell back={{ href: "/notebook", label: "Notebook" }} title="Settings">
       <div className="max-w-xl space-y-4 rounded-2xl border border-line bg-paper-hi/40 p-6">
@@ -146,7 +156,7 @@ function OpenOnThisPc() {
         </p>
         <button
           type="button"
-          onClick={() => void screenCoachForOnboarding(true)}
+          onClick={() => void openSettingsOnThisPc(section)}
           className="rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-paper"
         >
           Open settings

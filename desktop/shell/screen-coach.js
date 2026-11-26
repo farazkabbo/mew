@@ -33,11 +33,16 @@ function contentFrame() {
 }
 
 function placeAccountView() {
-  const account = currentPage.startsWith("acc-");
-  const section = account ? currentPage.slice(4) : null;
-  invoke("screen_coach_account_view", { section, frame: account ? contentFrame() : null }).catch(
+  const page = currentPage;
+  const account = page.startsWith("acc-");
+  const section = account ? page.slice(4) : null;
+  invoke("screen_coach_account_view", { section, frame: account ? contentFrame() : null }).then(
+    () => {
+      // Another page was chosen while this one was opening: that one wins.
+      if (currentPage !== page) placeAccountView();
+    },
     (error) => {
-      if (!account) return;
+      if (!account || currentPage !== page) return;
       $("account-loading").textContent =
         typeof error === "string" ? error : "Couldn't open your account settings just now.";
     },
@@ -88,8 +93,13 @@ for (const name of PAGES) {
   } catch {
     saved = null;
   }
-  showPage(location.hash.slice(1) || saved || "start");
+  showPage(window.__NEB_OPEN_PAGE__ || location.hash.slice(1) || saved || "start");
 }
+
+// A Settings link in Neb's window asked for one of these pages (the desktop app sends its id).
+window.addEventListener("screen-coach:page", (event) => {
+  if (PAGES.includes(event.detail)) showPage(event.detail);
+});
 
 // "How Neb sees your screen" has to be read before Screen Coach is turned on, so while it's off
 // it sits open on Start, above the checkbox; once it's on, it moves under Privacy, folded.
@@ -97,7 +107,8 @@ let howOn = null;
 function placeHow(on) {
   if (howOn === on) return;
   // Opened while it's off (to turn it on, often sent here by Neb): Start, whatever was last open.
-  if (howOn === null && !on) showPage("start");
+  // (Unless a Settings link asked for a page.)
+  if (howOn === null && !on && !window.__NEB_OPEN_PAGE__) showPage("start");
   howOn = on;
   const how = $("how-section");
   $(on ? "how-slot-privacy" : "how-slot-start").append(how);

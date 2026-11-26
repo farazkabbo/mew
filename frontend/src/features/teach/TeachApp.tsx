@@ -2,11 +2,11 @@
 
 import { type MewEvent, MewEventPage, type MewLabel } from "@mew/shared";
 import { Download, Trash2 } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
 import { useSettings } from "../settings/store";
+import { SettingsLink } from "../settings/SettingsLink";
 import { EventCard } from "./EventCard";
 
 const PAGE = 50;
@@ -95,9 +95,9 @@ export function TeachApp() {
       {loaded && !optedIn && (
         <p role="status" className="mb-6 rounded-2xl border border-line bg-paper-hi p-4 text-sm">
           Neb isn&apos;t keeping new decisions. Turn on <em>Keep Neb&apos;s decisions</em> in{" "}
-          <Link href="/settings?section=improve" className="underline hover:text-ink">
+          <SettingsLink section="improve" className="underline hover:text-ink">
             Settings
-          </Link>{" "}
+          </SettingsLink>{" "}
           to collect some.
         </p>
       )}

@@ -2,7 +2,6 @@
 
 import { Bug, Mic, MicOff, VolumeX, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 import { Keys } from "@/components/ui/Keycap";
 import { NebDot, nebDotLabel, type NebDotState } from "@/components/ui/NebDot";
@@ -10,6 +9,7 @@ import { NebDot, nebDotLabel, type NebDotState } from "@/components/ui/NebDot";
 import { Caption } from "../tutor/Caption";
 import { useTutor } from "../tutor/store";
 import { useVoice } from "../voice/store";
+import { SettingsLink } from "../settings/SettingsLink";
 import { useMew } from "./store";
 import { type MascotState, useMascotState } from "./useMewSession";
 
@@ -67,12 +67,9 @@ export function MewDock({ onSummon, onStartListening, onStopListening, onShortcu
           <VolumeX className="mt-0.5 size-3.5 shrink-0 text-muted" aria-hidden />
           <p className="min-w-0 flex-1">
             {voiceIssue}{" "}
-            <Link
-              href="/settings?section=voice"
-              className="text-ink underline-offset-2 hover:underline"
-            >
+            <SettingsLink section="voice" className="text-ink underline-offset-2 hover:underline">
               Settings
-            </Link>
+            </SettingsLink>
           </p>
           <button
             type="button"

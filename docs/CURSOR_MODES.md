@@ -113,6 +113,12 @@ mouse and touchpad timing). Record real ones (below) before trusting them.
       "rename … (to) …", "change / update / set the file name to …", "name this …", "call this
       file …", "would you mind renaming…", with casual openings ("can u", "pls", "could you").
       A question about renaming ("how do I rename a file?") is still a lesson.
+    - **On the desktop too** (2026-11-25, after a test on a desktop file stopped at "Select
+      what to rename in File Explorer", and a second wording went to Neb's hand, which clicked
+      the file and then couldn't type on the desktop; `fix/settings-pages-and-desktop-rename`).
+      With the desktop in front (Progman / WorkerW), the desktop's items and selection are read
+      the same way (`ShellWindows.FindWindowSW`, SWC_DESKTOP). "Re-name" and "re name" (as
+      speech is sometimes written down) count as "rename".
 
 ## Shared path library (designed, not built)
 

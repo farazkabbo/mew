@@ -78,10 +78,17 @@ foreach ($i in $items) {
 "#;
 
 /// The items in one Explorer window's folder (files and folders, up to 2,000), each marked
-/// whether it's selected. Only names and paths: nothing is opened or read.
+/// whether it's selected; window 0 is the desktop (ShellWindows.FindWindowSW with SWC_DESKTOP).
+/// Only names and paths: nothing is opened or read.
 const ITEMS_SCRIPT: &str = r#"$ErrorActionPreference = 'Stop'
 $h = [int64]$env:NEB_EXPLORER_WINDOW
-$w = (New-Object -ComObject Shell.Application).Windows() | Where-Object { $_.HWND -eq $h } | Select-Object -First 1
+$windows = (New-Object -ComObject Shell.Application).Windows()
+if ($h -eq 0) {
+  $found = 0
+  $w = $windows.FindWindowSW(0, $null, 8, [ref]$found, 1)
+} else {
+  $w = $windows | Where-Object { $_.HWND -eq $h } | Select-Object -First 1
+}
 if (-not $w) { '[]'; exit }
 $sel = @{}
 foreach ($i in @($w.Document.SelectedItems())) { $sel[[string]$i.Path] = $true }
@@ -93,8 +100,16 @@ foreach ($i in @($w.Document.Folder.Items())) {
 }
 "#;
 
-/// The files and folders in the File Explorer window `window`'s folder, and whether each is
-/// selected.
+/// `explorer_items`' window for the desktop's own files.
+pub const DESKTOP: isize = 0;
+
+/// Whether `class` is the desktop's window (Progman, or the WorkerW behind its icons).
+pub fn is_desktop_class(class: &str) -> bool {
+    matches!(class, "Progman" | "WorkerW")
+}
+
+/// The files and folders in the File Explorer window `window`'s folder (or on the desktop, for
+/// `DESKTOP`), and whether each is selected.
 pub fn explorer_items(window: isize) -> Vec<(PathBuf, bool)> {
     #[derive(serde::Deserialize)]
     struct Row {

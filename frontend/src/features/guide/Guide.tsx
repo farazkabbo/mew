@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Keys } from "@/components/ui/Keycap";
 
 import { CourseShell } from "../courses/CourseShell";
+import { SettingsLink } from "../settings/SettingsLink";
 
 /**
  * "How to use neb" (docs/NEB_APP_UI.md decision U30): the things a student comes to do, each as
@@ -255,12 +256,12 @@ const TOPICS: Topic[] = [
     steps: [
       <>
         <B>Handwriting didn&apos;t come out right?</B>{" "}
-        <Link href="/settings?section=handwriting">Settings</Link> → Handwriting →{" "}
+        <SettingsLink section="handwriting">Settings</SettingsLink> → Handwriting →{" "}
         <B>Calibrate again</B>, or <B>Reset</B> to make neb forget it.
       </>,
       <>
         <B>Voice, language, shortcuts, what neb may see:</B> all in{" "}
-        <Link href="/settings">Settings</Link>.
+        <SettingsLink>Settings</SettingsLink>.
       </>,
       <>
         <B>Want the first-run introduction again?</B> Settings → <B>Show the introduction again</B>.

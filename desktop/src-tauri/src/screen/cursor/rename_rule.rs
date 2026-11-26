@@ -185,6 +185,32 @@ pub struct Said {
 }
 
 /// The words of `lower`, each with where it is (punctuation is a space; positions are bytes).
+/// "re-name" and "re name" (as speech is sometimes written down) said as "rename".
+fn spoken(said: &str) -> String {
+    let mut out = said.to_owned();
+    for (from, to) in [
+        ("re-naming", "renaming"),
+        ("re naming", "renaming"),
+        ("re-name", "rename"),
+        ("re name", "rename"),
+    ] {
+        loop {
+            let lower = out.to_lowercase();
+            if lower.len() != out.len() {
+                break;
+            }
+            let edge = |c: Option<char>| !c.is_some_and(char::is_alphanumeric);
+            let Some(at) = lower.match_indices(from).map(|(i, _)| i).find(|&i| {
+                edge(lower[..i].chars().next_back()) && edge(lower[i + from.len()..].chars().next())
+            }) else {
+                break;
+            };
+            out.replace_range(at..at + from.len(), to);
+        }
+    }
+    out
+}
+
 fn tokens(lower: &str) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     let mut start = None;
@@ -214,6 +240,7 @@ fn tokens(lower: &str) -> Vec<(usize, usize)> {
 /// - "name this budget", "call this file Budget 2026"
 /// - and "… to start with 2026" / "… to end with final", which keep the names (`affix`).
 pub fn from_words(said: &str) -> Option<Said> {
+    let said = &spoken(said);
     let lower = said.to_lowercase();
     // Byte offsets only line up when lowercasing kept every length (true for nearly all text).
     if lower.len() != said.len() {
@@ -318,7 +345,7 @@ pub fn is_request(said: &str) -> bool {
     if from_words(said).is_some() || affix_request(said).is_some() {
         return true;
     }
-    let lower = said.to_lowercase();
+    let lower = spoken(said).to_lowercase();
     let words: Vec<&str> = tokens(&lower)
         .into_iter()
         .map(|(a, b)| &lower[a..b])
@@ -396,6 +423,7 @@ fn affix_rule(front: bool, text: &str) -> Option<RenameRule> {
 /// in front of these files": a prefix or suffix, said without "rename". Only when what it's added
 /// to is plainly file names (so "add a title to the start of this document" stays typing).
 pub fn affix_request(said: &str) -> Option<Said> {
+    let said = &spoken(said);
     let lower = said.to_lowercase().replace([',', '!', '?'], " ");
     if lower.len() != said.len() {
         return None;
@@ -941,5 +969,17 @@ mod tests {
         assert!(plan(&files, &named("a/b"), |_| false).is_err());
         assert!(plan(&files, &named("CON"), |_| false).is_err());
         assert!(plan(&files, &named("a"), |_| false).is_err()); // already so
+    }
+
+    #[test]
+    fn rename_written_as_two_words_is_still_a_rename() {
+        let said = from_words("Re-name this file to Budget").unwrap();
+        assert_eq!(said.rule.name.as_deref(), Some("Budget"));
+        let said = from_words("can you re name it to Trip notes").unwrap();
+        assert_eq!(said.rule.name.as_deref(), Some("Trip notes"));
+        assert!(is_request("please re-name new text document 4 hello"));
+        assert!(!is_request("how do I re-name a file"));
+        // Not inside another word.
+        assert_eq!(spoken("are names fine"), "are names fine");
     }
 }

@@ -117,6 +117,23 @@ export async function screenCoachForOnboarding(openSettings: boolean): Promise<b
   }
 }
 
+/**
+ * Opens the desktop app's Settings window, at one of its account pages when `section` is given
+ * (`hasCombinedSettings`). True when it was asked to.
+ */
+export async function openSettingsOnThisPc(section?: string): Promise<boolean> {
+  if (!isDesktop()) return false;
+  try {
+    await invoke("screen_coach_onboarding", {
+      openSettings: true,
+      page: section ? `acc-${section}` : null,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Tells the desktop app the line with `token` has been said (or couldn't be). */
 export async function reportSpoken(token: number): Promise<void> {
   await invoke("screen_coach_spoken", { token });

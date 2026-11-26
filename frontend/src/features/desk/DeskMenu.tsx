@@ -5,11 +5,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { SignOutMenuItem } from "@/components/AccountControls";
 
+import { SettingsLink } from "../settings/SettingsLink";
+
 const LINKS = [
   { href: "/tour", label: "Take the tour" },
   { href: "/guide", label: "How to use neb" },
   { href: "/teach", label: "Teach neb" },
-  { href: "/settings", label: "Settings" },
 ] as const;
 
 /**
@@ -59,6 +60,14 @@ export function DeskMenu({ name }: { name: string | null }) {
               {link.label}
             </Link>
           ))}
+          {/* In the desktop app: its Settings window, at once. */}
+          <SettingsLink
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="rounded-[10px] px-3 py-2 hover:bg-line/50"
+          >
+            Settings
+          </SettingsLink>
           <div className="mt-1 flex flex-col border-t border-line pt-1">
             <SignOutMenuItem />
           </div>

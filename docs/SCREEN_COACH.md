@@ -907,3 +907,11 @@ don't ask them again. Where a decision changes the brief above, the decision win
       nothing). Older desktop apps aren't marked: their users keep the web page, with a "This
       PC's settings →" link in its sidebar.
     - User-facing text says "Settings" (tray → Settings → Connect).
+    - **Fixed after the first test** (`fix/settings-pages-and-desktop-rename`): every account
+      page said "Opening your account settings…" because a webview added from a synchronous
+      command never finishes on Windows (Tauri's note on `Window::add_child`), so
+      `screen_coach_account_view` is `async` and makes the view one at a time. And Settings in
+      Neb's window went to a page with an "Open settings" button: every Settings link in the web
+      app is now a `SettingsLink`, which in the desktop app opens the window at its page
+      (`screen_coach_onboarding`'s `page`, one of the window's fixed page ids) without leaving
+      what's open. Landing on `/settings` there opens the window and goes back to the notebook.

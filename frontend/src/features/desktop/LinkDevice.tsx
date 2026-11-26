@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { CourseShell } from "../courses/CourseShell";
+import { SettingsLink } from "../settings/SettingsLink";
 import { finishDeviceLink, isDesktop } from "./bridge";
 
 type Step =
@@ -83,12 +84,12 @@ export function LinkDevice() {
             <p className="text-sm text-muted">
               The app gets its own sign-in, which only works for Screen Coach. You can sign it out
               any time in{" "}
-              <Link
-                href="/settings?section=devices"
+              <SettingsLink
+                section="devices"
                 className="text-ink underline-offset-2 hover:underline"
               >
                 Settings → Signed-in devices
-              </Link>
+              </SettingsLink>
               .
             </p>
             <div className="flex gap-3">

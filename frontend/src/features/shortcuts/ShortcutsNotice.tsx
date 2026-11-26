@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
-
 import { useSettings } from "../settings/store";
+import { SettingsLink } from "../settings/SettingsLink";
 import { useShortcutKeys } from "./useShortcutKeys";
 
 /**
@@ -44,9 +43,9 @@ export function ShortcutsNotice({ hidden }: { hidden: boolean }) {
         </li>
       </ul>
       <div className="mt-3 flex items-center justify-end gap-3">
-        <Link href="/settings#shortcuts" className="underline" onClick={done}>
+        <SettingsLink section="shortcuts" className="underline" onClick={done}>
           See all shortcuts
-        </Link>
+        </SettingsLink>
         <button
           type="button"
           onClick={done}
