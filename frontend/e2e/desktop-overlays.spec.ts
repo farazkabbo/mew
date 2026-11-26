@@ -484,9 +484,13 @@ test("the pointer shows its look", async ({ page }) => {
 test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard mark", async ({
   page,
 }) => {
-  const shell = await openShellPage(page, "draw-overlay.html");
-  const actionCalls = async () =>
-    (await shell.calls()).filter((call) => call.cmd !== "screen_draw_pen");
+  const opened = await openShellPage(page, "draw-overlay.html");
+  // A pen's position also goes to Rust as it moves ("screen_draw_pen", so the pointer follows a
+  // Windows Ink pen): that's not a mark, so it's counted on its own.
+  const shell = {
+    ...opened,
+    calls: async () => (await opened.calls()).filter((c) => c.cmd !== "screen_draw_pen"),
+  };
   await shell.dispatch("mew:draw-show", { marks: [], grey: false, drawing: true, mode: "draw" });
   // While drawing, the page isn't fully transparent: Windows would pass the mouse through.
   const tint = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -506,8 +510,11 @@ test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard
     for (let i = 1; i <= 10; i++) pen("pointermove", 100 + i * 20, 100 + (i % 2) * 30);
     pen("pointerup", 300, 100);
   });
-  await expect.poll(async () => (await actionCalls()).length).toBe(1);
-  const [mark] = await actionCalls();
+  await expect.poll(async () => (await shell.calls()).length).toBe(1);
+  const pens = (await opened.calls()).filter((c) => c.cmd === "screen_draw_pen");
+  expect(pens.length).toBeGreaterThan(0);
+  expect(pens[0]?.args).toEqual({ at: [120, 130] });
+  const [mark] = await shell.calls();
   expect(mark?.cmd).toBe("screen_draw_mark");
   const points = (mark?.args as { stroke: { points: number[][] } }).stroke.points;
   expect(points.length).toBeGreaterThan(5);
@@ -525,7 +532,7 @@ test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard
   await page.mouse.down();
   await page.mouse.move(600, 360);
   await page.mouse.up();
-  expect(await actionCalls()).toHaveLength(1);
+  expect(await shell.calls()).toHaveLength(1);
 
   // Keyboard drawing: Tab to a block, Space marks it (a closed path around it).
   await shell.dispatch("mew:draw-show", {
@@ -539,8 +546,8 @@ test("the draw overlay sends a pen mark, shows the mouse's, and sends a keyboard
   await page.keyboard.press("Tab");
   await expect(page.getByText("Text block 1 of 2. Space to mark it.")).toBeVisible();
   await page.keyboard.press("Space");
-  await expect.poll(async () => (await actionCalls()).length).toBe(2);
-  const keyed = (await actionCalls())[1]?.args as { stroke: { points: number[][] } };
+  await expect.poll(async () => (await shell.calls()).length).toBe(2);
+  const keyed = (await shell.calls())[1]?.args as { stroke: { points: number[][] } };
   expect(keyed.stroke.points[0]).toEqual([50, 50, 0.5]);
   expect(keyed.stroke.points.at(-1)).toEqual([50, 50, 0.5]);
   expect(shell.violations).toEqual([]);

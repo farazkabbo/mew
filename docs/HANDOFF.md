@@ -10,7 +10,7 @@ and Neb's hand: its own cursor clicks for the student when asked). Desktop relea
 [DESKTOP_RELEASE.md](DESKTOP_RELEASE.md).
 
 **2026-11-24, Handoff** (being built, behind `HANDOFF_ENABLED`): see
-[HANDOFF_FEATURE.md](HANDOFF_FEATURE.md). New migration `20261124000000_handoffs.sql` (not applied).
+[HANDOFF_FEATURE.md](HANDOFF_FEATURE.md). Migration `20261124000000_handoffs.sql` applied to production on 2026-11-25 (not to the test project).
 
 **2026-11-21, branch `feat/cursor-modes`:** the cursor modes (DO IT, SHOW ME, CATCH ME; M1–M6)
 are built. Spec, decisions, measured numbers and the manual checklist are in

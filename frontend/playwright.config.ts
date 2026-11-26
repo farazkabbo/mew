@@ -27,7 +27,8 @@ export default defineConfig({
   // CI runners compile the dev server cold on small VMs: allow more time there only.
   timeout: ci ? 90_000 : 30_000,
   expect: { timeout: ci ? 15_000 : 5_000 },
-  reporter: ci ? [["list"], ["html", { open: "never" }]] : [["list"]],
+  // On CI, "github" also turns each failure into an annotation on the run (readable without the logs).
+  reporter: ci ? [["list"], ["github"], ["html", { open: "never" }]] : [["list"]],
   use: {
     ...devices["Desktop Edge"],
     channel: process.env.E2E_CHANNEL ?? "msedge",

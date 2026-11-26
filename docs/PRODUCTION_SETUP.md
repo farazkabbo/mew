@@ -87,12 +87,15 @@ instead.
              where table_name = 'question_quota' and column_name = 'notify_when_more')
                                                  as "20261113 quota_notify",
      not has_function_privilege('anon', 'public.reserve_question(text,text,integer,boolean,boolean)',
-                                 'execute')      as "20261114 quota_functions_server_only";
+                                 'execute')      as "20261114 quota_functions_server_only",
+     to_regclass('public.handoffs')             is not null as "20261124 handoffs";
    ```
 
    **Status, 2026-11-14:** production has all of these. 20261112–20261114 were applied that day,
    after the database was restored from a pause. The test database
-   (`qnhfzevygmlgfrbavswq`) still needs 20261114.
+   (`qnhfzevygmlgfrbavswq`) still needs 20261114 and 20261124. **2026-11-25:** production has
+   20261124 (Handoff) too: its four tables with RLS and no grants, the private `handoffs` bucket and
+   `purge_handoffs` (service only), checked through the connector.
 
    Production also has three tables from Rahbir's unmerged
    `feature/stripe-payment-integration` branch (`subscriptions`, `usage_sessions`,
