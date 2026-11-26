@@ -9,6 +9,61 @@ use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindow, WebviewWindo
 use super::target::{self, Rect};
 pub use crate::screen::surfaces::Surface;
 
+#[derive(Default)]
+struct PageQueue {
+    ready: bool,
+    events: std::collections::VecDeque<(String, Value)>,
+}
+#[derive(Default)]
+struct Pages(std::sync::Mutex<std::collections::BTreeMap<String, PageQueue>>);
+pub(crate) fn page_loaded<R: Runtime>(window: &WebviewWindow<R>) {
+    if let Some(pages) = window.app_handle().try_state::<Pages>() {
+        let mut pages = pages.0.lock().unwrap_or_else(|p| p.into_inner());
+        let page = pages.entry(window.label().into()).or_default();
+        page.ready = true;
+        for (name, detail) in page.events.drain(..) {
+            let _ = emit(window, &name, &detail);
+        }
+    }
+}
+fn emit<R: Runtime>(window: &WebviewWindow<R>, name: &str, detail: &Value) -> tauri::Result<()> {
+    let name = serde_json::to_string(name)?;
+    let detail = serde_json::to_string(detail)?;
+    window.eval(format!(
+        "window.dispatchEvent(new CustomEvent({name}, {{ detail: {detail} }}))"
+    ))
+}
+pub(crate) fn track<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    if app.try_state::<Pages>().is_none() {
+        app.manage(Pages::default());
+    }
+    if let Some(pages) = app.try_state::<Pages>() {
+        pages
+            .0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(label.into(), PageQueue::default());
+    }
+}
+pub(crate) fn dispatch_window<R: Runtime>(
+    window: &WebviewWindow<R>,
+    name: &str,
+    detail: &Value,
+) -> tauri::Result<()> {
+    if let Some(pages) = window.app_handle().try_state::<Pages>() {
+        let mut pages = pages.0.lock().unwrap_or_else(|p| p.into_inner());
+        let page = pages.entry(window.label().into()).or_default();
+        if !page.ready {
+            if page.events.len() >= 32 {
+                page.events.pop_front();
+            }
+            page.events.push_back((name.into(), detail.clone()));
+            return Ok(());
+        }
+        return emit(window, name, detail);
+    }
+    emit(window, name, detail)
+}
 /// Only these surfaces take keyboard focus after a deliberate click, never when first shown.
 fn accepts_keyboard(surface: Surface) -> bool {
     matches!(
@@ -44,12 +99,18 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> tauri::Result
             std::io::Error::other("Mac overlays must be created on the main thread").into(),
         );
     }
+    track(app, surface.label());
     let dev_url = app.config().build.dev_url.clone();
     let size = initial_size(surface);
     let preview = surface == Surface::Clip;
     let window =
         WebviewWindowBuilder::new(app, surface.label(), WebviewUrl::App(surface.page().into()))
             .title("Neb")
+            .on_page_load(|window, payload| {
+                if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                    page_loaded(&window);
+                }
+            })
             .on_navigation(move |url| crate::screen::is_local_page(url, dev_url.as_ref()))
             .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
             .disable_drag_drop_handler()
@@ -63,9 +124,18 @@ pub fn ensure<R: Runtime>(app: &AppHandle<R>, surface: Surface) -> tauri::Result
             .shadow(preview)
             .always_on_top(!preview)
             .resizable(preview)
+            .initialization_script(
+                "Object.defineProperty(window, '__NEB_MAC_HOST__', { value: true });",
+            )
             .initialization_script(if surface == Surface::Draw {
                 "Object.defineProperty(window, '__NEB_MAC_DRAW_HOST__', { value: true });"
-            } else { "" })
+            } else if surface == Surface::Ink {
+                "Object.defineProperty(window, '__NEB_MAC_INK_HOST__', { value: true });"
+            } else if surface == Surface::Card {
+                "Object.defineProperty(window, '__NEB_MAC_CARD_HOST__', { value: true });"
+            } else {
+                ""
+            })
             .inner_size(size.0, size.1)
             .build()?;
     if !preview {
@@ -120,6 +190,16 @@ pub fn show_quietly<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> 
 }
 
 pub fn hide<R: Runtime>(window: &WebviewWindow<R>) -> tauri::Result<()> {
+    if let Some(pages) = window.app_handle().try_state::<Pages>() {
+        if let Some(page) = pages
+            .0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get_mut(window.label())
+        {
+            page.events.clear();
+        }
+    }
     let owned = window.clone();
     window.run_on_main_thread(move || {
         super::panel::with_window(&owned, |native| native.orderOut(None))
@@ -149,11 +229,7 @@ pub fn dispatch<R: Runtime>(
     let window = app
         .get_webview_window(surface.label())
         .ok_or_else(|| std::io::Error::other("Overlay window is not open"))?;
-    let name = serde_json::to_string(name)?;
-    let detail = serde_json::to_string(detail)?;
-    window.eval(format!(
-        "window.dispatchEvent(new CustomEvent({name}, {{ detail: {detail} }}))"
-    ))
+    dispatch_window(&window, name, detail)
 }
 
 /// Local surface commands must be called from that window and its exact bundled page.

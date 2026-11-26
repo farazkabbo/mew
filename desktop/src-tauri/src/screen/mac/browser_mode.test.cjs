@@ -35,6 +35,9 @@ function fixture(options = {}) {
               reads++;
               return options.switchWindow && reads > 1 ? "43" : "42";
             },
+            bounds() {
+              return options.bounds || { x: -1440, y: -200, width: 1200, height: 800 };
+            },
             mode() {
               if (options.error) throw options.error;
               if (options.switchFocus) workspace.frontmostApplication = {};
@@ -94,4 +97,18 @@ test("unsupported mode, permission errors and native text never escape", () => {
     { error: { errorNumber: -1712, message: "synthetic secret" } },
   ])
     assert.equal(fixture(options).run(), "unknown");
+});
+
+test("bound mode requires exact geometry in separate native/script ID namespaces", () => {
+  const argv = ["123", "com.google.Chrome", "100.5", "-1440", "-200", "1200", "800"];
+  assert.equal(fixture().run(argv), "bound-normal");
+  assert.equal(fixture({ mode: "incognito" }).run(argv), "bound-private");
+  assert.equal(
+    fixture({ bounds: { x: -1439, y: -200, width: 1200, height: 800 } }).run(argv),
+    "unknown",
+  );
+  assert.equal(fixture({ bounds: [-1440, -200, -240, 600] }).run(argv), "unknown");
+  assert.equal(fixture({ switchWindow: true }).run(argv), "unknown");
+  assert.equal(fixture({ switchFocus: true }).run(argv), "unknown");
+  assert.equal(fixture({ restart: true }).run(argv), "unknown");
 });

@@ -35,6 +35,8 @@ pub fn capability(app: &AppHandle) -> Result<(), String> {
             .permission("allow-mac-settings-status")
             .permission("allow-mac-settings-update")
             .permission("allow-mac-tools-toggle")
+            .permission("allow-mac-handoff-start")
+            .permission("allow-screen-coach-forget-paths")
             .permission("allow-desktop-update-status")
             .permission("allow-desktop-update-check")
             .permission("allow-desktop-update-install"),
@@ -68,12 +70,17 @@ pub struct Status {
     config: ScreenConfig,
     settings_reset: bool,
     island_visible: bool,
+    cursor_counts: crate::screen::cursor::telemetry::Counts,
+    voice_shortcut_available: bool,
+    tools_shortcut_available: bool,
     capture_available: bool,
     capture_blocker: &'static str,
 }
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Patch {
+    enabled: Option<bool>,
+    consent_version: Option<u32>,
     paused: Option<bool>,
     privacy: Option<Privacy>,
     circle: Option<CircleSettings>,
@@ -82,14 +89,22 @@ pub struct Patch {
     handoff: Option<HandoffSettings>,
 }
 fn edit(config: &mut ScreenConfig, patch: Patch) -> Result<(), String> {
-    if patch.privacy.as_ref().is_some_and(|p| p.let_neb_click)
-        || patch
-            .cursor
-            .as_ref()
-            .is_some_and(|c| c.catch_me || c.record_traces || c.debug)
-        || patch.handoff.as_ref().is_some_and(|h| h.timeline)
-    {
-        return Err("This Mac service is not connected; it cannot be enabled yet.".into());
+    let mut next = config.clone();
+    edit_inner(&mut next, patch)?;
+    *config = next;
+    Ok(())
+}
+fn edit_inner(config: &mut ScreenConfig, patch: Patch) -> Result<(), String> {
+    if let Some(enabled) = patch.enabled {
+        if enabled && patch.consent_version != Some(crate::screen::config::CONSENT_VERSION) {
+            return Err("Read and accept the current Screen Coach privacy notice first.".into());
+        }
+        config.enabled = enabled;
+        config.consent_version = if enabled {
+            crate::screen::config::CONSENT_VERSION
+        } else {
+            0
+        };
     }
     if let Some(v) = patch.paused {
         config.paused = v;
@@ -102,6 +117,11 @@ fn edit(config: &mut ScreenConfig, patch: Patch) -> Result<(), String> {
     }
     if let Some(v) = patch.help {
         config.help = v;
+    }
+    if patch.cursor.as_ref().is_some_and(|c| {
+        c.catch_me && c.catch_me_consent != crate::screen::cursor::settings::CATCH_ME_CONSENT
+    }) {
+        return Err("Read the CATCH ME privacy notice before enabling it.".into());
     }
     if let Some(v) = patch.cursor {
         config.cursor = v.normalized()?;
@@ -117,8 +137,11 @@ fn status(app: &AppHandle) -> Result<Status, String> {
         config,
         settings_reset,
         island_visible: island::shown(app),
-        capture_available: false,
-        capture_blocker: runtime::CAPTURE_BLOCKER,
+        cursor_counts:super::counts::view(app),
+        voice_shortcut_available:crate::mac_shortcut::voice_registered(app),
+        tools_shortcut_available:crate::mac_shortcut::tools_registered(app),
+        capture_available: true,
+        capture_blocker: "Screen Coach captures a privacy-checked supported window. Display capture blacks out other windows. Chrome and Brave require a verified normal window and existing Automation permission. Safari, Firefox and unknown browser states are refused. Grant macOS Screen Recording and Accessibility permissions before testing.",
     })
 }
 #[tauri::command]
@@ -130,7 +153,11 @@ pub fn mac_settings_status(window: WebviewWindow) -> Result<Status, String> {
 pub fn mac_settings_update(window: WebviewWindow, patch: Patch) -> Result<Status, String> {
     require_settings_window(&window)?;
     let app = window.app_handle();
+    let before = runtime::of(app)?.snapshot().0;
     runtime::of(app)?.update(|config| edit(config, patch))?;
+    if before.handoff.timeline && !runtime::of(app)?.snapshot().0.handoff.timeline {
+        super::handoff_runtime::forget_timeline(app);
+    }
     runtime::apply(app)?;
     status(app)
 }
@@ -140,6 +167,37 @@ pub fn mac_tools_toggle(window: WebviewWindow) -> Result<Status, String> {
     runtime::toggle_island(window.app_handle())?;
     status(window.app_handle())
 }
+#[tauri::command]
+pub fn screen_coach_onboarding(window: WebviewWindow, open_settings: bool) -> Result<bool, String> {
+    let app = window.app_handle();
+    let sign_in = app
+        .try_state::<crate::screen::sign_in::SignIn>()
+        .ok_or("Account services aren't ready.")?;
+    crate::screen::page::require_app_page(&window, sign_in.app_url())?;
+    if open_settings {
+        open(app)?;
+    }
+    let (config, _) = runtime::of(app)?.snapshot();
+    Ok(config.is_on() && !config.paused)
+}
+#[tauri::command]
+pub async fn mac_handoff_start(window: WebviewWindow) -> Result<(), String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || super::handoff_runtime::start(&app, None))
+        .await
+        .map_err(|_| "Handoff stopped.")?
+}
+
+#[tauri::command]
+pub async fn screen_coach_forget_paths(window: WebviewWindow) -> Result<(), String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || super::cursor_runtime::forget_paths(&app))
+        .await
+        .map_err(|_| "Couldn't forget learned paths.")?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,6 +226,40 @@ mod tests {
         ));
     }
     #[test]
+    fn capture_requires_current_explicit_consent_and_failed_patch_is_atomic() {
+        let mut c = ScreenConfig::default();
+        let before = c.clone();
+        assert!(edit(
+            &mut c,
+            Patch {
+                enabled: Some(true),
+                consent_version: Some(0),
+                ..Default::default()
+            }
+        )
+        .is_err());
+        assert_eq!(c, before);
+        edit(
+            &mut c,
+            Patch {
+                enabled: Some(true),
+                consent_version: Some(crate::screen::config::CONSENT_VERSION),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(c.is_on());
+        edit(
+            &mut c,
+            Patch {
+                enabled: Some(false),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(!c.is_on());
+    }
+    #[test]
     fn patch_preserves_other_preferences_and_refuses_unavailable_services() {
         let mut c = ScreenConfig::default();
         c.handoff.sender_name = "Student".into();
@@ -182,14 +274,15 @@ mod tests {
         assert_eq!(c.handoff.sender_name, "Student");
         assert_eq!(c.help, HelpLevel::Coach);
         let before = c.clone();
-        let p = Privacy {
-            let_neb_click: true,
+        let cursor = CursorSettings {
+            catch_me: true,
+            catch_me_consent: 0,
             ..Default::default()
         };
         assert!(edit(
             &mut c,
             Patch {
-                privacy: Some(p),
+                cursor: Some(cursor),
                 paused: Some(true),
                 ..Default::default()
             }

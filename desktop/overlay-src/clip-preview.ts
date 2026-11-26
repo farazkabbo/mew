@@ -14,7 +14,9 @@ import { invoke, on } from "./tauri";
 
 const RectSchema = z.tuple([z.number(), z.number(), z.number().min(0), z.number().min(0)]);
 const PreviewInfo = z.object({
-  imageUrl: z.string().startsWith("http://mewclip.localhost/"),
+  imageUrl: z
+    .string()
+    .regex(/^(?:http:\/\/mewclip\.localhost\/|mewclip:\/\/localhost\/)[a-zA-Z0-9_/-]+\.jpg$/),
   frame: z.tuple([z.number().positive(), z.number().positive()]),
   crop: RectSchema.nullable(),
   strokes: z.array(

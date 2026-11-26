@@ -9,6 +9,8 @@ fn main() {
         "mac_settings_status",
         "mac_settings_update",
         "mac_tools_toggle",
+        "mac_handoff_start",
+        "mac_cursor_catch_action",
         "screen_draw_ready",
         "notify_due",
         "notify_checks",
@@ -29,6 +31,7 @@ fn main() {
         "screen_coach_ask",
         "screen_coach_onboarding",
         "screen_ink_drawn",
+        "screen_ink_ready",
         "screen_ink_pill",
         "screen_clip_ready",
         "screen_clip_save",
@@ -54,6 +57,7 @@ fn main() {
         "screen_draw_select",
         "screen_draw_note",
         "screen_circle_card",
+        "screen_circle_ready",
         "screen_quiz_card",
         "screen_island",
         "desktop_update_status",
@@ -127,6 +131,28 @@ fn build_mac_capture() {
         .status()
         .expect("Apple Swift compiler");
     assert!(status.success(), "Mac capture indicator failed to compile");
+    println!("cargo:rerun-if-changed=native/macos/HandoffCrypto.swift");
+    let handoff = out.join("neb_handoff_crypto.o");
+    let status = Command::new("xcrun")
+        .args([
+            "swiftc",
+            "-parse-as-library",
+            "-O",
+            "-target",
+            &target,
+            "-emit-object",
+            "native/macos/HandoffCrypto.swift",
+            "-o",
+        ])
+        .arg(&handoff)
+        .arg("-module-cache-path")
+        .arg(&modules)
+        .status()
+        .expect("Apple Swift compiler");
+    assert!(
+        status.success(),
+        "Mac Handoff crypto bridge failed to compile"
+    );
     let signals = out.join("neb_call_signals.o");
     let status = Command::new("xcrun")
         .args([
@@ -150,6 +176,7 @@ fn build_mac_capture() {
         .arg(&archive)
         .arg(&object)
         .arg(&indicator)
+        .arg(&handoff)
         .arg(&signals)
         .status()
         .expect("Apple libtool is required");
@@ -185,6 +212,7 @@ fn build_mac_capture() {
         "Vision",
         "ImageIO",
         "UniformTypeIdentifiers",
+        "CryptoKit",
     ] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }

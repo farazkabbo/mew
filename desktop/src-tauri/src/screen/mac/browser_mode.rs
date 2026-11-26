@@ -1,22 +1,35 @@
-//! Unintegrated privacy adapter foundation. Does not authorize screen capture.
+//! Browser mode evidence. Production uses same-process read-only AppleEvents with the public
+//! no-user-consent send flag, exact native AX/CG focused-window geometry, and unique script
+//! geometry. Chrome stable and Brave have inspected installed dictionaries; Safari has no private-window
+//! property in its public dictionary, so other browsers remain Unknown.
 //!
-//! Chrome's installed public scripting.sdef: windows are ordered front-to-back;
-//! window.mode is explicitly `normal` / `incognito`. Safari's public dictionary
-//! has no private-window property; Safari and every unverified browser are unknown.
-//! Chromium WindowAppleScript uses browser session_id() as uniqueID, so numeric
-//! equality to CGWindowID proves nothing. Every successful sample is UNBOUND.
-//! No consumer may promote it into a focused-window/capture authorization.
-//!
-//! Caller contract: exact OS-observed PID + bundle + launch-date identity, native
-//! frontmost/focused CGWindowID and request generation; revalidate all of these
-//! through `current` at every async boundary. JXA independently checks process
-//! identity/frontmost status before and after its reads, but cannot prove focus
-//! binding. Only invoke Osascript after explicit Automation consent; it can cause
-//! a TCC prompt. No setup, polling, discovery or permission query occurs here.
+//! The older JXA runner remains an unbound testable adapter foundation. Its numeric IDs
+//! inhabit a different namespace and its `sample()` output never authorizes capture. Installed
+//! capture code calls `sample_native()`; it does not spawn osascript or trigger TCC consent.
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+
+#[cfg(target_os = "macos")]
+#[path = "browser_mode_native.rs"]
+mod native;
+#[cfg(target_os = "macos")]
+pub fn sample_native(
+    request: &FocusRequest,
+    bounds: super::target::Rect,
+    current: &dyn Fn() -> bool,
+) -> Mode {
+    native::sample(request, bounds, current)
+}
+
+pub(crate) fn saved_source(
+    request: &FocusRequest,
+    bounds: super::target::Rect,
+    current: &dyn Fn() -> bool,
+) -> Option<(String, String)> {
+    native::source(request, bounds, current)
+}
 
 const SCRIPT: &str = include_str!("browser_mode.js");
 const LIMIT: usize = 64;
@@ -84,6 +97,14 @@ impl Runner for Osascript {
     fn run(&mut self, argv: &[String], current: &dyn Fn() -> bool) -> Result<Vec<u8>, Failure> {
         if !current() {
             return Err(Failure::Cancelled);
+        }
+        #[cfg(target_os = "macos")]
+        if !argv
+            .first()
+            .and_then(|pid| pid.parse().ok())
+            .is_some_and(automation_previously_allowed)
+        {
+            return Err(Failure::Unavailable);
         }
         let mut command = Command::new("/usr/bin/osascript");
         command
@@ -224,6 +245,107 @@ fn parse(bytes: &[u8]) -> Sample {
     }
 }
 
+/// Exact native AX/CG geometry binding is supplied by the caller and freshly rechecked before
+/// and after JXA. Unique script-window geometry binds namespaces; numeric IDs are never
+/// compared. This only supports Chrome stable's inspected public dictionary.
+pub fn sample_bound(
+    runner: &mut dyn Runner,
+    request: &FocusRequest,
+    bounds: super::target::Rect,
+    current: &dyn Fn() -> bool,
+) -> Mode {
+    if request.bundle != "com.google.Chrome"
+        || request.pid <= 0
+        || request.cg_window_id == 0
+        || request.generation == 0
+        || !current()
+        || super::target::Rect::new(bounds.x, bounds.y, bounds.width, bounds.height).is_none()
+    {
+        return Mode::Unknown;
+    }
+    let launch_valid = request.launch.len() <= 64
+        && request
+            .launch
+            .parse::<f64>()
+            .is_ok_and(|v| v.is_finite() && v > 0.)
+        && request
+            .launch
+            .bytes()
+            .all(|b| b.is_ascii_digit() || b == b'.');
+    if !launch_valid {
+        return Mode::Unknown;
+    }
+    let argv = [
+        request.pid.to_string(),
+        request.bundle.clone(),
+        request.launch.clone(),
+        bounds.x.to_string(),
+        bounds.y.to_string(),
+        bounds.width.to_string(),
+        bounds.height.to_string(),
+    ];
+    let result = runner.run(&argv, current);
+    if !current() {
+        return Mode::Unknown;
+    }
+    match result.as_deref() {
+        Ok(b"bound-normal") | Ok(b"bound-normal\n") => Mode::Normal,
+        Ok(b"bound-private") | Ok(b"bound-private\n") => Mode::Private,
+        _ => Mode::Unknown,
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn automation_previously_allowed(pid: i32) -> bool {
+    use std::ffi::c_void;
+    #[repr(C, packed(2))]
+    struct Desc {
+        kind: u32,
+        data: *mut c_void,
+    }
+    #[link(name = "CoreServices", kind = "framework")]
+    unsafe extern "C" {
+        fn AECreateDesc(kind: u32, bytes: *const c_void, size: isize, out: *mut Desc) -> i16;
+        fn AEDisposeDesc(desc: *mut Desc) -> i16;
+        fn AEDeterminePermissionToAutomateTarget(
+            target: *const Desc,
+            event_class: u32,
+            event_id: u32,
+            ask_user: u8,
+        ) -> i32;
+    }
+    if pid <= 0 {
+        return false;
+    }
+    let mut desc = Desc {
+        kind: 0,
+        data: std::ptr::null_mut(),
+    };
+    // Public SDK query only, explicitly askUserIfNeeded=false. An ungranted permission stays
+    // Unknown; neither setup nor capture asks the user or opens privacy settings.
+    let created = unsafe {
+        AECreateDesc(
+            u32::from_be_bytes(*b"kpid"),
+            (&pid as *const i32).cast(),
+            std::mem::size_of::<i32>() as isize,
+            &mut desc,
+        )
+    };
+    if created != 0 {
+        return false;
+    }
+    let status = unsafe {
+        AEDeterminePermissionToAutomateTarget(
+            &desc,
+            u32::from_be_bytes(*b"****"),
+            u32::from_be_bytes(*b"****"),
+            0,
+        )
+    };
+    unsafe { AEDisposeDesc(&mut desc) };
+    status == 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -358,6 +480,37 @@ mod tests {
         assert_eq!(
             run_command(echo, &|| true, TIMEOUT),
             Ok(b"normal\t42\n".to_vec())
+        );
+    }
+    #[test]
+    fn bound_browser_output_cannot_promote_unbound_or_cancelled_results() {
+        struct BoundRunner(Vec<u8>);
+        impl Runner for BoundRunner {
+            fn run(&mut self, argv: &[String], _: &dyn Fn() -> bool) -> Result<Vec<u8>, Failure> {
+                assert_eq!(argv.len(), 7);
+                Ok(self.0.clone())
+            }
+        }
+        let bounds = super::super::target::Rect::new(-1440., -200., 1200., 800.).unwrap();
+        for (bytes, expected) in [
+            (b"bound-normal".to_vec(), Mode::Normal),
+            (b"bound-private".to_vec(), Mode::Private),
+            (b"normal\t42".to_vec(), Mode::Unknown),
+            (b"bound-normal\nsecret".to_vec(), Mode::Unknown),
+        ] {
+            assert_eq!(
+                sample_bound(&mut BoundRunner(bytes), &request(), bounds, &|| true),
+                expected
+            );
+        }
+        assert_eq!(
+            sample_bound(
+                &mut BoundRunner(b"bound-normal".to_vec()),
+                &request(),
+                bounds,
+                &|| false
+            ),
+            Mode::Unknown
         );
     }
 }

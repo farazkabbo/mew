@@ -48,6 +48,10 @@ function fixture(players = [], onDiscover = () => {}) {
             persistentID: () => p.track,
             name: () => p.title,
             artist: () => p.artist,
+            artworkUrl: () => {
+              if (!p.artwork) throw Error("absent");
+              return p.artwork;
+            },
           };
         },
         playpause() {
@@ -180,4 +184,16 @@ test("a selected player changing during the second player's discovery rejects co
     assert.equal(f.run("control", JSON.stringify(selected), "play_pause").error, "changed");
     assert.deepEqual(f.commands, []);
   }
+});
+
+test("optional Spotify artwork remains bounded data and never changes control target", () => {
+  const p = spotify();
+  p.artwork = "https://i.scdn.co/image/" + "a".repeat(40);
+  const f = fixture([p]);
+  const selected = f.run("read").now;
+  assert.equal(selected.artwork_url, p.artwork);
+  assert.equal(f.run("control", JSON.stringify(selected), "play_pause").now, null);
+  assert.deepEqual(f.commands, [[12, "play_pause"]]);
+  p.artwork = "x".repeat(2000);
+  assert.equal(f.run("read").now.artwork_url.length, 512);
 });

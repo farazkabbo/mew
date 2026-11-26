@@ -62,6 +62,23 @@ pub(crate) enum Shortcut {
     DocumentStart,
     DocumentEnd,
 }
+/// Fixed navigation keys only; no arbitrary scan code or command execution surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PlainKey {
+    Enter,
+    Escape,
+    Tab,
+    Backspace,
+    Up,
+    Down,
+    Left,
+    Right,
+    PageUp,
+    PageDown,
+    Home,
+    End,
+    Refresh,
+}
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Action {
     Text(String),
@@ -69,6 +86,7 @@ pub(crate) enum Action {
     Click {
         point: Point,
         button: Button,
+        click_count: u8,
     },
     /// Bounded pixel deltas. Positive vertical scrolls upward, as Quartz specifies.
     Scroll {
@@ -77,6 +95,7 @@ pub(crate) enum Action {
         horizontal: i32,
     },
     Shortcut(Shortcut),
+    Key(PlainKey),
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Error {
@@ -108,6 +127,7 @@ enum Event {
         point: Point,
         button: Button,
         down: bool,
+        click_count: u8,
     },
     Scroll {
         point: Point,
@@ -254,9 +274,11 @@ fn release_for(event: &Event) -> Option<Event> {
             point,
             button,
             down: true,
+            click_count,
         } => Some(Event::Button {
             point: *point,
             button: *button,
+            click_count: *click_count,
             down: false,
         }),
         _ => None,
@@ -313,16 +335,25 @@ fn events(action: &Action, bounds: Rect) -> Result<Vec<Event>, Error> {
             check_point(*point)?;
             result.push(Event::Move(*point));
         }
-        Action::Click { point, button } => {
+        Action::Click {
+            point,
+            button,
+            click_count,
+        } => {
+            if !(1..=2).contains(click_count) {
+                return Err(Error::InvalidAction);
+            }
             check_point(*point)?;
             result.push(Event::Button {
                 point: *point,
                 button: *button,
+                click_count: *click_count,
                 down: true,
             });
             result.push(Event::Button {
                 point: *point,
                 button: *button,
+                click_count: *click_count,
                 down: false,
             });
         }
@@ -343,6 +374,24 @@ fn events(action: &Action, bounds: Rect) -> Result<Vec<Event>, Error> {
                 vertical: *vertical,
                 horizontal: *horizontal,
             });
+        }
+        Action::Key(key) => {
+            let code = match key {
+                PlainKey::Enter => 36,
+                PlainKey::Escape => 53,
+                PlainKey::Tab => 48,
+                PlainKey::Backspace => 51,
+                PlainKey::Up => 126,
+                PlainKey::Down => 125,
+                PlainKey::Left => 123,
+                PlainKey::Right => 124,
+                PlainKey::PageUp => 116,
+                PlainKey::PageDown => 121,
+                PlainKey::Home => 115,
+                PlainKey::End => 119,
+                PlainKey::Refresh => 96,
+            };
+            key_pair(&mut result, code, vec![], 0);
         }
         Action::Shortcut(shortcut) => {
             // Same bounded intention as Windows mouse::PlainKey; no arbitrary virtual-key
@@ -395,7 +444,7 @@ fn events(action: &Action, bounds: Rect) -> Result<Vec<Event>, Error> {
 /// unknown destination elements and occluding windows. Focus alone does not prove a click safe.
 /// It must fail closed when the native focus/private/call proof is unavailable.
 /// This is deliberately NOT a tauri::command and has no Serialize/Deserialize derives.
-#[cfg(all(target_os = "macos", not(test)))]
+#[cfg(target_os = "macos")]
 pub(crate) fn perform<G: FnMut(&BoundTarget, &Action) -> Result<Authorization, Error>>(
     target: &BoundTarget,
     action: &Action,
@@ -407,7 +456,7 @@ pub(crate) fn perform<G: FnMut(&BoundTarget, &Action) -> Result<Authorization, E
     run(&mut native::Native, target, action, &mut guard)
 }
 
-#[cfg(all(target_os = "macos", not(test)))]
+#[cfg(target_os = "macos")]
 mod native {
     use super::*;
     use std::{ffi::c_void, ptr};
@@ -431,6 +480,7 @@ mod native {
         ) -> Cf;
         fn CGEventSetLocation(event: Cf, point: Point);
         fn CGEventPost(tap: u32, event: Cf);
+        fn CGEventSetIntegerValueField(event: Cf, field: u32, value: i64);
         fn CGEventSourceFlagsState(state: i32) -> u64;
         fn CGEventSourceKeyState(state: i32, key: u16) -> bool;
         fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
@@ -514,6 +564,7 @@ mod native {
                         point,
                         button,
                         down,
+                        click_count,
                     } => {
                         let (kind, button) = match (button, down) {
                             (Button::Primary, true) => (1, 0),
@@ -521,7 +572,11 @@ mod native {
                             (Button::Secondary, true) => (3, 1),
                             (Button::Secondary, false) => (4, 1),
                         };
-                        CGEventCreateMouseEvent(ptr::null(), kind, *point, button)
+                        let raw = CGEventCreateMouseEvent(ptr::null(), kind, *point, button);
+                        if !raw.is_null() {
+                            CGEventSetIntegerValueField(raw, 1, i64::from(*click_count));
+                        }
+                        raw
                     }
                     Event::Scroll {
                         point,
@@ -729,6 +784,7 @@ mod tests {
         let action = Action::Click {
             point: Point { x: -20., y: 10. },
             button: Button::Primary,
+            click_count: 1,
         };
         assert_eq!(
             run(&mut fake, &target(), &action, &mut approved),
@@ -854,5 +910,24 @@ mod tests {
         assert_eq!(result, Err(Error::Deadline));
         assert!(fake.posts.is_empty());
         assert_eq!(fake.preflights, 0);
+    }
+    #[test]
+    fn double_click_event_count_is_explicit_and_bounded() {
+        let target = target();
+        let click = Action::Click {
+            point: Point { x: 50., y: 100. },
+            button: Button::Primary,
+            click_count: 2,
+        };
+        let generated = events(&click, target.bounds).unwrap();
+        assert!(generated
+            .iter()
+            .all(|event| matches!(event, Event::Button { click_count: 2, .. })));
+        let bad = Action::Click {
+            point: Point { x: 50., y: 100. },
+            button: Button::Primary,
+            click_count: 3,
+        };
+        assert_eq!(events(&bad, target.bounds), Err(Error::InvalidAction));
     }
 }

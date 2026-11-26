@@ -62,7 +62,7 @@ impl Runtime {
                 reset,
                 preferences,
             }),
-            generation: AtomicU64::new(0),
+            generation: AtomicU64::new(1),
         }
     }
     pub fn snapshot(&self) -> (ScreenConfig, bool) {
@@ -119,6 +119,17 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     runtime.app = Some(app.clone());
     let runtime = Arc::new(runtime);
     drawing::setup(app)?;
+    super::capture_session::setup(app)?;
+    super::ask::setup(app)?;
+    super::study::setup(app)?;
+    super::annotate::setup(app)?;
+    super::handoff_runtime::setup(app)?;
+    super::clip::setup(app)?;
+    super::circle::setup(app)?;
+    super::hand::setup(app)?;
+    super::chores::setup(app);
+    super::cursor_runtime::setup(app)?;
+    super::annotate::set_save_handler(app, Arc::new(super::clip::from_ink))?;
     super::media_pins::setup(app)?;
     media::setup(app)?;
     super::settings::capability(app)?;
@@ -140,6 +151,15 @@ pub fn of(app: &AppHandle) -> Result<tauri::State<'_, Arc<Runtime>>, String> {
 }
 /// Apply preferences to installed services; no unavailable capture service is activated.
 pub fn apply(app: &AppHandle) -> Result<(), String> {
+    super::ask::cancel(app);
+    super::study::stop_all(app);
+    super::hand::stop_all(app);
+    super::chores::cancel_all(app);
+    super::cursor_runtime::stop_all(app);
+    super::circle::cancel_all(app);
+    super::clip::cancel_all(app);
+    super::handoff_runtime::cancel_all(app);
+    let _ = super::annotate::clear(app);
     let (config, _) = of(app)?.snapshot();
     if config.paused || !config.privacy.show_in_captures {
         media::close(app)?;
@@ -149,6 +169,28 @@ pub fn apply(app: &AppHandle) -> Result<(), String> {
         island::refresh(app)?;
     }
     Ok(())
+}
+/// Native cancellation invalidates all outstanding work before clearing visible surfaces.
+pub fn cancel(app: &AppHandle) {
+    if let Ok(r) = of(app) {
+        r.generation.fetch_add(1, Ordering::AcqRel);
+    }
+    super::ask::cancel(app);
+    super::study::stop_all(app);
+    super::hand::stop_all(app);
+    super::chores::cancel_all(app);
+    super::cursor_runtime::stop_all(app);
+    super::circle::cancel_all(app);
+    super::clip::cancel_all(app);
+    super::handoff_runtime::cancel_all(app);
+    let _ = super::annotate::clear(app);
+}
+pub fn account_changed<R: tauri::Runtime>(app: &AppHandle<R>) {
+    if let Some(runtime) = app.try_state::<Arc<Runtime>>() {
+        if let Some(handle) = runtime.app.as_ref() {
+            cancel(handle);
+        }
+    }
 }
 pub fn set_paused(app: &AppHandle, paused: bool) -> Result<(), String> {
     of(app)?.update(|config| {
@@ -169,7 +211,7 @@ impl island::Actions for Runtime {
         IslandView {
             tool,
             shape: state.preferences.shape,
-            mic: false,
+            mic: self.app.as_ref().is_some_and(super::ask::listening),
             silent: state.config.circle.silent,
             activity: if state.config.paused {
                 Activity::Paused
@@ -178,14 +220,12 @@ impl island::Actions for Runtime {
             },
             clearable,
             help: state.config.help,
-            watching: false,
+            watching: self.app.as_ref().is_some_and(super::study::watching),
         }
     }
     fn set_tool(&self, tool: Tool) -> Result<(), String> {
         let (config, _) = self.snapshot();
-        if tool == Tool::Select {
-            return Err(CAPTURE_BLOCKER.into());
-        }
+
         if tool.draws() && (config.paused || !config.privacy.show_in_captures) {
             return Err("Enable visible Mac annotations in local settings before drawing. Mac cannot guarantee hiding annotations from other screen recordings.".into());
         }
@@ -204,13 +244,21 @@ impl island::Actions for Runtime {
         Ok(())
     }
     fn set_shape(&self, shape: Shape) -> Result<(), String> {
-        self.preference(|preferences| preferences.shape = shape)
+        self.preference(|preferences| preferences.shape = shape)?;
+        let Some(app) = self.app.as_ref() else {
+            return Ok(());
+        };
+        let tool = drawing::view(app).0;
+        if tool.draws() {
+            drawing::set_tool(app, tool, shape)?;
+        }
+        Ok(())
     }
     fn toggle_mic(&self) -> Result<(), String> {
-        Err("Microphone capture is unavailable on this Mac.".into())
+        super::ask::toggle_mic(self.app.as_ref().ok_or(DRAW_BLOCKER)?)
     }
     fn toggle_watch(&self) -> Result<(), String> {
-        Err(CAPTURE_BLOCKER.into())
+        super::study::toggle_watch(self.app.as_ref().ok_or(DRAW_BLOCKER)?)
     }
     fn set_help(&self, level: HelpLevel) -> Result<(), String> {
         self.update(|config| {
@@ -224,6 +272,7 @@ impl island::Actions for Runtime {
     fn close(&self) -> Result<(), String> {
         self.generation.fetch_add(1, Ordering::AcqRel);
         let app = self.app.as_ref().ok_or(DRAW_BLOCKER)?;
+        cancel(app);
         media::close(app)?;
         drawing::close(app)?;
         self.preference(|preferences| preferences.tool = Tool::None)
@@ -317,7 +366,7 @@ mod tests {
             })
             .is_err());
         assert_eq!(runtime.snapshot().0, before);
-        assert_eq!(runtime.generation.load(Ordering::Acquire), 0);
+        assert_eq!(runtime.generation.load(Ordering::Acquire), 1);
         assert_eq!(std::fs::read(&runtime.path).unwrap(), b"original");
         std::fs::remove_dir_all(dir).unwrap();
     }

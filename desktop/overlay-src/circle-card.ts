@@ -201,3 +201,12 @@ on("mew:card-show", (detail) => {
   const next = cardLayout(detail);
   if (next) render(next);
 });
+
+if ((window as unknown as { __NEB_MAC_CARD_HOST__?: boolean }).__NEB_MAC_CARD_HOST__) {
+  void invoke("screen_circle_ready")
+    .then((detail) => {
+      const next = cardLayout(detail);
+      if (next) render(next);
+    })
+    .catch(() => undefined);
+}

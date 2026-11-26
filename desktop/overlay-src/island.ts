@@ -471,3 +471,8 @@ on("mew:island-host", (detail) => {
 
 // Ask only after the event listeners above are installed (including slow WKWebView loads).
 send({ type: "ready" });
+
+if ((window as unknown as { __NEB_MAC_HOST__?: boolean }).__NEB_MAC_HOST__) {
+  const close = document.getElementById("island-close");
+  if (close) close.title = "Hide (Escape)";
+}

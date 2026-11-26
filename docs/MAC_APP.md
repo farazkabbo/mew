@@ -1,11 +1,13 @@
 # Building neb for macOS
 
-Current status (2026-11-25): the same desktop project now builds on Mac, with native sign-in, local island/drawing/settings and media integration. **Full Windows parity remains incomplete.** This document started as the original Windows-to-Mac plan; its old inventory below is historical. Use [MAC_PARITY.md](MAC_PARITY.md) for current source/acceptance and [the Mac testing guide](../desktop/MAC_TESTING.md) for the development build.
+Current status (2026-11-26): the same desktop project contains the Mac implementations of Screen Coach, Circle/Clip, study flows, Hand/cursor modes, Handoff and media alongside the shared notebook. Automated verification and manual macOS acceptance are tracked separately. This document started as the original Windows-to-Mac plan; its old inventory below is historical. Use [MAC_PARITY.md](MAC_PARITY.md) for current source/acceptance and [the Mac testing guide](../desktop/MAC_TESTING.md) for the development build.
 
 A plan for the developer bringing the desktop app to the Mac. Read
 [ARCHITECTURE.md](ARCHITECTURE.md) first. This guide assumes you know how the pieces fit.
 
-## Where things stand
+## Historical starting point
+
+The following inventory describes the project before the port. It is retained to explain the original design, not as current setup or feature status. Use the current guides linked above for testing.
 
 - **The web app works on a Mac today,** in any browser. You can develop and test everything in
   `frontend/`, `backend/` and the packages on a MacBook.

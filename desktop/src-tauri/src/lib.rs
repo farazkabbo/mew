@@ -66,6 +66,14 @@ pub fn run() {
     // A clip's preview image, served from memory to the preview window only (S3).
     #[cfg(windows)]
     let builder = builder.register_uri_scheme_protocol(screen::clip::SCHEME, screen::clip::serve);
+    #[cfg(target_os = "macos")]
+    let builder =
+        builder.register_uri_scheme_protocol(screen::mac::clip::SCHEME, screen::mac::clip::serve);
+    #[cfg(target_os = "macos")]
+    let builder = builder.register_uri_scheme_protocol(
+        screen::mac::handoff_runtime::SCHEME,
+        screen::mac::handoff_runtime::serve,
+    );
     // A handoff draft's crops, served from memory to the preview window only.
     #[cfg(windows)]
     let builder = builder
@@ -121,6 +129,11 @@ fn sign_in_links(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(windows)]
             if let Some(id) = screen::handoff_run::parse_link(&link) {
                 screen::handoff_run::open_link(&handle, &id);
+                continue;
+            }
+            #[cfg(target_os = "macos")]
+            if let Some(id) = screen::mac::handoff_runtime::parse_link(&link) {
+                screen::mac::handoff_runtime::open_link(&handle, &id);
                 continue;
             }
             screen::sign_in::on_link(&handle, &link);
@@ -220,15 +233,52 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     };
 
     use screen::mac::{
+        annotate::{screen_ink_drawn, screen_ink_pill, screen_ink_ready},
+        ask::{screen_coach_ask, screen_coach_spoken},
+        circle::{screen_circle_card, screen_circle_ready},
+        clip::{screen_clip_cancel, screen_clip_ready, screen_clip_save},
+        cursor_runtime::mac_cursor_catch_action,
         drawing::{
             screen_draw_erase, screen_draw_island_press, screen_draw_mark, screen_draw_note,
             screen_draw_pen, screen_draw_ready, screen_draw_select,
         },
+        handoff_runtime::{
+            handoff_pick_up, handoff_preview_blur, handoff_preview_cancel, handoff_preview_copy,
+            handoff_preview_send, handoff_preview_state, handoff_preview_update,
+        },
         island::screen_island,
-        settings::{mac_settings_status, mac_settings_update, mac_tools_toggle},
+        settings::{
+            mac_handoff_start, mac_settings_status, mac_settings_update, mac_tools_toggle,
+            screen_coach_forget_paths, screen_coach_onboarding,
+        },
+        study::{screen_coach_pill, screen_notes_panel, screen_quiz_card},
     };
     use updates::{desktop_update_check, desktop_update_install, desktop_update_status};
     tauri::generate_handler![
+        screen_coach_ask,
+        screen_notes_panel,
+        screen_coach_pill,
+        screen_quiz_card,
+        screen_ink_ready,
+        screen_ink_drawn,
+        screen_ink_pill,
+        screen_coach_onboarding,
+        screen_clip_ready,
+        screen_clip_save,
+        screen_clip_cancel,
+        screen_circle_card,
+        screen_coach_spoken,
+        screen_circle_ready,
+        mac_cursor_catch_action,
+        handoff_preview_state,
+        handoff_preview_update,
+        handoff_preview_blur,
+        handoff_preview_send,
+        handoff_preview_copy,
+        handoff_preview_cancel,
+        handoff_pick_up,
+        screen_coach_forget_paths,
+        mac_handoff_start,
         mac_settings_status,
         mac_settings_update,
         mac_tools_toggle,
@@ -280,7 +330,12 @@ fn remote_capability(app: &AppHandle, app_url: &Url) -> tauri::Result<()> {
         .permission("allow-desktop-sign-in-ticket")
         .permission("allow-desktop-sign-out");
     #[cfg(target_os = "macos")]
-    let capability = capability.permission("allow-desktop-summon-shortcut");
+    let capability = capability
+        .permission("allow-desktop-summon-shortcut")
+        .permission("allow-handoff-pick-up")
+        .permission("allow-screen-coach-spoken")
+        .permission("allow-screen-coach-onboarding")
+        .permission("allow-screen-coach-ask");
     #[cfg(windows)]
     let capability = capability
         .permission("allow-screen-coach-ask")
@@ -373,7 +428,7 @@ pub(crate) fn show<R: tauri::Runtime>(app: &AppHandle<R>) -> Option<WebviewWindo
 /// Opens Neb at a line of the student's own notebook (docs/PLAN.md, "teach from your notes"):
 /// asked to do the work, neb shows where they wrote about it instead. The page (an id) and the
 /// line's box were checked when the event was parsed; they reach the page as JSON.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(crate) fn open_note<R: tauri::Runtime>(app: &AppHandle<R>, spot: &screen::protocol::NoteSpot) {
     let detail = serde_json::json!({ "pageId": spot.page_id, "bbox": spot.bbox });
     if let Some(window) = show(app) {
@@ -568,7 +623,34 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     )?;
     let update = MenuItem::with_id(app, "update", "Check for updates", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Neb", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &ask, &tools, &settings, &update, &quit])?;
+    let look = MenuItem::with_id(
+        app,
+        "mac-look",
+        "Ask about my screen (hold ⌃⇧Space)",
+        true,
+        None::<&str>,
+    )?;
+    let pause = MenuItem::with_id(
+        app,
+        "mac-pause",
+        "Pause or resume Screen Coach",
+        true,
+        None::<&str>,
+    )?;
+    let watch = MenuItem::with_id(app, "mac-watch", "Start or stop Watch", true, None::<&str>)?;
+    let stop = MenuItem::with_id(
+        app,
+        "mac-stop",
+        "Stop all screen tasks (Escape)",
+        true,
+        None::<&str>,
+    )?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &open, &ask, &look, &tools, &pause, &watch, &stop, &settings, &update, &quit,
+        ],
+    )?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Neb")
         .menu(&menu)
@@ -577,6 +659,23 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
                 show(app);
             }
             "summon" => summon(app),
+            "mac-look" => {
+                if screen::mac::ask::toggle_mic(app).is_err() {
+                    let _ = screen::mac::settings::open(app);
+                }
+            }
+            "mac-pause" => {
+                if let Ok(r) = screen::mac::runtime::of(app) {
+                    let paused = r.snapshot().0.paused;
+                    let _ = screen::mac::runtime::set_paused(app, !paused);
+                }
+            }
+            "mac-watch" => {
+                if screen::mac::study::toggle_watch(app).is_err() {
+                    let _ = screen::mac::settings::open(app);
+                }
+            }
+            "mac-stop" => screen::mac::runtime::cancel(app),
             "mac-tools" => {
                 let _ = screen::mac::runtime::toggle_island(app);
             }

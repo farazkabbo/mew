@@ -36,6 +36,12 @@ function run(argv) {
     var key = String(identity.app === "com.spotify.client" ? track.id() : track.persistentID());
     var title = String(track.name()).slice(0, 512);
     var artist = String(track.artist()).slice(0, 512);
+    var artwork = null;
+    if (identity.app === "com.spotify.client") {
+      try {
+        artwork = String(track.artworkUrl()).slice(0, 512);
+      } catch (_) {}
+    }
     if (!equal(identity, discover(identity.app))) throw new Error("changed");
     return {
       app: identity.app,
@@ -45,6 +51,7 @@ function run(argv) {
       title: title,
       artist: artist,
       playing: state === "playing",
+      artwork_url: artwork,
     };
   }
   try {

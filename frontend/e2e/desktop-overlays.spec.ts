@@ -975,10 +975,11 @@ test("the Windows drawing host continues to leave mouse collection to native pol
   expect(await shell.calls()).toEqual([]);
 });
 
-test("Mac settings retain privacy preferences and keep unavailable capture and updates truthful", async ({
+test("Mac settings retain explicit capture consent, privacy preferences and update status", async ({
   page,
 }) => {
   const config = {
+    enabled: false,
     paused: false,
     help: "hint",
     privacy: {
@@ -986,15 +987,26 @@ test("Mac settings retain privacy preferences and keep unavailable capture and u
       letNebClick: false,
       blockedApps: ["example.exe"],
       pauseDuringCalls: true,
+      askScope: "window",
+      redaction: { cards: true, secrets: true, codes: true, emails: false, phones: false },
     },
-    circle: { silent: false, pointer: "always" },
+    circle: { silent: false, pointer: "always", save: "auto" },
+    cursor: {
+      catchMe: false,
+      catchMeConsent: 0,
+      voice: true,
+      guidance: "auto",
+      debug: false,
+      recordTraces: false,
+    },
+    handoff: { timeline: false, senderName: "" },
   };
   const status = {
     config,
     settingsReset: false,
     islandVisible: false,
-    captureAvailable: false,
-    captureBlocker: "Screen capture privacy checks are not connected. No screen is read.",
+    captureAvailable: true,
+    captureBlocker: "Screen Coach uses privacy-checked captures and requires explicit consent.",
   };
   const shell = await openShellPage(page, "mac-screen-settings.html", {
     mac_settings_status: status,
@@ -1013,10 +1025,14 @@ test("Mac settings retain privacy preferences and keep unavailable capture and u
     cmd: "mac_settings_update",
     args: {
       patch: {
+        enabled: false,
+        consentVersion: 0,
         paused: false,
-        privacy: { ...config.privacy, showInCaptures: true },
+        privacy: { ...config.privacy, showInCaptures: true, blockedApps: ["example"] },
         circle: config.circle,
         help: "coach",
+        cursor: config.cursor,
+        handoff: config.handoff,
       },
     },
   });
@@ -1078,4 +1094,25 @@ test("Mac music shows native player state and sends explicit playback and pin ac
   await expect(page.locator("#music-title")).toHaveText("Nothing playing");
   await expect(page.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
   expect(shell.violations).toEqual([]);
+});
+
+test("Mac local overlays use Mac help text and Command shortcuts", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.assign(window, { __NEB_MAC_HOST__: true, __NEB_MAC_CARD_HOST__: true });
+  });
+  const shell = await openShellPage(page, "circle-card.html", {
+    screen_circle_ready: { mode: "ask", silent: true, place: {} },
+  });
+  await expect(page.getByLabel("Your question")).toBeVisible();
+  await page.keyboard.press("Meta+KeyS");
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_circle_card", args: { action: "save_only" } });
+  await openShellPage(page, "quiz-card.html");
+  await expect(page.locator("#quiz-input")).toHaveAttribute(
+    "placeholder",
+    /Control \+ Shift \+ Space/,
+  );
+  await openShellPage(page, "island.html");
+  await expect(page.locator("#island-close")).toHaveAttribute("title", "Hide (Escape)");
 });

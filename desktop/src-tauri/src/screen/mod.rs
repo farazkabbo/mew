@@ -63,6 +63,8 @@ pub mod destination;
 pub mod drag;
 pub mod frame;
 pub mod glance;
+pub mod hand_input;
+pub mod hand_protocol;
 pub mod handoff;
 pub mod hold;
 pub mod image;
@@ -86,6 +88,7 @@ pub mod surfaces;
 pub mod tray_badge;
 pub mod walkthrough;
 pub mod watch;
+pub mod write_protocol;
 
 #[cfg(windows)]
 pub mod account;

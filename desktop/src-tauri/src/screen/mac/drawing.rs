@@ -1,4 +1,4 @@
-//! Local annotation only. No screen pixels, text recognition, file writes or model requests.
+//! Native drawing gestures; explicit selections hand a target-bound region to Circle & Ask.
 //! All positions are CSS/Quartz points on one display; no Windows physical-pixel assumptions.
 use super::{
     input, island, overlay,
@@ -114,9 +114,6 @@ pub fn view(app: &AppHandle) -> (Tool, bool) {
         .unwrap_or((Tool::None, false))
 }
 pub fn set_tool(app: &AppHandle, tool: Tool, shape: Shape) -> Result<(), String> {
-    if tool == Tool::Select {
-        return Err("Screen selection is unavailable on Mac.".into());
-    }
     if tool.draws() {
         let (config, _) = super::runtime::of(app)?.snapshot();
         if config.paused || !config.privacy.show_in_captures {
@@ -278,17 +275,94 @@ pub struct Stroke {
     #[serde(default)]
     dashed: bool,
 }
+fn selection(app: &AppHandle, rect: [f32; 4]) -> Result<(), String> {
+    let (region, expected) = {
+        let h = state(app)?;
+        let s = h.0.lock().unwrap_or_else(|p| p.into_inner());
+        if s.tool != Tool::Select {
+            return Err("Choose the selection tool first.".into());
+        }
+        let display = s.frame.ok_or("The drawing session ended.")?;
+        let bound = s.binding.as_ref().ok_or("The drawing target changed.")?;
+        let [x, y, w, h] = rect;
+        if !rect.iter().all(|v| v.is_finite())
+            || x < 0.
+            || y < 0.
+            || w < 4.
+            || h < 4.
+            || f64::from(x + w) > display.width
+            || f64::from(y + h) > display.height
+        {
+            return Err("Select an area inside this display.".into());
+        }
+        let region = Rect::new(
+            display.x + f64::from(x),
+            display.y + f64::from(y),
+            f64::from(w),
+            f64::from(h),
+        )
+        .ok_or("Invalid selection.")?;
+        (
+            region,
+            super::pipeline::Target {
+                window_id: bound.window.id,
+                process: bound.process.clone(),
+                quartz_points: bound.window.bounds,
+            },
+        )
+    };
+    // The non-key drawing panel must be gone before capture, and the captured target must
+    // still be the original process launch/window. No pixels are acquired by this handler.
+    close(app)?;
+    let app = app.clone();
+    std::thread::Builder::new()
+        .name("neb-mac-selection".into())
+        .spawn(move || {
+            if let Err(message) = super::circle::select_bound(&app, region, expected) {
+                crate::screen::page::dispatch(
+                    &app,
+                    crate::screen::page::SAY,
+                    serde_json::json!({"text":message.chars().take(300).collect::<String>()}),
+                );
+            }
+        })
+        .map_err(|_| "Couldn't begin the screen selection.")?;
+    Ok(())
+}
 #[tauri::command]
 pub fn screen_draw_mark(window: WebviewWindow, stroke: Stroke) -> Result<(), String> {
     require(&window)?;
-    let _ = stroke;
-    Err("Screen selection requires Mac capture privacy checks, which are unavailable.".into())
+    if !(3..=4000).contains(&stroke.points.len())
+        || stroke.points.iter().flatten().any(|v| !v.is_finite())
+    {
+        return Err("Invalid selection stroke.".into());
+    }
+    let mut bounds = [
+        f32::INFINITY,
+        f32::INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+    ];
+    for [x, y, _] in stroke.points {
+        bounds[0] = bounds[0].min(x);
+        bounds[1] = bounds[1].min(y);
+        bounds[2] = bounds[2].max(x);
+        bounds[3] = bounds[3].max(y);
+    }
+    selection(
+        window.app_handle(),
+        [
+            bounds[0],
+            bounds[1],
+            bounds[2] - bounds[0],
+            bounds[3] - bounds[1],
+        ],
+    )
 }
 #[tauri::command]
 pub fn screen_draw_select(window: WebviewWindow, rect: [f32; 4]) -> Result<(), String> {
     require(&window)?;
-    let _ = rect;
-    Err("Screen selection requires Mac capture privacy checks, which are unavailable.".into())
+    selection(window.app_handle(), rect)
 }
 #[tauri::command]
 pub fn screen_draw_island_press(window: WebviewWindow, at: [f32; 2]) -> Result<(), String> {

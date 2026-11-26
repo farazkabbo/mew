@@ -45,6 +45,13 @@ pub fn classify_app(bundle_id: &str) -> AppClass {
     }
 }
 
+/// Exact inspected public dictionaries: Chrome and Brave installed scripting.sdef expose
+/// read-only window mode normal/incognito and front-to-back index/bounds. Other Chromium
+/// brands are not inferred from names or executable suffixes.
+pub fn has_inspected_browser_dictionary(bundle: &str) -> bool {
+    matches!(bundle, "com.google.Chrome" | "com.brave.Browser")
+}
+
 pub fn private_state(bundle_id: &str) -> PrivateState {
     match classify_app(bundle_id) {
         AppClass::SupportedNative => PrivateState::NotApplicableSupportedNative,
@@ -120,6 +127,24 @@ pub fn blocked_app(bundle_id: &str, blocked: &[String]) -> Option<String> {
                     .any(|alias| entry.eq_ignore_ascii_case(alias))
         })
         .cloned()
+}
+
+/// Compatibility label for existing server/database app-name contracts. These labels never
+/// authorize native access: policy and input remain bound to the real bundle, PID and launch.
+pub fn wire_name(bundle: &str) -> Option<&'static str> {
+    match bundle.to_ascii_lowercase().as_str() {
+        "com.apple.textedit" => Some("textedit.exe"),
+        "com.google.chrome" => Some("chrome.exe"),
+        "com.brave.browser" => Some("brave.exe"),
+        "com.apple.preview" => Some("preview.exe"),
+        "com.apple.iwork.pages" => Some("pages.exe"),
+        "com.apple.iwork.numbers" => Some("numbers.exe"),
+        "com.apple.iwork.keynote" => Some("keynote.exe"),
+        "com.microsoft.word" => Some("winword.exe"),
+        "com.microsoft.excel" => Some("excel.exe"),
+        "com.microsoft.powerpoint" => Some("powerpnt.exe"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

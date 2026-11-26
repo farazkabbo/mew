@@ -212,6 +212,17 @@ pub fn read_log(path: &Path) -> Option<UndoLog> {
 /// Renames, logging first. Never overwrites: a name that's taken by the time it's renamed is
 /// skipped. Returns how many were renamed.
 pub fn apply(plan: &[(PathBuf, PathBuf)], log_path: &Path, now_s: u64) -> std::io::Result<usize> {
+    apply_cancellable(plan, log_path, now_s, &|| true)
+}
+pub fn apply_cancellable(
+    plan: &[(PathBuf, PathBuf)],
+    log_path: &Path,
+    now_s: u64,
+    current: &dyn Fn() -> bool,
+) -> std::io::Result<usize> {
+    if !current() {
+        return Ok(0);
+    }
     let mut log = UndoLog {
         version: 1,
         at: now_s,
@@ -227,6 +238,9 @@ pub fn apply(plan: &[(PathBuf, PathBuf)], log_path: &Path, now_s: u64) -> std::i
     write_log(log_path, &log)?;
     let mut count = 0;
     for i in 0..log.entries.len() {
+        if !current() {
+            break;
+        }
         let (from, to) = (&log.entries[i].from, &log.entries[i].to);
         if to.exists() || !from.exists() {
             continue;
@@ -243,11 +257,18 @@ pub fn apply(plan: &[(PathBuf, PathBuf)], log_path: &Path, now_s: u64) -> std::i
 /// Puts the last rename back. Returns how many names were restored; the log is removed when
 /// everything is back.
 pub fn undo(log_path: &Path) -> std::io::Result<usize> {
+    undo_cancellable(log_path, &|| true)
+}
+pub fn undo_cancellable(log_path: &Path, current: &dyn Fn() -> bool) -> std::io::Result<usize> {
     let Some(mut log) = read_log(log_path) else {
         return Ok(0);
     };
     let mut restored = 0;
-    for entry in log.entries.iter_mut().rev() {
+    for i in (0..log.entries.len()).rev() {
+        if !current() {
+            break;
+        }
+        let entry = &log.entries[i];
         if !entry.done {
             continue;
         }
@@ -255,8 +276,9 @@ pub fn undo(log_path: &Path) -> std::io::Result<usize> {
             && !entry.from.exists()
             && rename_no_replace(&entry.to, &entry.from).is_ok()
         {
-            entry.done = false;
+            log.entries[i].done = false;
             restored += 1;
+            write_log(log_path, &log)?;
         }
     }
     if log.entries.iter().all(|e| !e.done) {
@@ -497,5 +519,34 @@ mod tests {
             .collect();
         out.sort();
         out
+    }
+    #[test]
+    fn cancellation_between_renames_preserves_remaining_files_and_undo() {
+        let dir = temp_dir("cancel-batch");
+        let a = dir.join("a.jpg");
+        let b = dir.join("b.jpg");
+        let aa = dir.join("aa.jpg");
+        let bb = dir.join("bb.jpg");
+        let log = dir.join("undo.json");
+        std::fs::write(&a, b"a").unwrap();
+        std::fs::write(&b, b"b").unwrap();
+        assert_eq!(
+            apply_cancellable(
+                &[(a.clone(), aa.clone()), (b.clone(), bb.clone())],
+                &log,
+                0,
+                &|| !aa.exists()
+            )
+            .unwrap(),
+            1
+        );
+        assert!(aa.exists() && b.exists() && !a.exists() && !bb.exists());
+        assert_eq!(undo(&log).unwrap(), 1);
+        assert!(a.exists() && b.exists());
+        apply(&[(a.clone(), aa.clone()), (b.clone(), bb.clone())], &log, 0).unwrap();
+        assert_eq!(undo_cancellable(&log, &|| !b.exists()).unwrap(), 1);
+        assert!(b.exists() && aa.exists());
+        assert_eq!(undo(&log).unwrap(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

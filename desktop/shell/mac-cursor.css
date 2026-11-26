@@ -1,0 +1,35 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: system-ui, sans-serif;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.catch {
+  box-sizing: border-box;
+  background: #fffaf0;
+  color: #423019;
+  border: 1px solid #d9ae65;
+  border-radius: 14px;
+  padding: 12px;
+  font-size: 14px;
+}
+.catch p {
+  margin: 0 0 10px;
+}
+.catch button {
+  font: inherit;
+  min-height: 32px;
+  border: 1px solid #cdb790;
+  border-radius: 8px;
+  background: white;
+  margin-right: 8px;
+  padding: 4px 10px;
+}

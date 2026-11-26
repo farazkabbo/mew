@@ -1,6 +1,6 @@
-//! Native Spotify / Apple Music only, through their shipped public scripting dictionaries.
+//! Native Spotify / Apple Music scripting dictionaries and exact foreground YouTube AX controls.
 //! Idle setup never starts osascript. Only the local island's explicit panel/control intent
-//! enables AppleEvents. Browser media, artwork and Spotify pins remain parity gaps.
+//! enables AppleEvents. Unknown or ambiguous browser/player evidence always refuses.
 use super::overlay;
 use crate::screen::{
     music::{Control, MusicView, NowPlaying},
@@ -16,6 +16,11 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager};
+
+#[path = "apple_art.rs"]
+mod apple_art;
+#[path = "browser_media.rs"]
+mod browser;
 
 const SCRIPT: &str = include_str!("media.js");
 const LIMIT: u64 = 8192;
@@ -37,7 +42,7 @@ impl Failure {
         Self::Timeout => "The music player took too long to respond.",
         Self::Ambiguous => "More than one player is available. Leave one playing to choose it.",
         Self::Changed => "The player or track changed. Try the control again.",
-        _ => "Open Spotify or Apple Music and play a track. Browser media is not available yet.",
+        _ => "Play a track in Spotify, Apple Music, or a normal Chrome/Brave YouTube watch page.",
     }
     }
 }
@@ -51,6 +56,12 @@ struct Track {
     title: String,
     artist: String,
     playing: bool,
+    #[serde(skip)]
+    browser: Option<browser::Identity>,
+    #[serde(skip)]
+    art: Option<String>,
+    #[serde(default)]
+    artwork_url: Option<String>,
 }
 impl Track {
     fn view(&self) -> Option<NowPlaying> {
@@ -68,6 +79,8 @@ impl Track {
         let player = match self.app.as_str() {
             "com.spotify.client" => "Spotify",
             "com.apple.Music" => "Apple Music",
+            "com.google.Chrome" if browser::accepts(self) => "Chrome",
+            "com.brave.Browser" if browser::accepts(self) => "Brave",
             _ => return None,
         };
         let mut now = NowPlaying::new(&self.title, &self.artist, &self.app)?;
@@ -75,6 +88,11 @@ impl Track {
         now.playing = self.playing;
         now.can_next = true;
         now.can_previous = true;
+        if let Some(browser) = &self.browser {
+            now.can_next = browser.can_next;
+            now.can_previous = browser.can_previous;
+        }
+        now.art = self.art.clone();
         Some(now)
     }
 }
@@ -106,6 +124,29 @@ fn parse(bytes: &[u8]) -> Result<Option<Track>, Failure> {
         return Err(Failure::Unavailable);
     }
     Ok(reply.now)
+}
+fn cached_art(
+    previous: Option<&Track>,
+    track: &Track,
+    fetch: &dyn Fn() -> Option<String>,
+) -> Option<String> {
+    // Cache absence too, until the selected process or track changes.
+    match previous.filter(|p| {
+        p.app == track.app
+            && p.pid == track.pid
+            && p.launch == track.launch
+            && p.track == track.track
+    }) {
+        Some(previous) => previous.art.clone(),
+        None => fetch(),
+    }
+}
+fn select(native: Option<Track>, browser: Option<Track>) -> Result<Option<Track>, Failure> {
+    match (native, browser) {
+        (Some(a), Some(b)) if a.playing != b.playing => Ok(Some(if a.playing { a } else { b })),
+        (Some(_), Some(_)) => Err(Failure::Ambiguous),
+        (a, b) => Ok(a.or(b)),
+    }
 }
 trait Runner: Send + 'static {
     fn run(&mut self, args: &[String], valid: &dyn Fn() -> bool) -> Result<Vec<u8>, Failure>;
@@ -215,7 +256,7 @@ impl Shared {
 }
 enum Work {
     Panel(u64),
-    Control(u64, Track, Control),
+    Control(u64, Box<Track>, Control),
 }
 pub struct Service {
     shared: Arc<Shared>,
@@ -271,6 +312,9 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                         if token != generation {
                             continue;
                         }
+                        if target.browser.is_some() {
+                            browser::query(&worker_app, generation, Some((*target, control))).map(|_| ())
+                        } else {
                         let command = match control {
                             Control::PlayPause => "play_pause",
                             Control::Next => "next",
@@ -284,6 +328,7 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                             .run(&["control".into(), expected, command.into()], &valid)
                             .and_then(|bytes| parse(&bytes))
                             .map(|_| ())
+                        }
                     }
                     _ => Ok(()),
                 };
@@ -291,7 +336,18 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                     runner
                         .run(&["read".into()], &valid)
                         .and_then(|bytes| parse(&bytes))
+                        .and_then(|native| {
+                            let web = browser::query(&worker_app, generation, None)?;
+                            select(native, web)
+                        })
                 });
+                let result = result.map(|track| track.map(|mut track| {
+                    if track.browser.is_some() || track.artwork_url.is_some() || track.app == "com.apple.Music" {
+                        let previous = state.target.lock().unwrap_or_else(|p| p.into_inner()).clone();
+                        track.art = cached_art(previous.as_ref(), &track, &|| if track.app == "com.apple.Music" { apple_art::read(&worker_app, generation, &track, &valid) } else { browser::artwork(&track, &valid) });
+                    }
+                    track
+                }));
                 if !valid() {
                     continue;
                 }
@@ -401,7 +457,7 @@ pub fn control(app: &AppHandle, control: Control) -> Result<(), String> {
         .ok_or("No single music player is selected.")?;
     state
         .tx
-        .try_send(Work::Control(generation, target, control))
+        .try_send(Work::Control(generation, Box::new(target), control))
         .map_err(|_| "Music controls are busy. Try again.".into())
 }
 pub fn intent_generation(app: &AppHandle) -> Option<u64> {
@@ -454,7 +510,46 @@ mod tests {
             title: "Song\nTitle".into(),
             artist: "Artist".into(),
             playing: false,
+            browser: None,
+            art: None,
+            artwork_url: None,
         }
+    }
+    #[test]
+    fn artwork_absence_is_cached_until_process_or_track_changes() {
+        let track = fixture();
+        let calls = std::cell::Cell::new(0);
+        let fetch = || {
+            calls.set(calls.get() + 1);
+            None
+        };
+        assert_eq!(cached_art(None, &track, &fetch), None);
+        for _ in 0..5 {
+            assert_eq!(cached_art(Some(&track), &track, &fetch), None);
+        }
+        assert_eq!(calls.get(), 1);
+        let mut newer = track.clone();
+        newer.launch = "101.5".into();
+        cached_art(Some(&track), &newer, &fetch);
+        assert_eq!(calls.get(), 2);
+    }
+    #[test]
+    fn combined_players_never_silently_choose_between_two_playing_or_paused_tracks() {
+        let a = fixture();
+        let mut b = fixture();
+        b.pid += 1;
+        assert_eq!(
+            select(Some(a.clone()), Some(b.clone())),
+            Err(Failure::Ambiguous)
+        );
+        b.playing = true;
+        assert_eq!(
+            select(Some(a.clone()), Some(b.clone())),
+            Ok(Some(b.clone()))
+        );
+        let mut a = a;
+        a.playing = true;
+        assert_eq!(select(Some(a), Some(b)), Err(Failure::Ambiguous));
     }
     #[test]
     fn parses_actual_state_and_names_apple_music() {

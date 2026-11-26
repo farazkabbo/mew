@@ -71,7 +71,7 @@ pub(super) fn delete_token(origin: &Url) -> Result<(), ()> {
 }
 
 /// Stable across sign-ins. It is only sent to the configured origin.
-fn device_id() -> Option<String> {
+pub(super) fn device_id() -> Option<String> {
     static DEVICE_LOCK: Mutex<()> = Mutex::new(());
     let _guard = DEVICE_LOCK
         .lock()

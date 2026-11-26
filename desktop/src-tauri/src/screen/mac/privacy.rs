@@ -80,6 +80,21 @@ fn classify(
     if role == Some("AXSecureTextField") || subrole == Subrole::Value("AXSecureTextField") {
         return Focus::Password;
     }
+    if app_policy::has_inspected_browser_dictionary(bundle_id) {
+        // Chromium maps protected text to AXSecureTextField subrole. Ordinary role absence
+        // is accepted only for this identified producer and only on explicit unsupported
+        // optional-subrole metadata; errors/no-value never become absence. Capture separately
+        // requires uniquely bound normal browser-window mode (this focus alone is insufficient).
+        // Source: chromium ui/accessibility/platform/ax_platform_node_cocoa.mm, AXSubrole.
+        return match (role, subrole) {
+            (
+                Some("AXWebArea" | "AXButton" | "AXTextArea" | "AXTextField"),
+                Subrole::Unsupported,
+            ) => Focus::Ordinary,
+            (Some("AXTextField"), Subrole::Value("AXSearchField")) => Focus::Ordinary,
+            _ => Focus::Unknown,
+        };
+    }
     if app_policy::classify_app(bundle_id) != AppClass::SupportedNative {
         return Focus::Unknown;
     }
@@ -385,7 +400,7 @@ mod native {
         }
         let role = matches!(
             role.as_str(),
-            "AXTextField" | "AXTextArea" | "AXSecureTextField" | "AXButton"
+            "AXTextField" | "AXTextArea" | "AXSecureTextField" | "AXButton" | "AXWebArea"
         )
         .then_some(role);
         let subrole = subrole_text.filter(|subrole| {
@@ -486,7 +501,7 @@ mod tests {
         for bundle in [
             "org.example.Editor",
             "com.apple.Safari",
-            "com.google.Chrome",
+            "com.google.Chrome.evil",
         ] {
             assert_eq!(
                 classify(bundle, 42, 42, Some("AXTextArea"), Subrole::Unsupported),
@@ -584,5 +599,48 @@ mod tests {
         changed = app.clone();
         changed.bundle_id = "org.example.Other".into();
         assert_ne!(app, changed);
+    }
+    #[test]
+    fn chrome_standard_focus_is_separate_from_bound_private_window_authorization() {
+        assert_eq!(
+            classify(
+                "com.google.Chrome",
+                42,
+                42,
+                Some("AXWebArea"),
+                Subrole::Unsupported
+            ),
+            Focus::Ordinary
+        );
+        assert_eq!(
+            classify(
+                "com.google.Chrome",
+                42,
+                42,
+                Some("AXTextField"),
+                Subrole::Value("AXSecureTextField")
+            ),
+            Focus::Password
+        );
+        assert_eq!(
+            classify(
+                "com.google.Chrome",
+                42,
+                42,
+                Some("AXTextField"),
+                Subrole::Failed(UnknownReason::FocusUnavailable)
+            ),
+            Focus::Unknown
+        );
+        assert_eq!(
+            classify(
+                "com.google.Chrome",
+                42,
+                43,
+                Some("AXWebArea"),
+                Subrole::Unsupported
+            ),
+            Focus::Unknown
+        );
     }
 }

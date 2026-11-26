@@ -98,6 +98,11 @@ pub struct SignIn {
 }
 
 impl SignIn {
+    #[cfg(target_os = "macos")]
+    pub(crate) fn app_url(&self) -> &Url {
+        &self.app_url
+    }
+
     pub fn new(app_url: Url) -> Self {
         Self {
             app_url,
@@ -109,6 +114,41 @@ impl SignIn {
         self.attempt
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+}
+
+/// A late 401 may only remove the credential that actually made that request. This uses
+/// the same account lock as ticket replacement and sign-out, including the Keychain check.
+#[cfg(target_os = "macos")]
+pub(crate) fn forget_rejected_token<R: Runtime>(
+    app: &AppHandle<R>,
+    expected: &[u8],
+) -> Result<bool, ()> {
+    let sign_in = app.try_state::<SignIn>().ok_or(())?;
+    let mut attempt = sign_in.attempt();
+    let removed = remove_matching_token(
+        expected,
+        || platform::load_token(&sign_in.app_url),
+        || platform::delete_token(&sign_in.app_url),
+    )?;
+    if removed {
+        attempt.saved_by = None;
+        set_connected(app, false);
+    }
+    Ok(removed)
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn remove_matching_token(
+    expected: &[u8],
+    load: impl FnOnce() -> Result<Option<SecretBytes>, ()>,
+    delete: impl FnOnce() -> Result<(), ()>,
+) -> Result<bool, ()> {
+    if load()?.is_some_and(|current| current.as_slice() == expected) {
+        delete()?;
+        Ok(true)
+    } else {
+        Ok(false)
     }
 }
 
@@ -350,7 +390,10 @@ fn set_connected<R: Runtime>(app: &AppHandle<R>, connected: bool) {
         }
     }
     #[cfg(target_os = "macos")]
-    let _ = (app, connected);
+    {
+        super::mac::runtime::account_changed(app);
+        let _ = connected;
+    }
 }
 
 /// Stage both secrets in memory. Keep any prior completed sign-in until the finish page
@@ -579,6 +622,50 @@ pub async fn desktop_sign_out<R: Runtime>(window: WebviewWindow<R>) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn revoked_request_cannot_erase_a_replaced_or_missing_credential() {
+        use std::cell::Cell;
+        let deleted = Cell::new(false);
+        for current in [Some(b"new-token".as_slice()), None] {
+            assert!(!remove_matching_token(
+                b"old-token",
+                || Ok(current.map(|bytes| SecretBytes::from_vec(bytes.to_vec()))),
+                || {
+                    deleted.set(true);
+                    Ok(())
+                }
+            )
+            .unwrap());
+            assert!(!deleted.get());
+        }
+        assert!(remove_matching_token(
+            b"old-token",
+            || Ok(Some(SecretBytes::from_vec(b"old-token".to_vec()))),
+            || {
+                deleted.set(true);
+                Ok(())
+            }
+        )
+        .unwrap());
+        assert!(deleted.get());
+        assert_eq!(
+            remove_matching_token(
+                b"old-token",
+                || Err(()),
+                || panic!("failed load must not erase")
+            ),
+            Err(())
+        );
+        assert_eq!(
+            remove_matching_token(
+                b"old-token",
+                || Ok(Some(SecretBytes::from_vec(b"old-token".to_vec()))),
+                || Err(())
+            ),
+            Err(())
+        );
+    }
 
     #[test]
     fn allows_only_same_origin_https_and_local_http() {
