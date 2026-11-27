@@ -14,8 +14,8 @@ use crate::screen::{
 };
 use std::{
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc, Arc,
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+        mpsc, Arc, Weak,
     },
     time::{Duration, Instant},
 };
@@ -68,6 +68,182 @@ pub struct NativeFrame {
     request: Request,
     displays: Vec<Display>,
     content_stamp: ContentStamp,
+    playback: Option<super::media::PlaybackSnapshot>,
+    tutor_position: AtomicU32,
+}
+/// A lease is minted only while native Circle takes ownership of a fresh redacted frame.
+/// Weak consumers cannot extend ownership; dropping the session revokes all retained uses.
+pub struct CircleRetention {
+    state: Arc<RetainedCircle>,
+}
+struct RetainedCircle {
+    frame: Arc<NativeFrame>,
+    credential: [u8; 32],
+    alive: AtomicBool,
+}
+pub struct CircleGrant(Weak<RetainedCircle>);
+impl Clone for CircleGrant {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl Drop for CircleRetention {
+    fn drop(&mut self) {
+        self.state.alive.store(false, Ordering::Release);
+    }
+}
+impl CircleRetention {
+    pub fn grant(&self) -> CircleGrant {
+        CircleGrant(Arc::downgrade(&self.state))
+    }
+}
+impl CircleGrant {
+    pub fn live(&self) -> bool {
+        self.0
+            .upgrade()
+            .is_some_and(|s| s.alive.load(Ordering::Acquire))
+    }
+    pub fn matches(&self, frame: &NativeFrame) -> bool {
+        self.0.upgrade().is_some_and(|s| {
+            s.alive.load(Ordering::Acquire) && std::ptr::eq(s.frame.as_ref(), frame)
+        })
+    }
+}
+pub fn retain_circle(
+    app: &AppHandle,
+    frame: Arc<NativeFrame>,
+    credential: [u8; 32],
+) -> Result<CircleRetention, String> {
+    if frame.request.intent != Intent::Circle
+        || !is_current(app, &frame)
+        || super::service_call::credential_stamp(app).ok() != Some(credential)
+    {
+        return Err("The Circle capture cannot be retained.".into());
+    }
+    Ok(CircleRetention {
+        state: Arc::new(RetainedCircle {
+            frame,
+            credential,
+            alive: AtomicBool::new(true),
+        }),
+    })
+}
+/// Time alone never extends an ordinary frame. A retained use must carry its explicit exact-
+/// frame weak grant, which becomes invalid immediately when its native owner is dropped.
+pub fn frame_time_live(frame: &NativeFrame, grant: Option<&CircleGrant>, now: Instant) -> bool {
+    grant.map_or(now < frame.expires_at(), |g| g.matches(frame))
+}
+pub fn retained_current(app: &AppHandle, frame: &NativeFrame, grant: &CircleGrant) -> bool {
+    if worker().is_err() {
+        return false;
+    }
+    let Some(owned) = grant
+        .0
+        .upgrade()
+        .filter(|s| s.alive.load(Ordering::Acquire) && std::ptr::eq(s.frame.as_ref(), frame))
+    else {
+        return false;
+    };
+    let current = || {
+        owned.alive.load(Ordering::Acquire)
+            && super::service_call::credential_stamp(app).ok() == Some(owned.credential)
+            && current_config(app, frame.generation).is_ok()
+    };
+    if !current() {
+        return false;
+    }
+    let mut request = frame.request.clone();
+    request.issued_at = Instant::now();
+    // This path performs metadata validation only: no indicator/capture service is reachable.
+    if let Ok(runtime) = runtime::of(app) {
+        if pipeline::revalidate_metadata(&request, &runtime.generation, &mut |r, _| {
+            sample(app, r, &frame.displays, None).map_err(|_| pipeline::Error::PolicyUnavailable)
+        })
+        .is_ok()
+            && current()
+        {
+            return true;
+        }
+    }
+    retained_stored_current(app, owned.clone(), &current)
+}
+fn retained_stored_current(
+    app: &AppHandle,
+    owned: Arc<RetainedCircle>,
+    current: &dyn Fn() -> bool,
+) -> bool {
+    let frame = &owned.frame;
+    if !current() {
+        return false;
+    }
+    let browser = app_policy::has_inspected_browser_dictionary(&frame.target.process.bundle_id);
+    let browser_mode = if browser {
+        super::browser_mode::sample_native(
+            &super::browser_mode::FocusRequest {
+                pid: frame.target.process.pid,
+                bundle: frame.target.process.bundle_id.clone(),
+                launch: f64::from_bits(frame.target.process.launch_time_bits).to_string(),
+                cg_window_id: frame.target.window_id,
+                generation: frame.generation,
+            },
+            frame.target.quartz_points,
+            current,
+        )
+    } else {
+        super::browser_mode::Mode::Unknown
+    };
+    let frame = owned.frame.clone();
+    let credential = owned.credential;
+    let live = owned.clone();
+    let result = on_main(app, move |app, deadline| {
+        let config = current_config(app, frame.generation)?;
+        if !live.alive.load(Ordering::Acquire)
+            || super::service_call::credential_stamp(app).ok() != Some(credential)
+            || config.privacy.redaction != frame.request.rules
+            || config.privacy.pause_during_calls != frame.request.pause_during_calls
+            || !stored_target_current_main(app, &frame.target, frame.generation)
+            || target::displays().as_ref() != Some(&frame.displays)
+        {
+            return Ok(false);
+        }
+        let class = app_policy::classify_app(&frame.target.process.bundle_id);
+        if app_policy::blocked_app(
+            &frame.target.process.bundle_id,
+            &config.privacy.blocked_apps,
+        )
+        .is_some()
+            || !(class == app_policy::AppClass::SupportedNative
+                || browser && browser_mode == super::browser_mode::Mode::Normal)
+        {
+            return Ok(false);
+        }
+        // App-specific focused metadata remains inspectable while a local card owns the key
+        // window. Unknown/protected fields and unknown browser modes refuse retained use.
+        if !binding::focused_window_matches(frame.target.process.pid, frame.target.quartz_points) {
+            return Ok(false);
+        }
+        let focus = privacy::retained_focus(&frame.target.process);
+        if focus.focus != crate::screen::privacy::Focus::Ordinary {
+            return Ok(false);
+        }
+        if browser && browser_mode != super::browser_mode::Mode::Normal {
+            return Ok(false);
+        }
+        let valid = || {
+            live.alive.load(Ordering::Acquire)
+                && Instant::now() < deadline
+                && current_config(app, frame.generation).is_ok()
+        };
+        if config.privacy.pause_during_calls
+            && call_signals::sample(deadline, &valid).state
+                != call_signals::SignalState::KnownSignalsIdle
+        {
+            return Ok(false);
+        }
+        Ok(valid() && stored_target_current_main(app, &frame.target, frame.generation))
+    })
+    .unwrap_or(false);
+    result && current()
 }
 impl NativeFrame {
     /// True only when the sampled input counters match. This is an invalidation hint,
@@ -80,6 +256,27 @@ impl NativeFrame {
     }
     pub fn expires_at(&self) -> Instant {
         self.request.issued_at + crate::screen::frame::FRAME_TTL
+    }
+    pub fn player_position(&self) -> Option<u32> {
+        self.playback
+            .as_ref()
+            .and_then(|snapshot| snapshot.position_sec)
+    }
+    pub fn media_source_url(&self) -> Option<&str> {
+        self.playback
+            .as_ref()
+            .map(|snapshot| snapshot.source_url.as_str())
+    }
+    pub fn tutor_position(&self) -> Option<u32> {
+        self.tutor_position.load(Ordering::Acquire).checked_sub(1)
+    }
+    pub fn set_tutor_position(&self, position: Option<u32>) {
+        self.tutor_position.store(
+            position
+                .filter(|seconds| *seconds <= 86_400)
+                .map_or(0, |seconds| seconds + 1),
+            Ordering::Release,
+        );
     }
     pub fn text(&self) -> &ScreenText {
         self.captured.text.in_image_pixels()
@@ -108,7 +305,7 @@ impl NativeFrame {
             width,
             height,
             timings: Timings::default(),
-            video_playing: None,
+            video_playing: self.playback.as_ref().map(|snapshot| snapshot.playing),
             window: None,
         }
     }
@@ -339,28 +536,42 @@ pub(crate) fn stored_target_current_main(
     {
         return false;
     }
-    let Some(card) = app.get_webview_window(super::overlay::Surface::Card.label()) else {
-        return false;
-    };
-    if super::overlay::require_surface(&card, super::overlay::Surface::Card).is_err() {
-        return false;
-    }
-    let mut card_is_key = false;
-    super::panel::with_window(&card, |window| {
-        card_is_key = window.isKeyWindow() && window.isVisible();
-    });
-    card_is_key
+    let owns_focus = [super::overlay::Surface::Card, super::overlay::Surface::Draw]
+        .into_iter()
+        .any(|surface| {
+            if matches!(surface, super::overlay::Surface::Draw)
+                && !super::drawing::keyboard_active(app)
+            {
+                return false;
+            }
+            let Some(window) = app.get_webview_window(surface.label()) else {
+                return false;
+            };
+            if super::overlay::require_surface(&window, surface).is_err() {
+                return false;
+            }
+            let mut key = false;
+            super::panel::with_window(&window, |native| {
+                key = native.isKeyWindow() && native.isVisible();
+            });
+            key
+        });
+    owns_focus
         && privacy::process_identity(target.process.pid).as_ref() == Some(&target.process)
-        && target::visible_windows().is_some_and(|windows| {
-            windows.iter().any(|w| {
-                w.id == target.window_id
-                    && w.pid == target.process.pid
-                    && w.bounds == target.quartz_points
-                    && w.layer == 0
-            })
-        })
+        && target::visible_windows().is_some_and(|windows| unique_window(target, &windows))
 }
 
+fn unique_window(target: &Target, windows: &[target::WindowSnapshot]) -> bool {
+    let mut matching = windows.iter().filter(|window| {
+        window.pid == target.process.pid
+            && window.bounds == target.quartz_points
+            && window.layer == 0
+    });
+    matching
+        .next()
+        .is_some_and(|window| window.id == target.window_id)
+        && matching.next().is_none()
+}
 fn call_evidence(pause: bool, state: call_signals::SignalState) -> Evidence {
     if !pause {
         return Evidence::DisabledByLocalPolicy;
@@ -556,6 +767,7 @@ pub fn capture_window(
         sample(app, r, &displays, None).map_err(|_| pipeline::Error::PolicyUnavailable)
     })
     .map_err(policy_error)?;
+    let before_playback = playback_for_target(app, &target, generation);
     let indicator = Indicator::begin(
         request
             .monitor
@@ -586,6 +798,15 @@ pub fn capture_window(
     if content_stamp() != input_stamp {
         return Err("The screen content changed during capture.".into());
     }
+    let playback = before_playback
+        .zip(playback_for_target(app, &target, generation))
+        .filter(|(before, after)| {
+            crate::screen::source::same_video(Some(&before.source_url), Some(&after.source_url))
+        })
+        .map(|(before, _)| before);
+    if content_stamp() != input_stamp {
+        return Err("The screen content changed during capture metadata checks.".into());
+    }
     Ok(NativeFrame {
         captured,
         target,
@@ -593,7 +814,33 @@ pub fn capture_window(
         request,
         displays,
         content_stamp: input_stamp,
+        playback,
+        tutor_position: AtomicU32::new(0),
     })
+}
+
+fn playback_for_target(
+    app: &AppHandle,
+    target: &Target,
+    generation: u64,
+) -> Option<super::media::PlaybackSnapshot> {
+    let handle = app.clone();
+    let target = target.clone();
+    let (tx, rx) = mpsc::sync_channel(1);
+    let deadline = Instant::now() + Duration::from_millis(450);
+    app.run_on_main_thread(move || {
+        let current =
+            || Instant::now() < deadline && target_is_current_main(&handle, &target, generation);
+        if current() {
+            let result =
+                super::media::playback_for_target_main(&target, generation, deadline, &current);
+            if current() {
+                let _ = tx.send(result);
+            }
+        }
+    })
+    .ok()?;
+    rx.recv_timeout(Duration::from_millis(500)).ok().flatten()
 }
 
 /// Call from a worker immediately before transport, persistence, or drawing a delayed result.
@@ -676,6 +923,82 @@ mod tests {
             },
             quartz_points: Rect::new(-1440., -200., 1000., 500.).unwrap(),
         }
+    }
+    fn retained_fixture(issued_at: Instant) -> Arc<NativeFrame> {
+        let target = target();
+        Arc::new(NativeFrame {
+            captured: pipeline::Captured {
+                jpeg: crate::screen::secret::SecretBytes::zeroed(0),
+                pixels: crate::screen::image::Pixels {
+                    width: 1,
+                    height: 1,
+                    channels: 4,
+                    data: crate::screen::secret::SecretBytes::zeroed(4),
+                },
+                blacked_out: vec![],
+                text: pipeline::LocalText::default(),
+                metadata: pipeline::Metadata {
+                    quartz_points: target.quartz_points,
+                    captured_pixels: (1, 1),
+                    encoded_pixels: (1, 1),
+                    generation: 7,
+                    intent: Intent::Circle,
+                },
+            },
+            request: Request {
+                target: target.clone(),
+                monitor: None,
+                intent: Intent::Circle,
+                generation: 7,
+                issued_at,
+                timeout: REQUEST_BUDGET,
+                rules: Default::default(),
+                pause_during_calls: true,
+            },
+            target,
+            generation: 7,
+            displays: vec![],
+            content_stamp: ContentStamp([0; 4]),
+            playback: None,
+            tutor_position: AtomicU32::new(0),
+        })
+    }
+    #[test]
+    fn retained_circle_is_exact_frame_owned_and_revoked_on_owner_drop() {
+        let now = Instant::now();
+        let frame = retained_fixture(now - Duration::from_secs(120));
+        assert!(!frame_time_live(&frame, None, now));
+        let owner = CircleRetention {
+            state: Arc::new(RetainedCircle {
+                frame: frame.clone(),
+                credential: [1; 32],
+                alive: AtomicBool::new(true),
+            }),
+        };
+        let grant = owner.grant();
+        assert!(frame_time_live(&frame, Some(&grant), now));
+        let other = retained_fixture(now);
+        assert!(!frame_time_live(&other, Some(&grant), now));
+        assert!(frame_time_live(&other, None, now));
+        drop(owner);
+        assert!(!grant.live());
+        assert!(!frame_time_live(&frame, Some(&grant), now));
+    }
+    #[test]
+    fn stored_provenance_refuses_a_coincident_replacement_document() {
+        let original = target();
+        let window = target::WindowSnapshot {
+            id: original.window_id,
+            pid: original.process.pid,
+            bounds: original.quartz_points,
+            layer: 0,
+            alpha: Some(1.),
+        };
+        assert!(unique_window(&original, std::slice::from_ref(&window)));
+        let mut replacement = window.clone();
+        replacement.id += 1;
+        assert!(!unique_window(&original, &[window, replacement.clone()]));
+        assert!(!unique_window(&original, &[replacement]));
     }
     #[test]
     fn retina_image_local_mapping_keeps_negative_quartz_origin() {

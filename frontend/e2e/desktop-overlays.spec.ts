@@ -990,7 +990,14 @@ test("Mac settings retain explicit capture consent, privacy preferences and upda
       askScope: "window",
       redaction: { cards: true, secrets: true, codes: true, emails: false, phones: false },
     },
-    circle: { silent: false, pointer: "always", save: "auto" },
+    circle: {
+      silent: false,
+      pointer: "always",
+      pointerSize: "medium",
+      pointerCorner: "bottom_right",
+      includeSourceLink: true,
+      save: "auto",
+    },
     cursor: {
       catchMe: false,
       catchMeConsent: 0,
@@ -998,8 +1005,15 @@ test("Mac settings retain explicit capture consent, privacy preferences and upda
       guidance: "auto",
       debug: false,
       recordTraces: false,
+      rulesOff: [],
     },
-    handoff: { timeline: false, senderName: "" },
+    handoff: {
+      timeline: false,
+      senderName: "",
+      windowMin: 90,
+      expiryDays: 7,
+      alwaysHideNames: false,
+    },
   };
   const status = {
     config,
@@ -1115,4 +1129,35 @@ test("Mac local overlays use Mac help text and Command shortcuts", async ({ page
   );
   await openShellPage(page, "island.html");
   await expect(page.locator("#island-close")).toHaveAttribute("title", "Hide (Escape)");
+});
+
+test("Mac Circle actions carry the displayed session identity across card replacements", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.assign(window, { __NEB_MAC_HOST__: true, __NEB_MAC_CARD_HOST__: true });
+  });
+  const first = "00000000-0000-4000-8000-000000000001:7";
+  const second = "00000000-0000-4000-8000-000000000002:9";
+  const shell = await openShellPage(page, "circle-card.html", {
+    screen_circle_ready: { mode: "ask", silent: true, place: {}, actionSession: first },
+  });
+  await expect(page.getByLabel("Your question")).toBeVisible();
+  await page.keyboard.press("Meta+KeyS");
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "screen_circle_card",
+    args: { action: "save_only", actionSession: first },
+  });
+  await shell.dispatch("mew:card-show", {
+    mode: "ask",
+    silent: true,
+    place: {},
+    actionSession: second,
+  });
+  await page.keyboard.press("Meta+KeyD");
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "screen_circle_card",
+    args: { action: "change_place", actionSession: second },
+  });
+  expect(shell.violations).toEqual([]);
 });

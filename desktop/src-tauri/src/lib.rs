@@ -248,7 +248,8 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         },
         island::screen_island,
         settings::{
-            mac_handoff_start, mac_settings_status, mac_settings_update, mac_tools_toggle,
+            mac_handoff_forget, mac_handoff_start, mac_local_history, mac_open_microphone_settings,
+            mac_open_notebook, mac_settings_status, mac_settings_update, mac_tools_toggle,
             screen_coach_forget_paths, screen_coach_onboarding,
         },
         study::{screen_coach_pill, screen_notes_panel, screen_quiz_card},
@@ -279,6 +280,10 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         handoff_pick_up,
         screen_coach_forget_paths,
         mac_handoff_start,
+        mac_handoff_forget,
+        mac_open_microphone_settings,
+        mac_open_notebook,
+        mac_local_history,
         mac_settings_status,
         mac_settings_update,
         mac_tools_toggle,
@@ -645,10 +650,47 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let pause_hour = MenuItem::with_id(
+        app,
+        "mac-pause-hour",
+        "Pause for 1 hour",
+        true,
+        None::<&str>,
+    )?;
+    let catch_pause = MenuItem::with_id(
+        app,
+        "mac-catch-pause",
+        "Pause or resume CATCH ME",
+        true,
+        None::<&str>,
+    )?;
+    let undo = MenuItem::with_id(app, "mac-undo-rename", "Undo rename", true, None::<&str>)?;
+    let handoff = MenuItem::with_id(app, "mac-handoff", "Prepare a Handoff…", true, None::<&str>)?;
+    let keyboard = MenuItem::with_id(
+        app,
+        "mac-keyboard-select",
+        "Select with keyboard",
+        true,
+        None::<&str>,
+    )?;
     let menu = Menu::with_items(
         app,
         &[
-            &open, &ask, &look, &tools, &pause, &watch, &stop, &settings, &update, &quit,
+            &open,
+            &ask,
+            &look,
+            &tools,
+            &keyboard,
+            &pause,
+            &pause_hour,
+            &catch_pause,
+            &watch,
+            &stop,
+            &undo,
+            &handoff,
+            &settings,
+            &update,
+            &quit,
         ],
     )?;
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
@@ -669,6 +711,24 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
                     let paused = r.snapshot().0.paused;
                     let _ = screen::mac::runtime::set_paused(app, !paused);
                 }
+            }
+            "mac-pause-hour" => {
+                let _ = screen::mac::runtime::pause_for_an_hour(app);
+            }
+            "mac-catch-pause" => {
+                let _ = screen::mac::runtime::toggle_catch_pause(app);
+            }
+            "mac-undo-rename" => {
+                let _ = screen::mac::chores::route_words(app, "undo rename");
+            }
+            "mac-handoff" => {
+                let handle = app.clone();
+                std::thread::spawn(move || {
+                    let _ = screen::mac::handoff_runtime::start(&handle, None);
+                });
+            }
+            "mac-keyboard-select" => {
+                let _ = screen::mac::drawing::toggle_keyboard(app);
             }
             "mac-watch" => {
                 if screen::mac::study::toggle_watch(app).is_err() {

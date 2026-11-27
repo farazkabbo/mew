@@ -24,9 +24,10 @@ pub const SIGNED_OUT: &str = "Screen Coach was signed out of your Neb account. C
 /// Native-only binding for explicit saved drafts; never sent over IPC or persisted.
 pub fn credential_stamp<R: Runtime>(app: &AppHandle<R>) -> Result<[u8; 32], CallError> {
     let account = app.try_state::<SignIn>().ok_or(CallError::Failed)?;
-    let token = mac_auth::load_token(account.app_url())
-        .map_err(|_| CallError::Failed)?
-        .ok_or_else(|| CallError::Account(NOT_CONNECTED.into()))?;
+    let observed = account.presence_snapshot();
+    let token = mac_auth::load_token(account.app_url()).map_err(|_| CallError::Failed)?;
+    account.observe_presence(observed, token.is_some());
+    let token = token.ok_or_else(|| CallError::Account(NOT_CONNECTED.into()))?;
     Ok(Sha256::digest(token.as_slice()).into())
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -340,7 +341,7 @@ impl Read for WipingReader {
 }
 fn status_result(status: u16, head: &[u8]) -> Result<(), CallError> {
     match status {
-        200 | 201 => Ok(()),
+        200 | 201 | 204 => Ok(()),
         401 => Ok(()), // caller compares and invalidates the credential under the account lock.
         _ => {
             if let Some(message) = limit_message(head) {
@@ -404,7 +405,7 @@ fn send(
     if status == 401 {
         return Ok(status);
     }
-    let success = matches!(status, 200 | 201);
+    let success = matches!(status, 200 | 201 | 204);
     let limit = if success { max_reply } else { HEAD_LIMIT };
     let mut head = SecretBytes::zeroed(HEAD_LIMIT);
     let mut head_len = 0;
@@ -548,6 +549,17 @@ mod tests {
             Ok(201)
         );
         assert_eq!(created, br#"{"clipId":"synthetic"}"#);
+        task.join().unwrap();
+    }
+    #[test]
+    fn no_content_destination_response_succeeds_without_a_body() {
+        let (url, task) = mock(response(204, b""));
+        let mut delivered = 0;
+        assert_eq!(
+            run(&url, 1024, &|| false, |chunk| delivered += chunk.len()),
+            Ok(204)
+        );
+        assert_eq!(delivered, 0);
         task.join().unwrap();
     }
     #[test]

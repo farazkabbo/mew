@@ -268,6 +268,7 @@ pub struct Metadata {
     pub intent: Intent,
 }
 
+#[cfg_attr(test, derive(Default))]
 pub struct LocalText(ScreenText);
 impl LocalText {
     /// These boxes are LOCAL capture-image pixels with origin (0,0), never global screen pixels.

@@ -44,6 +44,7 @@ struct Turn {
     target: Target,
     generation: u64,
     expires_at: Instant,
+    retained: Option<capture_session::CircleGrant>,
     shown_at: Instant,
     display: Display,
     capture_pixels: (u32, u32),
@@ -54,6 +55,7 @@ struct Turn {
     drawn: Option<DrawnInk>,
     frame: Option<Arc<NativeFrame>>,
     coaching: bool,
+    video_time_sec: Option<u32>,
     faded_at: Option<Instant>,
     stored_card: bool,
     anchor: Option<TextAnchor>,
@@ -61,6 +63,11 @@ struct Turn {
     focus_kind: FocusKind,
     content_stamp: capture_session::ContentStamp,
     native_content_watch: bool,
+}
+fn turn_live(turn: &Turn) -> bool {
+    turn.retained
+        .as_ref()
+        .map_or(Instant::now() < turn.expires_at, |grant| grant.live())
 }
 fn state(app: &AppHandle) -> Result<tauri::State<'_, Host>, String> {
     app.try_state()
@@ -103,7 +110,7 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                         t.id,
                         t.target.clone(),
                         t.generation,
-                        t.expires_at,
+                        turn_live(t),
                         t.shown_at,
                         t.drawn.is_some(),
                         t.stored_card,
@@ -116,7 +123,7 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                 id,
                 target,
                 generation,
-                expires,
+                time_live,
                 shown,
                 drawn,
                 stored_card,
@@ -124,7 +131,7 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                 native_content_watch,
             )) = active
             {
-                if Instant::now() >= expires
+                if !time_live
                     || (!native_content_watch && shown.elapsed() >= Duration::from_secs(5))
                     || (!drawn && shown.elapsed() >= ACK_TIMEOUT)
                     || (capture_session::content_stamp() != content_stamp
@@ -226,7 +233,7 @@ pub fn show_actions(
     actions: Vec<ScreenAction>,
     coaching: bool,
 ) -> Result<(), String> {
-    show_impl(app, frame, seed, actions, coaching, false)
+    show_impl(app, frame, seed, actions, coaching, false, None).map(|_| ())
 }
 /// Rendering an already-redacted Circle snapshot after deliberate local-card focus. The
 /// caller additionally binds its account stamp. It cannot authorize a new capture.
@@ -237,7 +244,16 @@ pub fn show_stored_actions(
     actions: Vec<ScreenAction>,
     coaching: bool,
 ) -> Result<(), String> {
-    show_impl(app, frame, seed, actions, coaching, true)
+    show_impl(
+        app,
+        frame,
+        seed,
+        actions,
+        coaching,
+        true,
+        super::circle::retained_grant(app, frame),
+    )
+    .map(|_| ())
 }
 fn show_impl(
     app: &AppHandle,
@@ -246,15 +262,19 @@ fn show_impl(
     actions: Vec<ScreenAction>,
     coaching: bool,
     stored_card: bool,
-) -> Result<(), String> {
-    if !(capture_session::is_current(app, frame)
-        || (stored_card && capture_session::is_stored_current(app, frame)))
-    {
+    retained: Option<capture_session::CircleGrant>,
+) -> Result<u64, String> {
+    let permitted = || match retained.as_ref() {
+        Some(grant) => capture_session::retained_current(app, frame, grant),
+        None => {
+            capture_session::is_current(app, frame)
+                || (stored_card && capture_session::is_stored_current(app, frame))
+        }
+    };
+    if !permitted() {
         return Err("The screen answer is no longer current.".into());
     }
-    if !(frame.input_is_unchanged()
-        || stored_card && capture_session::is_stored_current(app, frame))
-    {
+    if !(frame.input_is_unchanged() || stored_card && permitted()) {
         return Err("The content moved while Neb was answering. Ask to show it again.".into());
     }
     let (config, _) = runtime::of(app)?.snapshot();
@@ -271,7 +291,7 @@ fn show_impl(
         .iter()
         .any(|a| !matches!(a, ScreenAction::FocusRegion { .. } | ScreenAction::Clear))
     {
-        return clear(app);
+        return clear(app).map(|_| 0);
     }
     let display = display_for_frame(frame)?;
     let id = {
@@ -307,6 +327,7 @@ fn show_impl(
             target: frame.target.clone(),
             generation: frame.generation,
             expires_at: frame.expires_at(),
+            retained,
             shown_at: Instant::now(),
             display,
             capture_pixels: frame.captured.metadata.captured_pixels,
@@ -317,6 +338,7 @@ fn show_impl(
             drawn: None,
             frame: None,
             coaching,
+            video_time_sec: frame.tutor_position(),
             faded_at: None,
             stored_card,
             anchor,
@@ -334,12 +356,12 @@ fn show_impl(
                 .turn
                 .as_ref()
                 .filter(|t| t.id == id && t.faded_at.is_none())
-                .map(|t| (t.target.clone(), t.generation, t.expires_at))
+                .map(|t| (t.target.clone(), t.generation, turn_live(t)))
         });
-        let Some((target, generation, expires)) = active else {
+        let Some((target, generation, time_live)) = active else {
             return;
         };
-        if Instant::now() >= expires
+        if !time_live
             || !(capture_session::target_is_current_main(&handle, &target, generation)
                 || (stored_card
                     && capture_session::stored_target_current_main(&handle, &target, generation)))
@@ -384,7 +406,7 @@ fn show_impl(
     if !coaching {
         crate::mac_shortcut::reserve_escape(app)?;
     }
-    Ok(())
+    Ok(id)
 }
 pub fn show_owned_actions(
     app: &AppHandle,
@@ -393,14 +415,20 @@ pub fn show_owned_actions(
     actions: Vec<ScreenAction>,
     coaching: bool,
 ) -> Result<(), String> {
-    show_actions(app, &frame, seed, actions, coaching)?;
+    let id = show_impl(app, &frame, seed, actions, coaching, false, None)?;
+    if id == 0 {
+        return Ok(());
+    }
     let state = state(app)?;
     let mut s = state.0.lock().unwrap_or_else(|p| p.into_inner());
     let turn = s
         .turn
         .as_mut()
         .filter(|t| {
-            t.target == frame.target && t.generation == frame.generation && t.faded_at.is_none()
+            t.id == id
+                && t.target == frame.target
+                && t.generation == frame.generation
+                && t.faded_at.is_none()
         })
         .ok_or("The ink session changed.")?;
     turn.frame = Some(Arc::new(frame));
@@ -433,6 +461,18 @@ pub fn show_owned_actions(
     }
     Ok(())
 }
+pub fn show_owned_actions_with_video(
+    app: &AppHandle,
+    frame: NativeFrame,
+    seed: &str,
+    actions: Vec<ScreenAction>,
+    coaching: bool,
+    video_time_sec: Option<u32>,
+) -> Result<(), String> {
+    frame.set_tutor_position(video_time_sec);
+    show_owned_actions(app, frame, seed, actions, coaching)
+}
+
 fn dispatch_pending(app: &AppHandle, id: u64) -> Result<(), String> {
     // Serialize the actual eval submission with clear/fade. Dropping the state lock before
     // submission would let a cancelled pending request enqueue a DRAW after CLEAR.
@@ -441,7 +481,7 @@ fn dispatch_pending(app: &AppHandle, id: u64) -> Result<(), String> {
     let t = s
         .turn
         .as_ref()
-        .filter(|t| t.id == id && t.faded_at.is_none() && t.expires_at > Instant::now())
+        .filter(|t| t.id == id && t.faded_at.is_none() && turn_live(t))
         .ok_or("No active ink request.")?;
     if runtime::of(app)?
         .generation
@@ -465,7 +505,7 @@ pub fn visible(app: &AppHandle) -> bool {
             .unwrap_or_else(|p| p.into_inner())
             .turn
             .as_ref()
-            .is_some_and(|t| t.faded_at.is_none() && t.expires_at > Instant::now())
+            .is_some_and(|t| t.faded_at.is_none() && turn_live(t))
     })
 }
 pub fn clear(app: &AppHandle) -> Result<(), String> {
@@ -559,7 +599,7 @@ fn accept_ack(turn: &Turn, ink: &DrawnInk) -> bool {
         && ink.step.is_none()
         && turn.drawn.is_none()
         && turn.faded_at.is_none()
-        && Instant::now() < turn.expires_at
+        && turn_live(turn)
         && turn.shown_at.elapsed() < ACK_TIMEOUT
 }
 fn on_drawn(app: &AppHandle, ink: DrawnInk) -> Result<(), String> {
@@ -578,7 +618,7 @@ fn on_drawn(app: &AppHandle, ink: DrawnInk) -> Result<(), String> {
     {
         return Err("The ink target changed.".into());
     }
-    let pill = {
+    let (pill, seed, recorded) = {
         let state = state(app)?;
         let mut s = state.0.lock().unwrap_or_else(|p| p.into_inner());
         let t = s
@@ -594,13 +634,16 @@ fn on_drawn(app: &AppHandle, ink: DrawnInk) -> Result<(), String> {
         };
         let ink = ink::check_drawn(ink, monitor).ok_or("Invalid ink acknowledgment.")?;
         let bbox = ink.bbox;
-        t.drawn = Some(to_image(ink, t));
-        if t.coaching || t.frame.is_none() {
+        let recorded = to_image(ink, t);
+        t.drawn = Some(recorded.clone());
+        let pill = if t.coaching || t.frame.is_none() {
             None
         } else {
             bbox.map(|b| (t.id, t.display, b))
-        }
+        };
+        (pill, t.seed.clone(), recorded)
     };
+    super::circle::record_drawn(app, &target, generation, &seed, recorded);
     if let Some((id, display, bbox)) = pill {
         show_pill(app, id, display, bbox)?;
     }
@@ -658,7 +701,7 @@ pub fn take_for_save(
         let managed = state(app)?;
         let s = managed.0.lock().unwrap_or_else(|p| p.into_inner());
         let turn = s.turn.as_ref().ok_or("There is no ink to save.")?;
-        if turn.faded_at.is_some() || turn.expires_at <= Instant::now() {
+        if turn.faded_at.is_some() || !turn_live(turn) {
             return Err("The annotated frame has expired.".into());
         }
         if turn.drawn.is_none() {
@@ -678,10 +721,7 @@ pub fn take_for_save(
         let managed = state(app)?;
         let mut s = managed.0.lock().unwrap_or_else(|p| p.into_inner());
         if s.turn.as_ref().is_none_or(|t| {
-            t.id != id
-                || t.faded_at.is_some()
-                || t.expires_at <= Instant::now()
-                || t.drawn.is_none()
+            t.id != id || t.faded_at.is_some() || !turn_live(t) || t.drawn.is_none()
         }) {
             return Err("The ink changed before Save.".into());
         }
@@ -789,7 +829,7 @@ fn same_ink(previous: &[ScreenAction], moved: &[ScreenAction]) -> bool {
         })
 }
 fn reannotate_now(app: &AppHandle) -> Result<(), String> {
-    let (origin_id, seed, actions, anchor, kind, text, old_bounds, coaching) = {
+    let (origin_id, seed, actions, anchor, kind, text, old_bounds, coaching, video_time_sec) = {
         let state = state(app)?;
         let s = state.0.lock().unwrap_or_else(|p| p.into_inner());
         let t = s
@@ -814,6 +854,7 @@ fn reannotate_now(app: &AppHandle) -> Result<(), String> {
                 bottom: t.capture_pixels.1 as i32,
             },
             t.coaching,
+            t.video_time_sec,
         )
     };
     let stamp = super::service_call::credential_stamp(app).map_err(|e| e.to_string())?;
@@ -871,7 +912,7 @@ fn reannotate_now(app: &AppHandle) -> Result<(), String> {
     {
         return Err("The earlier ink was cleared.".into());
     }
-    show_owned_actions(app, frame, &seed, moved, coaching)
+    show_owned_actions_with_video(app, frame, &seed, moved, coaching, video_time_sec)
 }
 
 fn stored_target_current(app: &AppHandle, target: &Target, generation: u64) -> bool {
@@ -903,9 +944,9 @@ pub fn drawn_for_frame(app: &AppHandle, frame: &NativeFrame) -> Option<DrawnInk>
         && t.capture_pixels == frame.captured.metadata.captured_pixels
         && t.expires_at == frame.expires_at()
         && t.faded_at.is_none()
-        && Instant::now() < t.expires_at)
-        .then(|| t.drawn.clone())
-        .flatten()
+        && turn_live(t))
+    .then(|| t.drawn.clone())
+    .flatten()
 }
 
 #[tauri::command]
@@ -1067,6 +1108,7 @@ mod tests {
             target: target.clone(),
             generation: 7,
             expires_at: Instant::now() + Duration::from_secs(60),
+            retained: None,
             shown_at: Instant::now(),
             display: display(),
             capture_pixels: (2000, 1000),
@@ -1078,6 +1120,7 @@ mod tests {
             drawn: None,
             frame: None,
             coaching: false,
+            video_time_sec: None,
             faded_at: None,
             stored_card: false,
             anchor: None,

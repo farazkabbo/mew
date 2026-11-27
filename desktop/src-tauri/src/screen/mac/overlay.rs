@@ -68,7 +68,7 @@ pub(crate) fn dispatch_window<R: Runtime>(
 fn accepts_keyboard(surface: Surface) -> bool {
     matches!(
         surface,
-        Surface::Clip | Surface::Card | Surface::Quiz | Surface::Notes
+        Surface::Clip | Surface::Card | Surface::Quiz | Surface::Notes | Surface::Draw
     )
 }
 
@@ -292,7 +292,10 @@ mod tests {
         for surface in Surface::OVERLAYS {
             assert_eq!(
                 accepts_keyboard(surface),
-                matches!(surface, Surface::Card | Surface::Quiz | Surface::Notes)
+                matches!(
+                    surface,
+                    Surface::Card | Surface::Quiz | Surface::Notes | Surface::Draw
+                )
             );
         }
         assert!(accepts_keyboard(Surface::Clip));

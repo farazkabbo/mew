@@ -40,6 +40,8 @@ use tauri::{
 };
 pub const WINDOW: &str = "handoff";
 pub const SCHEME: &str = "mewhandoff";
+#[path = "handoff_metadata.rs"]
+mod metadata;
 const MAX_RECORD: usize = 3 * 1024 * 1024;
 const MAX_FILE: u64 = 64 * 1024 * 1024;
 const DRAFT_TTL: Duration = Duration::from_secs(15 * 60);
@@ -355,6 +357,152 @@ pub fn record_clip(
     let moment = package::redact_moment(&moment, &mut found);
     append(app, stamp, Event::Moment(moment));
 }
+/// A separate, local metadata consent contract for known editors/terminals. This grants no
+/// capture or field-value reads; all geometry and focus identities must be positively bound.
+fn metadata_current_main(
+    app: &AppHandle,
+    expected: &super::pipeline::Target,
+    generation: u64,
+) -> bool {
+    use super::hand_policy_ax as ax;
+    if !enabled(app)
+        || !runtime::of(app).is_ok_and(|r| r.generation.load(Ordering::Acquire) == generation)
+        || metadata::producer(&expected.process.bundle_id).is_none()
+        || !privacy::accessibility_trusted()
+        || privacy::frontmost_process_identity().as_ref() != Some(&expected.process)
+    {
+        return false;
+    }
+    let config = runtime::of(app).unwrap().snapshot().0;
+    if super::app_policy::blocked_app(&expected.process.bundle_id, &config.privacy.blocked_apps)
+        .is_some()
+        || metadata::producer(&expected.process.bundle_id).is_some_and(|wire| {
+            config
+                .privacy
+                .blocked_apps
+                .iter()
+                .any(|entry| entry.eq_ignore_ascii_case(wire))
+        })
+    {
+        return false;
+    }
+    let deadline = Instant::now() + Duration::from_millis(100);
+    let check = (|| {
+        let application = ax::application(expected.process.pid)?;
+        if !ax::element(application.0, expected.process.pid) {
+            return None;
+        }
+        let window = ax::attr(application.0, "AXFocusedWindow", deadline)?;
+        let focused = ax::attr(application.0, "AXFocusedUIElement", deadline)?;
+        if !ax::element(window.0, expected.process.pid)
+            || !ax::element(focused.0, expected.process.pid)
+        {
+            return None;
+        }
+        if !ax::equal(&window, &ax::attr(focused.0, "AXWindow", deadline)?) {
+            return None;
+        }
+        let pos = ax::pair(ax::attr(window.0, "AXPosition", deadline)?.0, 1)?;
+        let size = ax::pair(ax::attr(window.0, "AXSize", deadline)?.0, 2)?;
+        if target::Rect::new(pos.a, pos.b, size.a, size.b) != Some(expected.quartz_points) {
+            return None;
+        }
+        let role = ax::string(ax::attr(focused.0, "AXRole", deadline)?.0)?;
+        let subrole = metadata_subrole(focused.0, deadline)?;
+        if !matches!(
+            role.as_str(),
+            "AXTextArea"
+                | "AXTextField"
+                | "AXWebArea"
+                | "AXButton"
+                | "AXScrollArea"
+                | "AXOutline"
+                | "AXTable"
+        ) || subrole.as_deref() == Some("AXSecureTextField")
+            || (role == "AXTextField" && subrole.as_deref() != Some("AXSearchField"))
+        {
+            return None;
+        }
+        let windows = target::visible_windows()?;
+        if windows
+            .iter()
+            .filter(|w| {
+                w.pid == expected.process.pid && w.bounds == expected.quartz_points && w.layer == 0
+            })
+            .count()
+            != 1
+            || !windows.iter().any(|w| {
+                w.id == expected.window_id
+                    && w.pid == expected.process.pid
+                    && w.bounds == expected.quartz_points
+            })
+        {
+            return None;
+        }
+        if config.privacy.pause_during_calls
+            && super::call_signals::sample(deadline, &|| Instant::now() < deadline).state
+                != super::call_signals::SignalState::KnownSignalsIdle
+        {
+            return None;
+        }
+        Some(
+            Instant::now() < deadline
+                && privacy::frontmost_process_identity().as_ref() == Some(&expected.process),
+        )
+    })();
+    check == Some(true)
+}
+fn metadata_subrole(element: *const std::ffi::c_void, deadline: Instant) -> Option<Option<String>> {
+    use super::hand_policy_ax as ax;
+    use std::ffi::c_void;
+    #[link(name = "ApplicationServices", kind = "framework")]
+    unsafe extern "C" {
+        fn AXUIElementCopyAttributeValue(
+            element: *const c_void,
+            name: *const c_void,
+            out: *mut *const c_void,
+        ) -> i32;
+    }
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFStringCreateWithBytes(
+            allocator: *const c_void,
+            bytes: *const u8,
+            length: isize,
+            encoding: u32,
+            external: u8,
+        ) -> *const c_void;
+    }
+    let key = ax::Owned::new(unsafe {
+        CFStringCreateWithBytes(std::ptr::null(), b"AXSubrole".as_ptr(), 9, 0x08000100, 0)
+    })?;
+    let mut out = std::ptr::null();
+    let status = unsafe { AXUIElementCopyAttributeValue(element, key.0, &mut out) };
+    let owned = ax::Owned::new(out);
+    if Instant::now() >= deadline {
+        return None;
+    }
+    match status {
+        -25205 => Some(None),
+        0 => Some(Some(ax::string(owned?.0)?)),
+        _ => None,
+    }
+}
+fn metadata_current(app: &AppHandle, target: &super::pipeline::Target, generation: u64) -> bool {
+    if metadata::producer(&target.process.bundle_id).is_none() {
+        return capture_session::is_target_current(app, target, generation);
+    }
+    let target = target.clone();
+    let handle = app.clone();
+    let (tx, rx) = mpsc::sync_channel(1);
+    let deadline = Instant::now() + Duration::from_millis(250);
+    let _ = app.run_on_main_thread(move || {
+        if Instant::now() < deadline {
+            let _ = tx.send(metadata_current_main(&handle, &target, generation));
+        }
+    });
+    rx.recv_timeout(Duration::from_millis(300)).unwrap_or(false)
+}
 fn record_frontmost(app: &AppHandle) {
     let Ok(stamp) = service_call::credential_stamp(app) else {
         return;
@@ -363,101 +511,224 @@ fn record_frontmost(app: &AppHandle) {
         return;
     };
     let generation = r.generation.load(Ordering::Acquire);
+    let valid = || {
+        enabled(app)
+            && service_call::credential_stamp(app).ok() == Some(stamp)
+            && runtime::of(app).is_ok_and(|r| r.generation.load(Ordering::Acquire) == generation)
+    };
     let (tx, rx) = mpsc::sync_channel(1);
-    let deadline = Instant::now() + Duration::from_millis(400);
+    let deadline = Instant::now() + Duration::from_millis(300);
     let _ = app.run_on_main_thread(move || {
         if Instant::now() >= deadline {
             return;
         }
-        let target = (|| {
+        let found = (|| {
             let process = privacy::frontmost_process_identity()?;
-            let front = target::frontmost_app()?;
-            if process.pid != front.pid {
-                return None;
-            }
-            let window = target::frontmost_window_candidate(&front)?;
+            let window = target::frontmost_window_candidate(&target::AppIdentity {
+                pid: process.pid,
+                bundle_id: Some(process.bundle_id.clone()),
+            })?;
             Some(super::pipeline::Target {
                 window_id: window.id,
                 process,
                 quartz_points: window.bounds,
             })
         })();
-        let _ = tx.send(target);
+        let _ = tx.send(found);
     });
-    let Ok(Some(target)) = rx.recv_timeout(Duration::from_millis(450)) else {
+    let Ok(Some(target)) = rx.recv_timeout(Duration::from_millis(350)) else {
         return;
     };
-    if !capture_session::is_target_current(app, &target, generation) {
+    if !valid() || !metadata_current(app, &target, generation) {
         return;
     }
     let mut snapshot = Snapshot {
         at: now(),
-        app: super::app_policy::wire_name(&target.process.bundle_id)
-            .unwrap_or("unknown.exe")
+        app: metadata::producer(&target.process.bundle_id)
+            .or_else(|| super::app_policy::wire_name(&target.process.bundle_id))
+            .unwrap_or(&target.process.bundle_id)
             .into(),
-        window: String::new(),
         ..Snapshot::default()
     };
-    // Read only the already-authorized focused window's bounded title/document metadata.
     let expected = target.clone();
+    let handle = app.clone();
     let (tx, rx) = mpsc::sync_channel(1);
-    let deadline = Instant::now() + Duration::from_millis(300);
+    let deadline = Instant::now() + Duration::from_millis(900);
     let _ = app.run_on_main_thread(move || {
+        use super::hand_policy_ax as ax;
+        let bound = || {
+            Instant::now() < deadline
+                && if metadata::producer(&expected.process.bundle_id).is_some() {
+                    metadata_current_main(&handle, &expected, generation)
+                } else {
+                    capture_session::target_is_current_main(&handle, &expected, generation)
+                }
+        };
         let read = (|| {
-            if Instant::now() >= deadline
-                || privacy::process_identity(expected.process.pid).as_ref()
-                    != Some(&expected.process)
-            {
+            if !bound() {
                 return None;
             }
-            let app = super::hand_policy_ax::application(expected.process.pid)?;
-            let window = super::hand_policy_ax::attr(app.0, "AXFocusedWindow", deadline)?;
-            let pos = super::hand_policy_ax::pair(
-                super::hand_policy_ax::attr(window.0, "AXPosition", deadline)?.0,
-                1,
-            )?;
-            let size = super::hand_policy_ax::pair(
-                super::hand_policy_ax::attr(window.0, "AXSize", deadline)?.0,
-                2,
-            )?;
-            if super::target::Rect::new(pos.a, pos.b, size.a, size.b)
-                != Some(expected.quartz_points)
-            {
+            if super::app_policy::has_inspected_browser_dictionary(&expected.process.bundle_id) {
+                let req = super::browser_mode::FocusRequest {
+                    bundle: expected.process.bundle_id.clone(),
+                    pid: expected.process.pid,
+                    launch: f64::from_bits(expected.process.launch_time_bits).to_string(),
+                    cg_window_id: expected.window_id,
+                    generation,
+                };
+                let (title, url) =
+                    super::browser_mode::saved_source(&req, expected.quartz_points, &bound)?;
+                return Some((Some(title), None, Some(url)));
+            }
+            let application = ax::application(expected.process.pid)?;
+            let window = ax::attr(application.0, "AXFocusedWindow", deadline)?;
+            let p = ax::pair(ax::attr(window.0, "AXPosition", deadline)?.0, 1)?;
+            let size = ax::pair(ax::attr(window.0, "AXSize", deadline)?.0, 2)?;
+            if target::Rect::new(p.a, p.b, size.a, size.b) != Some(expected.quartz_points) {
                 return None;
             }
-
-            let title = super::hand_policy_ax::attr(window.0, "AXTitle", deadline)
-                .and_then(|s| super::hand_policy_ax::string_bounded(s.0, 200));
-            let document = super::hand_policy_ax::attr(window.0, "AXDocument", deadline)
-                .and_then(|s| super::hand_policy_ax::string_bounded(s.0, 2000));
-            Some((title, document))
+            let title =
+                ax::attr(window.0, "AXTitle", deadline).and_then(|v| ax::string_bounded(v.0, 200));
+            let document = ax::attr(window.0, "AXDocument", deadline)
+                .and_then(|v| ax::string_bounded(v.0, 2000));
+            bound().then_some((title, document, None))
         })();
         let _ = tx.send(read);
     });
-    if let Ok(Some((title, document))) = rx.recv_timeout(Duration::from_millis(350)) {
-        snapshot.window = title.unwrap_or_default();
-        snapshot.path = document
-            .as_deref()
-            .and_then(|s| Url::parse(s).ok())
-            .filter(|u| u.scheme() == "file")
-            .and_then(|u| u.to_file_path().ok())
-            .map(|p| p.to_string_lossy().into_owned());
-        snapshot.document = snapshot
+    let Ok(Some((title, document, url))) = rx.recv_timeout(Duration::from_millis(950)) else {
+        return;
+    };
+    if !valid() || !metadata_current(app, &target, generation) {
+        return;
+    }
+    snapshot.window = title.unwrap_or_default();
+    snapshot.url = url
+        .and_then(|s| crate::screen::source::sanitize_url(&s))
+        .map(|u| u.to_string());
+    snapshot.path = document
+        .as_deref()
+        .and_then(|s| Url::parse(s).ok())
+        .filter(|u| u.scheme() == "file")
+        .and_then(|u| u.to_file_path().ok())
+        .map(|p| p.to_string_lossy().into_owned());
+    if snapshot.path.is_none() && metadata::producer(&target.process.bundle_id).is_some() {
+        snapshot.path = metadata::title_path(&snapshot.window).map(|p| {
+            if let Some(tail) = p.strip_prefix("~/") {
+                home()
+                    .map(|h| h.join(tail).to_string_lossy().into_owned())
+                    .unwrap_or(p)
+            } else {
+                p
+            }
+        });
+    }
+    snapshot.document = snapshot
+        .path
+        .as_deref()
+        .and_then(|p| Path::new(p).file_name())
+        .map(|p| p.to_string_lossy().into_owned());
+    if metadata::producer(&target.process.bundle_id).is_some() {
+        snapshot.git = snapshot
             .path
             .as_deref()
-            .and_then(|p| Path::new(p).file_name())
-            .map(|p| p.to_string_lossy().into_owned());
+            .and_then(|p| Path::new(p).canonicalize().ok())
+            .filter(|p| home().is_ok_and(|h| p.starts_with(h)))
+            .and_then(|p| crate::screen::handoff::context::repo_of(&p, |d| d.join(".git").exists()))
+            .and_then(|repo| repo.canonicalize().ok())
+            .filter(|repo| home().is_ok_and(|h| repo.starts_with(h)))
+            .and_then(|repo| {
+                use crate::screen::handoff::context::{parse_git, READ_ONLY};
+                let run = |args: &[&str]| git_read_only(&repo, args, &valid);
+                Some(parse_git(
+                    &repo,
+                    &run(READ_ONLY[0])?,
+                    &run(READ_ONLY[1]).unwrap_or_default(),
+                    &run(READ_ONLY[2]).unwrap_or_default(),
+                    &run(READ_ONLY[3]).unwrap_or_default(),
+                ))
+            });
     }
-    if !capture_session::is_target_current(app, &target, generation) {
+    if !valid() || !metadata_current(app, &target, generation) {
         return;
     }
     let mut found = Found::new();
-    let snapshot = package::redact_snapshot(&snapshot, &mut found);
-    append(app, stamp, Event::Snapshot(snapshot));
+    append(
+        app,
+        stamp,
+        Event::Snapshot(package::redact_snapshot(&snapshot, &mut found)),
+    );
     if let Ok(h) = state(app) {
         *h.last_snapshot.lock().unwrap_or_else(|p| p.into_inner()) = Some(now());
     }
 }
+fn git_read_only(repo: &Path, args: &[&str], valid: &dyn Fn() -> bool) -> Option<String> {
+    if !valid() || !crate::screen::handoff::context::READ_ONLY.contains(&args) {
+        return None;
+    }
+    let mut command = Command::new("/usr/bin/git");
+    command
+        .args([
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "log.showSignature=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "diff.external=",
+        ])
+        .arg("-C")
+        .arg(repo)
+        .args(args);
+    if args.first() == Some(&"diff") {
+        command.arg("--no-ext-diff").arg("--no-textconv");
+    }
+    let mut child = command
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_PAGER", "cat")
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .spawn()
+        .ok()?;
+    let stdout = child.stdout.take()?;
+    let (tx, rx) = mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.take(64 * 1024 + 1).read_to_end(&mut bytes);
+        let _ = tx.send(bytes);
+    });
+    let start = Instant::now();
+    let mut output = None;
+    let result = loop {
+        if !valid() || start.elapsed() >= Duration::from_secs(2) {
+            break None;
+        }
+        if output.is_none() {
+            if let Ok(bytes) = rx.try_recv() {
+                if bytes.len() > 64 * 1024 {
+                    break None;
+                }
+                output = Some(bytes);
+            }
+        }
+        match child.try_wait() {
+            Ok(Some(s)) if !s.success() => break None,
+            Ok(Some(_)) if output.is_some() => {
+                break String::from_utf8(output.take().unwrap()).ok()
+            }
+            Err(_) => break None,
+            _ => std::thread::sleep(Duration::from_millis(10)),
+        }
+    };
+    if result.is_none() {
+        let _ = child.kill();
+    }
+    let _ = child.wait();
+    result
+}
+
 pub fn debug_view(app: &AppHandle) -> Value {
     let Ok(stamp) = service_call::credential_stamp(app) else {
         return json!({"count":0,"recent":[]});
@@ -493,6 +764,9 @@ pub fn start(app: &AppHandle, hint: Option<String>) -> Result<(), String> {
     }
     let stamp = service_call::credential_stamp(app).map_err(|e| e.to_string())?;
     let generation = runtime::of(app)?.generation.load(Ordering::Acquire);
+    // Capture current metadata before the preview can become the foreground window.
+    // This is metadata-only and deliberately bypasses the periodic debounce, as Windows does.
+    record_frontmost(app);
     let h = state(app)?;
     let revision = h.revision.fetch_add(1, Ordering::AcqRel) + 1;
     let mut random = [0; 16];

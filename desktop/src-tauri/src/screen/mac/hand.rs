@@ -247,29 +247,53 @@ fn perform(
     match result{Ok(Ok(_))=>Ok(()),_=>Err("Native input stopped because the app, focus or privacy check couldn't be verified. Any partial input stays in your document; use Undo if needed.".into())}
 }
 fn type_text(app: &AppHandle, t: Ticket, target: &BoundTarget, text: &str) -> Result<(), String> {
+    type_text_until(
+        app,
+        t,
+        target,
+        text,
+        Instant::now() + Duration::from_secs(15 * 60),
+    )
+}
+fn type_text_until(
+    app: &AppHandle,
+    t: Ticket,
+    target: &BoundTarget,
+    text: &str,
+    deadline: Instant,
+) -> Result<(), String> {
+    let mut roll = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0x9e37_79b9, |t| t.subsec_nanos())
+        | 1;
     for chunk in text_chunks(text) {
+        if Instant::now() >= deadline {
+            return Err("Typing reached its time limit. Any partial text stays in the document; use Undo if needed.".into());
+        }
+        let character = chunk.chars().next().ok_or("Empty typing piece.")?;
         perform(app, t, target.clone(), actions::Action::Text(chunk), None)?;
-        pause(app, t, Duration::from_millis(15))?;
+        roll ^= roll << 13;
+        roll ^= roll >> 17;
+        roll ^= roll << 5;
+        pause(app, t, typing_pause(character, roll))?;
     }
     Ok(())
 }
-fn text_chunks(text: &str) -> Vec<String> {
-    let mut chunks = Vec::new();
-    let mut chunk = String::new();
-    let mut units = 0;
-    for c in text.chars() {
-        let needed = c.len_utf16();
-        if units + needed > 16 {
-            chunks.push(std::mem::take(&mut chunk));
-            units = 0;
-        }
-        chunk.push(c);
-        units += needed;
-    }
-    if !chunk.is_empty() {
-        chunks.push(chunk);
-    }
-    chunks
+/// Same human cadence as win::typing::pause_after; every Unicode scalar receives a fresh
+/// native authorization, and an emoji's UTF-16 surrogate pair remains in one event quantum.
+fn typing_pause(c: char, roll: u32) -> Duration {
+    let key = 8 + roll % 14;
+    let breath = match c {
+        '\n' => 160 + (roll >> 8) % 120,
+        '.' | '!' | '?' => 80 + (roll >> 8) % 90,
+        ',' | ';' | ':' => 35 + (roll >> 8) % 40,
+        ' ' if (roll >> 4).is_multiple_of(19) => 90 + (roll >> 8) % 110,
+        _ => 0,
+    };
+    Duration::from_millis(u64::from(key + breath))
+}
+fn text_chunks(text: &str) -> impl Iterator<Item = String> + '_ {
+    text.chars().map(|c| c.to_string())
 }
 fn show_pointer(app: &AppHandle, t: Ticket, point: target::Point, label: &str) {
     let handle = app.clone();
@@ -291,6 +315,65 @@ fn show_pointer(app: &AppHandle, t: Ticket, point: target::Point, label: &str) {
             let _ = overlay::show_quietly(&window);
         }
     });
+}
+/// Clamp the start to the verified target: native cursor movement never traverses another
+/// application's window. Every emitted point still receives the ordinary Move policy proof.
+fn glide_path(
+    bounds: target::Rect,
+    from: target::Point,
+    to: target::Point,
+) -> Option<Vec<target::Point>> {
+    if !bounds.contains(to) || !from.x.is_finite() || !from.y.is_finite() {
+        return None;
+    }
+    let clamp = |p: target::Point| target::Point {
+        x: p.x.clamp(
+            bounds.x,
+            bounds.x + bounds.width - (bounds.width / 2.).min(0.5),
+        ),
+        y: p.y.clamp(
+            bounds.y,
+            bounds.y + bounds.height - (bounds.height / 2.).min(0.5),
+        ),
+    };
+    let from = clamp(from);
+    let mut path = (1..=22)
+        .map(|step| {
+            let (x, y) = hand::glide_point(
+                (from.x as i32, from.y as i32),
+                (to.x as i32, to.y as i32),
+                step,
+                22,
+            );
+            clamp(target::Point {
+                x: f64::from(x),
+                y: f64::from(y),
+            })
+        })
+        .collect::<Vec<_>>();
+    *path.last_mut()? = to;
+    Some(path)
+}
+fn glide(
+    app: &AppHandle,
+    t: Ticket,
+    target: &BoundTarget,
+    to: target::Point,
+    label: &str,
+) -> Result<(), String> {
+    let from = super::input::cursor().ok_or("The cursor position is unavailable.")?;
+    let path = glide_path(target.bounds, from, to)
+        .ok_or("The pointer target is outside the verified document.")?;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    for point in path {
+        if Instant::now() >= deadline || !current(app, t) {
+            return Err("The pointer movement was cancelled or timed out.".into());
+        }
+        perform(app, t, target.clone(), actions::Action::Move(point), None)?;
+        show_pointer(app, t, point, label);
+        pause(app, t, Duration::from_millis(16))?;
+    }
+    Ok(())
 }
 fn point(frame: &NativeFrame, p: protocol::Point) -> target::Point {
     let bounds = frame.target.quartz_points;
@@ -401,7 +484,7 @@ fn run(app: &AppHandle, t: Ticket, goal: &str, mode: Mode) -> Result<(), String>
                 "Waited for the app.".to_owned()
             }
             Action::Point { point: p, label } => {
-                show_pointer(app, t, point(&frame, p), &label);
+                glide(app, t, &target, point(&frame, p), &label)?;
                 pause(app, t, Duration::from_secs(8))?;
                 return Ok(());
             }
@@ -412,7 +495,7 @@ fn run(app: &AppHandle, t: Ticket, goal: &str, mode: Mode) -> Result<(), String>
                 double,
             } => {
                 let p = point(&frame, p);
-                show_pointer(app, t, p, &label);
+                glide(app, t, &target, p, &label)?;
                 if hand::risky_label(&label) {
                     return Err("That control needs your own click. I've pointed to it.".into());
                 }
@@ -446,7 +529,7 @@ fn run(app: &AppHandle, t: Ticket, goal: &str, mode: Mode) -> Result<(), String>
                 amount,
             } => {
                 let p = point(&frame, p);
-                show_pointer(app, t, p, "");
+                glide(app, t, &target, p, "")?;
                 perform(
                     app,
                     t,
@@ -480,8 +563,14 @@ fn run(app: &AppHandle, t: Ticket, goal: &str, mode: Mode) -> Result<(), String>
                 what,
                 target: requested,
             } => {
-                open(app, t, &frame, what, &requested)?;
-                format!("Opened {requested}.")
+                let opened = open(app, t, &frame, what, &requested);
+                // Cancellation/target invalidation must stop; a safe unresolved destination
+                // is feedback for the next bounded planner step, as on Windows.
+                if !current(app, t) || !capture_session::is_current(app, &frame) && opened.is_err()
+                {
+                    return Err("Stopped before trying another destination.".into());
+                }
+                open_history(&requested, opened)
             }
         };
         history.push(description);
@@ -491,6 +580,10 @@ fn run(app: &AppHandle, t: Ticket, goal: &str, mode: Mode) -> Result<(), String>
         pause(app, t, Duration::from_millis(500))?;
     }
     Err("Stopped after 80 actions. Review what changed before continuing.".into())
+}
+fn open_history(requested: &str, result: Result<(), String>) -> String {
+    let requested: String = requested.chars().take(100).collect();
+    match result { Ok(()) => format!("Opened {requested}."), Err(_) => format!("Couldn't open {requested}: no matching installed application or safe destination was available. Try another route.") }
 }
 fn safe_app_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
@@ -572,8 +665,8 @@ fn open(
     pause(app, t, Duration::from_millis(2500))
 }
 
-/// Validate stream ordering and the entire bounded text before dispatching native input.
-/// This avoids typing a prefix from a malformed/truncated response as if it succeeded.
+/// Validate every stream event before dispatching that piece. A later failure retains an
+/// explicit partial-input result; a malformed piece itself never reaches native input.
 #[derive(Default)]
 struct Writing {
     started: bool,
@@ -609,6 +702,24 @@ impl Writing {
             _ => self.error = Some("The writing reply was incomplete or malformed.".into()),
         }
     }
+    fn feed_live(
+        &mut self,
+        line: &str,
+        deliver: &mut impl FnMut(Option<&str>, Option<&str>) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let previous = self.text.len();
+        self.feed(line);
+        if let Some(error) = &self.error {
+            return Err(error.clone());
+        }
+        let speech = self.speech.take();
+        let text = (self.text.len() > previous).then(|| &self.text[previous..]);
+        if let Err(error) = deliver(speech.as_deref(), text) {
+            self.error = Some(error.clone());
+            return Err(error);
+        }
+        Ok(())
+    }
     fn validate(&self) -> Result<(), String> {
         if let Some(error) = &self.error {
             Err(error.clone())
@@ -618,6 +729,10 @@ impl Writing {
             Ok(())
         }
     }
+}
+enum WriteDelivery {
+    Line(String),
+    Finished(Result<(), String>),
 }
 fn write_document(
     app: &AppHandle,
@@ -632,40 +747,210 @@ fn write_document(
         &frame.server_meta(),
         frame.captured.jpeg.as_slice(),
     );
-    let mut lines = protocol::LineSplitter::default();
-    let mut writing = Writing::default();
-    let cancelled = || !current(app, t) || !capture_session::is_current(app, frame);
-    service_call::post_stream_bound(
-        app,
-        "api/screen/write",
-        body.as_slice(),
-        &t.account,
-        &cancelled,
-        |chunk| {
-            for line in lines.push(chunk) {
-                writing.feed(&line);
+    let stopped = Arc::new(AtomicBool::new(false));
+    let network_stop = stopped.clone();
+    let handle = app.clone();
+    let target = frame.target.clone();
+    // Producer validation bounds the entire queue to at most TEXT_CHARS nonempty text
+    // events (+Start/Done), regardless of network chunking. Native typing never stalls the
+    // HTTP reader or consumes its 90-second network deadline.
+    let (tx, rx) = mpsc::channel();
+    std::thread::Builder::new()
+        .name("neb-mac-write-stream".into())
+        .spawn(move || {
+            let mut lines = protocol::LineSplitter::default();
+            let mut checked = Writing::default();
+            let mut failure = None;
+            let cancelled = || {
+                network_stop.load(Ordering::Acquire)
+                    || !current(&handle, t)
+                    || !capture_session::is_target_current(&handle, &target, t.generation)
+            };
+            let response = service_call::post_stream_bound(
+                &handle,
+                "api/screen/write",
+                body.as_slice(),
+                &t.account,
+                &cancelled,
+                |chunk| {
+                    if network_stop.load(Ordering::Acquire) {
+                        return;
+                    }
+                    for line in lines.push(chunk) {
+                        checked.feed(&line);
+                        if let Some(error) = &checked.error {
+                            failure = Some(error.clone());
+                            network_stop.store(true, Ordering::Release);
+                            break;
+                        }
+                        if tx.send(WriteDelivery::Line(line)).is_err() {
+                            network_stop.store(true, Ordering::Release);
+                            break;
+                        }
+                    }
+                },
+            );
+            if failure.is_none() && response.is_ok() {
+                if let Some(line) = lines.finish() {
+                    checked.feed(&line);
+                    if let Some(error) = &checked.error {
+                        failure = Some(error.clone());
+                    } else {
+                        let _ = tx.send(WriteDelivery::Line(line));
+                    }
+                }
             }
-        },
-    )
-    .map_err(|e| e.to_string())?;
-    if let Some(line) = lines.finish() {
-        writing.feed(&line);
+            let result = failure.map_or_else(
+                || {
+                    response
+                        .map_err(|e| e.to_string())
+                        .and_then(|_| checked.validate())
+                },
+                Err,
+            );
+            let _ = tx.send(WriteDelivery::Finished(result));
+        })
+        .map_err(|_| "Couldn't start the writing stream.".to_owned())?;
+    let mut writing = Writing::default();
+    let mut typed = 0usize;
+    let target = bound(frame);
+    let deadline = Instant::now() + Duration::from_secs(15 * 60);
+    let mut deliver = |speech: Option<&str>, text: Option<&str>| {
+        if !current(app, t) {
+            return Err("Stopped.".into());
+        }
+        if let Some(speech) = speech {
+            say(app, speech, t);
+        }
+        if let Some(text) = text {
+            type_text_until(app, t, &target, text, deadline)?;
+            typed += text.chars().count();
+        }
+        Ok(())
+    };
+    let result = loop {
+        if !current(app, t) || Instant::now() >= deadline {
+            break Err("Writing was cancelled or reached its time limit.".into());
+        }
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(WriteDelivery::Line(line)) => {
+                if let Err(error) = writing.feed_live(&line, &mut deliver) {
+                    break Err(error);
+                }
+            }
+            Ok(WriteDelivery::Finished(result)) => break result.and_then(|_| writing.validate()),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                break Err("The writing stream ended before it was complete.".into())
+            }
+        }
+    };
+    stopped.store(true, Ordering::Release);
+    result.map_err(|message| partial_write_message(&message, typed))
+}
+
+fn partial_write_message(message: &str, typed: usize) -> String {
+    if typed == 0 {
+        message.to_owned()
+    } else {
+        format!("{message} Some text was already typed; use Undo to remove it.")
     }
-    writing.validate()?;
-    if let Some(speech) = &writing.speech {
-        say(app, speech, t);
-    }
-    type_text(app, t, &bound(frame), &writing.text)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
+    fn writing_delivers_validated_pieces_before_done_and_reports_later_failure() {
+        let mut writing = Writing::default();
+        let mut output = Vec::new();
+        let mut deliver = |speech: Option<&str>, text: Option<&str>| {
+            if let Some(speech) = speech {
+                output.push(format!("say:{speech}"));
+            }
+            if let Some(text) = text {
+                output.push(format!("type:{text}"));
+            }
+            Ok(())
+        };
+        writing.feed_live(r#"{"type":"start","speech":"Writing now","kind":"insert","turnId":"00000000-0000-4000-8000-000000000001"}"#,&mut deliver).unwrap();
+        writing
+            .feed_live(r#"{"type":"text","text":"First piece"}"#, &mut deliver)
+            .unwrap();
+        assert!(!writing.done);
+        assert!(writing.validate().is_err());
+        writing
+            .feed_live(r#"{"type":"text","text":"bad\u0000"}"#, &mut deliver)
+            .unwrap_err();
+        assert_eq!(output, vec!["say:Writing now", "type:First piece"]);
+        assert!(partial_write_message("The stream ended.", 11).contains("Undo"));
+        assert_eq!(partial_write_message("Stopped.", 0), "Stopped.");
+    }
+    #[test]
+    fn delivery_failure_stops_all_later_stream_input() {
+        let mut writing = Writing::default();
+        let mut calls = 0;
+        let mut deliver = |_: Option<&str>, _: Option<&str>| {
+            calls += 1;
+            Err("Target changed".to_owned())
+        };
+        assert!(writing.feed_live(r#"{"type":"start","speech":"Writing","kind":"insert","turnId":"00000000-0000-4000-8000-000000000001"}"#,&mut deliver).is_err());
+        assert!(writing
+            .feed_live(r#"{"type":"text","text":"Never typed"}"#, &mut deliver)
+            .is_err());
+        assert_eq!(calls, 1);
+        assert!(writing.text.is_empty());
+    }
+    #[test]
+    fn unresolved_destinations_are_bounded_planner_feedback() {
+        assert_eq!(open_history("Pages", Ok(())), "Opened Pages.");
+        let failed = open_history(
+            &"x".repeat(2000),
+            Err("Internal path must not be repeated".into()),
+        );
+        assert!(failed.contains("Try another route"));
+        assert!(!failed.contains("Internal path"));
+        assert!(failed.len() < 250);
+    }
+    #[test]
+    fn glide_uses_shared_easing_and_never_leaves_verified_window() {
+        let bounds = target::Rect::new(-1440., -200., 1200., 800.).unwrap();
+        let to = target::Point { x: -600., y: 300. };
+        let points = glide_path(
+            bounds,
+            target::Point {
+                x: 5000.,
+                y: -2000.,
+            },
+            to,
+        )
+        .unwrap();
+        assert_eq!(points.len(), 22);
+        assert!(points.iter().all(|p| bounds.contains(*p)));
+        assert_eq!(points.last(), Some(&to));
+        assert!(glide_path(bounds, to, target::Point { x: 0., y: 0. }).is_none());
+        assert!(glide_path(bounds, target::Point { x: f64::NAN, y: 0. }, to).is_none());
+    }
+    #[test]
+    fn single_scalar_typing_keeps_unicode_and_human_punctuation_pauses() {
+        let text = "é😀a\n".repeat(3000);
+        let pieces = text_chunks(&text).collect::<Vec<_>>();
+        assert_eq!(pieces.len(), 12_000);
+        assert!(pieces
+            .iter()
+            .all(|p| p.chars().count() == 1 && p.encode_utf16().count() <= 2));
+        assert_eq!(pieces.concat(), text);
+        assert!(typing_pause('a', 0).as_millis() >= 8);
+        assert!(typing_pause('.', 0) > typing_pause('a', 0));
+        assert!(typing_pause('\n', 0) > typing_pause('.', 0));
+    }
+    #[test]
     fn chunks_preserve_unicode_without_splitting_surrogates() {
         let text = "A😀".repeat(40);
-        let chunks = text_chunks(&text);
-        assert!(chunks.iter().all(|c| c.encode_utf16().count() <= 16));
+        let chunks = text_chunks(&text).collect::<Vec<_>>();
+        assert!(chunks
+            .iter()
+            .all(|c| c.chars().count() == 1 && c.encode_utf16().count() <= 2));
         assert_eq!(chunks.concat(), text);
     }
     #[test]

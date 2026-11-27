@@ -15,8 +15,7 @@ use crate::screen::{
     config::CONSENT_VERSION,
     glance,
     intent::{self, Intent},
-    notes_marks::{self, NotesSource},
-    page,
+    notes_marks, page,
     protocol::{self, ScreenAction},
     quiz::{self, Phase, Quiz, QuizWord},
     secret::SecretBytes,
@@ -71,6 +70,10 @@ struct State {
     timer_started: bool,
     findings: Vec<String>,
     pending_control: Option<(String, StepEvent)>,
+    coach_display: Option<super::target::Rect>,
+    quiz_display: Option<super::target::Rect>,
+    notes_display: Option<super::target::Rect>,
+    coach_arrow: Option<super::target::Point>,
 }
 #[derive(Default)]
 struct Study(Mutex<State>);
@@ -252,6 +255,46 @@ fn say(app: &AppHandle, text: &str) {
     say_ticket(app, text, ticket);
 }
 
+fn panel_rect(
+    surface: Surface,
+    display: super::target::Rect,
+    arrow: Option<super::target::Point>,
+) -> Option<super::target::Rect> {
+    use super::target::Rect;
+    if surface == Surface::Coach {
+        let monitor = crate::screen::frame::ScreenRect {
+            left: display.x.ceil() as i32,
+            top: display.y.ceil() as i32,
+            right: (display.x + display.width).floor() as i32,
+            bottom: (display.y + display.height).floor() as i32,
+        };
+        let r = walkthrough::pill_spot(
+            monitor,
+            1.,
+            arrow.map(|p| (p.x.round() as i32, p.y.round() as i32)),
+        );
+        return Rect::new(
+            f64::from(r.left),
+            f64::from(r.top),
+            f64::from(r.width()),
+            f64::from(r.height()),
+        );
+    }
+    let (width, height) = if surface == Surface::Quiz {
+        quiz::CARD_SIZE
+    } else {
+        (380., 520.)
+    };
+    Rect::new(
+        (display.x + display.width - width - 24.).max(display.x),
+        (display.y + display.height - height - 72.).max(display.y),
+        width.min(display.width),
+        height.min(display.height),
+    )
+}
+fn coach_draws(reply: &walkthrough::CoachReply) -> bool {
+    Session::after(reply).is_some_and(|session| !session.paused)
+}
 fn show(app: &AppHandle, surface: Surface, event: &'static str, value: Value, ticket: Ticket) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
@@ -261,19 +304,16 @@ fn show(app: &AppHandle, surface: Surface, event: &'static str, value: Value, ti
             return;
         }
         if let Ok(window) = overlay::ensure(&handle, surface) {
-            if let Some(display) = super::target::main_display() {
-                let (width, height) = match surface {
-                    Surface::Coach => walkthrough::PILL_SIZE,
-                    Surface::Quiz => quiz::CARD_SIZE,
-                    _ => (380., 520.),
-                };
-                let d = display.points;
-                if let Some(rect) = super::target::Rect::new(
-                    (d.x + d.width - width - 24.).max(d.x),
-                    (d.y + d.height - height - 72.).max(d.y),
-                    width.min(d.width),
-                    height.min(d.height),
-                ) {
+            let layout = state(&handle).ok().and_then(|s| {
+                let display = match surface {
+                    Surface::Coach => s.coach_display,
+                    Surface::Quiz => s.quiz_display,
+                    _ => s.notes_display,
+                }?;
+                Some((display, s.coach_arrow))
+            });
+            if let Some((display, arrow)) = layout {
+                if let Some(rect) = panel_rect(surface, display, arrow) {
                     let _ = overlay::place(&window, rect);
                 }
             }
@@ -441,6 +481,22 @@ fn run(app: &AppHandle, ticket: Ticket, work: Work) -> Result<(), String> {
         return Ok(());
     }
     let meta = frame.as_ref().map(NativeFrame::server_meta);
+    if let Some(frame) = frame.as_ref() {
+        let r = frame.captured.metadata.quartz_points;
+        let display = super::target::display_at(super::target::Point {
+            x: r.x + r.width / 2.,
+            y: r.y + r.height / 2.,
+        })
+        .map(|d| d.points);
+        let mut s = state(app)?;
+        match &work {
+            Work::Notes(_) => s.notes_display = display,
+            Work::Quiz => s.quiz_display = display,
+            Work::Watch(_) | Work::Answer(..) => {}
+            _ => s.coach_display = display,
+        }
+    }
+
     match work {
         Work::Notes(all) => {
             let f = frame.as_ref().ok_or("No study capture.")?;
@@ -454,7 +510,7 @@ fn run(app: &AppHandle, ticket: Ticket, work: Work) -> Result<(), String> {
                 &blocks,
                 meta.as_ref().and_then(|m| m.app.as_deref()),
                 all,
-                &NotesSource::default(),
+                &super::source_meta::notes_source(app, f),
             );
             let bytes = send(
                 app,
@@ -490,7 +546,12 @@ fn run(app: &AppHandle, ticket: Ticket, work: Work) -> Result<(), String> {
         }
         Work::Quiz => {
             let f = frame.as_ref().ok_or("No study capture.")?;
-            let body = quiz::quiz_body(meta.as_ref().unwrap(), None, f.captured.jpeg.as_slice());
+            let provenance = super::source_meta::read(app, f);
+            let body = quiz::quiz_body(
+                meta.as_ref().unwrap(),
+                provenance.title.as_deref(),
+                f.captured.jpeg.as_slice(),
+            );
             let bytes = send(app, ticket, Some(f), "api/screen/quiz", body.as_slice())?;
             let reply = quiz::parse_quiz_reply(bytes.as_slice())
                 .ok_or("I couldn't make a quiz just now.")?;
@@ -597,8 +658,25 @@ fn run(app: &AppHandle, ticket: Ticket, work: Work) -> Result<(), String> {
                 s.step = frame
                     .as_ref()
                     .map(|f| (glance::fingerprint(&f.captured.pixels), false));
+                s.coach_arrow = if coach_draws(&reply) {
+                    frame.as_ref().and_then(|f| {
+                        reply.actions.iter().find_map(|a| {
+                            if let ScreenAction::PointAt { point, .. } = a {
+                                let r = f.captured.metadata.quartz_points;
+                                Some(super::target::Point {
+                                    x: r.x + f64::from(point.x) / 1000. * r.width,
+                                    y: r.y + f64::from(point.y) / 1000. * r.height,
+                                })
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                } else {
+                    None
+                };
                 drop(s);
-                if let Some(f) = frame.as_ref() {
+                if let Some(f) = frame.as_ref().filter(|_| coach_draws(&reply)) {
                     show_actions(
                         app,
                         f,
@@ -956,6 +1034,10 @@ pub fn stop_watch(app: &AppHandle) {
             s.busy = false;
         }
     }
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let _ = super::island::refresh(&handle);
+    });
 }
 fn watch_look(
     app: &AppHandle,
@@ -1147,7 +1229,7 @@ mod tests {
             &blocks,
             Some("org.example.study"),
             true,
-            &NotesSource::default(),
+            &notes_marks::NotesSource::default(),
         );
         let mut api=FakeApi{calls:0,reply:br#"{"checkId":null,"related":true,"topic":"Biology","speech":"The text matches.","scopeLabel":"All notes","pages":[],"findings":[],"latencyMs":20}"#.to_vec()};
         let reply = notes_marks::parse_notes_reply(&api.post(body.as_slice())).unwrap();
@@ -1219,5 +1301,34 @@ mod tests {
         assert!(!quiz.advance());
         assert!(quiz.closing_line().contains("1 of 1 right"));
         assert!(quiz.closing_line().contains("review"));
+    }
+    #[test]
+    fn study_panels_follow_negative_origin_display_and_coach_avoids_arrow() {
+        let d = super::super::target::Rect::new(-1600., -200., 1600., 1000.).unwrap();
+        let quiz = panel_rect(Surface::Quiz, d, None).unwrap();
+        assert!(quiz.x >= d.x && quiz.x + quiz.width <= d.x + d.width);
+        assert!(quiz.x < 0.);
+        let bottom = panel_rect(Surface::Coach, d, None).unwrap();
+        let avoid = super::super::target::Point {
+            x: bottom.x + bottom.width / 2.,
+            y: bottom.y + bottom.height / 2.,
+        };
+        let top = panel_rect(Surface::Coach, d, Some(avoid)).unwrap();
+        assert!(top.y < bottom.y);
+    }
+    #[test]
+    fn inactive_and_paused_walkthrough_replies_never_keep_guidance_ink() {
+        let active=walkthrough::parse_coach_reply(format!(r#"{{"walkthroughId":"{ID}","title":"Task","status":"active","phase":"awaiting","step":1,"total":1,"hintsUsed":0,"speech":"Do it","actions":[]}}"#).as_bytes()).unwrap();
+        assert!(coach_draws(&active));
+        for status in [
+            CoachStatus::Paused,
+            CoachStatus::Completed,
+            CoachStatus::Stopped,
+            CoachStatus::Declined,
+        ] {
+            let mut reply = active.clone();
+            reply.status = status;
+            assert!(!coach_draws(&reply));
+        }
     }
 }

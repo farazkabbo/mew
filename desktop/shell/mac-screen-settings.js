@@ -4,8 +4,17 @@ const element = (id) => document.getElementById(id);
 const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
 let current = null;
 let updateBusy = false;
+let defaultPrivacy = null;
+const catchRules = ["reply_all", "attachment", "unsaved", "delete", "terminal"];
 function show(status) {
   current = status.config;
+  element("account-state").textContent =
+    status.accountConnected === true
+      ? "Screen Coach has a connected native account."
+      : status.accountConnected === false
+        ? "Screen Coach is not connected. Open your notebook to sign in."
+        : "Account status has not been checked in this session. Open your notebook to check.";
+  defaultPrivacy = status.defaultPrivacy ?? defaultPrivacy;
   element("voice-shortcut-status").textContent =
     status.voiceShortcutAvailable === false
       ? "The voice shortcut is unavailable. Use the microphone on Neb tools."
@@ -16,6 +25,27 @@ function show(status) {
     .join("\n");
   element("scope").value = current.privacy.askScope;
   element("save-mode").value = current.circle.save;
+  element("pointer-show").value = current.circle.pointer ?? "always";
+  element("pointer-size").value = current.circle.pointerSize ?? "medium";
+  element("pointer-corner").value = current.circle.pointerCorner ?? "bottom_right";
+  element("include-link").checked = current.circle.includeSourceLink ?? true;
+  for (const rule of catchRules)
+    element(`catch-rule-${rule}`).checked = !(current.cursor.rulesOff ?? []).includes(rule);
+  element("catch-state").textContent = status.catchPaused
+    ? "CATCH ME is temporarily paused from the menu bar."
+    : "CATCH ME follows the consent and rules selected here.";
+  element("catch-snoozed").textContent = Object.entries(current.cursor.snoozed ?? {})
+    .filter(([, until]) => until > Date.now() / 1000)
+    .map(([rule, until]) => `${rule}: snoozed until ${new Date(until * 1000).toLocaleTimeString()}`)
+    .join(" · ");
+  element("handoff-window").value = String(current.handoff.windowMin ?? 90);
+  element("handoff-expiry").value = String(current.handoff.expiryDays ?? 7);
+  element("handoff-names").checked = current.handoff.alwaysHideNames ?? false;
+  element("handoff-timeline-state").textContent =
+    `${status.handoffTimeline?.count ?? 0} local timeline records. ${(status.handoffTimeline?.recent ?? []).map((event) => `${event.kind} ${event.at}`).join(" · ")}`;
+  element("handoff-recipients").textContent = (current.handoff.recent ?? []).length
+    ? `Recent recipients: ${current.handoff.recent.join(", ")}`
+    : "No recent recipients.";
   element("redact-emails").checked = current.privacy.redaction.emails;
   element("redact-phones").checked = current.privacy.redaction.phones;
   element("click").checked = current.privacy.letNebClick;
@@ -28,7 +58,9 @@ function show(status) {
   element("sender").value = current.handoff.senderName;
   element("cursor-debug").checked = current.cursor.debug;
   element("cursor-traces").checked = current.cursor.recordTraces;
-  element("cursor-counts").textContent = JSON.stringify(status.cursorCounts ?? {});
+  element("cursor-counts").textContent = status.cursorCounts
+    ? JSON.stringify(status.cursorCounts)
+    : "Refresh local history to inspect cursor counts.";
   element("catch").checked = current.cursor.catchMe;
   element("guidance").value = current.cursor.guidance;
   element("cue-voice").checked = current.cursor.voice;
@@ -89,6 +121,10 @@ element("preferences").addEventListener("submit", async (event) => {
         },
         circle: {
           ...current.circle,
+          pointer: element("pointer-show").value,
+          pointerSize: element("pointer-size").value,
+          pointerCorner: element("pointer-corner").value,
+          includeSourceLink: element("include-link").checked,
           silent: element("silent").checked,
           save: element("save-mode").value,
         },
@@ -96,10 +132,14 @@ element("preferences").addEventListener("submit", async (event) => {
         handoff: {
           ...current.handoff,
           timeline: element("handoff").checked,
+          windowMin: Number(element("handoff-window").value),
+          expiryDays: Number(element("handoff-expiry").value),
+          alwaysHideNames: element("handoff-names").checked,
           senderName: element("sender").value,
         },
         cursor: {
           ...current.cursor,
+          rulesOff: catchRules.filter((rule) => !element(`catch-rule-${rule}`).checked),
           debug: element("cursor-debug").checked,
           recordTraces: element("cursor-traces").checked,
           catchMe: element("catch").checked,
@@ -175,5 +215,60 @@ element("forget-paths").addEventListener("click", async () => {
     notice("Learned paths deleted for this account.");
   } catch {
     notice("Couldn't delete learned paths. Try again.");
+  }
+});
+
+async function localEdit(patch) {
+  try {
+    show(await invoke("mac_settings_update", { patch }));
+    notice("Preferences saved on this Mac.");
+  } catch {
+    notice("Couldn't save this change. Reopen settings to check it.");
+  }
+}
+element("restore-blocklist").addEventListener("click", () => {
+  if (defaultPrivacy)
+    element("blocked").value = defaultPrivacy.blockedApps
+      .map((name) => name.replace(/\.exe$/, ""))
+      .join("\n");
+  notice("Default blocked apps restored in the form. Save preferences to apply.");
+});
+element("catch-reset").addEventListener(
+  "click",
+  () => current && localEdit({ cursor: { ...current.cursor, snoozed: {}, notMistakes: {} } }),
+);
+element("handoff-clear-recipients").addEventListener(
+  "click",
+  () => current && localEdit({ handoff: { ...current.handoff, recent: [] } }),
+);
+element("handoff-forget").addEventListener("click", async () => {
+  try {
+    show(await invoke("mac_handoff_forget"));
+    notice("Local Handoff timeline deleted.");
+  } catch {
+    notice("Couldn't delete the timeline. Try again.");
+  }
+});
+element("open-mic-settings").addEventListener("click", async () => {
+  try {
+    await invoke("mac_open_microphone_settings");
+  } catch {
+    notice("Open System Settings → Privacy & Security → Microphone to allow Neb.");
+  }
+});
+
+element("open-notebook").addEventListener("click", async () => {
+  try {
+    await invoke("mac_open_notebook");
+  } catch {
+    notice("Couldn't open the notebook. Use Open Neb in the menu bar.");
+  }
+});
+
+element("local-history").addEventListener("click", async () => {
+  try {
+    show(await invoke("mac_local_history"));
+  } catch {
+    notice("Couldn't inspect local history. Check your notebook account and try again.");
   }
 });

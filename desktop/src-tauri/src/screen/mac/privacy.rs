@@ -322,18 +322,35 @@ mod native {
     /// launch identity and frontmost ownership before AND after reads. Never authorize pixels
     /// from this alone: private browsing and call/share status remain Unknown.
     pub fn snapshot(expected: &ProcessIdentity) -> FocusSnapshot {
-        match checked_snapshot(expected) {
+        match checked_snapshot(expected, true) {
             Ok(snapshot) => snapshot,
             Err(reason) => FocusSnapshot::unknown(reason),
         }
     }
 
-    fn checked_snapshot(expected: &ProcessIdentity) -> Result<FocusSnapshot, UnknownReason> {
+    /// Metadata-only retained-source check. The caller must first prove that the exact
+    /// bundled Circle Card/keyboard Draw owns focus and the source AX/CG window still
+    /// matches. This function neither authorizes capture nor requests permissions.
+    pub(crate) fn retained_focus(expected: &ProcessIdentity) -> FocusSnapshot {
+        match checked_snapshot(expected, false) {
+            Ok(snapshot) => snapshot,
+            Err(reason) => FocusSnapshot::unknown(reason),
+        }
+    }
+    fn checked_snapshot(
+        expected: &ProcessIdentity,
+        require_frontmost: bool,
+    ) -> Result<FocusSnapshot, UnknownReason> {
         let started = Instant::now();
         if !accessibility_trusted() {
             return Err(UnknownReason::AccessibilityUnavailable);
         }
-        let before = frontmost_process_identity().ok_or(UnknownReason::IdentityUnavailable)?;
+        let before = if require_frontmost {
+            frontmost_process_identity()
+        } else {
+            process_identity(expected.pid)
+        }
+        .ok_or(UnknownReason::IdentityUnavailable)?;
         if &before != expected {
             return Err(UnknownReason::TargetChanged);
         }
@@ -373,7 +390,8 @@ mod native {
         let again = copy_attribute(app.0, "AXFocusedUIElement", started)?;
         if element_pid(again.0) != Some(expected.pid)
             || unsafe { CFEqual(focused.0, again.0) } == 0
-            || frontmost_process_identity().as_ref() != Some(expected)
+            || process_identity(expected.pid).as_ref() != Some(expected)
+            || (require_frontmost && frontmost_process_identity().as_ref() != Some(expected))
             || !accessibility_trusted()
         {
             return Err(UnknownReason::TargetChanged);
@@ -426,6 +444,8 @@ mod native {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub(crate) use native::retained_focus;
 #[cfg(target_os = "macos")]
 pub use native::{accessibility_trusted, frontmost_process_identity, process_identity, snapshot};
 

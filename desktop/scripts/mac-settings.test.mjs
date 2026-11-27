@@ -76,3 +76,43 @@ test("explicit save submits consent and privacy choices through native IPC", asy
     "com.apple.Mail,com.example.editor",
   );
 });
+test("pointer, source, Catch rules and Handoff choices are native settings", async () => {
+  const { elements, calls } = fixture();
+  await tick();
+  assert.ok(elements.has("pointer-show"));
+  elements.get("pointer-show").value = "never";
+  elements.get("pointer-size").value = "large";
+  elements.get("pointer-corner").value = "top_left";
+  elements.get("include-link").checked = false;
+  elements.get("catch-rule-attachment").checked = false;
+  elements.get("handoff-window").value = "180";
+  elements.get("handoff-expiry").value = "30";
+  elements.get("handoff-names").checked = true;
+  await elements.get("preferences").listeners.submit({ preventDefault() {} });
+  const patch = calls.find(([command]) => command === "mac_settings_update")[1].patch;
+  assert.equal(patch.circle.pointer, "never");
+  assert.equal(patch.circle.pointerSize, "large");
+  assert.equal(patch.circle.pointerCorner, "top_left");
+  assert.equal(patch.circle.includeSourceLink, false);
+  assert.deepEqual(Array.from(patch.cursor.rulesOff), ["attachment"]);
+  assert.equal(patch.handoff.windowMin, 180);
+  assert.equal(patch.handoff.expiryDays, 30);
+  assert.equal(patch.handoff.alwaysHideNames, true);
+});
+test("timeline deletion and microphone settings use narrow native commands", async () => {
+  const { elements, calls } = fixture();
+  await tick();
+  await elements.get("handoff-forget").listeners.click();
+  await elements.get("open-mic-settings").listeners.click();
+  assert.ok(calls.some(([command]) => command === "mac_handoff_forget"));
+  assert.ok(calls.some(([command]) => command === "mac_open_microphone_settings"));
+});
+test("account help opens the scoped notebook without accepting credentials", async () => {
+  const { elements, calls } = fixture();
+  await tick();
+  assert.ok(elements.has("account-state"));
+  await elements.get("open-notebook").listeners.click();
+  const call = calls.find(([command]) => command === "mac_open_notebook");
+  assert.ok(call);
+  assert.equal(call[1], undefined);
+});

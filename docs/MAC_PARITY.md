@@ -1,6 +1,6 @@
 # Windows and Mac desktop feature ledger
 
-Updated 2026-11-26. The Windows baseline is `origin/main` through `7f4d9fe`, merged into `feature/macbook` at `e83482d`. Both platforms remain in the same Tauri application and repository. Shared notebook/server features, wire contracts, model validation and pure state machines are reused; native operating-system adapters differ.
+Updated 2026-11-27. The Windows baseline is `origin/main` through `7f4d9fe`, merged into `feature/macbook` at `e83482d`. Both platforms remain in the same Tauri application and repository. Shared notebook/server features, wire contracts, model validation and pure state machines are reused; native operating-system adapters differ.
 
 This ledger records reachable implementation, not a claim that synthetic tests establish real macOS acceptance. Follow [the manual testing guide](../desktop/MAC_TESTING.md) on the packaged build. Historical foundation-only audits are available in Git history; their “unavailable” statuses do not describe the new implementation.
 
@@ -52,3 +52,27 @@ The Windows modules remain Windows-gated because they contain Win32/WinRT implem
 OS-independent protocols/validation stay in shared modules. Capture/privacy, authenticated transport, ink, Circle/Clip, studies, native actions, cursor observation/rendering, chores and Handoff have separate owners/modules. Privileged commands authorize the exact calling surface; local pages do not receive credentials or arbitrary capture/input access. Account changes, pause and Escape invalidate pending work before clearing UI.
 
 Independent reviews identified and drove fixes for risky label-less key input, Catch metadata leaking into remote planning, stale queued account/session output, noncancellable rename loops, destructive Save polling, completed walkthrough visibility and quiz routing. Verification records and remaining OS acceptance steps are in [the workflow record](MAC_IMPLEMENTATION_WORKFLOW.md) and [manual guide](../desktop/MAC_TESTING.md).
+
+## Follow-up behavior audit
+
+The initial feature-family map was insufficient to claim exact parity. A second comparison traced individual Windows handlers and found omissions; the following paths were added or corrected before the next manual pass:
+
+| Behavior                                                                     | Implementation                                                                                                                                                                |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Numbered semantic marks, underline/highlight OCR and keyboard selection      | `mac/circle.rs`, `mac/drawing.rs`; shared marks/blocks contracts                                                                                                              |
+| Explanation-step ink, student strokes, follow-up append and retry            | Circle session accumulates validated per-step ACKs; `mac/clip.rs` uses the first saved crop/scale and existing entries/append API                                             |
+| Old Card buttons and deferred workers                                        | Displayed action-session token plus immutable account/generation/serial tickets before capture, mutation, upload and queued UI effects                                        |
+| Saved video moments                                                          | `source.rs`, `mac/source_meta.rs`, captured named playback snapshot, OCR and tutor fallback; before/after video identity and save-time matching prevent cross-tab attribution |
+| Notes source links and quiz titles                                           | `mac/study.rs` uses bounded provenance and shared serializers                                                                                                                 |
+| Study panels on multiple displays and stopped coach ink                      | Panels retain captured display geometry; paused/completed/inactive replies clear arrows                                                                                       |
+| Timed pause, Catch pause, undo, keyboard entry and account/settings controls | Native tray/runtime plus the exact bundled local settings page; detailed history is an explicit action                                                                        |
+| Companion and handwritten-note scrolling                                     | New `mac/pointer.rs`, `note_scroll.rs`, bounded native geometry/policy adapters                                                                                               |
+| Handoff editor/terminal/browser and Git metadata                             | Metadata-only known producer contract, sanitized URL, home-contained canonical repo and four bounded read-only Git queries                                                    |
+| Incremental writing and native cursor glide                                  | `mac/hand.rs`; bounded validated network queue, per-scalar native authorization, Windows typing cadence and overall deadline; failed safe opens become planner feedback       |
+| Background browser music and capture metadata                                | Previously verified player retained only while exact process/window/normal source remains valid; one-second polling and named position/source snapshot                        |
+
+Known platform support gaps remain **implementation boundaries**, not merely unchecked manual tests: the Mac has no generic public system-wide media-session adapter equivalent to Windows GSMTC; browser privacy/source adapters currently cover the inspected Chrome/Brave contract, not Edge/Firefox/Vivaldi/Opera/Arc/Safari; unsupported websites/player layouts are not implemented as arbitrary browser automation. Public Spotify/Music dictionaries expose commands but not Windows-style dynamic skip-capability flags. Full browser/player equivalence must not be reported as completed. No private Apple APIs or privacy bypasses were introduced to conceal these limits.
+
+Active Circle snapshots now use an explicit native-owned retention lease, separate from the unchanged 60-second unused-capture lifetime. Only weak exact-frame grants reach annotation and Clip consumers; dropping the session revokes them. Fresh source/account/permission/privacy checks still precede use. Marking inactivity follows the Windows 20-second card / 80-second session policy; active explanations and follow-ups are not cut off at the pending-capture deadline. Local previews retain their own bounded lifetime.
+
+Saved entries now use the existing `entries/destination` contract when the user changes place, including choices made during the first upload. Moves are serialized and coalesced to the latest choice, and HTTP 204 is treated as the endpoint's successful empty response.

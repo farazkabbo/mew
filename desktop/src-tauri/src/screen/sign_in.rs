@@ -95,6 +95,8 @@ impl Attempt {
 pub struct SignIn {
     app_url: Url,
     attempt: Mutex<Attempt>,
+    #[cfg(target_os = "macos")]
+    presence: std::sync::atomic::AtomicU64,
 }
 
 impl SignIn {
@@ -107,7 +109,40 @@ impl SignIn {
         Self {
             app_url,
             attempt: Mutex::default(),
+            #[cfg(target_os = "macos")]
+            presence: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn known_connected(&self) -> Option<bool> {
+        match self.presence_snapshot() & 3 {
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        }
+    }
+    #[cfg(target_os = "macos")]
+    pub(crate) fn presence_snapshot(&self) -> u64 {
+        self.presence.load(std::sync::atomic::Ordering::Acquire)
+    }
+    #[cfg(target_os = "macos")]
+    pub(crate) fn observe_presence(&self, observed: u64, present: bool) {
+        let next = (observed & !3) | if present { 2 } else { 1 };
+        let _ = self.presence.compare_exchange(
+            observed,
+            next,
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+        );
+    }
+    #[cfg(target_os = "macos")]
+    fn cache_connected(&self, present: bool) {
+        let _ = self.presence.fetch_update(
+            std::sync::atomic::Ordering::AcqRel,
+            std::sync::atomic::Ordering::Acquire,
+            |old| Some((old.wrapping_add(4) & !3) | if present { 2 } else { 1 }),
+        );
     }
 
     fn attempt(&self) -> MutexGuard<'_, Attempt> {
@@ -391,8 +426,10 @@ fn set_connected<R: Runtime>(app: &AppHandle<R>, connected: bool) {
     }
     #[cfg(target_os = "macos")]
     {
+        if let Some(sign) = app.try_state::<SignIn>() {
+            sign.cache_connected(connected);
+        }
         super::mac::runtime::account_changed(app);
-        let _ = connected;
     }
 }
 
@@ -784,5 +821,22 @@ mod tests {
         assert!(attempt.begin(pending).is_none());
         assert!(attempt.expire(expired));
         assert!(attempt.pending.is_none());
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod cached_presence_tests {
+    use super::*;
+    #[test]
+    fn stale_native_observations_never_override_signout() {
+        let sign = SignIn::new(Url::parse("https://example.invalid").unwrap());
+        assert_eq!(sign.known_connected(), None);
+        let observed = sign.presence_snapshot();
+        sign.observe_presence(observed, true);
+        assert_eq!(sign.known_connected(), Some(true));
+        let old = sign.presence_snapshot();
+        sign.cache_connected(false);
+        sign.observe_presence(old, true);
+        assert_eq!(sign.known_connected(), Some(false));
     }
 }

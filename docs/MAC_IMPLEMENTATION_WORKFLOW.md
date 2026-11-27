@@ -14,7 +14,7 @@ Integration base: `e83482d`, branch `feature/macbook`, including `origin/main` t
 - [x] Hand/typing, public native target/action adapters, user approval and actual execution limits/cancellation.
 - [x] SHOW ME, DO IT's four chores/replay/undo and CATCH ME's five rules with consent/local state.
 - [x] Handoff behind its existing flag: protected local timeline, preview/redaction/Send, receiver/deep links and safe Pick up.
-- [x] Media/browser/source/artwork coverage, settings/tray/tour and complete API/permission reconciliation.
+- [ ] Exact browser/player support equivalence: inspected Chrome/Brave and native Spotify/Music adapters exist; generic system-wide media and broader browser/privacy adapters remain explicit platform gaps.
 - [x] Whole-branch code and security review; focused regression fixes; full repository and native checks; package from exact source; commit verified result.
 
 For each checkbox record implementing files, normal-app entry points, denial/cancellation behavior, automated evidence and review result. Runtime-only checks belong to the owner's manual acceptance list and must not hide missing implementation.
@@ -52,3 +52,22 @@ Run the manual guide on the final development app. Physical shortcuts, recording
 The native Mac adapters intentionally refuse unsupported/private/ambiguous producer states. Safari/Firefox/Edge do not inherit Chrome/Brave's positive browser-mode proof. Display capture masks unrelated contexts. The known-call detector is limited, artwork/source metadata may be absent, and provider-dependent flows require configured services. These boundaries are preserved rather than bypassed to make a test pass.
 
 Supplemental cursor tuning: the optimized pure-source harness passed all 28 tests including `threshold_sweep` (24 parameter combinations). This does not replace the full native Cargo suite above. The redundant unoptimized tuning run was stopped once the optimized run was underway.
+
+## Follow-up verification (2026-11-27)
+
+The individual-behavior comparison found additional omissions after the original feature-family audit. They are listed, with their implementation owners, in the follow-up section of `MAC_PARITY.md`. Checked feature families above must not be read as an exhaustive claim about every supported application/browser. Generic system-wide media and wider browser privacy/source support remain open code boundaries.
+
+New review fixes bind displayed controls, deferred native work, capture/session replacement, renderer ACKs, save/append/preview preparation and queued UI events to their originating session and account. Repository discovery checks the final canonical ancestor against the home boundary, and saved video moments require matching captured and current source identity. Final verification results are recorded below after the frozen-source checks.
+
+Frozen-source follow-up results:
+
+- Full repository gate passed formatting, lint, type checks and **2,172 tests** (shared 513, ink 194, desktop Vitest 46, desktop Node 26, frontend 800, Supabase 183, backend 410).
+- Native suite passed **518 tests**, with 0 failures and 2 default-ignored tests. The loopback auth test was separately run with `--ignored` and passed. The unchanged optional cursor tuning benchmark remains covered by the earlier recorded pure-source run.
+- Overlay integration passed **28 browser tests**, including Mac Command shortcuts and displayed action-session echo; existing Windows IPC expectations stayed unchanged.
+- Strict Clippy across all native targets/tests, changed-source Rust formatting, Prettier and shipped-source secret scanning passed.
+- Synthetic Swift/C FFI, JPEG/Vision and Intel capture-bridge compilation passed without personal screen capture.
+- Code/security reviews covered deferred action/session ownership, streaming partial failure, source attribution, saved-entry transforms, local IPC boundaries and bounded Handoff/Git metadata. The final owned-retention integration was reviewed locally and regression-tested: ordinary frame expiry stays strict; explicit weak grants do not outlive their native owner or authorize new capture.
+
+No real user desktop input/capture, provider calls, production account actions, signing identities or notarization were used for these automated gates. Known browser/player support gaps in the ledger remain open; this record must not be described as exact Windows support equivalence.
+
+- Final Apple Silicon development bundle rebuilt successfully at `desktop/src-tauri/target/debug/bundle/macos/Neb.app`; existing entitlements applied with an ad-hoc signature, and `codesign --verify --strict` passed. This is a local development artifact, not a notarized public installer.

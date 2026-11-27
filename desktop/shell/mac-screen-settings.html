@@ -25,6 +25,17 @@
       <p id="voice-shortcut-status"></p>
       <p id="message" role="status">Loading your local settings…</p>
       <section>
+        <h2>Your Neb account</h2>
+        <p id="account-state"></p>
+        <button id="open-notebook" type="button">
+          Open notebook to sign in or manage your account
+        </button>
+        <p>
+          Sign in and sign out through your notebook. Credentials stay in macOS Keychain and never
+          enter this settings page.
+        </p>
+      </section>
+      <section>
         <h2>Neb tools</h2>
         <button id="tools" disabled>Show or hide Neb tools</button>
         <form id="preferences">
@@ -67,6 +78,7 @@
               existing Windows app names are kept for compatibility. Password managers and protected
               fields remain refused.
             </p>
+            <button id="restore-blocklist" type="button">Restore default blocked apps</button>
             <label
               >Capture area<select id="scope">
                 <option value="window">Focused window</option>
@@ -83,6 +95,36 @@
             <p>
               Automatic saving creates an explanation in your notebook after a five-second Undo
               period. The selected save preference applies to every Circle &amp; Ask explanation.
+            </p>
+            <label
+              >Companion pointer<select id="pointer-show">
+                <option value="always">Always</option>
+                <option value="while_drawing">While drawing</option>
+                <option value="never">Never (drawing indicator still shown)</option>
+              </select></label
+            >
+            <label
+              >Pointer size<select id="pointer-size">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select></label
+            >
+            <label
+              >Pointer corner<select id="pointer-corner">
+                <option value="bottom_right">Bottom right</option>
+                <option value="bottom_left">Bottom left</option>
+                <option value="top_right">Top right</option>
+                <option value="top_left">Top left</option>
+              </select></label
+            >
+            <label
+              ><input id="include-link" type="checkbox" /> Keep the page title and link with saved
+              explanations</label
+            >
+            <p>
+              Payment cards, passwords, secret keys and verification codes are always covered on
+              Mac. If a safety check is unavailable, screen capture is refused.
             </p>
             <label><input id="redact-emails" type="checkbox" /> Redact email addresses</label>
             <label><input id="redact-phones" type="checkbox" /> Redact phone numbers</label>
@@ -122,6 +164,26 @@
               facts stay on this computer and are not sent to the planner. Blocked apps and
               protected fields remain unread. You can turn it off here or pause Screen Coach.
             </p>
+            <fieldset>
+              <legend>CATCH ME rules</legend>
+              <label
+                ><input id="catch-rule-reply_all" type="checkbox" /> Reply All to many
+                recipients</label
+              >
+              <label><input id="catch-rule-attachment" type="checkbox" /> Missing attachment</label>
+              <label><input id="catch-rule-unsaved" type="checkbox" /> Closing unsaved work</label>
+              <label
+                ><input id="catch-rule-delete" type="checkbox" /> Deleting folders or many
+                files</label
+              >
+              <label
+                ><input id="catch-rule-terminal" type="checkbox" /> Destructive terminal
+                commands</label
+              >
+              <p id="catch-state"></p>
+              <p id="catch-snoozed"></p>
+              <button id="catch-reset" type="button">Reset rule sensitivity and snoozes</button>
+            </fieldset>
             <label
               >SHOW ME guidance<select id="guidance">
                 <option value="auto">Fade with practice</option>
@@ -142,6 +204,31 @@
               timeline off deletes its local records. Picking up someone else's work asks before
               each file, page or repository action; commands are copied for you to review.
             </p>
+            <label
+              >Handoff session window<select id="handoff-window">
+                <option value="30">30 minutes</option>
+                <option value="90">90 minutes</option>
+                <option value="180">3 hours</option>
+              </select></label
+            >
+            <label
+              >Default Handoff expiry<select id="handoff-expiry">
+                <option value="1">1 day</option>
+                <option value="7">7 days</option>
+                <option value="30">30 days</option>
+              </select></label
+            >
+            <label
+              ><input id="handoff-names" type="checkbox" /> Always hide people's names in
+              Handoffs</label
+            >
+            <button id="local-history" type="button">
+              Refresh local timeline and cursor counts
+            </button>
+            <p id="handoff-timeline-state"></p>
+            <p id="handoff-recipients"></p>
+            <button id="handoff-clear-recipients" type="button">Forget recent recipients</button>
+            <button id="handoff-forget" type="button">Delete local Handoff timeline</button>
             <label>Handoff sender name<input id="sender" type="text" maxlength="80" /></label>
             <details>
               <summary>Cursor developer tools</summary>
@@ -163,6 +250,7 @@
       </section>
       <section>
         <h2>Screen Coach availability</h2>
+        <button id="open-mic-settings">Open macOS microphone settings</button>
         <button id="handoff-start">Prepare a Handoff draft</button>
         <p id="capture"></p>
         <p>

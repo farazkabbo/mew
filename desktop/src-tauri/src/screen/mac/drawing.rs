@@ -5,13 +5,14 @@ use super::{
     target::{self, Rect},
 };
 use crate::screen::{
+    frame::ScreenRect,
     island::{Shape, Tool},
     surfaces::Surface,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Mutex,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex,
 };
 use tauri::{ipc::CapabilityBuilder, AppHandle, Manager, WebviewWindow};
 
@@ -48,9 +49,11 @@ struct Session {
     shape: Shape,
     notes: bool,
     ready: bool,
+    keyboard: bool,
+    selecting_question: bool,
 }
 #[derive(Default)]
-struct Drawing(Mutex<Session>);
+struct Drawing(Mutex<Session>, Arc<AtomicU64>);
 
 pub fn setup(app: &AppHandle) -> Result<(), String> {
     app.manage(Drawing::default());
@@ -88,7 +91,8 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                     let expected = state(&app)
                         .ok()
                         .and_then(|s| s.0.lock().ok().and_then(|s| s.binding.clone()));
-                    if !same_target(expected.as_ref(), binding().as_ref()) {
+                    let own_keyboard = super::circle::stored_target_current_main(&app);
+                    if !own_keyboard && !same_target(expected.as_ref(), binding().as_ref()) {
                         let _ = close(&app);
                         let _ = island::refresh(&app);
                     }
@@ -106,12 +110,13 @@ fn state(app: &AppHandle) -> Result<tauri::State<'_, Drawing>, String> {
     app.try_state().ok_or_else(|| "Drawing isn't ready.".into())
 }
 pub fn view(app: &AppHandle) -> (Tool, bool) {
-    state(app)
-        .map(|s| {
-            let s = s.0.lock().unwrap_or_else(|p| p.into_inner());
+    let (tool, notes) = state(app)
+        .map(|h| {
+            let s = h.0.lock().unwrap_or_else(|p| p.into_inner());
             (s.tool, s.notes)
         })
-        .unwrap_or((Tool::None, false))
+        .unwrap_or((Tool::None, false));
+    (tool, notes || super::circle::has_visual_marks(app))
 }
 pub fn set_tool(app: &AppHandle, tool: Tool, shape: Shape) -> Result<(), String> {
     if tool.draws() {
@@ -131,10 +136,14 @@ pub fn set_tool(app: &AppHandle, tool: Tool, shape: Shape) -> Result<(), String>
             if target.process.pid == std::process::id() as i32 {
                 return Err("Switch to the app you want to annotate first.".into());
             }
+            state.1.fetch_add(1, Ordering::AcqRel);
             s.frame = Some(target.display.points);
             s.binding = Some(target);
         }
         let frame = s.frame.ok_or("Couldn't locate the drawing display.")?;
+        if s.tool != tool {
+            state.1.fetch_add(1, Ordering::AcqRel);
+        }
         s.tool = tool;
         s.shape = shape;
         frame
@@ -151,24 +160,38 @@ pub fn set_tool(app: &AppHandle, tool: Tool, shape: Shape) -> Result<(), String>
     crate::mac_shortcut::release_escape(app);
     Ok(())
 }
-fn sync(app: &AppHandle) -> Result<(), String> {
-    let state = state(app)?;
-    let s = state.0.lock().unwrap_or_else(|p| p.into_inner());
-    if !s.ready {
+pub(super) fn sync(app: &AppHandle) -> Result<(), String> {
+    // Snapshot before calling Circle: its native stored-frame grant also checks keyboard state.
+    let (ready, frame, tool, shape, question, keyboard) = {
+        let h = state(app)?;
+        let s = h.0.lock().unwrap_or_else(|p| p.into_inner());
+        (
+            s.ready,
+            s.frame,
+            s.tool,
+            s.shape,
+            s.selecting_question,
+            s.keyboard,
+        )
+    };
+    if !ready {
         return Ok(());
     }
-    overlay::dispatch(app,Surface::Draw,"mew:draw-show", &serde_json::json!({
-        "marks":[],"grey":true,"drawing":s.tool.annotates(),"mode":"draw","blocks":[],"pointer":null
-    })).map_err(|_| "Couldn't show drawing state.")?;
+    let (marks, blocks) = frame
+        .map(|display| super::circle::drawing_view(app, display))
+        .unwrap_or((serde_json::json!([]), vec![]));
+    overlay::dispatch(app,Surface::Draw,"mew:draw-show",&serde_json::json!({"marks":marks,"grey":false,"drawing":tool.draws(),"mode":if question{"select"}else if keyboard{"keyboard"}else{"draw"},"blocks":blocks,"pointer":null})).map_err(|_|"Couldn't show drawing state.")?;
     overlay::dispatch(
         app,
         Surface::Draw,
         "mew:draw-tool",
-        &serde_json::json!({"tool":s.tool,"shape":s.shape}),
+        &serde_json::json!({"tool":tool,"shape":shape}),
     )
     .map_err(|_| "Couldn't show the drawing tool.".into())
 }
 pub fn clear(app: &AppHandle) -> Result<(), String> {
+    super::note_scroll::stop(app);
+    super::circle::cancel_all(app);
     if app.get_webview_window(Surface::Draw.label()).is_some() {
         overlay::dispatch(
             app,
@@ -183,12 +206,13 @@ pub fn clear(app: &AppHandle) -> Result<(), String> {
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .notes = false;
-    Ok(())
+    sync(app)
 }
 pub fn close(app: &AppHandle) -> Result<(), String> {
     // Always release/hide native input even if clearing the JS content fails.
     let mut failure = None;
     if let Some(window) = app.get_webview_window(Surface::Draw.label()) {
+        let _ = overlay::set_activatable(&window, false);
         if overlay::set_click_through(&window, true).is_err() {
             failure = Some("Couldn't release drawing input.");
         }
@@ -199,9 +223,12 @@ pub fn close(app: &AppHandle) -> Result<(), String> {
     {
         let state = state(app)?;
         let mut s = state.0.lock().unwrap_or_else(|p| p.into_inner());
+        state.1.fetch_add(1, Ordering::AcqRel);
         s.tool = Tool::None;
         s.frame = None;
         s.binding = None;
+        s.keyboard = false;
+        s.selecting_question = false;
     }
     crate::mac_shortcut::release_escape(app);
     sync(app)?;
@@ -240,6 +267,17 @@ pub fn screen_draw_note(window: WebviewWindow, at: [f32; 2]) -> Result<(), Strin
         if s.tool != Tool::Pen || !s.frame.is_some_and(|f| valid_point(at, f)) {
             return Err("No active pen session.".into());
         }
+        if !s.notes {
+            if let Some(frame) = s.frame {
+                super::note_scroll::follow(
+                    app,
+                    super::target::Point {
+                        x: frame.x + f64::from(at[0]),
+                        y: frame.y + f64::from(at[1]),
+                    },
+                );
+            }
+        }
         s.notes = true;
     }
     island::refresh(app)
@@ -251,6 +289,15 @@ pub fn screen_draw_pen(window: WebviewWindow, at: [f32; 2]) -> Result<(), String
     let s = state.0.lock().unwrap_or_else(|p| p.into_inner());
     if !s.frame.is_some_and(|f| valid_point(at, f)) {
         return Err("Invalid pen position.".into());
+    }
+    if let Some(frame) = s.frame {
+        super::pointer::pen(
+            window.app_handle(),
+            super::target::Point {
+                x: frame.x + f64::from(at[0]),
+                y: frame.y + f64::from(at[1]),
+            },
+        );
     }
     Ok(()) // Hover is informational; never reads the app underneath or injects an event.
 }
@@ -275,35 +322,100 @@ pub struct Stroke {
     #[serde(default)]
     dashed: bool,
 }
-fn selection(app: &AppHandle, rect: [f32; 4]) -> Result<(), String> {
-    let (region, expected) = {
+pub(super) fn block_points(
+    rect: ScreenRect,
+    window: Rect,
+    display: Rect,
+    size: (u32, u32),
+) -> [f32; 4] {
+    [
+        (window.x + f64::from(rect.left) / f64::from(size.0) * window.width - display.x) as f32,
+        (window.y + f64::from(rect.top) / f64::from(size.1) * window.height - display.y) as f32,
+        (f64::from(rect.width()) / f64::from(size.0) * window.width) as f32,
+        (f64::from(rect.height()) / f64::from(size.1) * window.height) as f32,
+    ]
+}
+pub fn keyboard_active(app: &AppHandle) -> bool {
+    state(app).is_ok_and(|h| h.0.lock().unwrap_or_else(|p| p.into_inner()).keyboard)
+}
+fn same_completion(
+    epoch: u64,
+    generation: u64,
+    expected: &super::pipeline::Target,
+    current_epoch: u64,
+    current_generation: u64,
+    current: Option<&super::pipeline::Target>,
+) -> bool {
+    epoch == current_epoch && generation == current_generation && current == Some(expected)
+}
+fn completion_current(
+    app: &AppHandle,
+    epoch: u64,
+    generation: u64,
+    expected: &super::pipeline::Target,
+    serial: Option<u64>,
+) -> bool {
+    let Ok(h) = state(app) else {
+        return false;
+    };
+    let (current_epoch, current) = {
+        let s = h.0.lock().unwrap_or_else(|p| p.into_inner());
+        (
+            h.1.load(Ordering::Acquire),
+            s.frame
+                .and(s.binding.as_ref().map(|b| super::pipeline::Target {
+                    window_id: b.window.id,
+                    process: b.process.clone(),
+                    quartz_points: b.window.bounds,
+                })),
+        )
+    };
+    let Ok(r) = super::runtime::of(app) else {
+        return false;
+    };
+    let current_generation = r.generation.load(Ordering::Acquire);
+    same_completion(
+        epoch,
+        generation,
+        expected,
+        current_epoch,
+        current_generation,
+        current.as_ref(),
+    ) && serial.is_none_or(|serial| super::circle::still(app, serial))
+}
+pub fn toggle_keyboard(app: &AppHandle) -> Result<(), String> {
+    if keyboard_active(app) {
+        {
+            let h = state(app)?;
+            let mut s = h.0.lock().unwrap_or_else(|p| p.into_inner());
+            h.1.fetch_add(1, Ordering::AcqRel);
+            s.keyboard = false;
+            s.tool = Tool::None;
+        }
+        if let Some(w) = app.get_webview_window(Surface::Draw.label()) {
+            let _ = overlay::set_activatable(&w, false);
+            let _ = overlay::set_click_through(&w, true);
+        }
+        if super::circle::has_marks(app) {
+            if let Some(w) = app.get_webview_window(Surface::Card.label()) {
+                let _ = w.set_focus();
+            }
+            sync(app)?;
+        } else {
+            super::circle::cancel_all(app);
+            if let Some(w) = app.get_webview_window(Surface::Draw.label()) {
+                let _ = overlay::hide(&w);
+            }
+        }
+        return super::island::refresh(app);
+    }
+    set_tool(app, Tool::Select, Shape::Free)?;
+    let (epoch, expected) = {
         let h = state(app)?;
         let s = h.0.lock().unwrap_or_else(|p| p.into_inner());
-        if s.tool != Tool::Select {
-            return Err("Choose the selection tool first.".into());
-        }
-        let display = s.frame.ok_or("The drawing session ended.")?;
         let bound = s.binding.as_ref().ok_or("The drawing target changed.")?;
-        let [x, y, w, h] = rect;
-        if !rect.iter().all(|v| v.is_finite())
-            || x < 0.
-            || y < 0.
-            || w < 4.
-            || h < 4.
-            || f64::from(x + w) > display.width
-            || f64::from(y + h) > display.height
-        {
-            return Err("Select an area inside this display.".into());
-        }
-        let region = Rect::new(
-            display.x + f64::from(x),
-            display.y + f64::from(y),
-            f64::from(w),
-            f64::from(h),
-        )
-        .ok_or("Invalid selection.")?;
         (
-            region,
+            h.1.load(Ordering::Acquire),
             super::pipeline::Target {
                 window_id: bound.window.id,
                 process: bound.process.clone(),
@@ -311,58 +423,218 @@ fn selection(app: &AppHandle, rect: [f32; 4]) -> Result<(), String> {
             },
         )
     };
-    // The non-key drawing panel must be gone before capture, and the captured target must
-    // still be the original process launch/window. No pixels are acquired by this handler.
-    close(app)?;
-    let app = app.clone();
+    if let Some(w) = app.get_webview_window(Surface::Draw.label()) {
+        let _ = overlay::hide(&w);
+    }
+    let generation = super::runtime::of(app)?.generation.load(Ordering::Acquire);
+    let guard = state(app)?.1.clone();
+    let circle_epoch = super::circle::epoch(app);
+    let handle = app.clone();
+    std::thread::Builder::new()
+        .name("neb-mac-keyboard-select".into())
+        .spawn(move || {
+            if !completion_current(&handle, epoch, generation, &expected, None) {
+                return;
+            }
+            let active = || guard.load(Ordering::Acquire) == epoch;
+            let result = super::circle::prepare_checked(
+                &handle,
+                Some(expected.clone()),
+                generation,
+                circle_epoch,
+                &active,
+            );
+            let app = handle.clone();
+            let _ = handle.run_on_main_thread(move || {
+                let serial = result.as_ref().ok().copied();
+                if !completion_current(&app, epoch, generation, &expected, serial) {
+                    return;
+                }
+                if result.is_ok() {
+                    if let Ok(h) = state(&app) {
+                        h.0.lock().unwrap_or_else(|p| p.into_inner()).keyboard = true;
+                    }
+                    let _ = sync(&app);
+                    if let Some(w) = app.get_webview_window(Surface::Draw.label()) {
+                        let _ = overlay::set_activatable(&w, true);
+                        let _ = overlay::show_quietly(&w);
+                        let _ = w.set_focus();
+                    }
+                } else {
+                    let _ = close(&app);
+                }
+            });
+        })
+        .map_err(|_| "Couldn't start keyboard selection.")?;
+    Ok(())
+}
+pub fn select_question(app: &AppHandle) -> Result<(), String> {
+    {
+        let h = state(app)?;
+        let mut s = h.0.lock().unwrap_or_else(|p| p.into_inner());
+        if s.frame.is_none() {
+            return Err("The drawing session ended.".into());
+        }
+        h.1.fetch_add(1, Ordering::AcqRel);
+        s.selecting_question = true;
+    }
+    sync(app)?;
+    if let Some(w) = app.get_webview_window(Surface::Draw.label()) {
+        overlay::set_click_through(&w, false).map_err(|_| "Couldn't select the question.")?;
+        overlay::show_quietly(&w).map_err(|_| "Couldn't show question selection.")?;
+    }
+    Ok(())
+}
+fn submit(
+    app: &AppHandle,
+    points: Vec<[f32; 3]>,
+    dashed: bool,
+    question: bool,
+) -> Result<(), String> {
+    let (points, expected, region, epoch) = {
+        let h = state(app)?;
+        let s = h.0.lock().unwrap_or_else(|p| p.into_inner());
+        if s.tool != Tool::Select {
+            return Err("Choose the selection tool first.".into());
+        }
+        let display = s.frame.ok_or("The drawing session ended.")?;
+        let bound = s.binding.as_ref().ok_or("The drawing target changed.")?;
+        if points.is_empty()
+            || points.len() > 4000
+            || points
+                .iter()
+                .any(|p| !valid_point([p[0], p[1]], display) || !p[2].is_finite())
+        {
+            return Err("Draw inside this display.".into());
+        }
+        let points = points
+            .into_iter()
+            .map(|p| {
+                (
+                    (display.x + f64::from(p[0])) as f32,
+                    (display.y + f64::from(p[1])) as f32,
+                )
+            })
+            .collect::<Vec<_>>();
+        let left = points.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
+        let right = points.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max);
+        let top = points.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
+        let bottom = points.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max);
+        (
+            points,
+            super::pipeline::Target {
+                window_id: bound.window.id,
+                process: bound.process.clone(),
+                quartz_points: bound.window.bounds,
+            },
+            Rect::new(
+                f64::from(left),
+                f64::from(top),
+                f64::from(right - left),
+                f64::from(bottom - top),
+            ),
+            h.1.load(Ordering::Acquire),
+        )
+    };
+    if !keyboard_active(app) {
+        if let Some(w) = app.get_webview_window(Surface::Draw.label()) {
+            let _ = overlay::hide(&w);
+        }
+    }
+    let generation = super::runtime::of(app)?.generation.load(Ordering::Acquire);
+    let origin_serial = super::circle::current_serial(app);
+    let circle_epoch = super::circle::epoch(app);
+    let guard = state(app)?.1.clone();
+    let handle = app.clone();
     std::thread::Builder::new()
         .name("neb-mac-selection".into())
         .spawn(move || {
-            if let Err(message) = super::circle::select_bound(&app, region, expected) {
-                crate::screen::page::dispatch(
-                    &app,
-                    crate::screen::page::SAY,
-                    serde_json::json!({"text":message.chars().take(300).collect::<String>()}),
-                );
+            if !completion_current(&handle, epoch, generation, &expected, origin_serial) {
+                return;
             }
+            let active = || guard.load(Ordering::Acquire) == epoch;
+            let result = if question {
+                region
+                    .ok_or_else(|| "Select a question area.".to_owned())
+                    .and_then(|r| {
+                        origin_serial
+                            .ok_or_else(|| "The question selection expired.".to_owned())
+                            .and_then(|serial| {
+                                super::circle::read_selected_question_checked(
+                                    &handle, r, serial, &active,
+                                )
+                            })
+                    })
+            } else {
+                super::circle::mark_bound_checked(
+                    &handle,
+                    points,
+                    dashed,
+                    Some(expected.clone()),
+                    generation,
+                    circle_epoch,
+                    &active,
+                )
+            };
+            let app = handle.clone();
+            let _ = handle.run_on_main_thread(move || {
+                let serial = result.as_ref().ok().copied().or(origin_serial);
+                if !completion_current(&app, epoch, generation, &expected, serial) {
+                    return;
+                }
+                if let Ok(h) = state(&app) {
+                    h.0.lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .selecting_question = false;
+                }
+                let _ = sync(&app);
+                if state(&app).is_ok_and(|h| {
+                    h.0.lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .frame
+                        .is_some()
+                }) && super::circle::has_session(&app)
+                {
+                    if let Some(w) = app.get_webview_window(Surface::Draw.label()) {
+                        let _ = overlay::show_quietly(&w);
+                    }
+                }
+                if let Err(message) = result {
+                    crate::screen::page::dispatch(
+                        &app,
+                        crate::screen::page::SAY,
+                        serde_json::json!({"text":message.chars().take(300).collect::<String>()}),
+                    );
+                }
+            });
         })
-        .map_err(|_| "Couldn't begin the screen selection.")?;
+        .map_err(|_| "Couldn't begin screen selection.")?;
     Ok(())
 }
 #[tauri::command]
 pub fn screen_draw_mark(window: WebviewWindow, stroke: Stroke) -> Result<(), String> {
     require(&window)?;
-    if !(3..=4000).contains(&stroke.points.len())
-        || stroke.points.iter().flatten().any(|v| !v.is_finite())
-    {
-        return Err("Invalid selection stroke.".into());
-    }
-    let mut bounds = [
-        f32::INFINITY,
-        f32::INFINITY,
-        f32::NEG_INFINITY,
-        f32::NEG_INFINITY,
-    ];
-    for [x, y, _] in stroke.points {
-        bounds[0] = bounds[0].min(x);
-        bounds[1] = bounds[1].min(y);
-        bounds[2] = bounds[2].max(x);
-        bounds[3] = bounds[3].max(y);
-    }
-    selection(
-        window.app_handle(),
-        [
-            bounds[0],
-            bounds[1],
-            bounds[2] - bounds[0],
-            bounds[3] - bounds[1],
-        ],
-    )
+    submit(window.app_handle(), stroke.points, stroke.dashed, false)
 }
 #[tauri::command]
 pub fn screen_draw_select(window: WebviewWindow, rect: [f32; 4]) -> Result<(), String> {
     require(&window)?;
-    selection(window.app_handle(), rect)
+    let [x, y, w, h] = rect;
+    if !rect.iter().all(|v| v.is_finite()) || w < 4. || h < 4. {
+        return Err("Select a question area.".into());
+    }
+    submit(
+        window.app_handle(),
+        vec![
+            [x, y, 0.5],
+            [x + w, y, 0.5],
+            [x + w, y + h, 0.5],
+            [x, y + h, 0.5],
+            [x, y, 0.5],
+        ],
+        true,
+        true,
+    )
 }
 #[tauri::command]
 pub fn screen_draw_island_press(window: WebviewWindow, at: [f32; 2]) -> Result<(), String> {
@@ -420,5 +692,45 @@ mod tests {
         ] {
             assert!(!valid_point(p, f));
         }
+    }
+    #[test]
+    fn keyboard_blocks_convert_capture_pixels_to_negative_display_css_points() {
+        let rect = ScreenRect {
+            left: 200,
+            top: 100,
+            right: 600,
+            bottom: 300,
+        };
+        let window = Rect::new(-900., -50., 1000., 500.).unwrap();
+        let display = Rect::new(-1000., -100., 1200., 800.).unwrap();
+        assert_eq!(
+            block_points(rect, window, display, (2000, 1000)),
+            [200., 100., 200., 100.]
+        );
+    }
+    #[test]
+    fn delayed_drawing_completion_cannot_modify_replaced_or_cancelled_session() {
+        let expected = super::super::pipeline::Target {
+            window_id: 7,
+            process: super::super::privacy::ProcessIdentity {
+                pid: 42,
+                bundle_id: "com.apple.TextEdit".into(),
+                launch_time_bits: 1f64.to_bits(),
+            },
+            quartz_points: Rect::new(-600., 0., 500., 400.).unwrap(),
+        };
+        assert!(same_completion(3, 9, &expected, 3, 9, Some(&expected)));
+        assert!(!same_completion(3, 9, &expected, 4, 9, Some(&expected)));
+        assert!(!same_completion(3, 9, &expected, 3, 10, Some(&expected)));
+        assert!(!same_completion(3, 9, &expected, 3, 9, None));
+        let mut replacement = expected.clone();
+        replacement.process.launch_time_bits = 2f64.to_bits();
+        assert!(!same_completion(3, 9, &expected, 3, 9, Some(&replacement)));
+        replacement = expected.clone();
+        replacement.window_id += 1;
+        assert!(!same_completion(3, 9, &expected, 3, 9, Some(&replacement)));
+        replacement = expected.clone();
+        replacement.quartz_points.x += 1.;
+        assert!(!same_completion(3, 9, &expected, 3, 9, Some(&replacement)));
     }
 }

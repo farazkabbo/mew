@@ -202,6 +202,12 @@ fn checked(
     if unsafe { CFEqual(window.0, focused.0) } == 0 {
         return None;
     }
+    // Moving cannot activate a control or enter text. Exact process/window/hit binding
+    // above still applies; document containers and whitespace are valid cursor path points.
+    if matches!(action, Action::Move(_)) {
+        let again = attr(app.0, "AXFocusedWindow", deadline)?;
+        return Some(equal(&again, &focused) && Instant::now() < deadline);
+    }
     let role = string(attr(target.0, "AXRole", deadline)?.0)?;
     if !matches!(
         role.as_str(),

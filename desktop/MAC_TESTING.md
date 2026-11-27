@@ -45,15 +45,22 @@ Start in TextEdit, Preview, Pages/Numbers/Keynote, Word/Excel/PowerPoint, or a v
 
 ## 4. Circle & Ask, saving and notebook readback
 
-1. Select a region with freehand, rectangle and ellipse shapes. The card should show on its **first** opening.
-2. Type a question; then test the microphone and **read the question**. If multiple questions are found, choose one. Check that only the intended selected region is discussed.
-3. Follow an explanation through Next, Repeat, Pause, Resume and Stop. Check captions and spoken-step timing. Ask a follow-up without selecting the screen again.
-4. Change the save preference through **Ask**, **Never** and **Auto**. Auto should show its five-second Undo period; Undo must prevent saving that pending explanation.
-5. Use Save/Command+S. Inspect the memory-only preview, adjust its crop, include/exclude notes and source link, then save. The notebook should receive the saved clip/entry and render its image, ink and explanation.
-6. Ask “Save this” after a normal tutor answer, including after waiting for its renderer and after the old capture has become stale. Neb should re-place the old ink on a fresh authorized capture when needed.
-7. Ask “Save this to [an existing notebook/chapter].” Check the resolved destination. For an ambiguous name, choose explicitly; for a missing chapter, creation needs confirmation.
-8. Check a normal Chrome/Brave source link. It must point to the intended page with unnecessary query/fragment data removed. Unknown/unavailable title/link metadata is omitted.
-9. Leave a preview open past its expiry, then try Save. It must refuse. Cancel a preview, change account and start a new selection: old images and text must not reappear.
+1. Select a region with freehand, rectangle and ellipse shapes. Add up to three numbered marks; try a dashed underline and an OCR text highlight. The card should show on its **first** opening.
+2. From the menu bar choose **Select with keyboard**. Use Tab to cycle OCR blocks, Space to select a block, or Shift+arrow keys and Enter to create a box. Exit keyboard selection with no marks once: it must release focus rather than leave an empty blocking overlay.
+3. Type a question; then test the microphone and **read the question**. If multiple questions are found, choose one. Check that only the intended selected region is discussed.
+4. Follow an explanation through Next, Repeat, Pause, Resume and Stop. Check captions and spoken-step timing. Ask a follow-up without selecting the screen again.
+5. Change the save preference through **Ask**, **Never** and **Auto**. Auto should show its five-second Undo period; Undo must prevent saving that pending explanation.
+6. Use Save/Command+S. Inspect the memory-only preview, adjust its crop, include/exclude notes and source link, then save. The notebook should receive the saved clip/entry and render its image, ink and explanation.
+7. Ask “Save this” after a normal tutor answer, including after waiting for its renderer and after the old capture has become stale. Neb should re-place the old ink on a fresh authorized capture when needed.
+8. Ask “Save this to [an existing notebook/chapter].” Check the resolved destination. For an ambiguous name, choose explicitly; for a missing chapter, creation needs confirmation.
+9. Check a normal Chrome/Brave source link. For a supported YouTube watch page, verify its saved playback moment. Native position takes precedence over the redacted OCR time display, then the tutor's bounded reading. Change to another video in the same window before saving: the old moment must never attach to that new video. Unknown/unavailable provenance is omitted.
+10. Complete a multi-step answer and save it. The saved tutor strokes must belong to their respective explanation steps, and student marks must align with the crop. Ask a follow-up: it must append to the same entry. Retry a failed save after restoring the connection.
+11. Start an action, cancel it and immediately start a new selection. Old buttons, workers, speech, marks and Save completions must not capture, alter, focus or save the replacement session.
+12. Leave a preview open past its expiry, then try Save. It must refuse. Cancel a preview, change account and start a new selection: old images and text must not reappear.
+
+For a long-session regression, play a Circle explanation for more than 60 seconds, then ask a follow-up and save it. The redacted snapshot belongs to that active Circle session; closing it or changing account/privacy/source must revoke access. Ordinary unused captures and local previews still expire. With Select off, an untouched marking card hides after 20 seconds and its marks/session are discarded after 80 seconds.
+
+After saving an entry, change its destination twice quickly and confirm that the same entry moves to the latest chosen place. Also change destination while the first save is in flight. It must reconcile after receiving the real clip ID, without creating another entry.
 
 ## 5. Notes, guided learning, quizzes and Watch
 
@@ -68,6 +75,8 @@ Start in TextEdit, Preview, Pages/Numbers/Keynote, Word/Excel/PowerPoint, or a v
 | Quiz command-like answer | Answer a question with “save this” or “show that again” | It is graded as an answer, not executed as a command.                                     |
 | Watch                    | Island or menu-bar Watch control                        | Changed content is checked about every six seconds; identical content is not re-uploaded. |
 | Help modes               | Quiet, Hint, Coach, Answer                              | Responses follow the selected level.                                                      |
+
+Repeat Notes Check, Quiz and a walkthrough on a second display. Their panels should stay on the captured display; pause/completion must clear active arrows.
 
 Watch should suppress itself during other screen tasks and stop after 45 minutes or repeated failures. Pause/account changes must stop it immediately. Test missing network/provider keys as a refusal/error case, then repeat with your real configuration.
 
@@ -94,6 +103,8 @@ For Chrome/Brave, use a normal foreground YouTube watch page with accessible pla
 
 Copy a Spotify playlist/album link, choose **Pin copied Spotify link**, reopen the app and check the pin, Open and Unpin. Test an invalid link too. Pins do not require Spotify developer credentials.
 
+In local settings, test pointer visibility/size/corner, source-link opt-out, each Catch rule, snooze reset, temporary Catch pause, timed one-hour pause and the microphone settings link. Account status may initially be unknown; opening settings must not itself read Keychain history. Use **Refresh local history** explicitly to inspect counts/timeline. Verify the companion pointer hides in blocked/call/full-screen contexts and handwritten notes follow a supported document's scrolling.
+
 ## 8. Handoff
 
 Handoff retains the existing server feature/beta flags. A disabled server must refuse clearly; do not enable a production feature merely to run this test.
@@ -104,6 +115,7 @@ Handoff retains the existing server feature/beta flags. A disabled server must r
 4. With a permitted test account, Send and open the resulting link. Test browser viewing and `neb://handoff/<id>` back into Neb.
 5. Pick up the package. Confirm each proposed file/page/repository action. Commands are copied for your review, not executed. Git changes must preserve local work; decline a confirmation once and verify nothing changes.
 6. Test invalid IDs, wrong recipient/account, expired/revoked packages and tampered ciphertext as refusal cases.
+7. In a supported editor or Terminal, open a disposable repository under your home directory. Verify that Handoff can include repository/branch/change metadata when a public document/path identity is available. It must not read terminal output or execute commands while collecting the timeline. Test pausing and disabling the timeline mid-collection.
 
 ## 9. Finish your acceptance pass
 

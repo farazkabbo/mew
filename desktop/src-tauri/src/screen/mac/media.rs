@@ -25,7 +25,7 @@ mod browser;
 const SCRIPT: &str = include_str!("media.js");
 const LIMIT: u64 = 8192;
 const TIMEOUT: Duration = Duration::from_secs(3);
-const REFRESH: Duration = Duration::from_secs(2);
+const REFRESH: Duration = Duration::from_secs(1);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Failure {
     Unavailable,
@@ -313,7 +313,7 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                             continue;
                         }
                         if target.browser.is_some() {
-                            browser::query(&worker_app, generation, Some((*target, control))).map(|_| ())
+                            browser::query(&worker_app, generation, Some((*target, control)), None).map(|_| ())
                         } else {
                         let command = match control {
                             Control::PlayPause => "play_pause",
@@ -337,7 +337,8 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                         .run(&["read".into()], &valid)
                         .and_then(|bytes| parse(&bytes))
                         .and_then(|native| {
-                            let web = browser::query(&worker_app, generation, None)?;
+                            let retained = state.target.lock().unwrap_or_else(|p| p.into_inner()).clone().filter(|t| t.browser.is_some());
+                            let web = browser::query(&worker_app, generation, None, retained)?;
                             select(native, web)
                         })
                 });
@@ -459,6 +460,21 @@ pub fn control(app: &AppHandle, control: Control) -> Result<(), String> {
         .tx
         .try_send(Work::Control(generation, Box::new(target), control))
         .map_err(|_| "Music controls are busy. Try again.".into())
+}
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PlaybackSnapshot {
+    pub playing: bool,
+    pub position_sec: Option<u32>,
+    pub source_url: String,
+}
+/// Read-only capture/source media metadata; caller supplies its exact-target authorization.
+pub(crate) fn playback_for_target_main(
+    expected: &super::pipeline::Target,
+    generation: u64,
+    deadline: Instant,
+    current: &dyn Fn() -> bool,
+) -> Option<PlaybackSnapshot> {
+    browser::playback_for_target_main(expected, generation, deadline, current)
 }
 pub fn intent_generation(app: &AppHandle) -> Option<u64> {
     let state = service(app).ok()?;

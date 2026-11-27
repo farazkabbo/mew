@@ -93,17 +93,30 @@ fn descendants(root: &ax::Owned, deadline: Instant) -> Option<Vec<ax::Owned>> {
 struct Snapshot {
     track: Track,
     button: Option<ax::Owned>,
+    position_sec: Option<u32>,
+}
+fn retained_process_matches(previous: &Track, process: &privacy::ProcessIdentity) -> bool {
+    accepts(previous)
+        && process.pid == previous.pid
+        && process.bundle_id == previous.app
+        && f64::from_bits(process.launch_time_bits).to_string() == previous.launch
 }
 fn snapshot(
     generation: u64,
     deadline: Instant,
     current: &dyn Fn() -> bool,
     action: Option<Control>,
+    retained: Option<&Track>,
 ) -> Option<Snapshot> {
     if !current() || !privacy::accessibility_trusted() {
         return None;
     }
-    let process = privacy::frontmost_process_identity()?;
+    let process = match retained {
+        Some(previous) if accepts(previous) => privacy::process_identity(previous.pid)
+            .filter(|p| retained_process_matches(previous, p))?,
+        Some(_) => return None,
+        None => privacy::frontmost_process_identity()?,
+    };
     if !matches!(
         process.bundle_id.as_str(),
         "com.google.Chrome" | "com.brave.Browser"
@@ -114,6 +127,20 @@ fn snapshot(
         pid: process.pid,
         bundle_id: Some(process.bundle_id.clone()),
     })?;
+    if let Some(previous) = retained {
+        let expected = previous.browser.as_ref()?;
+        if expected.window != window.id
+            || expected.bounds
+                != [
+                    window.bounds.x,
+                    window.bounds.y,
+                    window.bounds.width,
+                    window.bounds.height,
+                ]
+        {
+            return None;
+        }
+    }
     let native = ax::application(process.pid)?;
     let focused = ax::attr(native.0, "AXFocusedWindow", deadline)?;
     let position = ax::pair(ax::attr(focused.0, "AXPosition", deadline)?.0, 1)?;
@@ -137,7 +164,13 @@ fn snapshot(
     let live = || {
         current()
             && Instant::now() < deadline
-            && privacy::frontmost_process_identity().as_ref() == Some(&process)
+            && (if retained.is_some() {
+                privacy::process_identity(process.pid)
+            } else {
+                privacy::frontmost_process_identity()
+            })
+            .as_ref()
+                == Some(&process)
             && target::frontmost_window_candidate(&target::AppIdentity {
                 pid: process.pid,
                 bundle_id: Some(process.bundle_id.clone()),
@@ -156,6 +189,26 @@ fn snapshot(
         return None;
     }
     let nodes = descendants(&player, deadline)?;
+    let sliders: Vec<_> = nodes
+        .iter()
+        .filter(|n| {
+            label(n, deadline).as_deref() == Some("Seek slider")
+                && ax::attr(n.0, "AXRole", deadline)
+                    .and_then(|v| ax::string(v.0))
+                    .as_deref()
+                    == Some("AXSlider")
+        })
+        .collect();
+    let position_sec = if sliders.len() == 1 {
+        let number = |name| ax::attr(sliders[0].0, name, deadline).and_then(|v| numeric(v.0));
+        slider_seconds(
+            number("AXValue"),
+            number("AXMinValue"),
+            number("AXMaxValue"),
+        )
+    } else {
+        None
+    };
     let mut buttons: Vec<(String, ax::Owned)> = nodes
         .into_iter()
         .filter_map(|n| {
@@ -190,6 +243,10 @@ fn snapshot(
     if video_id(&after_url).as_deref() != Some(&id) || !ax::equal(&again, &focused) || !live() {
         return None;
     }
+    let source = format!("https://www.youtube.com/watch?v={id}");
+    if retained.is_some_and(|previous| previous.track != source) {
+        return None;
+    }
     let title = title
         .strip_suffix(" - YouTube")
         .unwrap_or(&title)
@@ -199,7 +256,7 @@ fn snapshot(
             app: process.bundle_id,
             pid: process.pid,
             launch: request.launch,
-            track: format!("https://www.youtube.com/watch?v={id}"),
+            track: source,
             title,
             artist: String::new(),
             playing,
@@ -218,6 +275,7 @@ fn snapshot(
             }),
         },
         button,
+        position_sec,
     })
 }
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -234,6 +292,59 @@ unsafe extern "C" {
         external: u8,
     ) -> *const c_void;
 }
+#[link(name = "CoreFoundation", kind = "framework")]
+unsafe extern "C" {
+    fn CFGetTypeID(value: *const c_void) -> usize;
+    fn CFNumberGetTypeID() -> usize;
+    fn CFNumberGetValue(value: *const c_void, kind: isize, out: *mut c_void) -> bool;
+}
+fn numeric(value: *const c_void) -> Option<f64> {
+    let mut out = 0f64;
+    (unsafe {
+        CFGetTypeID(value) == CFNumberGetTypeID()
+            && CFNumberGetValue(value, 6, (&mut out as *mut f64).cast())
+    } && out.is_finite())
+    .then_some(out)
+}
+fn slider_seconds(value: Option<f64>, min: Option<f64>, max: Option<f64>) -> Option<u32> {
+    let (value, min, max) = (value?, min?, max?);
+    (value.is_finite()
+        && min == 0.
+        && max.is_finite()
+        && max > 0.
+        && max <= 86400.
+        && value >= min
+        && value <= max)
+        .then(|| value.floor() as u32)
+}
+/// Source/capture callers supply their own current-target authorization, independently of
+/// the music panel. No AX action, permission prompt or pixel read occurs here.
+pub(super) fn playback_for_target_main(
+    expected: &crate::screen::mac::pipeline::Target,
+    generation: u64,
+    deadline: Instant,
+    current: &dyn Fn() -> bool,
+) -> Option<super::PlaybackSnapshot> {
+    let sample = snapshot(generation, deadline, current, None, None)?;
+    let browser = sample.track.browser.as_ref()?;
+    (sample.track.pid == expected.process.pid
+        && sample.track.app == expected.process.bundle_id
+        && sample.track.launch == f64::from_bits(expected.process.launch_time_bits).to_string()
+        && browser.window == expected.window_id
+        && browser.bounds
+            == [
+                expected.quartz_points.x,
+                expected.quartz_points.y,
+                expected.quartz_points.width,
+                expected.quartz_points.height,
+            ]
+        && current())
+    .then_some(super::PlaybackSnapshot {
+        playing: sample.track.playing,
+        position_sec: sample.position_sec,
+        source_url: sample.track.track,
+    })
+}
 fn same_target(a: &Track, b: &Track) -> bool {
     a.app == b.app
         && a.pid == b.pid
@@ -248,6 +359,7 @@ pub(super) fn query(
     app: &AppHandle,
     generation: u64,
     expected: Option<(Track, Control)>,
+    retained: Option<Track>,
 ) -> Result<Option<Track>, Failure> {
     let live = Arc::new(AtomicBool::new(true));
     let active = live.clone();
@@ -265,13 +377,25 @@ pub(super) fn query(
         }
         let result = match expected {
             Some((expected, action)) => (|| {
-                let first = snapshot(generation, deadline, &current, Some(action))
-                    .ok_or(Failure::Changed)?;
+                let first = snapshot(
+                    generation,
+                    deadline,
+                    &current,
+                    Some(action),
+                    Some(&expected),
+                )
+                .ok_or(Failure::Changed)?;
                 if !same_target(&first.track, &expected) {
                     return Err(Failure::Changed);
                 }
-                let fresh = snapshot(generation, deadline, &current, Some(action))
-                    .ok_or(Failure::Changed)?;
+                let fresh = snapshot(
+                    generation,
+                    deadline,
+                    &current,
+                    Some(action),
+                    Some(&expected),
+                )
+                .ok_or(Failure::Changed)?;
                 if !same_target(&fresh.track, &expected)
                     || !ax::equal(
                         first.button.as_ref().ok_or(Failure::Changed)?,
@@ -306,7 +430,13 @@ pub(super) fn query(
                 }
                 Ok(None)
             })(),
-            None => Ok(snapshot(generation, deadline, &current, None).map(|s| s.track)),
+            None => Ok(snapshot(generation, deadline, &current, None, None)
+                .or_else(|| {
+                    retained.as_ref().and_then(|previous| {
+                        snapshot(generation, deadline, &current, None, Some(previous))
+                    })
+                })
+                .map(|s| s.track)),
         };
         if current() {
             let _ = tx.send(result);
@@ -376,6 +506,24 @@ pub(super) fn artwork(track: &Track, current: &dyn Fn() -> bool) -> Option<Strin
 mod tests {
     use super::*;
     #[test]
+    fn seek_slider_requires_numeric_seconds_and_complete_bounded_range() {
+        assert_eq!(
+            slider_seconds(Some(754.9), Some(0.), Some(1200.)),
+            Some(754)
+        );
+        for (value, min, max) in [
+            (Some(-1.), Some(0.), Some(1200.)),
+            (Some(f64::NAN), Some(0.), Some(1200.)),
+            (Some(754.), None, Some(1200.)),
+            (Some(754.), Some(0.), None),
+            (Some(754.), Some(1.), Some(1200.)),
+            (Some(754.), Some(0.), Some(100.)),
+            (Some(754.), Some(0.), Some(86401.)),
+        ] {
+            assert_eq!(slider_seconds(value, min, max), None);
+        }
+    }
+    #[test]
     fn artwork_rejects_external_hosts_schemes_credentials_and_paths() {
         let id = "0123456789abcdef0123456789abcdef01234567";
         assert!(spotify_art_url(&format!("https://i.scdn.co/image/{id}")).is_some());
@@ -443,6 +591,18 @@ mod tests {
             }),
         };
         assert!(accepts(&t));
+        let process = privacy::ProcessIdentity {
+            pid: t.pid,
+            bundle_id: t.app.clone(),
+            launch_time_bits: 123.5f64.to_bits(),
+        };
+        assert!(retained_process_matches(&t, &process));
+        let mut reused = process.clone();
+        reused.launch_time_bits = 124.5f64.to_bits();
+        assert!(!retained_process_matches(&t, &reused));
+        let mut replaced = process;
+        replaced.bundle_id = "com.google.Chrome.evil".into();
+        assert!(!retained_process_matches(&t, &replaced));
         for mutate in [0, 1, 2, 3, 4] {
             let mut b = t.clone();
             match mutate {

@@ -226,7 +226,7 @@ fn catch_current_main(
         return false;
     };
     let config = runtime.snapshot().0;
-    if (require_catch && !config.cursor.catch_me_on())
+    if (require_catch && (!config.cursor.catch_me_on() || runtime::catch_paused(app)))
         || super::app_policy::blocked_app(&target.process.bundle_id, &config.privacy.blocked_apps)
             .is_some()
     {
@@ -517,7 +517,7 @@ fn run(app: &AppHandle, commands: mpsc::Receiver<Command>) {
             return;
         };
         let config = r.snapshot().0;
-        let catch_enabled = config.cursor.catch_me_on();
+        let catch_enabled = config.cursor.catch_me_on() && !runtime::catch_paused(app);
         if lesson.is_none()
             && !catch_enabled
             && !config.cursor.debug

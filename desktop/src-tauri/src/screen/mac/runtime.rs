@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
 };
@@ -30,12 +30,15 @@ struct State {
     reset: bool,
     preferences: Preferences,
 }
+#[path = "runtime_controls.rs"]
+mod controls;
 pub struct Runtime {
     app: Option<AppHandle>,
     path: PathBuf,
     preferences_path: PathBuf,
     state: Mutex<State>,
     pub generation: AtomicU64,
+    catch_paused: AtomicBool,
 }
 impl Runtime {
     fn new(path: PathBuf) -> Self {
@@ -63,6 +66,7 @@ impl Runtime {
                 preferences,
             }),
             generation: AtomicU64::new(1),
+            catch_paused: AtomicBool::new(false),
         }
     }
     pub fn snapshot(&self) -> (ScreenConfig, bool) {
@@ -129,6 +133,8 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     super::hand::setup(app)?;
     super::chores::setup(app);
     super::cursor_runtime::setup(app)?;
+    super::pointer::setup(app)?;
+    super::note_scroll::setup(app)?;
     super::annotate::set_save_handler(app, Arc::new(super::clip::from_ink))?;
     super::media_pins::setup(app)?;
     media::setup(app)?;
@@ -198,6 +204,54 @@ pub fn set_paused(app: &AppHandle, paused: bool) -> Result<(), String> {
         Ok(())
     })?;
     apply(app)
+}
+
+/// A temporary CATCH pause leaves the stored opt-in and individual rule choices intact.
+pub fn catch_paused(app: &AppHandle) -> bool {
+    of(app).is_ok_and(|r| r.catch_paused.load(Ordering::Acquire))
+}
+pub fn toggle_catch_pause(app: &AppHandle) -> Result<(), String> {
+    let r = of(app)?;
+    r.catch_paused.fetch_xor(true, Ordering::AcqRel);
+    if let Some(window) = app.get_webview_window("screen-mac-catch") {
+        let _ = super::overlay::hide(&window);
+    }
+    Ok(())
+}
+pub fn pause_for_an_hour(app: &AppHandle) -> Result<(), String> {
+    set_paused(app, true)?;
+    let generation = of(app)?.generation.load(Ordering::Acquire);
+    let handle = app.clone();
+    std::thread::Builder::new()
+        .name("neb-mac-pause-hour".into())
+        .spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(3600));
+            // Serialize the ownership check with all preference changes. A resumed, re-paused,
+            // disabled or otherwise changed session never inherits an earlier timer.
+            let Ok(r) = of(&handle) else {
+                return;
+            };
+            let mut state = r.state.lock().unwrap_or_else(|p| p.into_inner());
+            if !controls::resume_due(
+                generation,
+                r.generation.load(Ordering::Acquire),
+                state.config.paused,
+                state.config.is_on(),
+            ) {
+                return;
+            }
+            let mut next = state.config.clone();
+            next.paused = false;
+            if config::save(&r.path, &next).is_err() {
+                return;
+            }
+            r.generation.fetch_add(1, Ordering::AcqRel);
+            state.config = next;
+            drop(state);
+            let _ = apply(&handle);
+        })
+        .map_err(|_| "Couldn't start the pause timer.")?;
+    Ok(())
 }
 
 impl island::Actions for Runtime {

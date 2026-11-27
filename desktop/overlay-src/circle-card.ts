@@ -26,12 +26,29 @@ const mic = document.getElementById("card-mic") as HTMLButtonElement | null;
 
 let layout: CardLayout | null = null;
 let countdown = 0;
+// Only native Mac views provide this opaque snapshot identity. Windows keeps its existing IPC.
+let actionSession: string | undefined;
+function actionArgs(action: string, words?: string): Record<string, string> {
+  return {
+    action,
+    ...(words !== undefined && { text: words }),
+    ...(actionSession !== undefined && { actionSession }),
+  };
+}
+function receive(detail: unknown): void {
+  const next = cardLayout(detail);
+  if (!next) return;
+  const token =
+    detail && typeof detail === "object" && "actionSession" in detail
+      ? (detail as { actionSession?: unknown }).actionSession
+      : undefined;
+  actionSession = typeof token === "string" && token.length <= 120 ? token : undefined;
+  render(next);
+}
 
 function act(action: CardAction, words?: string): void {
   for (const b of buttons?.querySelectorAll("button") ?? []) b.disabled = true;
-  void invoke("screen_circle_card", { action, ...(words !== undefined && { text: words }) }).catch(
-    () => undefined,
-  );
+  void invoke("screen_circle_card", actionArgs(action, words)).catch(() => undefined);
 }
 
 function chip(label: string, onClick: () => void): HTMLLIElement {
@@ -110,7 +127,7 @@ function render(next: CardLayout): void {
 
 // Click, speak, click again: the words are asked like typed ones (a follow-up, with the marks).
 mic?.addEventListener("click", () => {
-  void invoke("screen_circle_card", { action: "mic" }).catch(() => undefined);
+  void invoke("screen_circle_card", actionArgs("mic")).catch(() => undefined);
 });
 
 on("mew:card-mic", (detail) => {
@@ -178,7 +195,7 @@ function fit(): void {
   );
   if (Math.abs(wanted - fitted) < 2) return;
   fitted = wanted;
-  void invoke("screen_circle_card", { action: "fit", text: String(wanted) }).catch(() => undefined);
+  void invoke("screen_circle_card", actionArgs("fit", String(wanted))).catch(() => undefined);
 }
 /**
  * Fits whatever size was asked for last: each new view puts the window back at its usual size, so
@@ -198,15 +215,13 @@ if (card) {
 }
 
 on("mew:card-show", (detail) => {
-  const next = cardLayout(detail);
-  if (next) render(next);
+  receive(detail);
 });
 
 if ((window as unknown as { __NEB_MAC_CARD_HOST__?: boolean }).__NEB_MAC_CARD_HOST__) {
   void invoke("screen_circle_ready")
     .then((detail) => {
-      const next = cardLayout(detail);
-      if (next) render(next);
+      receive(detail);
     })
     .catch(() => undefined);
 }

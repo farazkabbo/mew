@@ -36,6 +36,10 @@ pub fn capability(app: &AppHandle) -> Result<(), String> {
             .permission("allow-mac-settings-update")
             .permission("allow-mac-tools-toggle")
             .permission("allow-mac-handoff-start")
+            .permission("allow-mac-handoff-forget")
+            .permission("allow-mac-open-microphone-settings")
+            .permission("allow-mac-open-notebook")
+            .permission("allow-mac-local-history")
             .permission("allow-screen-coach-forget-paths")
             .permission("allow-desktop-update-status")
             .permission("allow-desktop-update-check")
@@ -69,8 +73,12 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
 pub struct Status {
     config: ScreenConfig,
     settings_reset: bool,
+    default_privacy: Privacy,
+    handoff_timeline: Option<serde_json::Value>,
+    catch_paused: bool,
+    account_connected: Option<bool>,
     island_visible: bool,
-    cursor_counts: crate::screen::cursor::telemetry::Counts,
+    cursor_counts: Option<crate::screen::cursor::telemetry::Counts>,
     voice_shortcut_available: bool,
     tools_shortcut_available: bool,
     capture_available: bool,
@@ -136,8 +144,12 @@ fn status(app: &AppHandle) -> Result<Status, String> {
     Ok(Status {
         config,
         settings_reset,
+        default_privacy: Privacy::default(),
+        handoff_timeline: None,
+        catch_paused: runtime::catch_paused(app),
+        account_connected: app.try_state::<crate::screen::sign_in::SignIn>().and_then(|s|s.known_connected()),
         island_visible: island::shown(app),
-        cursor_counts:super::counts::view(app),
+        cursor_counts:None,
         voice_shortcut_available:crate::mac_shortcut::voice_registered(app),
         tools_shortcut_available:crate::mac_shortcut::tools_registered(app),
         capture_available: true,
@@ -180,6 +192,57 @@ pub fn screen_coach_onboarding(window: WebviewWindow, open_settings: bool) -> Re
     let (config, _) = runtime::of(app)?.snapshot();
     Ok(config.is_on() && !config.paused)
 }
+#[tauri::command]
+pub async fn mac_local_history(window: WebviewWindow) -> Result<Status, String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let counts = super::counts::view(&app);
+        let timeline = super::handoff_runtime::debug_view(&app);
+        let mut view = status(&app)?;
+        view.cursor_counts = Some(counts);
+        view.handoff_timeline = Some(timeline);
+        Ok(view)
+    })
+    .await
+    .map_err(|_| "Couldn't inspect local history.")?
+}
+#[tauri::command]
+pub fn mac_open_notebook(window: WebviewWindow) -> Result<(), String> {
+    require_settings_window(&window)?;
+    crate::show(window.app_handle())
+        .map(|_| ())
+        .ok_or_else(|| "Couldn't open your notebook.".into())
+}
+#[tauri::command]
+pub async fn mac_handoff_forget(window: WebviewWindow) -> Result<Status, String> {
+    require_settings_window(&window)?;
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        super::handoff_runtime::forget_timeline(&app);
+        status(&app)
+    })
+    .await
+    .map_err(|_| "Couldn't delete Handoff timeline.")?
+}
+#[tauri::command]
+pub async fn mac_open_microphone_settings(window: WebviewWindow) -> Result<(), String> {
+    require_settings_window(&window)?;
+    // A fixed OS preference pane only; no web/model argument can select a URI or app.
+    tauri::async_runtime::spawn_blocking(|| {
+        std::process::Command::new("/usr/bin/open")
+            .arg("--")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+            .status()
+            .map_err(|_| "Couldn't open microphone settings.")?
+            .success()
+            .then_some(())
+            .ok_or_else(|| "Couldn't open microphone settings.".to_owned())
+    })
+    .await
+    .map_err(|_| "Couldn't open microphone settings.")?
+}
+
 #[tauri::command]
 pub async fn mac_handoff_start(window: WebviewWindow) -> Result<(), String> {
     require_settings_window(&window)?;

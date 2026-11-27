@@ -46,12 +46,25 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                 }
             });
             if expired {
+                super::circle::words_cancelled(&handle);
                 page::dispatch(&handle, page::CANCEL, serde_json::Value::Null);
                 let _ = super::island::refresh(&handle);
             }
         })
         .map_err(|_| "Couldn't start voice expiry.")?;
     Ok(())
+}
+/// While our own microphone/transcription gesture is pending, retain the existing redacted
+/// session but defer call-idle sampling. No capture/upload grant is issued by this hint.
+pub fn voice_pending(app: &AppHandle) -> bool {
+    app.try_state::<Asking>().is_some_and(|state| {
+        state
+            .voice
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .pending
+            .is_some()
+    })
 }
 pub fn engaged(app: &AppHandle) -> bool {
     app.try_state::<Asking>().is_some_and(|s| {
@@ -102,6 +115,7 @@ pub fn toggle_mic(app: &AppHandle) -> Result<(), String> {
             runtime::of(app)?.generation.fetch_add(1, Ordering::AcqRel);
         }
         crate::mac_shortcut::reserve_escape(app)?;
+        super::circle::pause_for_words(app);
         page::dispatch(app, page::LISTEN, serde_json::Value::Null);
     }
     super::island::refresh(app)
@@ -140,6 +154,7 @@ pub fn screen_coach_ask(window: WebviewWindow, transcript: String) -> Result<(),
     drop(voice);
     let text = protocol::clean_transcript(&transcript);
     if text.is_empty() && !study::takes_words(app) {
+        super::circle::words_cancelled(app);
         return Ok(());
     }
     if s.busy.swap(true, Ordering::AcqRel) {
@@ -305,7 +320,7 @@ fn ask(app: &AppHandle, text: &str, generation: u64) -> Result<(), String> {
     let body = protocol::ask_body(
         text,
         &meta,
-        None,
+        meta.video_playing,
         study::active_walkthrough(app).as_deref(),
         Some(config.help),
         frame.captured.jpeg.as_slice(),
@@ -351,7 +366,14 @@ fn ask(app: &AppHandle, text: &str, generation: u64) -> Result<(), String> {
     let (reply, id) = final_reply.ok_or("Neb's answer was incomplete. Try again.")?;
     deliver(app, page::ANSWER, json!({"turnId":id,"response":reply}), ui);
     if reply.draws() {
-        super::annotate::show_owned_actions(app, frame, &id, reply.actions, false)?;
+        super::annotate::show_owned_actions_with_video(
+            app,
+            frame,
+            &id,
+            reply.actions,
+            false,
+            reply.video_time_sec,
+        )?;
     }
     Ok(())
 }
