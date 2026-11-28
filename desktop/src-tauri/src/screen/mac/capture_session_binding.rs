@@ -87,7 +87,7 @@ fn pair(value: Cf, kind: u32) -> Option<Pair> {
     let mut out = Pair::default();
     (unsafe { AXValueGetValue(value, kind, (&mut out as *mut Pair).cast()) } != 0).then_some(out)
 }
-pub(super) fn focused_window_matches(pid: i32, bounds: Rect) -> bool {
+pub(crate) fn focused_window_matches(pid: i32, bounds: Rect) -> bool {
     checked(pid, bounds).unwrap_or(false)
 }
 fn checked(pid: i32, bounds: Rect) -> Option<bool> {

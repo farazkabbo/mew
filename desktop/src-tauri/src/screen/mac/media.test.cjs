@@ -48,11 +48,51 @@ function fixture(players = [], onDiscover = () => {}) {
             persistentID: () => p.track,
             name: () => p.title,
             artist: () => p.artist,
+            director: () => p.artist,
             artworkUrl: () => {
               if (!p.artwork) throw Error("absent");
               return p.artwork;
             },
           };
+        },
+        playing: () => p.state === "playing",
+        nameOfCurrentItem: () => p.title,
+        pathOfCurrentItem: () => p.source,
+        durationOfCurrentItem: () => p.duration,
+        playbackShowsMenu: () => Boolean(p.menu),
+        play() {
+          commands.push([pid, "play_pause"]);
+        },
+        next() {
+          commands.push([pid, "next"]);
+        },
+        previous() {
+          commands.push([pid, "previous"]);
+        },
+        documents() {
+          return (p.documents || []).map((d) => ({
+            name: () => d.title,
+            file: () => d.file,
+            modified: () => Boolean(d.modified),
+            duration: () => d.duration,
+            dataSize: () => d.size,
+            playing: () => d.playing,
+            set rate(value) {
+              assert.equal(value, 0);
+              d.playing = false;
+              commands.push([pid, "play_pause"]);
+            },
+            play() {
+              d.playing = true;
+              commands.push([pid, "play_pause"]);
+            },
+            stop() {
+              throw Error("recording stop must never be invoked");
+            },
+            pause() {
+              throw Error("recording pause must never be invoked");
+            },
+          }));
         },
         playpause() {
           commands.push([pid, "play_pause"]);
@@ -196,4 +236,152 @@ test("optional Spotify artwork remains bounded data and never changes control ta
   assert.deepEqual(f.commands, [[12, "play_pause"]]);
   p.artwork = "x".repeat(2000);
   assert.equal(f.run("read").now.artwork_url.length, 512);
+});
+
+const tv = () => ({ ...music(), app: "com.apple.TV", pid: 31 });
+const vlc = () => ({
+  ...spotify(),
+  app: "org.videolan.vlc",
+  pid: 32,
+  source: "file:///Users/synthetic/Movie.mp4",
+  duration: 120,
+});
+const quicktime = () => ({
+  ...spotify(),
+  app: "com.apple.QuickTimePlayerX",
+  pid: 33,
+  documents: [
+    {
+      title: "Movie",
+      file: "file:///Users/synthetic/Movie.mov",
+      modified: false,
+      duration: 120,
+      size: 2000,
+      playing: true,
+    },
+  ],
+});
+test("public TV dictionary metadata and commands bind its own running PID", () => {
+  const f = fixture([tv()]);
+  const selected = f.run("read").now;
+  assert.equal(selected.app, "com.apple.TV");
+  assert.equal(selected.artist, "Artist");
+  assert.equal(f.run("control", JSON.stringify(selected), "next").now, null);
+  assert.deepEqual(f.commands, [[31, "next"]]);
+});
+test("VLC public player source is hashed and native next/previous are explicit", () => {
+  const f = fixture([vlc()]);
+  const selected = f.run("read").now;
+  assert.equal(selected.app, "org.videolan.vlc");
+  assert.match(selected.track, /^vlc:[a-f0-9]{64}$/);
+  assert.ok(!JSON.stringify(selected).includes("/Users/"));
+  assert.equal(f.run("control", JSON.stringify(selected), "previous").now, null);
+  assert.deepEqual(f.commands, [[32, "previous"]]);
+});
+test("VLC refuses capture sources, DVD menus, invalid duration and path-like titles", () => {
+  for (const change of [
+    { source: "screen://" },
+    { source: "avcapture://" },
+    { menu: true },
+    { duration: NaN },
+    { title: "/Users/synthetic/private.mp4" },
+  ]) {
+    const f = fixture([{ ...vlc(), ...change }]);
+    const result = f.run("read");
+    assert.ok(result.now == null);
+    assert.deepEqual(f.commands, []);
+  }
+});
+test("QuickTime controls only an unmodified file-backed movie and never a recording command", () => {
+  const f = fixture([quicktime()]);
+  const selected = f.run("read").now;
+  assert.match(selected.track, /^quicktime:[a-f0-9]{64}$/);
+  assert.ok(!JSON.stringify(selected).includes("/Users/"));
+  assert.equal(f.run("control", JSON.stringify(selected), "play_pause").now, null);
+  assert.deepEqual(f.commands, [[33, "play_pause"]]);
+  const paused = f.run("read", JSON.stringify(selected)).now;
+  assert.equal(paused.playing, false);
+  assert.equal(f.run("control", JSON.stringify(paused), "next").error, "unavailable");
+  assert.equal(f.run("control", JSON.stringify(paused), "play_pause").now, null);
+  assert.deepEqual(f.commands, [
+    [33, "play_pause"],
+    [33, "play_pause"],
+  ]);
+});
+test("QuickTime live, modified, nonmovie and ambiguous documents cannot become controls", () => {
+  for (const change of [
+    { file: null },
+    { modified: true },
+    { duration: 0 },
+    { size: 0 },
+    { playing: false },
+    { file: "screen://" },
+    { file: "file:///dev/video.mov" },
+    { file: "https://example.com/recording.mov" },
+  ]) {
+    const p = quicktime();
+    Object.assign(p.documents[0], change);
+    const f = fixture([p]);
+    assert.ok(f.run("read").now == null);
+    assert.deepEqual(f.commands, []);
+  }
+  const p = quicktime();
+  p.documents.push({ ...p.documents[0], file: "file:///Users/synthetic/Other.mov" });
+  assert.equal(fixture([p]).run("read").error, "ambiguous");
+});
+test("new native sources changing after selection reject stale commands", () => {
+  const p = vlc();
+  const f = fixture([p]);
+  const selected = f.run("read").now;
+  assert.equal(selected.app, "org.videolan.vlc");
+  p.source = "file:///Users/synthetic/Different.mp4";
+  assert.equal(f.run("control", JSON.stringify(selected), "play_pause").error, "changed");
+  assert.deepEqual(f.commands, []);
+});
+
+test("native media source hashes match standard SHA256 including Unicode", () => {
+  const { createHash } = require("node:crypto");
+  const context = { ObjC: { import() {} } };
+  vm.createContext(context);
+  vm.runInContext(script, context);
+  for (const value of ["", "abc", "/Users/synthetic/é😀 Movie.mov", "x".repeat(2000)])
+    assert.equal(context.mediaHash(value), createHash("sha256").update(value).digest("hex"));
+});
+
+test("local media filenames with spaces remain private hashed identities", () => {
+  const p = vlc();
+  p.source = "/Users/synthetic/My Movies/é.mp4";
+  const selected = fixture([p]).run("read").now;
+  assert.match(selected.track, /^vlc:[a-f0-9]{64}$/);
+  assert.ok(!JSON.stringify(selected).includes("My Movies"));
+});
+
+test("QuickTime cached movie approval is scoped to exact PID launch and source", () => {
+  const p = quicktime(),
+    f = fixture([p]);
+  const selected = f.run("read").now;
+  p.documents[0].playing = false;
+  for (const change of [
+    { pid: 99 },
+    { launch: "99" },
+    { track: "quicktime:" + "0".repeat(64) },
+    { app: "org.videolan.vlc" },
+  ])
+    assert.equal(f.run("read", JSON.stringify({ ...selected, ...change })).now, null);
+  assert.equal(f.run("read", JSON.stringify(selected)).now.playing, false);
+  assert.deepEqual(f.commands, []);
+});
+test("QuickTime denial and timeout remain truthful failures", () => {
+  for (const code of [-1743, -1744, -1712]) {
+    const p = quicktime(),
+      f = fixture([p]);
+    p.documents[0].title = {
+      toString() {
+        throw { errorNumber: code };
+      },
+    };
+    const result = f.run("read");
+    assert.equal(result.error, code === -1712 ? "timeout" : "denied");
+    assert.deepEqual(f.commands, []);
+  }
 });

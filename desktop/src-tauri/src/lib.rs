@@ -12,6 +12,14 @@
 //! the default browser (https only), never into a window of ours.
 
 #[cfg(target_os = "macos")]
+mod browser_companion_auth;
+#[cfg(target_os = "macos")]
+mod browser_companion_install;
+#[cfg(target_os = "macos")]
+mod browser_companion_protocol;
+#[cfg(target_os = "macos")]
+mod browser_companion_server;
+#[cfg(target_os = "macos")]
 mod mac_shortcut;
 mod origin;
 mod reminders;
@@ -232,6 +240,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
         desktop_sign_in_cancel, desktop_sign_in_start, desktop_sign_in_ticket, desktop_sign_out,
     };
 
+    use screen::mac::browser_bridge::mac_browser_companion;
     use screen::mac::{
         annotate::{screen_ink_drawn, screen_ink_pill, screen_ink_ready},
         ask::{screen_coach_ask, screen_coach_spoken},
@@ -256,6 +265,7 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     };
     use updates::{desktop_update_check, desktop_update_install, desktop_update_status};
     tauri::generate_handler![
+        mac_browser_companion,
         screen_coach_ask,
         screen_notes_panel,
         screen_coach_pill,

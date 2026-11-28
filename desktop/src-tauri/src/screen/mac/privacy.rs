@@ -74,13 +74,25 @@ fn classify(
     role: Option<&str>,
     subrole: Subrole<'_>,
 ) -> Focus {
+    classify_with_companion(bundle_id, expected_pid, actual_pid, role, subrole, false)
+}
+fn classify_with_companion(
+    bundle_id: &str,
+    expected_pid: i32,
+    actual_pid: i32,
+    role: Option<&str>,
+    subrole: Subrole<'_>,
+    companion: bool,
+) -> Focus {
     if expected_pid <= 0 || actual_pid != expected_pid {
         return Focus::Unknown;
     }
     if role == Some("AXSecureTextField") || subrole == Subrole::Value("AXSecureTextField") {
         return Focus::Password;
     }
-    if app_policy::has_inspected_browser_dictionary(bundle_id) {
+    if app_policy::has_inspected_browser_dictionary(bundle_id)
+        || companion && crate::browser_companion_auth::browser_identifier(bundle_id)
+    {
         // Chromium maps protected text to AXSecureTextField subrole. Ordinary role absence
         // is accepted only for this identified producer and only on explicit unsupported
         // optional-subrole metadata; errors/no-value never become absence. Capture separately
@@ -322,7 +334,7 @@ mod native {
     /// launch identity and frontmost ownership before AND after reads. Never authorize pixels
     /// from this alone: private browsing and call/share status remain Unknown.
     pub fn snapshot(expected: &ProcessIdentity) -> FocusSnapshot {
-        match checked_snapshot(expected, true) {
+        match checked_snapshot(expected, true, false) {
             Ok(snapshot) => snapshot,
             Err(reason) => FocusSnapshot::unknown(reason),
         }
@@ -332,14 +344,20 @@ mod native {
     /// bundled Circle Card/keyboard Draw owns focus and the source AX/CG window still
     /// matches. This function neither authorizes capture nor requests permissions.
     pub(crate) fn retained_focus(expected: &ProcessIdentity) -> FocusSnapshot {
-        match checked_snapshot(expected, false) {
+        match checked_snapshot(expected, false, false) {
             Ok(snapshot) => snapshot,
             Err(reason) => FocusSnapshot::unknown(reason),
         }
     }
+    /// Caller supplies a fresh, authenticated and native-window-bound normal-browser proof.
+    /// This only expands the producer role contract, never private/call/capture permission.
+    pub(crate) fn companion_focus(expected: &ProcessIdentity, retained: bool) -> FocusSnapshot {
+        checked_snapshot(expected, !retained, true).unwrap_or_else(FocusSnapshot::unknown)
+    }
     fn checked_snapshot(
         expected: &ProcessIdentity,
         require_frontmost: bool,
+        companion: bool,
     ) -> Result<FocusSnapshot, UnknownReason> {
         let started = Instant::now();
         if !accessibility_trusted() {
@@ -399,13 +417,24 @@ mod native {
         if started.elapsed() >= TOTAL_BUDGET {
             return Err(UnknownReason::Deadline);
         }
-        let focus = classify(
-            &expected.bundle_id,
-            expected.pid,
-            actual_pid,
-            Some(&role),
-            subrole_status,
-        );
+        let focus = if companion {
+            classify_with_companion(
+                &expected.bundle_id,
+                expected.pid,
+                actual_pid,
+                Some(&role),
+                subrole_status,
+                true,
+            )
+        } else {
+            classify(
+                &expected.bundle_id,
+                expected.pid,
+                actual_pid,
+                Some(&role),
+                subrole_status,
+            )
+        };
         if focus != Focus::Password {
             if let Subrole::Failed(reason) = subrole_status {
                 return Err(reason);
@@ -445,15 +474,73 @@ mod native {
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) use native::retained_focus;
-#[cfg(target_os = "macos")]
 pub use native::{accessibility_trusted, frontmost_process_identity, process_identity, snapshot};
+#[cfg(target_os = "macos")]
+pub(crate) use native::{companion_focus, retained_focus};
 
 #[cfg(test)]
 mod tests {
     use super::*;
     const TEXTEDIT: &str = "com.apple.TextEdit";
 
+    #[test]
+    fn companion_producer_contract_is_explicit_and_never_overrides_secure_focus() {
+        let browser = "org.mozilla.firefox";
+        assert_eq!(
+            classify(browser, 42, 42, Some("AXWebArea"), Subrole::Unsupported),
+            Focus::Unknown
+        );
+        assert_eq!(
+            classify_with_companion(
+                browser,
+                42,
+                42,
+                Some("AXWebArea"),
+                Subrole::Unsupported,
+                true
+            ),
+            Focus::Ordinary
+        );
+        for id in [browser, "org.example.Browser"] {
+            assert_eq!(
+                classify_with_companion(
+                    id,
+                    42,
+                    42,
+                    Some("AXTextField"),
+                    Subrole::Value("AXSecureTextField"),
+                    true
+                ),
+                Focus::Password
+            );
+            assert_eq!(
+                classify_with_companion(id, 42, 43, Some("AXWebArea"), Subrole::Unsupported, true),
+                Focus::Unknown
+            );
+            assert_eq!(
+                classify_with_companion(
+                    id,
+                    42,
+                    42,
+                    Some("AXWebArea"),
+                    Subrole::Failed(UnknownReason::Deadline),
+                    true
+                ),
+                Focus::Unknown
+            );
+        }
+        assert_eq!(
+            classify_with_companion(
+                "org.example.Browser",
+                42,
+                42,
+                Some("AXWebArea"),
+                Subrole::Unsupported,
+                true
+            ),
+            Focus::Unknown
+        );
+    }
     #[test]
     fn ordinary_textedit_text_area_uses_explicit_optional_absence() {
         assert_eq!(

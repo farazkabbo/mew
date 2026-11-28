@@ -13,6 +13,11 @@
       "minimumSystemVersion": "14.0",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist"
-    }
+    },
+    "externalBin": ["binaries/neb-browser-host"]
+  },
+  "build": {
+    "beforeDevCommand": "node scripts/browser-companion.mjs build --profile debug && pnpm run build:shell",
+    "beforeBuildCommand": "node scripts/browser-companion.mjs build && pnpm run build:shell"
   }
 }

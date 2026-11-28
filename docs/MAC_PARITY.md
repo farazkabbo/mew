@@ -71,8 +71,24 @@ The initial feature-family map was insufficient to claim exact parity. A second 
 | Incremental writing and native cursor glide                                  | `mac/hand.rs`; bounded validated network queue, per-scalar native authorization, Windows typing cadence and overall deadline; failed safe opens become planner feedback       |
 | Background browser music and capture metadata                                | Previously verified player retained only while exact process/window/normal source remains valid; one-second polling and named position/source snapshot                        |
 
-Known platform support gaps remain **implementation boundaries**, not merely unchecked manual tests: the Mac has no generic public system-wide media-session adapter equivalent to Windows GSMTC; browser privacy/source adapters currently cover the inspected Chrome/Brave contract, not Edge/Firefox/Vivaldi/Opera/Arc/Safari; unsupported websites/player layouts are not implemented as arbitrary browser automation. Public Spotify/Music dictionaries expose commands but not Windows-style dynamic skip-capability flags. Full browser/player equivalence must not be reported as completed. No private Apple APIs or privacy bypasses were introduced to conceal these limits.
+Known platform support gaps remain **implementation boundaries**, not merely unchecked manual tests: the Mac has no generic public system-wide media-session adapter equivalent to Windows GSMTC; browser privacy/source adapters include the inspected Chrome/Brave contract and an explicitly installed, approved Chromium/Firefox companion profile, with fresh native window binding; Safari native messaging remains unimplemented; unsupported websites/player layouts are not implemented as arbitrary browser automation. Public Spotify/Music dictionaries expose commands but not Windows-style dynamic skip-capability flags. Full browser/player equivalence must not be reported as completed. No private Apple APIs or privacy bypasses were introduced to conceal these limits.
 
 Active Circle snapshots now use an explicit native-owned retention lease, separate from the unchanged 60-second unused-capture lifetime. Only weak exact-frame grants reach annotation and Clip consumers; dropping the session revokes them. Fresh source/account/permission/privacy checks still precede use. Marking inactivity follows the Windows 20-second card / 80-second session policy; active explanations and follow-ups are not cut off at the pending-capture deadline. Local previews retain their own bounded lifetime.
 
 Saved entries now use the existing `entries/destination` contract when the user changes place, including choices made during the first upload. Moves are serialized and coalesced to the latest choice, and HTTP 204 is treated as the endpoint's successful empty response.
+
+## Browser companion and additional native players
+
+The companion source, bounded native messaging relay, mutual process/signature checks, private
+pairing registry, local registration controls and native window matching are now implemented.
+The shared workspace test command includes extension tests. Screen Coach, retained Circle
+source checks, Hand and website media use the same native privacy boundaries. Extension
+pairing does not grant capture, input or site access. See [the installation and architecture
+guide](MAC_BROWSER_COMPANION.md) for the exact supported flow and remaining Safari boundary.
+
+TV, VLC and QuickTime now have inspected native adapters. QuickTime only discovers an actively
+playing, unmodified local movie, then retains exact native movie identity for pause/resume;
+recording controls are never called. Website media uses a unique permitted top-frame player.
+Generic website skip handlers, browser artwork, cross-origin embedded players and Safari's
+signed native containing extension are still open implementation work. None is established by
+an extension source build or mocked tests.

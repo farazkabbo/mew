@@ -262,6 +262,7 @@ fn snapshot(
             playing,
             art: None,
             artwork_url: None,
+            companion: None,
             browser: Some(Identity {
                 window: window.id,
                 bounds: [
@@ -583,6 +584,7 @@ mod tests {
             playing: true,
             art: None,
             artwork_url: None,
+            companion: None,
             browser: Some(Identity {
                 window: 4,
                 bounds: [0., 0., 800., 600.],

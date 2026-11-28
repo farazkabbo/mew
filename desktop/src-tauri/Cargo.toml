@@ -1,7 +1,8 @@
 [package]
 name = "mew-desktop"
+default-run = "mew-desktop"
 version = "0.1.7"
-description = "Mew for Windows: a Tauri shell around the Mew web app"
+description = "Neb for Windows and macOS: the shared notebook with native desktop tools"
 edition = "2021"
 rust-version = "1.90"
 publish = false

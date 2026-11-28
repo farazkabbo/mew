@@ -3,6 +3,7 @@ packages:
   - backend
   - backend/supabase
   - desktop
+  - browser-extension
   - packages/*
 
 # typescript-eslint still requests vulnerable minimatch 10.x. Its minimatch() call is

@@ -3,6 +3,7 @@ pub(crate) mod actions;
 pub mod annotate;
 pub mod app_policy;
 pub mod ask;
+pub mod browser_bridge;
 pub mod browser_mode;
 pub mod call_signals;
 pub mod capture;

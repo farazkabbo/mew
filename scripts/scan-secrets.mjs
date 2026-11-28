@@ -28,6 +28,7 @@ export const PATTERNS = [
 
 /** Shipped to the learner: the desktop app and the browser's JavaScript. */
 const SHIPPED = [
+  "browser-extension",
   "desktop/src-tauri/src",
   "desktop/overlay-src",
   "desktop/shell",

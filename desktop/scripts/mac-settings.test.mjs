@@ -5,18 +5,23 @@ import assert from "node:assert/strict";
 const html = readFileSync(new URL("../shell/mac-screen-settings.html", import.meta.url), "utf8");
 const code = readFileSync(new URL("../shell/mac-screen-settings.js", import.meta.url), "utf8");
 const tick = () => new Promise((resolve) => setImmediate(resolve));
-function fixture() {
-  const elements = new Map(
-    [...html.matchAll(/\bid="([^"]+)"/g)].map(([, id]) => [
-      id,
-      {
-        listeners: {},
-        addEventListener(name, fn) {
-          this.listeners[name] = fn;
-        },
+function fixture(companion = { pending: [], connections: [], pairings: [] }) {
+  function node() {
+    return {
+      listeners: {},
+      children: [],
+      addEventListener(name, fn) {
+        this.listeners[name] = fn;
       },
-    ]),
-  );
+      append(...children) {
+        this.children.push(...children);
+      },
+      replaceChildren() {
+        this.children = [];
+      },
+    };
+  }
+  const elements = new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(([, id]) => [id, node()]));
   const config = {
     cursor: { catchMe: false, catchMeConsent: 0, guidance: "auto", voice: true },
     handoff: { timeline: false, senderName: "" },
@@ -36,11 +41,12 @@ function fixture() {
   const calls = [];
   const invoke = async (command, args) => {
     calls.push([command, args]);
+    if (command === "mac_browser_companion") return companion;
     if (command === "desktop_update_status") return { current: "0.1.7", phase: { state: "off" } };
     return { config, captureBlocker: "fixture", settingsReset: false };
   };
   runInNewContext(code, {
-    document: { getElementById: (id) => elements.get(id) ?? null },
+    document: { getElementById: (id) => elements.get(id) ?? null, createElement: () => node() },
     window: { __TAURI__: { core: { invoke } }, addEventListener() {} },
     console,
   });
@@ -115,4 +121,40 @@ test("account help opens the scoped notebook without accepting credentials", asy
   const call = calls.find(([command]) => command === "mac_open_notebook");
   assert.ok(call);
   assert.equal(call[1], undefined);
+});
+
+test("browser pairing shows signed publisher as text and sends only the selected identity", async () => {
+  const pending = {
+    connectionId: "1".repeat(32),
+    profileId: "2".repeat(32),
+    browserIdentifier: "org.mozilla.firefox",
+    signer: "<img src=x onerror=alert(1)>",
+    team: "TESTTEAM",
+  };
+  const pairing = {
+    pairingId: "3".repeat(32),
+    profileId: "4".repeat(32),
+    browserIdentifier: "com.google.Chrome",
+  };
+  const { elements, calls } = fixture({
+    pending: [pending],
+    pairings: [pairing],
+    connections: [{ trusted: true }],
+  });
+  await tick();
+  await elements.get("browser-refresh").listeners.click();
+  const rows = elements.get("browser-profiles").children;
+  assert.equal(rows.length, 2);
+  assert.ok(rows[0].children[0].textContent.includes(pending.signer));
+  assert.equal(rows[0].children[0].innerHTML, undefined);
+  await rows[0].children[1].listeners.click();
+  await elements.get("browser-profiles").children[1].children[1].listeners.click();
+  const actions = calls
+    .filter(([command]) => command === "mac_browser_companion")
+    .map(([, args]) => args.action);
+  assert.equal(actions[1].action, "approve");
+  assert.equal(actions[1].id, pending.connectionId);
+  assert.equal(actions[2].action, "revoke");
+  assert.equal(actions[2].id, pairing.pairingId);
+  assert.match(elements.get("browser-state").textContent, /1 connected profiles/);
 });

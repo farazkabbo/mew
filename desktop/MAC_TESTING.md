@@ -130,3 +130,17 @@ MACOSX_DEPLOYMENT_TARGET=14.0 pnpm --filter @mew/desktop exec tauri build --debu
 ```
 
 See [the source parity ledger](../docs/MAC_PARITY.md) for code ownership and verification boundaries, and [release/update preparation](MAC_UPDATES.md) for distribution gates.
+
+## Companion browser and additional media checks
+
+Follow [the companion installation guide](../docs/MAC_BROWSER_COMPANION.md) to install the local
+host, load the development extension, pair each profile and grant the intended website access.
+Test Firefox and a Chromium browser separately. Pairing, revoked permissions, private windows,
+multiple profiles, navigation, source replacement, Retina/external displays and retained Circle
+focus are separate checks. Safari's native handler is not implemented; its source package must
+not be recorded as a passing Safari integration.
+
+Test TV, VLC and QuickTime with synthetic media. QuickTime needs a playing, unmodified local
+movie before it can be selected; unseen paused or recording documents must remain unavailable.
+Generic website play/pause is implemented, while generic skip controls and browser artwork
+remain unavailable. Record refused states distinctly from defects and unsupported features.

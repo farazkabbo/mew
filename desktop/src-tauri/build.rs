@@ -7,6 +7,7 @@ fn main() {
     let commands = tauri_build::AppManifest::new().commands(&[
         "desktop_summon_shortcut",
         "mac_settings_status",
+        "mac_browser_companion",
         "mac_settings_update",
         "mac_tools_toggle",
         "mac_handoff_start",

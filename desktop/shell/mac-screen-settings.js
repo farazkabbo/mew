@@ -272,3 +272,50 @@ element("local-history").addEventListener("click", async () => {
     notice("Couldn't inspect local history. Check your notebook account and try again.");
   }
 });
+
+async function browserProfiles(action = { action: "status" }) {
+  try {
+    const view = await invoke("mac_browser_companion", { action });
+    const container = element("browser-profiles");
+    container.replaceChildren();
+    for (const pending of view.pending ?? []) {
+      const row = document.createElement("p");
+      const label = document.createElement("span");
+      label.textContent = `Pair request: ${pending.browserIdentifier} · Publisher: ${pending.signer || "unknown"} · Team: ${pending.team || "unsigned development"} · Profile: ${pending.profileId}. `;
+      const approve = document.createElement("button");
+      approve.type = "button";
+      approve.textContent = "Approve this browser profile";
+      approve.addEventListener("click", () =>
+        browserProfiles({ action: "approve", id: pending.connectionId }),
+      );
+      row.append(label, approve);
+      container.append(row);
+    }
+    for (const pairing of view.pairings ?? []) {
+      const row = document.createElement("p");
+      const label = document.createElement("span");
+      label.textContent = `${pairing.browserIdentifier} · Profile: ${pairing.profileId}. `;
+      const revoke = document.createElement("button");
+      revoke.type = "button";
+      revoke.textContent = "Revoke profile";
+      revoke.addEventListener("click", () =>
+        browserProfiles({ action: "revoke", id: pairing.pairingId }),
+      );
+      row.append(label, revoke);
+      container.append(row);
+    }
+    element("browser-state").textContent =
+      `${(view.connections ?? []).filter((c) => c.trusted).length} connected profiles. ${(view.pending ?? []).length} waiting for approval.`;
+  } catch {
+    element("browser-state").textContent =
+      "Browser companion is unavailable. Restart Neb and check the installation guide.";
+  }
+}
+element("browser-refresh").addEventListener("click", () => browserProfiles());
+
+element("browser-install").addEventListener("click", () =>
+  browserProfiles({ action: "install", browser: element("browser-kind").value }),
+);
+element("browser-uninstall").addEventListener("click", () =>
+  browserProfiles({ action: "uninstall", browser: element("browser-kind").value }),
+);

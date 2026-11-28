@@ -1,4 +1,4 @@
-//! Apple Music artwork from its installed public com.apple.Music.sdef. The only event
+//! Music/TV artwork from installed public com.apple.Music.sdef and com.apple.TV.sdef. The only event
 //! is core/getd to the already-running PID, with NeverInteract + DoNotPromptForUserConsent.
 //! No files, automation prompt, app launch, network, private framework or player control.
 use super::Track;
@@ -189,7 +189,7 @@ fn supported_bytes(kind: u32, bytes: &[u8]) -> bool {
         && (bytes.starts_with(b"\x89PNG\r\n\x1a\n") || bytes.starts_with(&[0xff, 0xd8, 0xff]))
 }
 fn same_identity(bundle: &str, pid: i32, launch: f64, expected: &Track) -> bool {
-    expected.app == "com.apple.Music"
+    matches!(expected.app.as_str(), "com.apple.Music" | "com.apple.TV")
         && bundle == expected.app
         && pid == expected.pid
         && pid > 0
@@ -247,7 +247,7 @@ pub(super) fn read(
     expected: &Track,
     current: &dyn Fn() -> bool,
 ) -> Option<String> {
-    if expected.app != "com.apple.Music"
+    if !matches!(expected.app.as_str(), "com.apple.Music" | "com.apple.TV")
         || expected.pid <= 0
         || expected.track.len() != 16
         || !expected.track.bytes().all(|b| b.is_ascii_hexdigit())
@@ -344,6 +344,7 @@ mod tests {
             artist: String::new(),
             playing: true,
             browser: None,
+            companion: None,
             art: None,
             artwork_url: None,
         };
@@ -352,5 +353,9 @@ mod tests {
         assert!(!same_identity("com.apple.Music", 20, 124.5, &expected));
         assert!(!same_identity("com.apple.Music.evil", 20, 123.5, &expected));
         assert!(!same_identity("com.apple.Music", 20, f64::NAN, &expected));
+        let mut tv = expected;
+        tv.app = "com.apple.TV".into();
+        assert!(same_identity("com.apple.TV", 20, 123.5, &tv));
+        assert!(!same_identity("com.apple.Music", 20, 123.5, &tv));
     }
 }

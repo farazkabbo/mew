@@ -249,6 +249,28 @@
         </form>
       </section>
       <section>
+        <h2>Browser companion</h2>
+        <p>
+          Install the Neb companion in each browser you use, then choose Pair from its toolbar.
+          Review the browser publisher below before approving. Website media also needs the site's
+          permission in the extension. Pairing never grants screen or keyboard access.
+        </p>
+        <label
+          >Browser<select id="browser-kind">
+            <option value="chrome">Chrome</option>
+            <option value="brave">Brave</option>
+            <option value="edge">Edge</option>
+            <option value="chromium">Chromium</option>
+            <option value="firefox">Firefox</option>
+          </select></label
+        >
+        <button id="browser-install" type="button">Install local browser connection</button>
+        <button id="browser-uninstall" type="button">Remove local browser connection</button>
+        <button id="browser-refresh" type="button">Refresh browser profiles</button>
+        <p id="browser-state" role="status">Refresh to inspect paired browser profiles.</p>
+        <div id="browser-profiles"></div>
+      </section>
+      <section>
         <h2>Screen Coach availability</h2>
         <button id="open-mic-settings">Open macOS microphone settings</button>
         <button id="handoff-start">Prepare a Handoff draft</button>

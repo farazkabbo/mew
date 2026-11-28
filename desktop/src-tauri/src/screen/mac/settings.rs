@@ -33,6 +33,7 @@ pub fn capability(app: &AppHandle) -> Result<(), String> {
             .local(true)
             .window(SETTINGS_WINDOW)
             .permission("allow-mac-settings-status")
+            .permission("allow-mac-browser-companion")
             .permission("allow-mac-settings-update")
             .permission("allow-mac-tools-toggle")
             .permission("allow-mac-handoff-start")
@@ -153,7 +154,7 @@ fn status(app: &AppHandle) -> Result<Status, String> {
         voice_shortcut_available:crate::mac_shortcut::voice_registered(app),
         tools_shortcut_available:crate::mac_shortcut::tools_registered(app),
         capture_available: true,
-        capture_blocker: "Screen Coach captures a privacy-checked supported window. Display capture blacks out other windows. Chrome and Brave require a verified normal window and existing Automation permission. Safari, Firefox and unknown browser states are refused. Grant macOS Screen Recording and Accessibility permissions before testing.",
+        capture_blocker: "Screen Coach captures a privacy-checked supported window. Display capture blacks out other windows. Paired companion profiles require fresh native-window-bound normal-browser evidence. Chrome and Brave can also use their inspected Automation interface. Safari and unpaired or unknown browser states are refused. Grant macOS Screen Recording and Accessibility permissions before testing.",
     })
 }
 #[tauri::command]

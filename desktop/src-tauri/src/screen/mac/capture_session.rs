@@ -21,7 +21,7 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 #[path = "capture_session_binding.rs"]
-mod binding;
+pub(crate) mod binding;
 
 const SAMPLE_BUDGET: Duration = Duration::from_millis(450);
 const REQUEST_BUDGET: Duration = Duration::from_secs(15);
@@ -176,8 +176,13 @@ fn retained_stored_current(
     if !current() {
         return false;
     }
-    let browser = app_policy::has_inspected_browser_dictionary(&frame.target.process.bundle_id);
-    let browser_mode = if browser {
+    let browser =
+        app_policy::classify_app(&frame.target.process.bundle_id) == app_policy::AppClass::Browser;
+    let companion =
+        super::browser_bridge::probe(app, &frame.target, frame.generation, true).is_some();
+    let browser_mode = if companion {
+        super::browser_mode::Mode::Normal
+    } else if app_policy::has_inspected_browser_dictionary(&frame.target.process.bundle_id) {
         super::browser_mode::sample_native(
             &super::browser_mode::FocusRequest {
                 pid: frame.target.process.pid,
@@ -222,7 +227,11 @@ fn retained_stored_current(
         if !binding::focused_window_matches(frame.target.process.pid, frame.target.quartz_points) {
             return Ok(false);
         }
-        let focus = privacy::retained_focus(&frame.target.process);
+        let focus = if companion {
+            privacy::companion_focus(&frame.target.process, true)
+        } else {
+            privacy::retained_focus(&frame.target.process)
+        };
         if focus.focus != crate::screen::privacy::Focus::Ordinary {
             return Ok(false);
         }
@@ -584,6 +593,9 @@ fn call_evidence(pause: bool, state: call_signals::SignalState) -> Evidence {
 }
 fn browser_mode_for_request(app: &AppHandle, request: &Request) -> super::browser_mode::Mode {
     use super::browser_mode::{self, FocusRequest, Mode};
+    if super::browser_bridge::probe(app, &request.target, request.generation, false).is_some() {
+        return Mode::Normal;
+    }
     if !app_policy::has_inspected_browser_dictionary(&request.target.process.bundle_id) {
         return Mode::Unknown;
     }
@@ -654,7 +666,11 @@ fn sample(
         if !same_target(&req.target, &actual, &expected_displays, &actual_displays) {
             return Err("The capture target changed.".into());
         }
-        let focus = privacy::snapshot(&req.target.process);
+        let focus = if browser_mode == super::browser_mode::Mode::Normal {
+            privacy::companion_focus(&req.target.process, false)
+        } else {
+            privacy::snapshot(&req.target.process)
+        };
         let class = app_policy::classify_app(&req.target.process.bundle_id);
         let blocked_application = if class == app_policy::AppClass::Blocked
             || app_policy::blocked_app(&req.target.process.bundle_id, &config.privacy.blocked_apps)
@@ -662,7 +678,7 @@ fn sample(
         {
             Evidence::Present
         } else if class == app_policy::AppClass::SupportedNative
-            || (app_policy::has_inspected_browser_dictionary(&req.target.process.bundle_id)
+            || (class == app_policy::AppClass::Browser
                 && browser_mode == super::browser_mode::Mode::Normal)
         {
             Evidence::Clear
@@ -824,6 +840,9 @@ fn playback_for_target(
     target: &Target,
     generation: u64,
 ) -> Option<super::media::PlaybackSnapshot> {
+    if let Some(playback) = super::browser_bridge::playback(app, target, generation) {
+        return Some(playback);
+    }
     let handle = app.clone();
     let target = target.clone();
     let (tx, rx) = mpsc::sync_channel(1);

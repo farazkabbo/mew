@@ -41,6 +41,10 @@ fn read_context(app: &AppHandle, frame: &NativeFrame, notes: bool) -> ClipSource
     {
         return out;
     }
+    // Worker-only native request; never block the AppKit queue on browser IPC.
+    let companion_source =
+        super::browser_bridge::probe(app, &frame.target, frame.generation, retained.is_some())
+            .map(|window| (Some(window.tab.title), Some(window.tab.url)));
     let target = frame.target.clone();
     let generation = frame.generation;
     let app = app.clone();
@@ -57,32 +61,32 @@ fn read_context(app: &AppHandle, frame: &NativeFrame, notes: bool) -> ClipSource
         if !valid() {
             return;
         }
-        let result =
-            if super::app_policy::has_inspected_browser_dictionary(&target.process.bundle_id) {
-                let request = super::browser_mode::FocusRequest {
-                    bundle: target.process.bundle_id.clone(),
-                    pid: target.process.pid,
-                    launch: f64::from_bits(target.process.launch_time_bits).to_string(),
-                    cg_window_id: target.window_id,
-                    generation,
-                };
-                super::browser_mode::saved_source(&request, target.quartz_points, &valid)
-                    .map(|(title, url)| (Some(title), Some(url)))
-            } else {
-                let title = (|| {
-                    let app = ax::application(target.process.pid)?;
-                    let window = ax::attr(app.0, "AXFocusedWindow", deadline)?;
-                    let p = ax::pair(ax::attr(window.0, "AXPosition", deadline)?.0, 1)?;
-                    let size = ax::pair(ax::attr(window.0, "AXSize", deadline)?.0, 2)?;
-                    if super::target::Rect::new(p.a, p.b, size.a, size.b)
-                        != Some(target.quartz_points)
-                    {
-                        return None;
-                    }
-                    ax::string_bounded(ax::attr(window.0, "AXTitle", deadline)?.0, 200)
-                })();
-                Some((title, None))
+        let result = if companion_source.is_some() {
+            companion_source
+        } else if super::app_policy::has_inspected_browser_dictionary(&target.process.bundle_id) {
+            let request = super::browser_mode::FocusRequest {
+                bundle: target.process.bundle_id.clone(),
+                pid: target.process.pid,
+                launch: f64::from_bits(target.process.launch_time_bits).to_string(),
+                cg_window_id: target.window_id,
+                generation,
             };
+            super::browser_mode::saved_source(&request, target.quartz_points, &valid)
+                .map(|(title, url)| (Some(title), Some(url)))
+        } else {
+            let title = (|| {
+                let app = ax::application(target.process.pid)?;
+                let window = ax::attr(app.0, "AXFocusedWindow", deadline)?;
+                let p = ax::pair(ax::attr(window.0, "AXPosition", deadline)?.0, 1)?;
+                let size = ax::pair(ax::attr(window.0, "AXSize", deadline)?.0, 2)?;
+                if super::target::Rect::new(p.a, p.b, size.a, size.b) != Some(target.quartz_points)
+                {
+                    return None;
+                }
+                ax::string_bounded(ax::attr(window.0, "AXTitle", deadline)?.0, 200)
+            })();
+            Some((title, None))
+        };
         if valid() {
             let _ = tx.send(result);
         }

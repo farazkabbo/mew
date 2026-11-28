@@ -215,7 +215,8 @@ fn perform(
             "The target or privacy settings changed. Stopped before the next input.".into(),
         );
     }
-    let browser = super::app_policy::has_inspected_browser_dictionary(&target.process.bundle_id)
+    let browser = (super::app_policy::classify_app(&target.process.bundle_id)
+        == super::app_policy::AppClass::Browser)
         .then(|| policy::BrowserLease::after_verified_target(&target));
     let live = Arc::new(AtomicBool::new(true));
     let active = live.clone();

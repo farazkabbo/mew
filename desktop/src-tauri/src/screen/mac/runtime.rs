@@ -122,6 +122,9 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     let mut runtime = Runtime::new(config::path_in(&dir));
     runtime.app = Some(app.clone());
     let runtime = Arc::new(runtime);
+    // Companion availability must not prevent sign-in, notebook, native media or tools.
+    // Browser contexts without a running, paired companion continue to fail closed.
+    let _ = super::browser_bridge::setup(app);
     drawing::setup(app)?;
     super::capture_session::setup(app)?;
     super::ask::setup(app)?;

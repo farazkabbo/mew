@@ -21,6 +21,8 @@ use tauri::{AppHandle, Manager};
 mod apple_art;
 #[path = "browser_media.rs"]
 mod browser;
+#[path = "companion_media.rs"]
+mod companion;
 
 const SCRIPT: &str = include_str!("media.js");
 const LIMIT: u64 = 8192;
@@ -42,7 +44,7 @@ impl Failure {
         Self::Timeout => "The music player took too long to respond.",
         Self::Ambiguous => "More than one player is available. Leave one playing to choose it.",
         Self::Changed => "The player or track changed. Try the control again.",
-        _ => "Play a track in Spotify, Apple Music, or a normal Chrome/Brave YouTube watch page.",
+        _ => "Play media in Spotify, Music, TV, VLC, QuickTime, a permitted website in a paired browser, or a normal Chrome/Brave YouTube watch page.",
     }
     }
 }
@@ -58,6 +60,8 @@ struct Track {
     playing: bool,
     #[serde(skip)]
     browser: Option<browser::Identity>,
+    #[serde(skip)]
+    companion: Option<companion::Identity>,
     #[serde(skip)]
     art: Option<String>,
     #[serde(default)]
@@ -79,6 +83,12 @@ impl Track {
         let player = match self.app.as_str() {
             "com.spotify.client" => "Spotify",
             "com.apple.Music" => "Apple Music",
+            "com.apple.TV" => "Apple TV",
+            "org.videolan.vlc" if hashed_native_key(&self.track, "vlc:") => "VLC",
+            "com.apple.QuickTimePlayerX" if hashed_native_key(&self.track, "quicktime:") => {
+                "QuickTime Player"
+            }
+            _ if companion::accepts(self) => "Browser",
             "com.google.Chrome" if browser::accepts(self) => "Chrome",
             "com.brave.Browser" if browser::accepts(self) => "Brave",
             _ => return None,
@@ -88,13 +98,29 @@ impl Track {
         now.playing = self.playing;
         now.can_next = true;
         now.can_previous = true;
+        if self.app == "com.apple.QuickTimePlayerX" {
+            now.can_next = false;
+            now.can_previous = false;
+        }
         if let Some(browser) = &self.browser {
             now.can_next = browser.can_next;
             now.can_previous = browser.can_previous;
         }
+        if let Some((next, previous)) = companion::capabilities(self) {
+            now.can_next = next;
+            now.can_previous = previous;
+        }
         now.art = self.art.clone();
         Some(now)
     }
+}
+fn hashed_native_key(key: &str, prefix: &str) -> bool {
+    key.strip_prefix(prefix).is_some_and(|hash| {
+        hash.len() == 64
+            && hash
+                .bytes()
+                .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    })
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -147,6 +173,20 @@ fn select(native: Option<Track>, browser: Option<Track>) -> Result<Option<Track>
         (Some(_), Some(_)) => Err(Failure::Ambiguous),
         (a, b) => Ok(a.or(b)),
     }
+}
+fn read_arguments(previous: Option<&Track>) -> Vec<String> {
+    let mut args = vec!["read".into()];
+    if let Some(movie) =
+        previous.filter(|track| track.app == "com.apple.QuickTimePlayerX" && track.view().is_some())
+    {
+        // This approval is native-owned panel memory, never a webview-supplied identity.
+        if let Ok(identity) = serde_json::to_string(
+            &serde_json::json!({"app":movie.app,"pid":movie.pid,"launch":movie.launch,"track":movie.track,"playing":movie.playing}),
+        ) {
+            args.push(identity);
+        }
+    }
+    args
 }
 trait Runner: Send + 'static {
     fn run(&mut self, args: &[String], valid: &dyn Fn() -> bool) -> Result<Vec<u8>, Failure>;
@@ -312,7 +352,12 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                         if token != generation {
                             continue;
                         }
-                        if target.browser.is_some() {
+                        if target.companion.is_some() {
+                            let control_state = state.clone();
+                            let control_app = worker_app.clone();
+                            let gate = Arc::new(move || control_state.valid(generation) && consent(&control_app));
+                            companion::control(&worker_app, generation, &target, control, &valid, gate)
+                        } else if target.browser.is_some() {
                             browser::query(&worker_app, generation, Some((*target, control)), None).map(|_| ())
                         } else {
                         let command = match control {
@@ -333,19 +378,23 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
                     _ => Ok(()),
                 };
                 let result = result.and_then(|_| {
+                    let previous = state.target.lock().unwrap_or_else(|p|p.into_inner()).clone();
                     runner
-                        .run(&["read".into()], &valid)
+                        .run(&read_arguments(previous.as_ref()), &valid)
                         .and_then(|bytes| parse(&bytes))
                         .and_then(|native| {
                             let retained = state.target.lock().unwrap_or_else(|p| p.into_inner()).clone().filter(|t| t.browser.is_some());
-                            let web = browser::query(&worker_app, generation, None, retained)?;
+                            let prior_companion = previous.as_ref().filter(|t| t.companion.is_some());
+                            let paired = companion::query(&worker_app, generation, prior_companion, &valid)?;
+                            let legacy = browser::query(&worker_app, generation, None, retained)?;
+                            let web = companion::prefer_inspected_player(paired, legacy)?;
                             select(native, web)
                         })
                 });
                 let result = result.map(|track| track.map(|mut track| {
-                    if track.browser.is_some() || track.artwork_url.is_some() || track.app == "com.apple.Music" {
+                    if track.browser.is_some() || track.artwork_url.is_some() || matches!(track.app.as_str(), "com.apple.Music" | "com.apple.TV") {
                         let previous = state.target.lock().unwrap_or_else(|p| p.into_inner()).clone();
-                        track.art = cached_art(previous.as_ref(), &track, &|| if track.app == "com.apple.Music" { apple_art::read(&worker_app, generation, &track, &valid) } else { browser::artwork(&track, &valid) });
+                        track.art = cached_art(previous.as_ref(), &track, &|| if matches!(track.app.as_str(), "com.apple.Music" | "com.apple.TV") { apple_art::read(&worker_app, generation, &track, &valid) } else { browser::artwork(&track, &valid) });
                     }
                     track
                 }));
@@ -527,6 +576,7 @@ mod tests {
             artist: "Artist".into(),
             playing: false,
             browser: None,
+            companion: None,
             art: None,
             artwork_url: None,
         }
@@ -566,6 +616,45 @@ mod tests {
         let mut a = a;
         a.playing = true;
         assert_eq!(select(Some(a), Some(b)), Err(Failure::Ambiguous));
+    }
+    #[test]
+    fn only_the_displayed_exact_quicktime_movie_receives_paused_playback_approval() {
+        assert_eq!(read_arguments(None), vec!["read"]);
+        let mut movie = fixture();
+        assert_eq!(read_arguments(Some(&movie)), vec!["read"]);
+        movie.app = "com.apple.QuickTimePlayerX".into();
+        assert_eq!(read_arguments(Some(&movie)), vec!["read"]);
+        movie.track = format!("quicktime:{}", "a".repeat(64));
+        let args = read_arguments(Some(&movie));
+        let expected: serde_json::Value = serde_json::from_str(&args[1]).unwrap();
+        assert_eq!(expected["app"], movie.app);
+        assert_eq!(expected["pid"], movie.pid);
+        assert_eq!(expected["launch"], movie.launch);
+        assert_eq!(expected["track"], movie.track);
+        assert!(expected.get("title").is_none());
+        assert!(expected.get("artist").is_none());
+    }
+    #[test]
+    fn native_player_names_and_capabilities_require_real_adapter_identities() {
+        let mut track = fixture();
+        track.app = "com.apple.TV".into();
+        assert_eq!(track.view().unwrap().player, Some("Apple TV"));
+        track.app = "com.apple.QuickTimePlayerX".into();
+        assert!(track.view().is_none());
+        track.track = format!("quicktime:{}", "a".repeat(64));
+        let now = track.view().unwrap();
+        assert_eq!(now.player, Some("QuickTime Player"));
+        assert!(!now.can_next && !now.can_previous);
+        track.app = "org.videolan.vlc".into();
+        assert!(track.view().is_none());
+        track.track = format!("vlc:{}", "b".repeat(64));
+        let now = track.view().unwrap();
+        assert_eq!(now.player, Some("VLC"));
+        assert!(now.can_next && now.can_previous);
+        assert!(!hashed_native_key(
+            "vlc:/Users/synthetic/private.mov",
+            "vlc:"
+        ));
     }
     #[test]
     fn parses_actual_state_and_names_apple_music() {

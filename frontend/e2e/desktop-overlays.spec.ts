@@ -1025,6 +1025,19 @@ test("Mac settings retain explicit capture consent, privacy preferences and upda
   const shell = await openShellPage(page, "mac-screen-settings.html", {
     mac_settings_status: status,
     mac_settings_update: status,
+    mac_browser_companion: {
+      pending: [
+        {
+          connectionId: "1".repeat(32),
+          profileId: "2".repeat(32),
+          browserIdentifier: "org.mozilla.firefox",
+          signer: "<b>Verified publisher</b>",
+          team: "TESTTEAM",
+        },
+      ],
+      connections: [],
+      pairings: [],
+    },
     desktop_update_status: { current: "0.1.7", phase: { state: "off" } },
   });
   await expect(page.locator("#capture")).toHaveText(status.captureBlocker);
@@ -1050,7 +1063,21 @@ test("Mac settings retain explicit capture consent, privacy preferences and upda
       },
     },
   });
-  await expect(page.getByRole("status")).toHaveText("Preferences saved on this Mac.");
+  await expect(page.locator("#message")).toHaveText("Preferences saved on this Mac.");
+  await page.getByRole("button", { name: "Refresh browser profiles" }).click();
+  await expect(page.locator("#browser-profiles")).toContainText("<b>Verified publisher</b>");
+  await expect(page.locator("#browser-profiles b")).toHaveCount(0);
+  await page.getByRole("button", { name: "Approve this browser profile" }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "mac_browser_companion",
+    args: { action: { action: "approve", id: "1".repeat(32) } },
+  });
+  await page.locator("#browser-kind").selectOption("firefox");
+  await page.getByRole("button", { name: "Install local browser connection", exact: true }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "mac_browser_companion",
+    args: { action: { action: "install", browser: "firefox" } },
+  });
   expect(shell.violations).toEqual([]);
 });
 

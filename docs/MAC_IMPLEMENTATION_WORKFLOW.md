@@ -14,7 +14,7 @@ Integration base: `e83482d`, branch `feature/macbook`, including `origin/main` t
 - [x] Hand/typing, public native target/action adapters, user approval and actual execution limits/cancellation.
 - [x] SHOW ME, DO IT's four chores/replay/undo and CATCH ME's five rules with consent/local state.
 - [x] Handoff behind its existing flag: protected local timeline, preview/redaction/Send, receiver/deep links and safe Pick up.
-- [ ] Exact browser/player support equivalence: inspected Chrome/Brave and native Spotify/Music adapters exist; generic system-wide media and broader browser/privacy adapters remain explicit platform gaps.
+- [ ] Exact browser/player support equivalence: inspected Chrome/Brave, paired Chromium/Firefox companion profiles and native Spotify/Music/TV/VLC/QuickTime adapters exist; Safari native transport and generic system-wide media remain explicit platform gaps.
 - [x] Whole-branch code and security review; focused regression fixes; full repository and native checks; package from exact source; commit verified result.
 
 For each checkbox record implementing files, normal-app entry points, denial/cancellation behavior, automated evidence and review result. Runtime-only checks belong to the owner's manual acceptance list and must not hide missing implementation.
@@ -49,7 +49,7 @@ The checked implementation items above mean source integration and automated ver
 
 Run the manual guide on the final development app. Physical shortcuts, recording/Accessibility/Automation/microphone permissions, native actions, real accounts/providers, media layouts, Spaces/displays and OS window behavior still need that pass. Windows-native runtime and signed production updates require their own platform/release checks. A local ad-hoc signed debug app is not a Developer ID signed, notarized download release.
 
-The native Mac adapters intentionally refuse unsupported/private/ambiguous producer states. Safari/Firefox/Edge do not inherit Chrome/Brave's positive browser-mode proof. Display capture masks unrelated contexts. The known-call detector is limited, artwork/source metadata may be absent, and provider-dependent flows require configured services. These boundaries are preserved rather than bypassed to make a test pass.
+The native Mac adapters intentionally refuse unsupported/private/ambiguous producer states. Safari remains unavailable. Firefox and Edge require their own approved companion profile and fresh native window proof; they never inherit Chrome/Brave's Automation proof. Display capture masks unrelated contexts. The known-call detector is limited, artwork/source metadata may be absent, and provider-dependent flows require configured services. These boundaries are preserved rather than bypassed to make a test pass.
 
 Supplemental cursor tuning: the optimized pure-source harness passed all 28 tests including `threshold_sweep` (24 parameter combinations). This does not replace the full native Cargo suite above. The redundant unoptimized tuning run was stopped once the optimized run was underway.
 
@@ -71,3 +71,48 @@ Frozen-source follow-up results:
 No real user desktop input/capture, provider calls, production account actions, signing identities or notarization were used for these automated gates. Known browser/player support gaps in the ledger remain open; this record must not be described as exact Windows support equivalence.
 
 - Final Apple Silicon development bundle rebuilt successfully at `desktop/src-tauri/target/debug/bundle/macos/Neb.app`; existing entitlements applied with an ad-hoc signature, and `codesign --verify --strict` passed. This is a local development artifact, not a notarized public installer.
+
+### Browser companion continuation
+
+The extension, native helper, explicit local installation/pairing controls and native-window
+binding have been added to this branch. The new [companion guide](MAC_BROWSER_COMPANION.md)
+explains the separate browser installation requirement and the pending Safari, artwork and
+website skip-control work. Earlier verification totals above describe earlier commits; use
+the latest final verification record for this continuation. Do not read the new companion
+source as proof of actual browser installation, OS behavior or production extension signing.
+
+### Verified companion checkpoint (2026-11-28)
+
+- Refreshed `origin/main`: `7f4d9fe`, already included in this branch.
+- `pnpm check`: formatting, lint (including shipped companion scripts), type checks and
+  **2,209 tests passed**: shared 513, ink 194, desktop Vitest 46, desktop Node 39,
+  companion Node 24, frontend 800, Supabase 183 and backend 410. Backend multiprocessing
+  needs local IPC permission in the test environment.
+- Native Rust: **539 app tests and 9 helper tests passed**, with two app tests intentionally
+  ignored by default. The existing loopback-only authentication test was separately run and
+  passed. Strict Clippy passed for all targets.
+- Desktop overlay integration: **28 tests passed** with fake IPC, including browser profile
+  approval and installation controls, safe publisher text and existing Windows/Mac behavior.
+- Swift/C capture bridge synthetic checks passed without screen capture. The checked-in
+  `native/macos/tests/verify_browser_auth.sh` smoke test accepted the exact signed sibling
+  app and rejected a signed impostor using real Mac peer credentials. It also refused an
+  unrecognized parent as a browser. Actual approved-browser parent authentication remains a
+  manual installation check.
+- Chromium, Firefox and Safari source bundles built. The Safari bundle is source only; the
+  signed native containing extension and its transport are not implemented.
+- Apple Silicon debug `Neb.app` built with the embedded `neb-browser-host`. Development
+  signatures were verified. This is an ad-hoc signed development app, not a notarized release.
+- Secret scan and whitespace checks passed. No actual browser registration, personal tab or
+  screen reading, native desktop input, provider calls or production account actions occurred.
+
+The earlier scoped agent reviews found and resolved the pending-play source-identity race.
+The subsequent integration review added a shared deadline for fragmented frames, refused
+nearly coincident native windows under rounding tolerance, and required a live native media
+owner immediately before dispatching queued controls. Profile revocation, replaced connections,
+changed document/player identities and missing permissions continue to fail closed.
+
+This checkpoint does **not** establish exact Windows support equivalence. Safari native
+integration, generic website skip handlers/artwork, cross-origin embedded players and a generic
+system-wide Mac media-session adapter remain outside the implemented support set. Production
+signing/notarization also awaits the owner's Apple Developer team. Manual OS acceptance is
+still required for the implemented adapters.

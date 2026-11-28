@@ -52,7 +52,8 @@ pub(crate) fn authorize(
     if !privacy::accessibility_trusted() {
         return Err(Error::AccessibilityUnavailable);
     }
-    let browser_valid = app_policy::has_inspected_browser_dictionary(&expected.process.bundle_id)
+    let browser_valid = (app_policy::classify_app(&expected.process.bundle_id)
+        == app_policy::AppClass::Browser)
         && browser.is_some_and(|lease| lease.matches(expected));
     if (app_policy::classify_app(&expected.process.bundle_id)
         != app_policy::AppClass::SupportedNative
@@ -73,7 +74,11 @@ pub(crate) fn authorize(
     if window.id != expected.window_id || window.bounds != expected.bounds {
         return Err(Error::TargetChanged);
     }
-    let focus = privacy::snapshot(&expected.process);
+    let focus = if browser_valid {
+        privacy::companion_focus(&expected.process, false)
+    } else {
+        privacy::snapshot(&expected.process)
+    };
     if focus.focus != Focus::Ordinary
         || !(focus.private_browsing == app_policy::PrivateState::NotApplicableSupportedNative
             || browser_valid
