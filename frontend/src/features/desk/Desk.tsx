@@ -8,6 +8,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Keys } from "@/components/ui/Keycap";
 import { NebMark } from "@/components/ui/NebDot";
 
+import { useMacKeyboard } from "../shortcuts/SummonShortcutHelp";
 import { clipImageUrl } from "../moments/api";
 import { type Moment, subtreeIds } from "../moments/moments";
 import { COLORS } from "../notebook/tree/node-style";
@@ -65,6 +66,7 @@ export function greeting(now: number, name: string | null): string {
  * dashboard: the only number that counts is what stayed.
  */
 export function Desk(props: DeskProps) {
+  const mac = useMacKeyboard();
   const { tree, unsortedId, now, moments, dueCounts } = props;
   const notebooks = tree
     .children(null)
@@ -266,7 +268,9 @@ export function Desk(props: DeskProps) {
             />
             {recent.length === 0 ? (
               <p className="text-sm text-muted">
-                Nothing saved yet. Hold Ctrl Alt and circle anything on your screen to ask neb.
+                {mac
+                  ? "Nothing saved yet. Open a notebook to ask Neb about your work."
+                  : "Nothing saved yet. Hold Ctrl Alt and circle anything on your screen to ask neb."}
               </p>
             ) : (
               <ul className="grid grid-cols-1 gap-[18px] sm:grid-cols-2 xl:grid-cols-3">

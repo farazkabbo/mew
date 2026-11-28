@@ -1,6 +1,7 @@
 //! Screen Coach's Windows code. Every `unsafe` Win32/WinRT call lives in a small function in
 //! these modules, with its safety reasoning next to it.
 
+pub(super) mod auth;
 pub mod capture;
 pub mod catch_chip;
 pub mod catch_facts;

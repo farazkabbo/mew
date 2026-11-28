@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Neb browser companion</title>
+    <link rel="stylesheet" href="popup.css" />
+    <script type="module" src="popup.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>Neb browser companion</h1>
+      <p>
+        Connect this browser profile to Neb for verified window privacy and website media controls.
+      </p>
+      <p id="connection" role="status">Loading…</p>
+      <p class="profile">Profile: <code id="profile"></code></p>
+      <button id="pair">Pair this profile with Neb</button
+      ><button id="unpair" class="secondary">Disconnect this profile</button>
+      <h2>Website media</h2>
+      <p id="website">Open a regular website.</p>
+      <button id="enable" disabled>Enable media on this website</button>
+      <p>
+        Only playback metadata and fixed play or pause actions are supported. No screenshots, page
+        text, passwords, or account credentials are read. Private windows are refused. Next and
+        previous are unavailable without a verified site adapter.
+      </p>
+      <p id="message" role="status" aria-live="polite"></p>
+    </main>
+  </body>
+</html>

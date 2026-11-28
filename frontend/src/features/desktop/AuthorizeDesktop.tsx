@@ -15,7 +15,7 @@ type Step = "confirm" | "sending" | "sent" | "failed" | "cancelled";
 const signInLink = (code: string, state: string | null) =>
   `neb://auth/callback?code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ""}`;
 
-const DEVICES = { windows: "a Windows PC" } as const;
+const DEVICES = { windows: "a Windows PC", mac: "a Mac" } as const;
 
 /** "just now", "3 minutes ago"… from the app's start time (seconds), as the page sees it. */
 function startedWhen(startedAt: number | null): string | null {

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Neb reminder</title>
+    <link rel="stylesheet" href="mac-cursor.css" />
+    <script src="mac-catch.js" defer></script>
+  </head>
+  <body class="catch">
+    <p id="message" role="status"></p>
+    <button data-action="snooze">Snooze</button
+    ><button data-action="not_mistake">Not a mistake</button
+    ><button data-action="dismiss">Dismiss</button>
+  </body>
+</html>

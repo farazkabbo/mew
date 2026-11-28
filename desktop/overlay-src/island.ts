@@ -87,7 +87,9 @@ function path(d: string): SVGPathElement {
 }
 
 /** When a button last acted: the same press may arrive twice (Rust's, then the page's click). */
-let lastAct = 0;
+// There is no previous press on a newly loaded island. Zero drops its first click
+// when it arrives during the first 450 ms of the page lifetime.
+let lastAct = Number.NEGATIVE_INFINITY;
 const SAME_PRESS_MS = 450;
 
 function act(button: HTMLButtonElement, run: () => void): void {
@@ -123,12 +125,15 @@ function openPanel(): Panel {
   return panel === "menu" || panel === "music" ? panel : "none";
 }
 
+/** The native host bounds this too; measure content even while a Mac panel is still collapsed. */
+const MAX_ISLAND_HEIGHT = 460;
+
 /** The island's height with what's open below the tools (CSS px), as tall as its content. */
 function islandHeight(): number {
   const panel = openPanel();
   const element = panel === "menu" ? menu : panel === "music" ? musicPanel : null;
   const bottom = element ? element.getBoundingClientRect().bottom : CLOSED_HEIGHT;
-  return Math.min(Math.ceil(bottom), window.innerHeight);
+  return Math.max(CLOSED_HEIGHT, Math.min(Math.ceil(bottom), MAX_ISLAND_HEIGHT));
 }
 
 /**
@@ -147,15 +152,28 @@ function drawShape(): void {
 /** A button's name under it, after the pointer rests on it a moment. */
 const tip = document.getElementById("island-tip");
 let tipTimer = 0;
+let inlineTooltips = false;
+let musicEmptyHint = "Play something in Spotify or your browser";
+let musicHasTrack = false;
+let inlineTipShown = false;
+let activityText = activity?.textContent ?? "Neb";
 function hideTip(): void {
   window.clearTimeout(tipTimer);
   if (tip) tip.hidden = true;
+  if (inlineTipShown && activity) activity.textContent = activityText;
+  inlineTipShown = false;
 }
 function showTipFor(button: HTMLElement): void {
   hideTip();
   const name = button.dataset.tip;
   if (!tip || !name || openPanel() !== "none") return;
   tipTimer = window.setTimeout(() => {
+    if (inlineTooltips && activity) {
+      // The compact bar has room for the control name, not the Windows footer's full sentence.
+      activity.textContent = button.getAttribute("aria-label") || name;
+      inlineTipShown = true;
+      return;
+    }
     tip.textContent = name;
     tip.hidden = false;
     const box = button.getBoundingClientRect();
@@ -220,7 +238,8 @@ function musicResized(): void {
 
 function render(next: IslandView): void {
   if (bar) bar.dataset.activity = next.activity;
-  if (activity) activity.textContent = ACTIVITY_LABEL[next.activity];
+  activityText = ACTIVITY_LABEL[next.activity];
+  if (activity && !inlineTipShown) activity.textContent = activityText;
   for (const button of document.querySelectorAll<HTMLButtonElement>("button[data-tool]")) {
     button.setAttribute("aria-pressed", String(button.dataset.tool === next.tool));
   }
@@ -359,12 +378,13 @@ function pinItem(pin: PinView): HTMLLIElement {
 
 function renderMusic(view: MusicView): void {
   const now = view.now;
+  musicHasTrack = now !== null;
   if (musicButton) musicButton.dataset.playing = String(now?.playing === true);
   if (title) title.textContent = now ? now.title : "Nothing playing";
   if (artist) {
     artist.textContent = now
       ? [now.artist, now.player].filter(Boolean).join(" · ")
-      : "Play something in Spotify or your browser";
+      : musicEmptyHint;
   }
   if (art && artEmpty) {
     if (now?.art) {
@@ -428,3 +448,31 @@ on("mew:island-show", (detail) => {
 // Until Rust's first view: the freehand icon, nothing pressed, nothing playing.
 shapeIcon?.replaceChildren(path(SHAPE_PATHS.free));
 renderMusic({ now: null, pins: [], notice: null, pinning: false });
+
+on("mew:island-notice", (detail) => {
+  const message = (detail as { message?: unknown } | null)?.message;
+  if (typeof message === "string" && message.length <= 200) {
+    activityText = message;
+    if (activity && !inlineTipShown) activity.textContent = message;
+  }
+});
+
+// A compact native panel has no transparent footer to host the Windows tooltip.
+on("mew:island-host", (detail) => {
+  hideTip();
+  inlineTooltips = (detail as { inlineTooltips?: unknown } | null)?.inlineTooltips === true;
+  const nativePlayersOnly =
+    (detail as { nativePlayersOnly?: unknown } | null)?.nativePlayersOnly === true;
+  musicEmptyHint = nativePlayersOnly
+    ? "Play something in Spotify or Apple Music"
+    : "Play something in Spotify or your browser";
+  if (!musicHasTrack && artist) artist.textContent = musicEmptyHint;
+});
+
+// Ask only after the event listeners above are installed (including slow WKWebView loads).
+send({ type: "ready" });
+
+if ((window as unknown as { __NEB_MAC_HOST__?: boolean }).__NEB_MAC_HOST__) {
+  const close = document.getElementById("island-close");
+  if (close) close.title = "Hide (Escape)";
+}

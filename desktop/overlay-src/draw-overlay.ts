@@ -76,6 +76,9 @@ const NEB = "#6b4ee6";
 let tool: DrawTool = "none";
 let shape: DrawShape = "free";
 let notes: Pt[][] = [];
+// Set by the bundled Mac host before any page script; Windows keeps native mouse polling.
+const localMouse =
+  (window as Window & { __NEB_MAC_DRAW_HOST__?: boolean }).__NEB_MAC_DRAW_HOST__ === true;
 /** Where the island is on this page (left, top, right, bottom), while it shows. */
 let island: unknown = null;
 /**
@@ -268,7 +271,7 @@ window.addEventListener("pointermove", (event) => {
 });
 
 window.addEventListener("pointerdown", (event) => {
-  if (event.pointerType === "mouse") return; // Rust reads the mouse
+  if (event.pointerType === "mouse" && (!localMouse || event.button !== 0)) return;
   // This page can be above the island: a press on its buttons is theirs, never a stroke.
   if (insideBox(island, event.clientX, event.clientY)) {
     void invoke("screen_draw_island_press", { at: [event.clientX, event.clientY] }).catch(
@@ -307,7 +310,7 @@ function onMove(event: PointerEvent): void {
       events = [];
     }
     for (const each of events.length > 0 ? events : [event]) {
-      stroke.push(point(each));
+      if (stroke.length < MAX_POINTS) stroke.push(point(each));
       if (tool === "eraser") rubOut([each.clientX, each.clientY]);
     }
   }
@@ -316,7 +319,7 @@ function onMove(event: PointerEvent): void {
 
 window.addEventListener("pointerup", (event) => {
   // The stroke or box on show may be the mouse's, which Rust finishes itself.
-  if (event.pointerType === "mouse") return;
+  if (event.pointerType === "mouse" && !localMouse) return;
   window.removeEventListener("pointermove", onMove);
   if (box) {
     const [x0, y0] = box.from;
@@ -348,7 +351,7 @@ window.addEventListener("pointerup", (event) => {
 
 // Windows took the pen back mid-stroke: nothing half-drawn stays, and the next stroke starts clean.
 window.addEventListener("pointercancel", (event) => {
-  if (event.pointerType === "mouse") return;
+  if (event.pointerType === "mouse" && !localMouse) return;
   window.removeEventListener("pointermove", onMove);
   box = null;
   stroke = null;
@@ -358,7 +361,7 @@ window.addEventListener("pointercancel", (event) => {
 /** A pen or eraser stroke ended: the pen's becomes a note (on this page only). */
 function endNote(): void {
   if (stroke && tool === "pen" && stroke.length > 0) {
-    notes = [...notes, stroke.map(([x, y]) => [x - shift[0], y - shift[1]] as Pt)];
+    notes = [...notes.slice(-127), stroke.map(([x, y]) => [x - shift[0], y - shift[1]] as Pt)];
   }
   stroke = null;
 }
@@ -465,3 +468,11 @@ on("mew:draw-fade", () => {
 
 window.addEventListener("resize", resize);
 resize();
+
+window.addEventListener("pointercancel", () => {
+  window.removeEventListener("pointermove", onMove);
+  stroke = null;
+  box = null;
+  paint();
+});
+if (localMouse) void invoke("screen_draw_ready").catch(() => undefined);

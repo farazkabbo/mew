@@ -4,7 +4,6 @@
 //! excluded from captures, so Neb never sees it. Its page sends one command, `screen_island`,
 //! with the button pressed; Rust sends back the view after every change.
 
-use serde::Deserialize;
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 
 use super::circle::{self, Stage};
@@ -14,7 +13,6 @@ use super::island::{
     island_spot, music_height, Activity, IslandView, Shape, Tool, ISLAND_MENU_HEIGHT, ISLAND_SIZE,
     ISLAND_WINDOW_HEIGHT,
 };
-use super::music::Control;
 use super::overlay::{self, require_surface, Surface};
 use super::screen_music;
 use super::tray_badge::Status;
@@ -182,51 +180,7 @@ fn activity(status: Status, answering: bool) -> Activity {
     }
 }
 
-/// A button on the island.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum IslandAction {
-    /// The pen, the eraser or select (clicked again: off).
-    Tool {
-        tool: Tool,
-    },
-    /// A shape from select's menu (select comes on with it).
-    Shape {
-        shape: Shape,
-    },
-    /// The shapes menu opened or closed: the window grows to fit it.
-    Menu {
-        open: bool,
-    },
-    Mic,
-    /// Watch on or off: Neb keeps looking for slips in the student's working.
-    Watch,
-    /// How much Neb gives away (the mode switch).
-    Help {
-        help: super::config::HelpLevel,
-    },
-    Clear,
-    Close,
-    /// The music panel opened (`height`: the island's height with it, measured by the page) or
-    /// closed.
-    MusicPanel {
-        open: bool,
-        height: u32,
-    },
-    /// Play/pause, next or previous on what's playing.
-    MusicControl {
-        control: Control,
-    },
-    /// Pin the playlist whose link is on the clipboard.
-    MusicPin,
-    /// Open a pinned playlist, or unpin it (its Spotify id).
-    MusicOpen {
-        id: String,
-    },
-    MusicUnpin {
-        id: String,
-    },
-}
+pub use super::island::IslandAction;
 
 #[tauri::command(async)]
 pub fn screen_island<R: Runtime>(
@@ -240,6 +194,7 @@ pub fn screen_island<R: Runtime>(
         return Ok(());
     }
     match action {
+        IslandAction::Ready => {}
         IslandAction::Tool { tool } => {
             let (current, _) = circle::tool(app);
             circle::set_tool(app, current.toggled(tool));

@@ -7,7 +7,9 @@ import { expect, type Page, test } from "./fixtures";
  * to the browser.
  */
 
-test.beforeEach(({ page }) => {
+test.beforeEach(async ({ page }) => {
+  // These cases exercise the Windows Ctrl+Alt gesture; Mac has its own coverage.
+  await page.addInitScript(() => Object.defineProperty(navigator, "platform", { value: "Win32" }));
   page.on("console", (message) => {
     if (/Content.Security.Policy|Refused to/i.test(message.text())) {
       throw new Error(`CSP violation: ${message.text()}`);

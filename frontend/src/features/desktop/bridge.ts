@@ -2,7 +2,7 @@ import { MomentChecksDue, ReviewQueue, SkillsView } from "@mew/shared";
 
 /**
  * The desktop app (Tauri, desktop/) shows this web app in its own window. Inside it, the page may
- * call three commands, each checked in Rust:
+ * use a scoped command set checked in Rust:
  * - `notify_due`: show a review reminder;
  * - `notify_checks`: saved moments' checks are due (K8; only when the student turned it on);
  * - `notify_skills`: coach-mode skills are due for a re-check on the computer (S5);
@@ -10,8 +10,8 @@ import { MomentChecksDue, ReviewQueue, SkillsView } from "@mew/shared";
  * - `screen_coach_ask`: ask Screen Coach about the frame the desktop app captured on the hotkey
  *   (the page sends only the words; it never sees the screenshot);
  * - `screen_coach_link_finish`: hand the desktop app a one-time sign-in code;
- * - `desktop_sign_in_start`, `desktop_sign_in_ticket`, `desktop_sign_out`: signing the app in
- *   through the browser, and out;
+ * - `desktop_sign_in_start`, `desktop_sign_in_cancel`, `desktop_sign_in_ticket`, and
+ *   `desktop_sign_out`: managing browser sign-in and sign-out;
  * - `screen_coach_spoken`: a line Screen Coach asked to be said has been said (Circle & Ask plays
  *   its steps to that timing).
  * The desktop app's summon (holding Ctrl+Alt while Screen Coach is off) arrives as a
@@ -21,6 +21,17 @@ import { MomentChecksDue, ReviewQueue, SkillsView } from "@mew/shared";
 type TauriGlobal = { core?: { invoke?: (cmd: string, args?: object) => Promise<unknown> } };
 
 export const SUMMON_EVENT = "mew:summon";
+
+/** Null on older native builds, in the browser, or if the capability is unavailable. */
+export async function macSummonShortcutStatus(): Promise<boolean | null> {
+  if (!isDesktop()) return null;
+  try {
+    const status = await invoke("desktop_summon_shortcut", {});
+    return typeof status === "boolean" ? status : null;
+  } catch {
+    return null;
+  }
+}
 
 /** True inside the desktop app (Tauri injects its IPC bridge into every page it shows). */
 export function isDesktop(): boolean {
@@ -118,6 +129,22 @@ export async function startDesktopSignIn(): Promise<string> {
   const url = await invoke("desktop_sign_in_start", {});
   if (typeof url !== "string") throw new Error("Not running in the Neb desktop app");
   return url;
+}
+
+/** Stops the current browser handoff. Older desktop builds may lack this command. */
+export async function cancelDesktopSignIn(): Promise<void> {
+  try {
+    await invoke("desktop_sign_in_cancel", {});
+  } catch (error) {
+    const message = String(error);
+    if (
+      message !== "Command desktop_sign_in_cancel not found" &&
+      message !== "desktop_sign_in_cancel not allowed. Command not found" &&
+      message !== "Command desktop_sign_in_cancel not allowed by ACL"
+    ) {
+      throw error;
+    }
+  }
 }
 
 /** The ticket from the sign-in the browser just finished; it can only be taken once. */

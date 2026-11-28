@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 
 import { Keys } from "@/components/ui/Keycap";
 
+import { SummonShortcutHelp, useMacKeyboard } from "./SummonShortcutHelp";
 import { useShortcutKeys } from "./useShortcutKeys";
 
 type Row = { keys: string[]; hold?: boolean; what: string; say: string };
@@ -17,6 +18,7 @@ type Row = { keys: string[]; hold?: boolean; what: string; say: string };
 export function ShortcutsSheet({ open, onClose }: { open: boolean; onClose(): void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const keys = useShortcutKeys();
+  const mac = useMacKeyboard();
   useEffect(() => {
     const element = dialog.current;
     if (!element) return;
@@ -27,10 +29,11 @@ export function ShortcutsSheet({ open, onClose }: { open: boolean; onClose(): vo
   const k = (action: ShortcutAction) => keys.shown(action).split("+");
   const rows: Row[] = [
     {
-      keys: ["Ctrl", "Alt"],
-      hold: true,
-      what:
-        keys.platform === "desktop"
+      keys: mac ? ["neb dot"] : ["Ctrl", "Alt"],
+      hold: !mac,
+      what: mac
+        ? "Ask Neb from your notebook"
+        : keys.platform === "desktop"
           ? "Circle and ask: hold in neb, double tap on your screen"
           : "Circle and ask, on the page",
       say: "or say “what's this?”",
@@ -76,7 +79,7 @@ export function ShortcutsSheet({ open, onClose }: { open: boolean; onClose(): vo
         <header className="flex items-start gap-6">
           <div className="flex-1">
             <h2 id="shortcuts-title" className="font-serif text-[56px] leading-none">
-              Two keys, max.
+              {mac ? "Your notebook shortcuts." : "Two keys, max."}
             </h2>
             <p className="mt-3 max-w-xl text-muted">
               Every action fits one hand, so the other one keeps the pencil. Or skip the keys and
@@ -92,6 +95,11 @@ export function ShortcutsSheet({ open, onClose }: { open: boolean; onClose(): vo
             <X className="size-5" aria-hidden />
           </button>
         </header>
+        {mac && (
+          <p className="text-sm text-muted">
+            <SummonShortcutHelp />
+          </p>
+        )}
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {rows.map((row) => (
             <li

@@ -3,7 +3,7 @@
   "version": "0.1.7",
   "private": true,
   "type": "module",
-  "description": "Neb for Windows: a Tauri v2 shell around the web app, with a summon gesture (hold Ctrl+Alt), review reminders and Screen Coach.",
+  "description": "Neb for Windows and macOS: a Tauri v2 shell around the shared web app, with native shortcuts, review reminders and Screen Coach.",
   "scripts": {
     "app": "tauri dev",
     "bundle": "tauri build",
@@ -13,7 +13,7 @@
     "build:shell": "node scripts/build-shell.mjs",
     "lint": "eslint --max-warnings 0 overlay-src",
     "typecheck": "tsc --noEmit -p overlay-src",
-    "test": "vitest run --root overlay-src"
+    "test": "vitest run --root overlay-src && node --test scripts/update-manifest.test.mjs scripts/mac-settings.test.mjs scripts/browser-companion.test.mjs src-tauri/src/screen/mac/media.test.cjs src-tauri/src/screen/mac/browser_mode.test.cjs"
   },
   "dependencies": {
     "@mew/ink": "workspace:*",

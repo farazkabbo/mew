@@ -17,8 +17,8 @@ use super::overlay::{self, Surface};
 use super::win::{input, target};
 
 /// Window sizes, in CSS pixels.
-pub const CAPSULE_SIZE: (f64, f64) = (440.0, 52.0);
-pub const KEYS_SIZE: (f64, f64) = (500.0, 60.0);
+pub use super::surfaces::CAPSULE_SIZE;
+pub use super::surfaces::KEYS_SIZE;
 /// From the monitor's edges, clear of the frame's glow (CSS pixels).
 const MARGIN: f64 = 48.0;
 

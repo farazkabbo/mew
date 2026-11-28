@@ -118,17 +118,21 @@ mod tests {
         assert_eq!(paths, vec!["C:\\code\\neb\\backend"]);
         let title = paths_in("C:\\Users\\me\\proj\\src\\signup.ts - Notepad++");
         assert_eq!(title, vec!["C:\\Users\\me\\proj\\src\\signup.ts"]);
-        let repo = repo_of(Path::new("C:\\Users\\me\\proj\\src\\signup.ts"), |d| {
-            d == Path::new("C:\\Users\\me\\proj")
-        });
-        assert_eq!(repo, Some(PathBuf::from("C:\\Users\\me\\proj")));
-        assert_eq!(repo_of(Path::new("C:\\x\\y"), |_| false), None);
+        // Filesystem traversal uses host-native paths; parsing Windows text above is separate.
+        let native_repo = PathBuf::from("workspace").join("proj");
+        let source = native_repo.join("src").join("signup.ts");
+        let repo = repo_of(&source, |d| d == native_repo);
+        assert_eq!(repo, Some(native_repo));
+        assert_eq!(
+            repo_of(&PathBuf::from("missing").join("project"), |_| false),
+            None
+        );
     }
 
     #[test]
     fn git_context_is_names_and_counts() {
         let git = parse_git(
-            Path::new("C:\\code\\neb"),
+            &PathBuf::from("code").join("neb"),
             "fix-dup-emails\n",
             "a1b2c3d\tdedupe waitlist\n",
             " M signup.ts\n?? notes.md\n",

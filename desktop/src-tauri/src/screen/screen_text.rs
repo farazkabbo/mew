@@ -6,8 +6,9 @@
 //! leave the device only inside a clip the student chose to save. Texts are wiped on drop.
 
 use super::frame::ScreenRect;
+use super::image::Pixels;
 use super::privacy::detect::{find_sensitive, RedactionRules};
-use super::privacy::redact::{OcrLine, PixelRect};
+use super::privacy::redact::{fill, rects_to_cover, OcrLine, PixelRect, REDACTED};
 use super::secret::wipe;
 
 pub struct ScreenWord {
@@ -54,12 +55,71 @@ impl Drop for TextBlock {
 }
 
 impl ScreenText {
+    /// Masks recognized sensitive words before retaining any text. The OCR adapter supplies
+    /// top-left pixel coordinates and the dimensions of the image it read.
+    /// None means the frame or its OCR geometry was invalid. Discard it if masking is required.
+    pub fn redact_ocr(
+        raw: &mut Pixels,
+        lines: &[OcrLine],
+        (ocr_width, ocr_height): (u32, u32),
+        bounds: ScreenRect,
+        mut covered: Vec<PixelRect>,
+        rules: &RedactionRules,
+    ) -> Option<Self> {
+        let (width, height) = (raw.width, raw.height);
+        let expected_bytes = (width as usize)
+            .checked_mul(height as usize)?
+            .checked_mul(4)?;
+        if expected_bytes == 0
+            || raw.channels != 4
+            || raw.data.len() != expected_bytes
+            || ocr_width == 0
+            || ocr_height == 0
+            || bounds.right.checked_sub(bounds.left)? <= 0
+            || bounds.bottom.checked_sub(bounds.top)? <= 0
+        {
+            return None;
+        }
+        let scale = (
+            width as f32 / ocr_width as f32,
+            height as f32 / ocr_height as f32,
+        );
+        let valid_geometry = lines.iter().flat_map(|line| &line.words).all(|word| {
+            let left = word.x * scale.0;
+            let top = word.y * scale.1;
+            let right = (word.x + word.width) * scale.0;
+            let bottom = (word.y + word.height) * scale.1;
+            [left, top, right, bottom]
+                .iter()
+                .all(|edge| edge.is_finite())
+                && left < right
+                && top < bottom
+                && left < width as f32
+                && top < height as f32
+                && right > 0.0
+                && bottom > 0.0
+        });
+        if !valid_geometry {
+            return None;
+        }
+        let masks = rects_to_cover(lines, rules, scale, width, height);
+        fill(raw, &masks, REDACTED);
+        covered.extend(masks);
+        Some(Self::from_ocr(
+            lines,
+            scale,
+            (width, height),
+            bounds,
+            &covered,
+        ))
+    }
+
     /// Words from OCR `lines` (in OCR-image pixels; `ocr_scale` converts to captured pixels),
     /// placed on screen within `bounds` (the captured area, `raw_width`×`raw_height` pixels),
     /// leaving out any word that touches a `covered` rectangle (captured pixels).
     pub fn from_ocr(
         lines: &[OcrLine],
-        ocr_scale: f32,
+        (scale_x, scale_y): (f32, f32),
         (raw_width, raw_height): (u32, u32),
         bounds: ScreenRect,
         covered: &[PixelRect],
@@ -73,20 +133,34 @@ impl ScreenText {
         for (index, line) in lines.iter().enumerate() {
             for word in &line.words {
                 let raw = PixelRect {
-                    left: (word.x * ocr_scale).max(0.0) as u32,
-                    top: (word.y * ocr_scale).max(0.0) as u32,
-                    right: ((word.x + word.width) * ocr_scale).ceil().max(0.0) as u32,
-                    bottom: ((word.y + word.height) * ocr_scale).ceil().max(0.0) as u32,
+                    left: ((word.x * scale_x) as u32).min(raw_width),
+                    top: ((word.y * scale_y) as u32).min(raw_height),
+                    right: ((((word.x + word.width) * scale_x).ceil()) as u32).min(raw_width),
+                    bottom: ((((word.y + word.height) * scale_y).ceil()) as u32).min(raw_height),
                 };
-                if word.text.trim().is_empty() || covered.iter().any(|c| touches(c, &raw)) {
+                if raw.left >= raw.right
+                    || raw.top >= raw.bottom
+                    || word.text.trim().is_empty()
+                    || covered.iter().any(|c| touches(c, &raw))
+                {
                     continue;
                 }
                 words.push(ScreenWord {
                     rect: ScreenRect {
-                        left: bounds.left + (raw.left as f32 * sx).floor() as i32,
-                        top: bounds.top + (raw.top as f32 * sy).floor() as i32,
-                        right: bounds.left + (raw.right as f32 * sx).ceil() as i32,
-                        bottom: bounds.top + (raw.bottom as f32 * sy).ceil() as i32,
+                        left: bounds
+                            .left
+                            .saturating_add((raw.left as f32 * sx).floor() as i32),
+                        top: bounds
+                            .top
+                            .saturating_add((raw.top as f32 * sy).floor() as i32),
+                        right: bounds
+                            .left
+                            .saturating_add((raw.right as f32 * sx).ceil() as i32)
+                            .min(bounds.right),
+                        bottom: bounds
+                            .top
+                            .saturating_add((raw.bottom as f32 * sy).ceil() as i32)
+                            .min(bounds.bottom),
                     },
                     text: word.text.clone(),
                     line: index as u32,
@@ -458,6 +532,96 @@ fn terms(text: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::screen::privacy::redact::OcrWord;
+    use crate::screen::secret::SecretBytes;
+
+    #[test]
+    fn masks_scaled_pixels_before_retaining_text_on_an_offset_display() {
+        let mut raw = Pixels {
+            width: 640,
+            height: 160,
+            channels: 4,
+            data: SecretBytes::from_vec(vec![255; 640 * 160 * 4]),
+        };
+        let bounds = ScreenRect {
+            left: -640,
+            top: 100,
+            right: 0,
+            bottom: 260,
+        };
+        let lines = ocr(&["Card 4111 1111 1111 1111 Algebra"]);
+        let rules = RedactionRules::default();
+        let text = ScreenText::redact_ocr(&mut raw, &lines, (320, 80), bounds, Vec::new(), &rules)
+            .expect("valid scaled OCR");
+        assert_eq!(text.text_in(bounds, &rules), "Card Algebra");
+        let data = raw.data.as_slice();
+        assert_eq!(&data[(10 * 640 + 110) * 4..][..4], &[128, 128, 128, 255]);
+        assert_eq!(&data[(10 * 640 + 510) * 4..][..4], &[255; 4]);
+    }
+
+    #[test]
+    fn rejects_invalid_ocr_geometry_without_modifying_the_frame() {
+        let mut raw = Pixels {
+            width: 120,
+            height: 80,
+            channels: 4,
+            data: SecretBytes::from_vec(vec![255; 120 * 80 * 4]),
+        };
+        let mut lines = ocr(&["Code"]);
+        lines[0].words[0].x = f32::NAN;
+        assert!(ScreenText::redact_ocr(
+            &mut raw,
+            &lines,
+            (120, 80),
+            BOUNDS,
+            Vec::new(),
+            &RedactionRules::default(),
+        )
+        .is_none());
+        assert!(raw.data.as_slice().iter().all(|&byte| byte == 255));
+    }
+
+    #[test]
+    fn maps_the_bottom_of_a_tall_capture_using_the_ocr_height() {
+        let mut raw = Pixels {
+            width: 121,
+            height: 7680,
+            channels: 4,
+            data: SecretBytes::zeroed(121 * 7680 * 4),
+        };
+        let bounds = ScreenRect {
+            left: 50,
+            top: 100,
+            right: 171,
+            bottom: 7780,
+        };
+        let lines = [OcrLine {
+            words: vec![OcrWord {
+                text: "Example".to_owned(),
+                x: 2.0,
+                y: 2540.0,
+                width: f32::MAX / 8.0,
+                height: 32.0,
+            }],
+        }];
+        let text = ScreenText::redact_ocr(
+            &mut raw,
+            &lines,
+            (40, 2560),
+            bounds,
+            Vec::new(),
+            &RedactionRules::default(),
+        )
+        .expect("word intersects the OCR image");
+        assert_eq!(
+            text.rects().collect::<Vec<_>>(),
+            [ScreenRect {
+                left: 56,
+                top: 7720,
+                right: 171,
+                bottom: 7780,
+            }]
+        );
+    }
 
     /// Lines of words 10 px apart, each word 40×10 OCR pixels (OCR ran at half size).
     fn ocr(lines: &[&str]) -> Vec<OcrLine> {
@@ -489,7 +653,7 @@ mod tests {
     };
 
     fn text(lines: &[&str], covered: &[PixelRect]) -> ScreenText {
-        ScreenText::from_ocr(&ocr(lines), 2.0, (2000, 1000), BOUNDS, covered)
+        ScreenText::from_ocr(&ocr(lines), (2.0, 2.0), (2000, 1000), BOUNDS, covered)
     }
 
     #[test]
@@ -623,7 +787,7 @@ mod tests {
             (52.0, 10.0, "catalysts made of protein."),
             (100.0, 10.0, "They are not consumed."),
         ]);
-        let screen = ScreenText::from_ocr(&lines, 2.0, (2000, 1000), BOUNDS, &[]);
+        let screen = ScreenText::from_ocr(&lines, (2.0, 2.0), (2000, 1000), BOUNDS, &[]);
         let blocks = screen.blocks(&RedactionRules::default());
         let read: Vec<(&str, &str)> = blocks
             .iter()
@@ -660,7 +824,7 @@ mod tests {
             .enumerate()
             .map(|(i, l)| (i as f32 * 40.0, 10.0, l.trim_end()))
             .collect();
-        let screen = ScreenText::from_ocr(&ocr_at(&rows), 1.0, (2000, 40_000), BOUNDS, &[]);
+        let screen = ScreenText::from_ocr(&ocr_at(&rows), (1.0, 1.0), (2000, 40_000), BOUNDS, &[]);
         let blocks = screen.blocks(&RedactionRules::default());
         assert!(!blocks.is_empty() && blocks.len() <= MAX_BLOCKS);
         assert!(blocks.iter().map(|b| b.text.len() + 1).sum::<usize>() <= SCREEN_CHARS);

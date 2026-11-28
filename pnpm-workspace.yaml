@@ -3,7 +3,13 @@ packages:
   - backend
   - backend/supabase
   - desktop
+  - browser-extension
   - packages/*
+
+# typescript-eslint still requests vulnerable minimatch 10.x. Its minimatch() call is
+# compatible with this patched release until the upstream dependency is updated.
+overrides:
+  "@typescript-eslint/typescript-estree>minimatch": "11.0.1"
 
 # Lifecycle scripts are blocked unless explicitly allowed here (supply-chain hardening).
 allowBuilds:

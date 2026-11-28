@@ -1,4 +1,6 @@
-# Mew for Windows (desktop app)
+# Mew desktop app
+
+Windows behavior is documented below. The **same app/project** also has a Mac development build; see [Mac testing](MAC_TESTING.md) and the [current parity ledger](../docs/MAC_PARITY.md) for what is implemented and still open.
 
 A [Tauri v2](https://v2.tauri.app) shell around the Mew web app. The window shows the web app
 (the same pages, in Edge WebView2), and adds what a web page can't do:

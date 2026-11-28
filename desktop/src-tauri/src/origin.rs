@@ -27,6 +27,27 @@ fn is_loopback(url: &Url) -> bool {
     matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
 }
 
+#[cfg(any(target_os = "macos", test))]
+pub fn may_open_external_link(url: &Url) -> bool {
+    url.scheme() == "https" && is_allowed_app_url(url) && has_no_credentials(url)
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn has_no_credentials(url: &Url) -> bool {
+    url.username().is_empty() && url.password().is_none()
+}
+
+/// Opens the checked web app's sign-in address or an HTTPS external link in the default browser.
+#[cfg(target_os = "macos")]
+pub fn open_in_mac_browser(url: &Url) -> bool {
+    is_allowed_app_url(url)
+        && has_no_credentials(url)
+        && std::process::Command::new("/usr/bin/open")
+            .arg(url.as_str())
+            .status()
+            .is_ok_and(|status| status.success())
+}
+
 /// The window may show the app itself and Clerk's sign-in pages (for sign-in redirects);
 /// anything else is refused rather than opened inside the app.
 pub fn may_navigate(app: &Url, target: &Url) -> bool {
@@ -127,5 +148,19 @@ mod tests {
             capability_pattern(&url("https://mew.example.com/notebook")),
             "https://mew.example.com/*"
         );
+    }
+
+    #[test]
+    fn accepts_only_credential_free_https_for_external_links() {
+        assert!(may_open_external_link(&url("https://example.com/lesson")));
+        for raw in [
+            "http://localhost:3000/lesson",
+            "https://name:token@example.com/lesson",
+            "https://name@example.com/lesson",
+            "file:///tmp/lesson",
+            "neb://sign-in",
+        ] {
+            assert!(!may_open_external_link(&url(raw)));
+        }
     }
 }

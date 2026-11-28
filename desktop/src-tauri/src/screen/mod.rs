@@ -63,12 +63,16 @@ pub mod destination;
 pub mod drag;
 pub mod frame;
 pub mod glance;
+pub mod hand_input;
+pub mod hand_protocol;
 pub mod handoff;
 pub mod hold;
 pub mod image;
 pub mod ink;
 pub mod intent;
 pub mod island;
+#[cfg(target_os = "macos")]
+pub mod mac;
 pub mod marks;
 pub mod music;
 pub mod notes_marks;
@@ -80,9 +84,11 @@ pub mod raster;
 pub mod screen_text;
 pub mod secret;
 pub mod source;
+pub mod surfaces;
 pub mod tray_badge;
 pub mod walkthrough;
 pub mod watch;
+pub mod write_protocol;
 
 #[cfg(windows)]
 pub mod account;
@@ -110,13 +116,16 @@ pub mod device_call;
 pub mod handoff_run;
 #[cfg(windows)]
 pub mod keys;
+#[cfg(target_os = "macos")]
+#[path = "mac/auth.rs"]
+mod mac_auth;
 #[cfg(windows)]
 pub mod note_scroll;
 #[cfg(windows)]
 pub mod notes_check;
 #[cfg(windows)]
 pub mod overlay;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub mod page;
 #[cfg(windows)]
 pub mod pipeline;
@@ -134,7 +143,7 @@ pub mod screen_quiz;
 pub mod screen_watch;
 #[cfg(windows)]
 pub mod screen_write;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub mod sign_in;
 #[cfg(windows)]
 pub mod status;

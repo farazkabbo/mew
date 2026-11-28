@@ -1,0 +1,94 @@
+# Windows and Mac desktop feature ledger
+
+Updated 2026-11-27. The Windows baseline is `origin/main` through `7f4d9fe`, merged into `feature/macbook` at `e83482d`. Both platforms remain in the same Tauri application and repository. Shared notebook/server features, wire contracts, model validation and pure state machines are reused; native operating-system adapters differ.
+
+This ledger records reachable implementation, not a claim that synthetic tests establish real macOS acceptance. Follow [the manual testing guide](../desktop/MAC_TESTING.md) on the packaged build. Historical foundation-only audits are available in Git history; their “unavailable” statuses do not describe the new implementation.
+
+## Implementation map
+
+Paths below are relative to `desktop/src-tauri/src/screen/` unless noted otherwise.
+
+| Windows behavior                                                        | Mac implementation and normal entry point                                                                                                                                                                     |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Installed notebook, Dock/tray lifecycle, reminders, account persistence | Shared `desktop/src-tauri/src/lib.rs`, `sign_in.rs`; `mac/auth.rs`, origin-scoped Keychain and browser sign-in.                                                                                               |
+| Consent, privacy settings, pause and onboarding                         | `mac/settings.rs`, `mac/runtime.rs`, bundled `mac-screen-settings.*`; local capability only. Hosted page onboarding can open settings but cannot alter local privacy.                                         |
+| Global voice/tool/summon gestures                                       | `desktop/src-tauri/src/mac_shortcut.rs`; Control+Shift+N, Control+Shift+Space, Control+Shift+I; Escape cancellation and registration status.                                                                  |
+| Window capture, indicator, OCR, local redaction, cancellation           | `mac/capture_session.rs`, `capture_session_binding.rs`, `pipeline.rs`, `capture.rs`, `indicator.rs`; native Swift bridges. Native intent/target/permissions/privacy are checked before pixels and before use. |
+| Display scope and protected areas                                       | `mac/pipeline.rs` composes only the authorized window into a black display canvas; non-target/occluding windows are masked before OCR. It does not infer that all background windows are safe.                |
+| Private windows, password fields, app blocklist and call pause          | `mac/privacy.rs`, `app_policy.rs`, `browser_mode_native.rs`, `call_signals.*`; exact process launch/window binding, known public AX contracts and bounded evidence. Unknown is refusal.                       |
+| Authenticated ask, model intent, streamed answers and errors            | `mac/ask.rs`, `service_call.rs`, existing device credentials; shared `intent.rs`, `protocol.rs`, main-page voice bridge and server routes. Requests and delivery bind the originating account/generation.     |
+| Tutor ink, Save pill, source changes and re-placement                   | `mac/annotate.rs`, `annotate_watch.rs`; shared `ink.rs`, OCR anchors and reanchor protocol. Fresh source/ACK checks; no OCR words enter the renderer.                                                         |
+| Island, drawing, erasing, selection shapes and focus-safe panels        | `mac/island.rs`, `drawing.rs`, `overlay.rs`, `panel.rs`; shared bundled island/draw pages. First-load queues prevent lost initial events.                                                                     |
+| Circle & Ask, read/type/speak, steps, follow-ups and playback           | `mac/circle.rs`; shared `circle_protocol.rs`, `circle_steps.rs`, local Card and voice bridge. Queued output binds its originating session.                                                                    |
+| Clip preview/crop, Auto/Ask/Never, notebook destinations and readback   | `mac/clip.rs`, `source_meta.rs`; memory-only nonce image protocol, explicit crop/expiry checks, shared destination/clip protocols and notebook events.                                                        |
+| Notes Check                                                             | `mac/study.rs`; redacted text-only notes request, scoped findings and notebook links.                                                                                                                         |
+| Walkthroughs, skill rechecks and resume                                 | `mac/study.rs`; shared `walkthrough.rs` and existing server state. Finished view persists until Close.                                                                                                        |
+| Screen quizzes, grades, skip/stop and review cards                      | `mac/study.rs`; shared `quiz.rs`; quiz answers take precedence over command-like wording.                                                                                                                     |
+| Watch and help levels                                                   | `mac/study.rs`; shared `watch.rs`/`glance.rs`; changed-frame filtering, task suppression, bounded failures and 45-minute limit.                                                                               |
+| Native Hand, typing, clicks/double-clicks, keys, scrolling and pointing | `mac/hand.rs`, `actions.rs`, `hand_policy.rs`, `hand_policy_ax.rs`; shared `hand_protocol.rs`, `hand_input.rs`, `write_protocol.rs`. Each input event is independently authorized.                            |
+| SHOW ME, prediction, corrections, guidance and learned paths            | `mac/cursor_runtime.rs`, `cursor_ax.rs`, `cursor_render.rs`; shared cursor engine/lesson/path/scene modules and account-scoped cache.                                                                         |
+| DO IT: file finding, recipe saving, photo rename/undo, settings         | `mac/chores.rs` and fixed `chores.js`; shared allowlists/parsers and cancellable atomic no-replace rename helpers. Native confirmation precedes mutations.                                                    |
+| CATCH ME and five rules                                                 | `mac/cursor_runtime.rs`/`cursor_ax.rs`; shared Catcher. Separate explicit consent permits bounded local facts in supported unblocked producers; this exception does not authorize remote planning.            |
+| Replay, local counts, developer debug/traces, forget paths              | `mac/cursor_runtime.rs`, `counts.rs`; shared replay/debug/trace/telemetry contracts. Traces are bounded geometry only, not screenshots/text.                                                                  |
+| Music, controls, artwork and Spotify pins                               | `mac/media.rs`, `media.js`, `browser_media.rs`, `apple_art.rs`, `media_pins.rs`; positive identity/state checks, bounded public metadata/artwork and existing player UI.                                      |
+| Handoff timeline, encrypted draft/package, preview/edit/cover/Send      | `mac/handoff_runtime.rs`, `handoff_crypto.rs`, system CryptoKit bridge; shared timeline/select/redaction/package contracts and existing server feature flags.                                                 |
+| Handoff receiving, links and Pick up                                    | `mac/handoff_runtime.rs`, shared `handoff/pickup.rs`; authenticated decrypt, strict links and confirmation before local actions; commands copied only.                                                        |
+| Updates/direct-download packaging                                       | Shared `updates.rs`, Mac bundle config/entitlements, manifest scripts; public signing/notarization/distribution remain separate release gates.                                                                |
+
+The Windows modules remain Windows-gated because they contain Win32/WinRT implementations. A module count or matching command count is not a parity percentage. Several Windows settings commands map to one locally authorized Mac settings patch; Windows-only pass-through pointer mechanisms map to actual Mac panel buttons rather than arbitrary input IPC.
+
+## Mac compatibility and acceptance boundaries
+
+- Native coordinate spaces use Quartz points, display backing pixels and image-local OCR pixels explicitly. No global Windows physical-pixel coordinate assumption is reused for panel placement.
+- Positive native producer/AX-role contracts cover the implemented known document applications. Chrome/Brave mode comes from their inspected public scripting dictionaries, bound to the native window; other browsers/private/unknown states remain refusals. This is a real support boundary, not evidence that every app/browser works.
+- Known-call/microphone checks are limited evidence. They do not establish universal absence of recording/sharing. Overlay visibility in external recordings is explicitly disclosed and opt-in.
+- Display capture intentionally blacks other contexts rather than exposing unverified apps. It may provide less context than a Windows multi-window capture.
+- Input sampling, AX names, content notifications, focus/Spaces/mixed-display behavior, microphone lifecycle and actual input delivery require installed-app testing. Unsupported notifications have a conservative visible-ink timeout.
+- Player controls depend on public scripting/AX evidence. Native Spotify/Apple Music and positively identified normal YouTube browser layouts are implemented; unsupported/private/background/localized browser layouts can refuse. Artwork can be absent.
+- Metadata that cannot be safely resolved is omitted. Public release signing/notarization, real signed updates, Windows native build/runtime and paid-provider integration are not established by the local synthetic suite.
+
+## Organization and review
+
+OS-independent protocols/validation stay in shared modules. Capture/privacy, authenticated transport, ink, Circle/Clip, studies, native actions, cursor observation/rendering, chores and Handoff have separate owners/modules. Privileged commands authorize the exact calling surface; local pages do not receive credentials or arbitrary capture/input access. Account changes, pause and Escape invalidate pending work before clearing UI.
+
+Independent reviews identified and drove fixes for risky label-less key input, Catch metadata leaking into remote planning, stale queued account/session output, noncancellable rename loops, destructive Save polling, completed walkthrough visibility and quiz routing. Verification records and remaining OS acceptance steps are in [the workflow record](MAC_IMPLEMENTATION_WORKFLOW.md) and [manual guide](../desktop/MAC_TESTING.md).
+
+## Follow-up behavior audit
+
+The initial feature-family map was insufficient to claim exact parity. A second comparison traced individual Windows handlers and found omissions; the following paths were added or corrected before the next manual pass:
+
+| Behavior                                                                     | Implementation                                                                                                                                                                |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Numbered semantic marks, underline/highlight OCR and keyboard selection      | `mac/circle.rs`, `mac/drawing.rs`; shared marks/blocks contracts                                                                                                              |
+| Explanation-step ink, student strokes, follow-up append and retry            | Circle session accumulates validated per-step ACKs; `mac/clip.rs` uses the first saved crop/scale and existing entries/append API                                             |
+| Old Card buttons and deferred workers                                        | Displayed action-session token plus immutable account/generation/serial tickets before capture, mutation, upload and queued UI effects                                        |
+| Saved video moments                                                          | `source.rs`, `mac/source_meta.rs`, captured named playback snapshot, OCR and tutor fallback; before/after video identity and save-time matching prevent cross-tab attribution |
+| Notes source links and quiz titles                                           | `mac/study.rs` uses bounded provenance and shared serializers                                                                                                                 |
+| Study panels on multiple displays and stopped coach ink                      | Panels retain captured display geometry; paused/completed/inactive replies clear arrows                                                                                       |
+| Timed pause, Catch pause, undo, keyboard entry and account/settings controls | Native tray/runtime plus the exact bundled local settings page; detailed history is an explicit action                                                                        |
+| Companion and handwritten-note scrolling                                     | New `mac/pointer.rs`, `note_scroll.rs`, bounded native geometry/policy adapters                                                                                               |
+| Handoff editor/terminal/browser and Git metadata                             | Metadata-only known producer contract, sanitized URL, home-contained canonical repo and four bounded read-only Git queries                                                    |
+| Incremental writing and native cursor glide                                  | `mac/hand.rs`; bounded validated network queue, per-scalar native authorization, Windows typing cadence and overall deadline; failed safe opens become planner feedback       |
+| Background browser music and capture metadata                                | Previously verified player retained only while exact process/window/normal source remains valid; one-second polling and named position/source snapshot                        |
+
+Known platform support gaps remain **implementation boundaries**, not merely unchecked manual tests: the Mac has no generic public system-wide media-session adapter equivalent to Windows GSMTC; browser privacy/source adapters include the inspected Chrome/Brave contract and an explicitly installed, approved Chromium/Firefox companion profile, with fresh native window binding; Safari native messaging remains unimplemented; unsupported websites/player layouts are not implemented as arbitrary browser automation. Public Spotify/Music dictionaries expose commands but not Windows-style dynamic skip-capability flags. Full browser/player equivalence must not be reported as completed. No private Apple APIs or privacy bypasses were introduced to conceal these limits.
+
+Active Circle snapshots now use an explicit native-owned retention lease, separate from the unchanged 60-second unused-capture lifetime. Only weak exact-frame grants reach annotation and Clip consumers; dropping the session revokes them. Fresh source/account/permission/privacy checks still precede use. Marking inactivity follows the Windows 20-second card / 80-second session policy; active explanations and follow-ups are not cut off at the pending-capture deadline. Local previews retain their own bounded lifetime.
+
+Saved entries now use the existing `entries/destination` contract when the user changes place, including choices made during the first upload. Moves are serialized and coalesced to the latest choice, and HTTP 204 is treated as the endpoint's successful empty response.
+
+## Browser companion and additional native players
+
+The companion source, bounded native messaging relay, mutual process/signature checks, private
+pairing registry, local registration controls and native window matching are now implemented.
+The shared workspace test command includes extension tests. Screen Coach, retained Circle
+source checks, Hand and website media use the same native privacy boundaries. Extension
+pairing does not grant capture, input or site access. See [the installation and architecture
+guide](MAC_BROWSER_COMPANION.md) for the exact supported flow and remaining Safari boundary.
+
+TV, VLC and QuickTime now have inspected native adapters. QuickTime only discovers an actively
+playing, unmodified local movie, then retains exact native movie identity for pause/resume;
+recording controls are never called. Website media uses a unique permitted top-frame player.
+Generic website skip handlers, browser artwork, cross-origin embedded players and Safari's
+signed native containing extension are still open implementation work. None is established by
+an extension source build or mocked tests.

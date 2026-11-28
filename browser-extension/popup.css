@@ -1,0 +1,56 @@
+:root {
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+  color: #23232b;
+  background: #faf9f7;
+}
+body {
+  margin: 0;
+  width: 340px;
+}
+main {
+  padding: 20px;
+}
+h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+h2 {
+  font-size: 16px;
+  margin: 22px 0 8px;
+}
+p {
+  margin: 10px 0;
+}
+button {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #6353c7;
+  border-radius: 8px;
+  background: #6353c7;
+  color: white;
+  font: inherit;
+  margin: 10px 0;
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: #4c408f;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.profile {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+#message {
+  font-weight: 600;
+}
+button:focus-visible {
+  outline: 3px solid #b4aaff;
+  outline-offset: 2px;
+}

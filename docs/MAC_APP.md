@@ -1,9 +1,13 @@
 # Building neb for macOS
 
+Current status (2026-11-26): the same desktop project contains the Mac implementations of Screen Coach, Circle/Clip, study flows, Hand/cursor modes, Handoff and media alongside the shared notebook. Automated verification and manual macOS acceptance are tracked separately. This document started as the original Windows-to-Mac plan; its old inventory below is historical. Use [MAC_PARITY.md](MAC_PARITY.md) for current source/acceptance and [the Mac testing guide](../desktop/MAC_TESTING.md) for the development build.
+
 A plan for the developer bringing the desktop app to the Mac. Read
 [ARCHITECTURE.md](ARCHITECTURE.md) first. This guide assumes you know how the pieces fit.
 
-## Where things stand
+## Historical starting point
+
+The following inventory describes the project before the port. It is retained to explain the original design, not as current setup or feature status. Use the current guides linked above for testing.
 
 - **The web app works on a Mac today,** in any browser. You can develop and test everything in
   `frontend/`, `backend/` and the packages on a MacBook.
@@ -99,8 +103,14 @@ Don't fill the code with `#[cfg]`. Instead:
   `set_ignore_cursor_events`.
 - **Private windows** (`privacy/private_window.rs`): the lists use `.exe` names (`msedge.exe`
   and others). Add the macOS bundle ids: Safari, Chrome, Edge, Firefox, Arc, Brave.
-- **The hold keys:** Ctrl+Alt on Windows. Pick the Mac keys with the owner; Control+Option is
-  the direct equivalent. Update `keys.rs` and the shortcuts sheet.
+- **Summon keys:** Ctrl+Alt remains the Windows hold gesture. The Mac app registers
+  **Control+Shift+N (⌃⇧N)**: N for Neb, invoking the notebook summon action from any app
+  while Neb is running. It restores hidden/minimized Neb. This deliberately uses three keys
+  to avoid common Mac commands and Control+Option (VoiceOver). It does not capture the screen
+  or start the microphone; use the notebook mic to speak. Settings, the shortcut sheet and
+  guide check native registration status; if unavailable, use Ask Neb in the menu bar or the
+  notebook dot. Older native builds fall back safely. Mac Control+Option does not activate
+  the notebook hold gesture.
 - **Updater** (`updates.rs`, Windows-only now): the Tauri updater supports macOS (`.app.tar.gz`).
 
 **Rust crates:** the `objc2` family (`objc2-app-kit`, `objc2-foundation`,

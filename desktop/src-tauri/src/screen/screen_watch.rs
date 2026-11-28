@@ -17,7 +17,6 @@
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, Runtime};
 
@@ -27,7 +26,6 @@ use super::config::HelpLevel;
 use super::device_call::{self, CallError};
 use super::page;
 use super::pipeline::Captured;
-use super::protocol::{actions_are_valid, with_image, ScreenAction, SPEECH_CHARS};
 use super::screen_island;
 
 /// How often Neb looks while Watch is on.
@@ -347,67 +345,7 @@ impl Tick {
     }
 }
 
-/// `POST /api/screen/watch`: the monitor, its app, the help level and the last slip said.
-pub fn watch_body(
-    meta: &super::frame::FrameMeta,
-    help: HelpLevel,
-    previous: Option<&str>,
-    jpeg: &[u8],
-) -> super::secret::SecretBytes {
-    #[derive(Serialize)]
-    struct Head<'a> {
-        app: Option<&'a str>,
-        scope: &'static str,
-        help: HelpLevel,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        previous: Option<&'a str>,
-    }
-    let previous = previous.map(|p| {
-        let end = p.char_indices().nth(300).map_or(p.len(), |(i, _)| i);
-        &p[..end]
-    });
-    let head = Head {
-        app: meta.app.as_deref(),
-        scope: super::protocol::scope_name(meta.kind),
-        help,
-        previous,
-    };
-    with_image(&head, jpeg, meta.width, meta.height)
-}
-
-/// What `POST /api/screen/watch` answers (packages/shared/src/screen-watch.ts).
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum WatchReply {
-    Fine,
-    Nothing,
-    #[serde(rename_all = "camelCase")]
-    Mistake {
-        speech: String,
-        actions: Vec<ScreenAction>,
-        turn_id: String,
-    },
-}
-
-/// The reply, checked like every screen answer. None for anything malformed.
-pub fn parse_watch_reply(bytes: &[u8]) -> Option<WatchReply> {
-    let reply: WatchReply = serde_json::from_slice(bytes).ok()?;
-    let ok = match &reply {
-        WatchReply::Fine | WatchReply::Nothing => true,
-        WatchReply::Mistake {
-            speech,
-            actions,
-            turn_id,
-        } => {
-            !speech.trim().is_empty()
-                && speech.chars().count() <= SPEECH_CHARS
-                && !speech.chars().any(char::is_control)
-                && actions_are_valid(actions)
-                && super::protocol::is_uuid(turn_id)
-        }
-    };
-    ok.then_some(reply)
-}
+pub use super::watch::{parse_watch_reply, watch_body, WatchReply};
 
 #[cfg(test)]
 mod tests {

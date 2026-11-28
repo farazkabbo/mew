@@ -242,3 +242,7 @@ on("mew:ink-fade", fade);
 on("mew:ink-clear", clear);
 window.addEventListener("resize", resize);
 resize();
+
+if ((window as unknown as { __NEB_MAC_INK_HOST__?: boolean }).__NEB_MAC_INK_HOST__) {
+  void invoke("screen_ink_ready").catch(() => undefined);
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { isMacKeyboard } from "./SummonShortcutHelp";
 import { HoldGestureTracker } from "./hold";
 
 type HoldHandlers = {
@@ -24,6 +25,8 @@ export function useHoldToTalk(handlers: HoldHandlers): void {
   });
 
   useEffect(() => {
+    // Control+Option belongs to VoiceOver on Mac; use the native summon or neb dot.
+    if (isMacKeyboard()) return;
     const tracker = new HoldGestureTracker((signal) => {
       if (signal === "started") ref.current.start();
       else if (signal === "ended") ref.current.release();

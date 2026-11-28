@@ -1,4 +1,6 @@
 pnpm-lock.yaml
+# Personal onboarding notes are local-only and excluded from Git.
+onboarding-notes/
 **/.next/**
 **/.next-e2e/**
 **/.next-journey/**

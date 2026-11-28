@@ -17,6 +17,9 @@ const result = document.getElementById("quiz-result");
 const form = document.getElementById("quiz-form") as HTMLFormElement | null;
 const input = document.getElementById("quiz-input") as HTMLInputElement | null;
 const buttons = document.getElementById("quiz-buttons");
+if ((window as unknown as { __NEB_MAC_HOST__?: boolean }).__NEB_MAC_HOST__ && input) {
+  input.placeholder = "Type your answer, or hold Control + Shift + Space and say it";
+}
 
 let layout: QuizLayout | null = null;
 

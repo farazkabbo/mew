@@ -95,7 +95,7 @@ test("settings are saved to the account and used by the notebook", async ({ page
   await page.goto("/notebook");
   await page.getByRole("button", { name: "Debug panel" }).click();
   await expect(page.getByRole("radio", { name: "Direct answers" })).toBeChecked();
-  await expect(page.getByRole("slider")).toHaveValue("0.85");
+  await expect(page.getByRole("slider", { name: "Threshold" })).toHaveValue("0.85");
 });
 
 test("the language picker offers four languages and saves the choice", async ({ page }) => {

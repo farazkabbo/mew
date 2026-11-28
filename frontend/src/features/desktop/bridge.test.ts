@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isDesktop, remindAboutChecks, remindAboutReviews, remindAboutSkills } from "./bridge";
+import {
+  cancelDesktopSignIn,
+  isDesktop,
+  remindAboutChecks,
+  remindAboutReviews,
+  remindAboutSkills,
+} from "./bridge";
 
 const ITEM = {
   courseId: "22222222-2222-4222-8222-222222222222",
@@ -18,6 +24,26 @@ afterEach(() => {
 });
 
 describe("desktop bridge", () => {
+  it("cancels the native browser handoff without signing the device out", async () => {
+    const invoke = vi.fn(() => Promise.resolve());
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke } } });
+
+    await cancelDesktopSignIn();
+
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("desktop_sign_in_cancel", {});
+  });
+
+  it("allows UI-only cancellation on older builds and reports other failures", async () => {
+    const invoke = vi.fn();
+    vi.stubGlobal("window", { __TAURI__: { core: { invoke } } });
+
+    invoke.mockRejectedValueOnce("Command desktop_sign_in_cancel not allowed by ACL");
+    await expect(cancelDesktopSignIn()).resolves.toBeUndefined();
+
+    invoke.mockRejectedValueOnce("Not allowed.");
+    await expect(cancelDesktopSignIn()).rejects.toBe("Not allowed.");
+  });
+
   it("is inert in a browser", async () => {
     vi.stubGlobal("window", {});
     expect(isDesktop()).toBe(false);
@@ -91,5 +117,23 @@ describe("desktop bridge", () => {
     invoke.mockClear();
     expect(await remindAboutSkills(skills([list[2]]), now)).toBe(false);
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("Mac summon capability", () => {
+  it("distinguishes registered, conflicted and older native builds", async () => {
+    const { macSummonShortcutStatus } = await import("./bridge");
+    const invoke = vi.fn();
+    vi.stubGlobal("window", { __TAURI_INTERNALS__: {}, __TAURI__: { core: { invoke } } });
+    invoke
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockRejectedValueOnce(new Error("Unknown command"))
+      .mockResolvedValueOnce({ registered: true });
+    expect(await macSummonShortcutStatus()).toBe(true);
+    expect(await macSummonShortcutStatus()).toBe(false);
+    expect(await macSummonShortcutStatus()).toBeNull();
+    expect(await macSummonShortcutStatus()).toBeNull();
+    expect(invoke).toHaveBeenCalledWith("desktop_summon_shortcut", {});
   });
 });

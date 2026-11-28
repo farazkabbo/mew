@@ -799,3 +799,392 @@ test("the draw overlay draws the card's pointer line in neb's violet, and clears
   await expect.poll(() => violetAt(200, 100)).toBe(false);
   expect(shell.violations).toEqual([]);
 });
+
+test("the island requests a fresh view after loading and keeps native failures truthful", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 820, height: 58 });
+  const shell = await openShellPage(page, "island.html");
+  await expect
+    .poll(shell.calls)
+    .toEqual([{ cmd: "screen_island", args: { action: { type: "ready" } } }]);
+  await shell.dispatch("mew:island-show", {
+    tool: "none",
+    shape: "free",
+    mic: false,
+    silent: false,
+    activity: "ready",
+    clearable: false,
+    help: "hint",
+    watching: false,
+  });
+  const mic = page.getByRole("button", { name: "Microphone", exact: true });
+  await expect(mic).toHaveAttribute("aria-pressed", "false");
+  await mic.click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "mic" } } });
+  // A click requests the native action; it does not manufacture a successful listening state.
+  await expect(mic).toHaveAttribute("aria-pressed", "false");
+  await shell.dispatch("mew:island-notice", {
+    message: "That tool couldn't be used right now. Please try again.",
+  });
+  await expect(page.locator("#island-activity")).toHaveText(
+    "That tool couldn't be used right now. Please try again.",
+  );
+  // Failure notices must not push native controls beyond the compact panel's edge.
+  const close = (await page.getByRole("button", { name: "Close", exact: true }).boundingBox())!;
+  expect(close.x + close.width).toBeLessThanOrEqual(820);
+  await shell.dispatch("mew:island-show", {
+    tool: "none",
+    shape: "free",
+    mic: true,
+    silent: false,
+    activity: "listening",
+    clearable: false,
+    help: "hint",
+    watching: false,
+  });
+  await expect(mic).toHaveAttribute("aria-pressed", "true");
+  expect(shell.violations).toEqual([]);
+});
+
+test("the island expands music from a collapsed Mac viewport and bounds its requested height", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 820, height: 58 });
+  const shell = await openShellPage(page, "island.html");
+  await page.getByRole("button", { name: "Music", exact: true }).click();
+  const musicHeight = async () => {
+    const call = (await shell.calls()).findLast(
+      (entry) =>
+        entry.cmd === "screen_island" &&
+        (entry.args as { action: { type: string } }).action.type === "music_panel",
+    );
+    return (call?.args as { action: { height: number } } | undefined)?.action.height ?? 0;
+  };
+  await expect.poll(musicHeight).toBeGreaterThan(58);
+  const height = await musicHeight();
+  expect(height).toBeLessThanOrEqual(460);
+  // Simulate the native host honoring the request; content is now inside the visible panel.
+  await page.setViewportSize({ width: 820, height });
+  const music = page.getByRole("region", { name: "Music", exact: true });
+  await expect(music).toBeVisible();
+  const box = (await music.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(height);
+
+  // Even unusually tall content cannot request an unbounded native overlay.
+  await music.evaluate((element) => {
+    element.style.minHeight = "1000px";
+  });
+  await shell.dispatch("mew:island-music", {
+    now: null,
+    pins: [],
+    notice: null,
+    pinning: false,
+  });
+  await expect.poll(musicHeight).toBe(460);
+  expect(shell.violations).toEqual([]);
+});
+
+test("the compact Mac island shows inline tooltips and restores the latest native activity", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 820, height: 58 });
+  const shell = await openShellPage(page, "island.html");
+  await shell.dispatch("mew:island-host", { inlineTooltips: true });
+  const pen = page.getByRole("button", { name: "Pen", exact: true });
+  await pen.hover();
+  const activity = page.locator("#island-activity");
+  await expect(activity).toHaveText("Pen");
+  await expect(page.getByRole("tooltip")).toBeHidden();
+  await shell.dispatch("mew:island-show", {
+    tool: "none",
+    shape: "free",
+    mic: true,
+    silent: false,
+    activity: "listening",
+    clearable: false,
+    help: "hint",
+    watching: false,
+  });
+  await expect(activity).toHaveText("Pen");
+  await page.mouse.move(1, 1);
+  await expect(activity).toHaveText("Listening…");
+  expect(shell.violations).toEqual([]);
+});
+
+test("Mac drawing accepts local mouse strokes, erases them and clears without reading the screen", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(window, "__NEB_MAC_DRAW_HOST__", { value: true }),
+  );
+  const shell = await openShellPage(page, "draw-overlay.html");
+  await expect.poll(shell.calls).toContainEqual({ cmd: "screen_draw_ready", args: undefined });
+  await shell.dispatch("mew:draw-show", {
+    marks: [],
+    grey: true,
+    drawing: true,
+    mode: "draw",
+    blocks: [],
+    pointer: null,
+  });
+  await shell.dispatch("mew:draw-tool", { tool: "pen", shape: "free" });
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(200, 100, { steps: 10 });
+  await page.mouse.up();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_draw_note", args: { at: [100, 100] } });
+  const blue = () =>
+    page.locator("canvas").evaluate((canvas: HTMLCanvasElement) => {
+      const ratio = window.devicePixelRatio;
+      const p = canvas.getContext("2d")!.getImageData(150 * ratio, 100 * ratio, 1, 1).data;
+      return (p[3] ?? 0) > 0 && (p[2] ?? 0) > (p[0] ?? 0);
+    });
+  await expect.poll(blue).toBe(true);
+  await shell.dispatch("mew:draw-tool", { tool: "eraser", shape: "free" });
+  await page.mouse.move(140, 90);
+  await page.mouse.down();
+  await page.mouse.move(150, 100, { steps: 3 });
+  await page.mouse.up();
+  await expect.poll(blue).toBe(false);
+  await shell.dispatch("mew:draw-tool", { tool: "pen", shape: "free" });
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(200, 100, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(blue).toBe(true);
+  await shell.dispatch("mew:draw-clear-notes", {});
+  await expect.poll(blue).toBe(false);
+  expect(shell.violations).toEqual([]);
+});
+
+test("the Windows drawing host continues to leave mouse collection to native polling", async ({
+  page,
+}) => {
+  const shell = await openShellPage(page, "draw-overlay.html");
+  await shell.dispatch("mew:draw-show", { marks: [], grey: false, drawing: true, mode: "draw" });
+  await shell.dispatch("mew:draw-tool", { tool: "pen", shape: "free" });
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(200, 100, { steps: 5 });
+  await page.mouse.up();
+  expect(await shell.calls()).toEqual([]);
+});
+
+test("Mac settings retain explicit capture consent, privacy preferences and update status", async ({
+  page,
+}) => {
+  const config = {
+    enabled: false,
+    paused: false,
+    help: "hint",
+    privacy: {
+      showInCaptures: false,
+      letNebClick: false,
+      blockedApps: ["example.exe"],
+      pauseDuringCalls: true,
+      askScope: "window",
+      redaction: { cards: true, secrets: true, codes: true, emails: false, phones: false },
+    },
+    circle: {
+      silent: false,
+      pointer: "always",
+      pointerSize: "medium",
+      pointerCorner: "bottom_right",
+      includeSourceLink: true,
+      save: "auto",
+    },
+    cursor: {
+      catchMe: false,
+      catchMeConsent: 0,
+      voice: true,
+      guidance: "auto",
+      debug: false,
+      recordTraces: false,
+      rulesOff: [],
+    },
+    handoff: {
+      timeline: false,
+      senderName: "",
+      windowMin: 90,
+      expiryDays: 7,
+      alwaysHideNames: false,
+    },
+  };
+  const status = {
+    config,
+    settingsReset: false,
+    islandVisible: false,
+    captureAvailable: true,
+    captureBlocker: "Screen Coach uses privacy-checked captures and requires explicit consent.",
+  };
+  const shell = await openShellPage(page, "mac-screen-settings.html", {
+    mac_settings_status: status,
+    mac_settings_update: status,
+    mac_browser_companion: {
+      pending: [
+        {
+          connectionId: "1".repeat(32),
+          profileId: "2".repeat(32),
+          browserIdentifier: "org.mozilla.firefox",
+          signer: "<b>Verified publisher</b>",
+          team: "TESTTEAM",
+        },
+      ],
+      connections: [],
+      pairings: [],
+    },
+    desktop_update_status: { current: "0.1.7", phase: { state: "off" } },
+  });
+  await expect(page.locator("#capture")).toHaveText(status.captureBlocker);
+  await expect(page.getByRole("button", { name: "Check for updates", exact: true })).toBeDisabled();
+  await expect(page.locator("#install-update")).toBeHidden();
+  await expect(page.locator("#visible")).not.toBeChecked();
+  expect((await shell.calls()).some((c) => c.cmd === "mac_settings_update")).toBe(false);
+  await page.locator("#visible").check();
+  await page.locator("#help").selectOption("coach");
+  await page.getByRole("button", { name: "Save preferences" }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "mac_settings_update",
+    args: {
+      patch: {
+        enabled: false,
+        consentVersion: 0,
+        paused: false,
+        privacy: { ...config.privacy, showInCaptures: true, blockedApps: ["example"] },
+        circle: config.circle,
+        help: "coach",
+        cursor: config.cursor,
+        handoff: config.handoff,
+      },
+    },
+  });
+  await expect(page.locator("#message")).toHaveText("Preferences saved on this Mac.");
+  await page.getByRole("button", { name: "Refresh browser profiles" }).click();
+  await expect(page.locator("#browser-profiles")).toContainText("<b>Verified publisher</b>");
+  await expect(page.locator("#browser-profiles b")).toHaveCount(0);
+  await page.getByRole("button", { name: "Approve this browser profile" }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "mac_browser_companion",
+    args: { action: { action: "approve", id: "1".repeat(32) } },
+  });
+  await page.locator("#browser-kind").selectOption("firefox");
+  await page.getByRole("button", { name: "Install local browser connection", exact: true }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "mac_browser_companion",
+    args: { action: { action: "install", browser: "firefox" } },
+  });
+  expect(shell.violations).toEqual([]);
+});
+
+test("Mac music shows native player state and sends explicit playback and pin actions", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.setViewportSize({ width: 820, height: 460 });
+  const shell = await openShellPage(page, "island.html");
+  await shell.dispatch("mew:island-host", { inlineTooltips: true, nativePlayersOnly: true });
+  await page.getByRole("button", { name: "Music", exact: true }).click();
+  await expect(page.locator("#music-artist")).toHaveText(
+    "Play something in Spotify or Apple Music",
+  );
+  const id = "37i9dQZF1DXcBWIGoYBM5M";
+  await shell.dispatch("mew:island-music", {
+    now: {
+      title: "<script>untrusted track</script>",
+      artist: "Synthetic artist",
+      player: "Apple Music",
+      playing: true,
+      can_next: true,
+      can_previous: true,
+      art: null,
+    },
+    pins: [{ id, kind: "playlist", name: "Study music" }],
+    notice: null,
+    pinning: false,
+  });
+  await expect(page.locator("#music-title")).toHaveText("<script>untrusted track</script>");
+  await expect(page.locator("#music-title script")).toHaveCount(0);
+  await expect(page.locator("#music-artist")).toHaveText("Synthetic artist · Apple Music");
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "screen_island",
+    args: { action: { type: "music_control", control: "play_pause" } },
+  });
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Open Study music in Spotify", exact: true }).click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "music_open", id } } });
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Unpin Study music", exact: true }).click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "music_unpin", id } } });
+  await page.clock.fastForward(500);
+  await page.getByRole("button", { name: "Pin copied Spotify link", exact: true }).click();
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_island", args: { action: { type: "music_pin" } } });
+  await shell.dispatch("mew:island-music", { now: null, pins: [], notice: null, pinning: false });
+  await expect(page.locator("#music-title")).toHaveText("Nothing playing");
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeDisabled();
+  expect(shell.violations).toEqual([]);
+});
+
+test("Mac local overlays use Mac help text and Command shortcuts", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.assign(window, { __NEB_MAC_HOST__: true, __NEB_MAC_CARD_HOST__: true });
+  });
+  const shell = await openShellPage(page, "circle-card.html", {
+    screen_circle_ready: { mode: "ask", silent: true, place: {} },
+  });
+  await expect(page.getByLabel("Your question")).toBeVisible();
+  await page.keyboard.press("Meta+KeyS");
+  await expect
+    .poll(shell.calls)
+    .toContainEqual({ cmd: "screen_circle_card", args: { action: "save_only" } });
+  await openShellPage(page, "quiz-card.html");
+  await expect(page.locator("#quiz-input")).toHaveAttribute(
+    "placeholder",
+    /Control \+ Shift \+ Space/,
+  );
+  await openShellPage(page, "island.html");
+  await expect(page.locator("#island-close")).toHaveAttribute("title", "Hide (Escape)");
+});
+
+test("Mac Circle actions carry the displayed session identity across card replacements", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.assign(window, { __NEB_MAC_HOST__: true, __NEB_MAC_CARD_HOST__: true });
+  });
+  const first = "00000000-0000-4000-8000-000000000001:7";
+  const second = "00000000-0000-4000-8000-000000000002:9";
+  const shell = await openShellPage(page, "circle-card.html", {
+    screen_circle_ready: { mode: "ask", silent: true, place: {}, actionSession: first },
+  });
+  await expect(page.getByLabel("Your question")).toBeVisible();
+  await page.keyboard.press("Meta+KeyS");
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "screen_circle_card",
+    args: { action: "save_only", actionSession: first },
+  });
+  await shell.dispatch("mew:card-show", {
+    mode: "ask",
+    silent: true,
+    place: {},
+    actionSession: second,
+  });
+  await page.keyboard.press("Meta+KeyD");
+  await expect.poll(shell.calls).toContainEqual({
+    cmd: "screen_circle_card",
+    args: { action: "change_place", actionSession: second },
+  });
+  expect(shell.violations).toEqual([]);
+});

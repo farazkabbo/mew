@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src ipc: http://ipc.localhost"
+    />
+    <title>Neb settings</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="fonts.css" />
+    <link rel="stylesheet" href="mac-screen-settings.css" />
+    <script src="mac-screen-settings.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>Neb on your Mac</h1>
+      <p>
+        Open your notebook with <kbd>Control + Shift + N</kbd>. Use Neb tools to draw local notes
+        over your screen. Toggle Neb tools with <kbd>Control + Shift + I</kbd>. Hold
+        <kbd>Control + Shift + Space</kbd> to ask about your screen, then release to send. If that
+        shortcut is unavailable, use the microphone on Neb tools.
+      </p>
+      <p id="voice-shortcut-status"></p>
+      <p id="message" role="status">Loading your local settings…</p>
+      <section>
+        <h2>Your Neb account</h2>
+        <p id="account-state"></p>
+        <button id="open-notebook" type="button">
+          Open notebook to sign in or manage your account
+        </button>
+        <p>
+          Sign in and sign out through your notebook. Credentials stay in macOS Keychain and never
+          enter this settings page.
+        </p>
+      </section>
+      <section>
+        <h2>Neb tools</h2>
+        <button id="tools" disabled>Show or hide Neb tools</button>
+        <form id="preferences">
+          <fieldset disabled id="fields">
+            <legend>Local preferences</legend>
+            <label><input id="visible" type="checkbox" /> Allow visible Mac overlays</label>
+            <p>
+              Drawings stay in memory until you clear or close them. Mac annotations may appear in
+              screen recordings and screen shares. Enable this only if that is okay with you. This
+              does not by itself allow screen capture.
+            </p>
+            <label
+              ><input id="enabled" type="checkbox" /> Enable Screen Coach (privacy notice version
+              5)</label
+            >
+            <p>
+              When you ask with Neb's microphone, Circle &amp; Ask, or enable Watch, Neb captures
+              the focused supported document window. It checks blocked apps, password fields and
+              known calls; an indicator appears before capture. It redacts text locally before
+              sending an image to your signed-in Neb server. Watch checks changed content every six
+              seconds for up to 45 minutes. Detection cannot identify every screen share.
+              Unknown/private browser windows are refused. Screenshots stay in memory until used,
+              cancelled or expired. Only saving a clip stores the selected image in your notebook.
+              You can pause or disable Screen Coach at any time.
+            </p>
+            <p>
+              In macOS System Settings → Privacy &amp; Security, enable Screen &amp; System Audio
+              Recording and Accessibility for Neb. Microphone permission is requested when you first
+              use voice.
+            </p>
+            <label
+              >Blocked apps (one compatible app name or Mac bundle identifier per line)<textarea
+                id="blocked"
+                rows="5"
+                spellcheck="false"
+              ></textarea>
+            </label>
+            <p>
+              Blocked apps are never read. Mac bundle identifiers such as com.apple.Mail work here;
+              existing Windows app names are kept for compatibility. Password managers and protected
+              fields remain refused.
+            </p>
+            <button id="restore-blocklist" type="button">Restore default blocked apps</button>
+            <label
+              >Capture area<select id="scope">
+                <option value="window">Focused window</option>
+                <option value="monitor">Display (other windows blacked out)</option>
+              </select></label
+            >
+            <label
+              >Save Circle &amp; Ask explanations<select id="save-mode">
+                <option value="auto">Automatically after 5 seconds, with Undo</option>
+                <option value="ask">Only when I choose Save</option>
+                <option value="never">Never</option>
+              </select></label
+            >
+            <p>
+              Automatic saving creates an explanation in your notebook after a five-second Undo
+              period. The selected save preference applies to every Circle &amp; Ask explanation.
+            </p>
+            <label
+              >Companion pointer<select id="pointer-show">
+                <option value="always">Always</option>
+                <option value="while_drawing">While drawing</option>
+                <option value="never">Never (drawing indicator still shown)</option>
+              </select></label
+            >
+            <label
+              >Pointer size<select id="pointer-size">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select></label
+            >
+            <label
+              >Pointer corner<select id="pointer-corner">
+                <option value="bottom_right">Bottom right</option>
+                <option value="bottom_left">Bottom left</option>
+                <option value="top_right">Top right</option>
+                <option value="top_left">Top left</option>
+              </select></label
+            >
+            <label
+              ><input id="include-link" type="checkbox" /> Keep the page title and link with saved
+              explanations</label
+            >
+            <p>
+              Payment cards, passwords, secret keys and verification codes are always covered on
+              Mac. If a safety check is unavailable, screen capture is refused.
+            </p>
+            <label><input id="redact-emails" type="checkbox" /> Redact email addresses</label>
+            <label><input id="redact-phones" type="checkbox" /> Redact phone numbers</label>
+            <label
+              ><input id="click" type="checkbox" /> Let Neb click and type in supported documents
+              when I ask</label
+            >
+            <p>
+              Neb checks each proposed action, avoids sensitive controls and stops when you press
+              Escape. You remain responsible for confirming payments, sending, deleting and other
+              sensitive actions yourself.
+            </p>
+            <label
+              ><input id="calls" type="checkbox" /> Pause during detected microphone use or known
+              calls</label
+            >
+            <label><input id="paused" type="checkbox" /> Pause Neb tools</label>
+            <label><input id="silent" type="checkbox" /> Prefer silent interaction</label>
+            <label
+              >Help level
+              <select id="help">
+                <option value="quiet">Quiet</option>
+                <option value="hint">Hint</option>
+                <option value="coach">Coach</option>
+                <option value="answer">Answer</option>
+              </select></label
+            >
+            <label
+              ><input id="catch" type="checkbox" /> Enable CATCH ME (privacy notice version
+              1)</label
+            >
+            <p>
+              CATCH ME reads the names of nearby controls on this Mac, and—in unblocked supported
+              apps—email draft words, attachment and recipient counts, unsaved changes, selected
+              files and the terminal line being typed. It warns about reply-all, missing
+              attachments, losing unsaved work, deleting files and risky terminal commands. Those
+              facts stay on this computer and are not sent to the planner. Blocked apps and
+              protected fields remain unread. You can turn it off here or pause Screen Coach.
+            </p>
+            <fieldset>
+              <legend>CATCH ME rules</legend>
+              <label
+                ><input id="catch-rule-reply_all" type="checkbox" /> Reply All to many
+                recipients</label
+              >
+              <label><input id="catch-rule-attachment" type="checkbox" /> Missing attachment</label>
+              <label><input id="catch-rule-unsaved" type="checkbox" /> Closing unsaved work</label>
+              <label
+                ><input id="catch-rule-delete" type="checkbox" /> Deleting folders or many
+                files</label
+              >
+              <label
+                ><input id="catch-rule-terminal" type="checkbox" /> Destructive terminal
+                commands</label
+              >
+              <p id="catch-state"></p>
+              <p id="catch-snoozed"></p>
+              <button id="catch-reset" type="button">Reset rule sensitivity and snoozes</button>
+            </fieldset>
+            <label
+              >SHOW ME guidance<select id="guidance">
+                <option value="auto">Fade with practice</option>
+                <option value="full">Full path</option>
+                <option value="light">Next target</option>
+                <option value="corrections_only">Corrections only</option>
+              </select></label
+            >
+            <label><input id="cue-voice" type="checkbox" /> Speak cursor corrections</label>
+            <label
+              ><input id="handoff" type="checkbox" /> Keep an encrypted Handoff timeline on this
+              Mac</label
+            >
+            <p>
+              Handoff keeps up to 24 hours of app context and saved moments in an encrypted local
+              timeline, isolated to this account. A draft shows the selected moments and redacted
+              text before anything is shared. Only Send uploads an encrypted package. Turning the
+              timeline off deletes its local records. Picking up someone else's work asks before
+              each file, page or repository action; commands are copied for you to review.
+            </p>
+            <label
+              >Handoff session window<select id="handoff-window">
+                <option value="30">30 minutes</option>
+                <option value="90">90 minutes</option>
+                <option value="180">3 hours</option>
+              </select></label
+            >
+            <label
+              >Default Handoff expiry<select id="handoff-expiry">
+                <option value="1">1 day</option>
+                <option value="7">7 days</option>
+                <option value="30">30 days</option>
+              </select></label
+            >
+            <label
+              ><input id="handoff-names" type="checkbox" /> Always hide people's names in
+              Handoffs</label
+            >
+            <button id="local-history" type="button">
+              Refresh local timeline and cursor counts
+            </button>
+            <p id="handoff-timeline-state"></p>
+            <p id="handoff-recipients"></p>
+            <button id="handoff-clear-recipients" type="button">Forget recent recipients</button>
+            <button id="handoff-forget" type="button">Delete local Handoff timeline</button>
+            <label>Handoff sender name<input id="sender" type="text" maxlength="80" /></label>
+            <details>
+              <summary>Cursor developer tools</summary>
+              <p>
+                The debug view shows predicted cursor positions. Trace recording saves positions,
+                timing and control rectangles locally, without names or screen contents. Up to 200
+                recent traces are kept for this account.
+              </p>
+              <label><input id="cursor-debug" type="checkbox" /> Show prediction debug view</label
+              ><label
+                ><input id="cursor-traces" type="checkbox" /> Record local cursor geometry
+                traces</label
+              ><button id="forget-paths" type="button">Forget learned paths</button>
+              <p id="cursor-counts"></p>
+            </details>
+            <button type="submit">Save preferences</button>
+          </fieldset>
+        </form>
+      </section>
+      <section>
+        <h2>Browser companion</h2>
+        <p>
+          Install the Neb companion in each browser you use, then choose Pair from its toolbar.
+          Review the browser publisher below before approving. Website media also needs the site's
+          permission in the extension. Pairing never grants screen or keyboard access.
+        </p>
+        <label
+          >Browser<select id="browser-kind">
+            <option value="chrome">Chrome</option>
+            <option value="brave">Brave</option>
+            <option value="edge">Edge</option>
+            <option value="chromium">Chromium</option>
+            <option value="firefox">Firefox</option>
+          </select></label
+        >
+        <button id="browser-install" type="button">Install local browser connection</button>
+        <button id="browser-uninstall" type="button">Remove local browser connection</button>
+        <button id="browser-refresh" type="button">Refresh browser profiles</button>
+        <p id="browser-state" role="status">Refresh to inspect paired browser profiles.</p>
+        <div id="browser-profiles"></div>
+      </section>
+      <section>
+        <h2>Screen Coach availability</h2>
+        <button id="open-mic-settings">Open macOS microphone settings</button>
+        <button id="handoff-start">Prepare a Handoff draft</button>
+        <p id="capture"></p>
+        <p>
+          Use the microphone on Neb tools to start a question; press it again to finish. Press
+          Escape to cancel. Select the Watch control for periodic help. Neb can guide and act in
+          supported apps after you enable the relevant preferences.
+        </p>
+      </section>
+      <section>
+        <h2>App updates</h2>
+        <p id="update-status">Checking build configuration…</p>
+        <button id="check-update" disabled>Check for updates</button
+        ><button id="install-update" hidden>Restart to update</button>
+      </section>
+    </main>
+  </body>
+</html>

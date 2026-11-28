@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use super::config::HelpLevel;
 use super::frame::ScreenRect;
 use super::marks::Pt;
+use super::music::Control;
 
 /// The island's bar in CSS pixels, and its height with the shapes menu open below the tools.
 /// Like a Mac's notch it hangs from the top edge of the screen.
@@ -188,6 +189,54 @@ pub struct IslandView {
     pub help: HelpLevel,
     /// Watch is on: Neb keeps looking for slips in the student's working.
     pub watching: bool,
+}
+
+/// A button on the island.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum IslandAction {
+    /// The bundled page is ready to receive its first state.
+    Ready,
+    /// The pen, the eraser or select (clicked again: off).
+    Tool {
+        tool: Tool,
+    },
+    /// A shape from select's menu (select comes on with it).
+    Shape {
+        shape: Shape,
+    },
+    /// The shapes menu opened or closed: the window grows to fit it.
+    Menu {
+        open: bool,
+    },
+    Mic,
+    /// Watch on or off: Neb keeps looking for slips in the student's working.
+    Watch,
+    /// How much Neb gives away (the mode switch).
+    Help {
+        help: super::config::HelpLevel,
+    },
+    Clear,
+    Close,
+    /// The music panel opened (`height`: the island's height with it, measured by the page) or
+    /// closed.
+    MusicPanel {
+        open: bool,
+        height: u32,
+    },
+    /// Play/pause, next or previous on what's playing.
+    MusicControl {
+        control: Control,
+    },
+    /// Pin the playlist whose link is on the clipboard.
+    MusicPin,
+    /// Open a pinned playlist, or unpin it (its Spotify id).
+    MusicOpen {
+        id: String,
+    },
+    MusicUnpin {
+        id: String,
+    },
 }
 
 #[cfg(test)]

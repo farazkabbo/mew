@@ -11,6 +11,7 @@ import {
   type Tool,
 } from "../notebook/palette";
 import { useNotebookUi } from "../notebook/store";
+import { useMacKeyboard } from "../shortcuts/SummonShortcutHelp";
 import { useShortcutKeys } from "../shortcuts/useShortcutKeys";
 
 const TOOLS: { tool: Tool; label: string; icon: LucideIcon }[] = [
@@ -69,6 +70,7 @@ export function PencilCase({
 }) {
   const { tool, inkColor, highlighterColor, penSize, canUndo, canRedo } = useNotebookUi();
   const { setTool, setColor, setPenSize } = useNotebookUi.getState();
+  const mac = useMacKeyboard();
   const keys = useShortcutKeys();
   const [sizes, setSizes] = useState(false);
   const [moreColours, setMoreColours] = useState(false);
@@ -142,8 +144,12 @@ export function PencilCase({
       <button
         type="button"
         onClick={onCircle}
-        aria-label="Circle and ask (hold Ctrl+Alt)"
-        title="Circle and ask (hold Ctrl+Alt on the page) · or say “what's this?”"
+        aria-label={mac ? "Circle and ask" : "Circle and ask (hold Ctrl+Alt)"}
+        title={
+          mac
+            ? "Circle and ask · tap again to ask"
+            : "Circle and ask (hold Ctrl+Alt on the page) · or say “what's this?”"
+        }
         className="grid size-11 place-items-center rounded-full bg-neb text-white transition-opacity duration-[120ms] hover:opacity-90"
       >
         <svg

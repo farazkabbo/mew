@@ -49,10 +49,10 @@ export type TourStep = {
   done: TourDone;
   /** Small print: what the step costs, or what to do without a microphone or a PDF. */
   note?: string;
-  /** Only in the Windows app (the browser has no Screen Coach). */
-  desktopOnly?: boolean;
-  /** Only in the browser (the Windows app shows the island instead). */
-  browserOnly?: boolean;
+  /** Only when native Screen Coach is available. */
+  screenCoachOnly?: boolean;
+  /** For apps that ask from the notebook instead of the island. */
+  notebookOnly?: boolean;
   /** Where "Skip this step" goes when the steps after it can't be done without this one. */
   skipTo?: string;
 };
@@ -61,7 +61,7 @@ const USES_A_QUESTION = "A real question uses one of your free ones. To keep it,
 
 /**
  * Five steps (the meeting of 2026-11-14): a notebook, then the three things that matter most:
- * asking (on the island in the Windows app, by holding Ctrl + Alt in the browser), quizzes from
+ * asking (on the island or in the notebook), quizzes from
  * your course, and Review.
  */
 export const TOUR_STEPS: readonly TourStep[] = [
@@ -80,16 +80,16 @@ export const TOUR_STEPS: readonly TourStep[] = [
     body: "Tap Ctrl + Alt twice, quickly: the black bar at the top of your screen is the island, over any app. Draw round something with Select and press the mic to ask. Pick how much I give away: Quiet, Hint, Coach, or Answer for the full working with why. Press the eye and I watch while you work, and speak up when something slips.",
     done: { by: "next", after: "coach-on" },
     note: "The island needs Screen Coach on. Nothing there? Click another window, then tap twice again.",
-    desktopOnly: true,
+    screenCoachOnly: true,
   },
   {
     id: "ask",
-    title: "Write, then hold Ctrl + Alt to ask",
-    body: "Open a page and write a line of working. I tick what's right and circle a slip. Hold Ctrl + Alt, ask your question out loud, and let go: I answer out loud and in writing beside your work.",
+    title: "Write, then ask neb",
+    body: "Open a page and write a line of working. I tick what's right and circle a slip. Tap the neb dot to ask, or use the notebook shortcut. Hold Ctrl + Alt, ask out loud, and let go. I answer out loud and in writing beside your work.",
     target: '[data-testid="sheet"], [data-tour="new-page"]',
     done: { by: "next" },
     note: USES_A_QUESTION,
-    browserOnly: true,
+    notebookOnly: true,
   },
   {
     id: "quiz",
@@ -117,9 +117,9 @@ export const TOUR_STEPS: readonly TourStep[] = [
   },
 ];
 
-/** The steps for this app: the island in the Windows app, Ctrl + Alt on a page in the browser. */
-export function stepsFor(desktop: boolean): readonly TourStep[] {
-  return TOUR_STEPS.filter((step) => (desktop ? !step.browserOnly : !step.desktopOnly));
+/** Choose the asking step based on whether the installed app exposes Screen Coach. */
+export function stepsFor(hasScreenCoach: boolean): readonly TourStep[] {
+  return TOUR_STEPS.filter((step) => (hasScreenCoach ? !step.notebookOnly : !step.screenCoachOnly));
 }
 
 /** Where the student is, from the address the app keeps in step with the screen (U29). */

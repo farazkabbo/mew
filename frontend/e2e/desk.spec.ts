@@ -18,6 +18,8 @@ const SHOTS = "test-results/desk";
 test("a first run is one dashed cover; a named notebook becomes a cover you can open", async ({
   page,
 }) => {
+  await page.route("**/api/courses", (route) => route.fulfill({ json: [] }));
+  await page.route("**/api/review", (route) => route.fulfill({ json: { items: [] } }));
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   // A first run has no course reviews due. The API service's course store is shared by the run,
   // and an earlier spec's course comes due depending on the time of day: answer for it here.

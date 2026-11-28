@@ -21,9 +21,7 @@ use super::image::{
 };
 use super::privacy::blocklist::is_blocked;
 use super::privacy::private_window::is_private_window;
-use super::privacy::redact::{
-    fill, rects_to_cover, screen_to_pixels, PixelRect, BLACKED_OUT, REDACTED,
-};
+use super::privacy::redact::{fill, screen_to_pixels, PixelRect, BLACKED_OUT};
 use super::privacy::{may_capture, Focus, Refusal, Situation};
 use super::screen_text::ScreenText;
 use super::secret::SecretBytes;
@@ -381,7 +379,7 @@ fn cover_sensitive_text(
     raw: &mut Pixels,
     target: &Target,
     privacy: &Privacy,
-    mut hidden: Vec<PixelRect>,
+    hidden: Vec<PixelRect>,
 ) -> Result<ScreenText, ScreenError> {
     let rules = &privacy.redaction;
     let required = rules.cards || rules.secrets || rules.codes || rules.emails || rules.phones;
@@ -403,22 +401,14 @@ fn cover_sensitive_text(
         return fail(ScreenError::RedactionFailed);
     };
     let grey = downscale_bgra_to_gray(raw, ocr.max_side());
-    let scale = raw.width as f32 / grey.width as f32;
+    let ocr_size = (grey.width, grey.height);
     let lines = match ocr.read(&grey) {
         Ok(lines) => lines,
         Err(_) => return fail(ScreenError::RedactionFailed),
     };
     drop(grey);
-    let rects = rects_to_cover(&lines, rules, scale, raw.width, raw.height);
-    fill(raw, &rects, REDACTED);
-    hidden.extend(rects);
-    Ok(ScreenText::from_ocr(
-        &lines,
-        scale,
-        (raw.width, raw.height),
-        target.bounds,
-        &hidden,
-    ))
+    ScreenText::redact_ocr(raw, &lines, ocr_size, target.bounds, hidden, rules)
+        .map_or_else(|| fail(ScreenError::RedactionFailed), Ok)
 }
 
 fn elapsed_ms(since: Instant) -> u32 {

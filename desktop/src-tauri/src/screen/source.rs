@@ -97,6 +97,31 @@ pub fn sanitize_url(raw: &str) -> Option<Url> {
     (clean.as_str().len() <= URL_CHARS).then_some(clean)
 }
 
+/// Resolve saved provenance using the same order on every platform: a native player
+/// position, the redacted on-device time display, then the tutor's bounded reading.
+/// Disabling source links removes both the URL and its moment.
+pub fn saved_link(
+    raw_url: Option<&str>,
+    screen_text: &str,
+    player_position: Option<u32>,
+    tutor_position: Option<u32>,
+    include_link: bool,
+) -> (Option<String>, Option<u32>) {
+    let Some(url) = raw_url.filter(|_| include_link).and_then(sanitize_url) else {
+        return (None, None);
+    };
+    let moment = is_video_page(&url)
+        .then(|| {
+            player_position
+                .filter(|seconds| *seconds <= MAX_VIDEO_SECONDS)
+                .or_else(|| player_time(screen_text))
+                .or(tutor_position.filter(|seconds| *seconds <= MAX_VIDEO_SECONDS))
+        })
+        .flatten();
+    let url = moment.map_or_else(|| url.clone(), |seconds| with_timestamp(&url, seconds));
+    (Some(url.to_string()), moment)
+}
+
 /// A YouTube watch link that opens at `seconds` (`…&t=754s` is what YouTube itself writes; the
 /// server accepts plain seconds, so that's what we store).
 pub fn with_timestamp(url: &Url, seconds: u32) -> Url {
@@ -293,5 +318,105 @@ mod tests {
             Some(TITLE_CHARS)
         );
         assert!(is_browser("chrome.exe") && !is_browser("acrobat.exe"));
+    }
+}
+
+#[cfg(test)]
+mod saved_link_tests {
+    use super::*;
+    const VIDEO: &str = "https://www.youtube.com/watch?v=abcdef12345&token=private&t=99";
+    #[test]
+    fn saved_video_links_keep_the_best_bounded_moment() {
+        let (url, seconds) = saved_link(Some(VIDEO), "12:34 / 45:00", Some(10), Some(30), true);
+        assert_eq!(seconds, Some(10));
+        assert_eq!(
+            url.as_deref(),
+            Some("https://www.youtube.com/watch?v=abcdef12345&t=10")
+        );
+        assert_eq!(
+            saved_link(Some(VIDEO), "12:34 / 45:00", None, Some(30), true).1,
+            Some(754)
+        );
+        assert_eq!(
+            saved_link(Some(VIDEO), "slide 42", None, Some(30), true).1,
+            Some(30)
+        );
+        assert_eq!(
+            saved_link(Some(VIDEO), "slide 42", Some(90_000), Some(90_000), true).1,
+            None
+        );
+    }
+    #[test]
+    fn private_links_and_nonvideo_pages_never_keep_a_video_moment() {
+        assert_eq!(
+            saved_link(Some(VIDEO), "12:34 / 45:00", Some(10), Some(30), false),
+            (None, None)
+        );
+        assert_eq!(
+            saved_link(
+                Some("http://localhost/private"),
+                "12:34 / 45:00",
+                Some(10),
+                Some(30),
+                true
+            ),
+            (None, None)
+        );
+        assert_eq!(
+            saved_link(
+                Some("https://example.com/lesson?token=private"),
+                "12:34 / 45:00",
+                Some(10),
+                Some(30),
+                true
+            ),
+            (Some("https://example.com/lesson".into()), None)
+        );
+    }
+}
+
+/// Compare canonical YouTube video identities, never a window title or arbitrary URL query.
+pub fn same_video(captured: Option<&str>, current: Option<&str>) -> bool {
+    fn identity(raw: &str) -> Option<String> {
+        let url = sanitize_url(raw)?;
+        let id = if is_youtube(url.host_str()?) && url.path() == "/watch" {
+            url.query_pairs()
+                .find(|(key, _)| key == "v")
+                .map(|(_, value)| value.into_owned())?
+        } else if url.host_str() == Some("youtu.be") {
+            url.path().strip_prefix('/')?.to_owned()
+        } else {
+            return None;
+        };
+        is_video_id(&id).then_some(id)
+    }
+    let Some(captured) = captured.and_then(identity) else {
+        return false;
+    };
+    current
+        .and_then(identity)
+        .is_some_and(|current| current == captured)
+}
+#[cfg(test)]
+mod video_identity_tests {
+    use super::*;
+    #[test]
+    fn a_saved_timestamp_cannot_move_to_a_new_tab_or_video() {
+        let captured = Some("https://www.youtube.com/watch?v=abcdef12345");
+        assert!(same_video(
+            captured,
+            Some("https://youtube.com/watch?v=abcdef12345&t=90&token=private")
+        ));
+        assert!(same_video(captured, Some("https://youtu.be/abcdef12345")));
+        assert!(!same_video(
+            captured,
+            Some("https://youtube.com/watch?v=other123456")
+        ));
+        assert!(!same_video(
+            captured,
+            Some("https://example.com/watch?v=abcdef12345")
+        ));
+        assert!(!same_video(None, captured));
+        assert!(!same_video(captured, None));
     }
 }
